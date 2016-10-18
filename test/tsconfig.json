@@ -1,0 +1,14 @@
+{
+    "compilerOptions": {
+        "target": "es6",
+        "module": "commonjs",
+        "declaration": false,
+        "outDir": "../dist/test"
+    },
+    "compileOnSave": true,
+    "buildOnSave": false,
+    "include": [
+        "../typings/index.d.ts",
+        "**/*.ts"
+    ]
+}

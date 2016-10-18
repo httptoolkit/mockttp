@@ -1,7 +1,7 @@
 import net = require("net");
 import http = require("http");
 
-interface DestroyableServer extends http.Server {
+export interface DestroyableServer extends http.Server {
     destroy(callback?: () => void): void;
 }
 
