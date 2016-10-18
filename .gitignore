@@ -1,0 +1,5 @@
+.DS_store
+node_modules
+dist/
+typings/
+.env

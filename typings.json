@@ -1,0 +1,21 @@
+{
+  "globalDependencies": {
+    "aws-lambda": "registry:dt/aws-lambda#0.0.0+20160906141158",
+    "aws-sdk": "registry:dt/aws-sdk#0.0.0+20160908162406",
+    "docopt": "registry:dt/docopt#0.0.0+20160316155526",
+    "dotenv": "registry:dt/dotenv#2.0.0+20160327131627",
+    "form-data": "registry:dt/form-data#0.0.0+20160724024111",
+    "fs-extra": "registry:dt/fs-extra#0.0.0+20160907105211",
+    "jszip": "registry:dt/jszip#0.0.0+20160709055933",
+    "mocha": "registry:dt/mocha#2.2.5+20160720003353",
+    "node": "registry:dt/node#6.0.0+20160907173219",
+    "request": "registry:dt/request#0.0.0+20160726020908",
+    "request-promise-native": "registry:dt/request-promise-native#1.0.3+20161006212032",
+    "temp": "registry:dt/temp#0.8.3+20160105142454"
+  },
+  "dependencies": {
+    "chai": "registry:npm/chai#3.5.0+20160723033700",
+    "sinon": "registry:npm/sinon#1.16.0+20160723033700",
+    "sinon-chai": "registry:npm/sinon-chai#2.8.0+20160310030142"
+  }
+}

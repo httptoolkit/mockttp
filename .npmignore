@@ -1,0 +1,4 @@
+test/
+typings/
+dist/test
+.env
