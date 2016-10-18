@@ -10,5 +10,9 @@
     "include": [
         "../typings/index.d.ts",
         "**/*.ts"
+    ],
+    "filesGlob": [
+        "../typings/index.d.ts",
+        "**/*.ts"
     ]
 }
