@@ -3,15 +3,25 @@ import request = require("request-promise-native");
 import expect from "../expect";
 
 describe("HTTP Server Mock", function () {
-    it("can mock a server", async () => {
-        let server = new HttpServerMock();
-        await server.start();
+    let server = new HttpServerMock();
 
+    beforeEach(() => server.start());
+    afterEach(() => server.stop());
+
+    it("should mock simple matching GETs", async () => {
         server.get("/mocked-endpoint").thenReply(200, "mocked data");
 
         let response = await request.get(server.urlFor("/mocked-endpoint"));
         expect(response).to.equal("mocked data");
+    });
 
-        await server.stop();
+    it("should reject non-matching requests", async () => {
+        server.get("/other-endpoint").thenReply(200, "mocked data");
+
+        let result = await request.get(server.urlFor("/not-mocked-endpoint")).catch((e) => e);
+
+        expect(result).to.be.instanceof(Error);
+        expect(result.statusCode).to.equal(503);
+        expect(result.message).to.include("No rules were found matching this request");
     });
 });
