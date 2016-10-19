@@ -1,5 +1,4 @@
 import express = require("express");
-import bodyParser = require('body-parser');
 
 export enum Method {
     GET,
@@ -7,10 +6,9 @@ export enum Method {
     PUT
 }
 
-export interface Request
-       extends express.Request,
-               bodyParser.ParsedAsJson,
-               bodyParser.ParsedAsUrlencoded {
+export interface Request extends express.Request {
+    body: any; // Added by body-parser
+    // TODO: Push https://github.com/types/npm-body-parser to DefinitelyTyped, to do this neater
 }
 
 export interface Explainable {
