@@ -1,6 +1,6 @@
 {
   "name": "http-server-mock",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Mock HTTP server for testing HTTP clients and stubbing webservices",
   "main": "dist/src/main.js",
   "typings": "dist/src/main.d.ts",
