@@ -45,6 +45,8 @@
     "node": ">=4.0.0"
   },
   "dependencies": {
+    "body-parser": "^1.15.2",
+    "express": "^4.14.0",
     "lodash": "^4.16.4",
     "portfinder": "^1.0.9"
   }

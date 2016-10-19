@@ -1,5 +1,5 @@
-import http = require("http");
-import { Explainable } from "../common-types";
+import express = require("express");
+import { Explainable, Request } from "../common-types";
 
 export interface MockRule extends Explainable {
     matches: RequestMatcher
@@ -7,8 +7,8 @@ export interface MockRule extends Explainable {
     isComplete: RuleCompletionChecker;
 }
 
-export type RequestMatcher = ((request: http.IncomingMessage) => boolean) & Explainable;
-export type RequestHandler = ((request: http.IncomingMessage, response: http.ServerResponse) => Promise<void>) & Explainable;
+export type RequestMatcher = ((request: Request) => boolean) & Explainable;
+export type RequestHandler = ((request: Request, response: express.Response) => Promise<void>) & Explainable;
 
 export interface RuleCompletionChecker extends Explainable {
     (): boolean;

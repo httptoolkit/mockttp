@@ -1,23 +1,28 @@
 import http = require("http");
 import portfinder = require("portfinder");
+import express = require("express");
+import bodyParser = require('body-parser');
 
-import { Method } from "./common-types";
+import { Method, Request } from "./common-types";
 import { MockRule } from "./rules/mock-rule-types";
 import PartialMockRule from "./rules/partial-mock-rule";
-import destroyable from "./destroyable-server";
-
-declare module "http" {
-    interface IncomingMessage {
-        body: string;
-    }
-}
+import destroyable, { DestroyableServer } from "./destroyable-server";
 
 // Provides all the external API, uses that to build and manage the rules list, and interrogate our recorded requests
 export default class HttpServerMock {
     private rules: MockRule[] = [];
     private debug: boolean = false;
 
-    private server = destroyable(http.createServer(this.handleRequest.bind(this)));
+    private app: express.Application;
+    private server: DestroyableServer;
+
+    constructor() {
+        this.app = express();
+
+        this.app.use(bodyParser.json());
+        this.app.use(bodyParser.urlencoded({ extended: true }));
+        this.app.use(this.handleRequest.bind(this));
+    }
 
     async start(port?: number): Promise<void> {
         port = (port || await new Promise<number>((resolve, reject) => {
@@ -28,7 +33,9 @@ export default class HttpServerMock {
         }));
 
         if (this.debug) console.log(`Starting mock server on port ${port}`);
-        return new Promise<void>((resolve, reject) => this.server.listen(port, resolve));
+        return new Promise<void>((resolve, reject) => {
+            this.server = destroyable(this.app.listen(port, resolve));
+        });
     }
 
     async stop(): Promise<void> {
@@ -75,22 +82,8 @@ export default class HttpServerMock {
         this.rules.push(rule);
     }
 
-    private async readBody(request: http.IncomingMessage): Promise<string> {
-        return new Promise<string>((resolve, reject) => {
-            var body = "";
-            request.on('data', function(chunk) {
-                body += chunk;
-            });
-            request.on('end', function() {
-                resolve(body);
-            });
-            request.on('error', reject);
-        });
-    }
-
-    private async handleRequest(request: http.IncomingMessage, response: http.ServerResponse): Promise<void> {
+    private async handleRequest(request: Request, response: express.Response) {
         try {
-            request.body = await this.readBody(request);
             let matchingRules = this.rules.filter((r) => r.matches(request));
 
             if (matchingRules.length > 0) {
@@ -117,7 +110,7 @@ export default class HttpServerMock {
     }
 }
 
-function explainRequest(request: http.IncomingMessage) {
+function explainRequest(request: Request) {
     let msg = `${request.method} request to ${request.url}`;
 
     if (request.body && request.body.length > 0) {
