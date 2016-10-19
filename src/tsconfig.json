@@ -6,7 +6,7 @@
         "outDir": "../dist/src"
     },
     "compileOnSave": true,
-    "buildOnSave": false,
+    "buildOnSave": true,
     "include": [
         "../typings/index.d.ts",
         "../custom-typings/*.d.ts",
