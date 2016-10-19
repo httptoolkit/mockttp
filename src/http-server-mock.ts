@@ -1,4 +1,5 @@
 import http = require("http");
+import portfinder = require("portfinder");
 
 import { Method } from "./common-types";
 import { MockRule } from "./rules/mock-rule-types";
@@ -11,7 +12,14 @@ export default class HttpServerMock {
 
     private server = destroyable(http.createServer(this.handleRequest.bind(this)));
 
-    start(port = 8080): Promise<void> {
+    async start(port?: number): Promise<void> {
+        port = (port || await new Promise<number>((resolve, reject) => {
+            portfinder.getPort((err, port) => {
+                if (err) reject(err);
+                else resolve(port);
+            });
+        }));
+
         return new Promise<void>((resolve, reject) => this.server.listen(port, resolve));
     }
 

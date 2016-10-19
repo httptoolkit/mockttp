@@ -9,10 +9,12 @@
     "buildOnSave": false,
     "include": [
         "../typings/index.d.ts",
+        "../custom-typings/*.d.ts",
         "**/*.ts"
     ],
     "filesGlob": [
         "../typings/index.d.ts",
+        "../custom-typings/*.d.ts",
         "**/*.ts"
     ]
 }
