@@ -9,6 +9,7 @@ import destroyable from "./destroyable-server";
 // Provides all the external API, uses that to build and manage the rules list, and interrogate our recorded requests
 export default class HttpServerMock {
     private rules: MockRule[] = [];
+    private debug: boolean = false;
 
     private server = destroyable(http.createServer(this.handleRequest.bind(this)));
 
@@ -20,6 +21,7 @@ export default class HttpServerMock {
             });
         }));
 
+        if (this.debug) console.log(`Starting mock server on port ${port}`);
         return new Promise<void>((resolve, reject) => this.server.listen(port, resolve));
     }
 
@@ -34,8 +36,13 @@ export default class HttpServerMock {
         this.reset();
     }
 
+    enableDebug() {
+        this.debug = true;
+    }
+
     reset() {
         this.rules = [];
+        this.debug = false;
     }
 
     get url(): string {
@@ -69,8 +76,11 @@ export default class HttpServerMock {
             if (matchingRules.length > 0) {
                 let nextRule = matchingRules.filter((r) => !r.isComplete())[0] ||
                                matchingRules[matchingRules.length - 1];
+                if (this.debug) console.log(`Request matched rule: ${nextRule.explain()}`);
                 await nextRule.handleRequest(request, response);
             } else {
+                if (this.debug) console.warn(`Unmatched request received: ${explainRequest(request)}`);
+
                 response.writeHead(503, `Request for unmocked endpoint`);
                 response.write("No rules were found matching this request.\n");
                 response.write(`This request was: ${explainRequest(request)}\n\n`);
