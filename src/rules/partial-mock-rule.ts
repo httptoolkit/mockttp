@@ -1,4 +1,6 @@
 import http = require("http");
+import _ = require("lodash");
+import querystring = require("querystring");
 
 import { Method } from "../common-types";
 import { MockRule, RequestMatcher, RequestHandler, RuleCompletionChecker } from "./mock-rule-types";
@@ -10,18 +12,29 @@ export default class PartialMockRule {
 
     private matcher: RequestMatcher;
 
-    thenReply(status: number, data: string): MockRule {
+    withForm(formData: { [key: string]: string }): PartialMockRule {
+        this.matcher = combineMatchers(this.matcher, formDataMatcher(formData));
+        return this;
+    }
+
+    thenReply(status: number, data?: string): MockRule {
         let completionHandler = triggerOnce();
 
         let rule = {
             matches: this.matcher,
             handleRequest: completionHandler.wrap(simpleResponder(status, data)), // TODO: Should wrap whole rule?
             isComplete: completionHandler,
-            explain: () => `${rule.matches.explain()} and ${rule.handleRequest.explain()}, ${completionHandler.explain()}.`
+            explain: () => `Match requests ${rule.matches.explain()} and ${rule.handleRequest.explain()}, ${completionHandler.explain()}.`
         }
         this.addRule(rule);
         return rule;
     }
+}
+
+function combineMatchers(matcherA: RequestMatcher, matcherB: RequestMatcher): RequestMatcher {
+    let matcher = <RequestMatcher> ((request) => matcherA(request) && matcherB(request));
+    matcher.explain = () => `${matcherA.explain()} and ${matcherB.explain()}`;
+    return matcher;
 }
 
 function simpleMatcher(method: Method, path: string): RequestMatcher {
@@ -29,16 +42,25 @@ function simpleMatcher(method: Method, path: string): RequestMatcher {
     let matcher = <RequestMatcher> ((request: http.IncomingMessage) =>
         request.method === methodName && request.url === path
     );
-    matcher.explain = () => `Match ${methodName} requests for ${path}`;
+    matcher.explain = () => `making ${methodName}s for ${path}`;
     return matcher;
 }
 
-function simpleResponder(status: number, data: string): RequestHandler {
+function formDataMatcher(formData: { [key: string]: string }): RequestMatcher {
+    let matcher = <RequestMatcher> ((request) =>
+        request.headers["content-type"] &&
+        request.headers["content-type"].indexOf("application/x-www-form-urlencoded") !== -1 &&
+        _.isMatch(querystring.parse(request.body), formData)
+    );
+    matcher.explain = () => `with form data including ${JSON.stringify(formData)}`;
+    return matcher;
+}
+function simpleResponder(status: number, data?: string): RequestHandler {
     let responder = <RequestHandler> async function(request: http.IncomingMessage, response: http.ServerResponse) {
         response.writeHead(status);
-        response.end(data);
+        response.end(data || "");
     }
-    responder.explain = () => `respond with status ${status} and body "${data}"`;
+    responder.explain = () => `respond with status ${status}` + (data ? ` and body "${data}"` : "");
     return responder;
 }
 

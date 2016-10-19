@@ -24,4 +24,29 @@ describe("HTTP Server Mock", function () {
         expect(result.statusCode).to.equal(503);
         expect(result.message).to.include("No rules were found matching this request");
     });
+
+    describe("form matching", () => {
+        beforeEach(() => {
+            server.post("/")
+                  .withForm({ shouldMatch: "yes" })
+                  .thenReply(200, "matched");
+        });
+
+        it("should match requests by form data", async () => {
+            let response = await request.post(server.url, {
+                form: { shouldMatch: "yes" }
+            });
+            expect(response).to.equal("matched");
+        });
+
+        it("shouldn't match requests without form data", async () => {
+            await expect(request.post(server.url)).to.eventually.be.rejected;
+        });
+
+        it("shouldn't match requests with the wrong form data", async () => {
+            await expect(request.post(server.url, {
+                form: { shouldMatch: "no" }
+            })).to.eventually.be.rejected;
+        });
+    });
 });

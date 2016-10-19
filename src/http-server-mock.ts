@@ -6,6 +6,12 @@ import { MockRule } from "./rules/mock-rule-types";
 import PartialMockRule from "./rules/partial-mock-rule";
 import destroyable from "./destroyable-server";
 
+declare module "http" {
+    interface IncomingMessage {
+        body: string;
+    }
+}
+
 // Provides all the external API, uses that to build and manage the rules list, and interrogate our recorded requests
 export default class HttpServerMock {
     private rules: MockRule[] = [];
@@ -69,8 +75,22 @@ export default class HttpServerMock {
         this.rules.push(rule);
     }
 
+    private async readBody(request: http.IncomingMessage): Promise<string> {
+        return new Promise<string>((resolve, reject) => {
+            var body = "";
+            request.on('data', function(chunk) {
+                body += chunk;
+            });
+            request.on('end', function() {
+                resolve(body);
+            });
+            request.on('error', reject);
+        });
+    }
+
     private async handleRequest(request: http.IncomingMessage, response: http.ServerResponse): Promise<void> {
         try {
+            request.body = await this.readBody(request);
             let matchingRules = this.rules.filter((r) => r.matches(request));
 
             if (matchingRules.length > 0) {
@@ -98,5 +118,11 @@ export default class HttpServerMock {
 }
 
 function explainRequest(request: http.IncomingMessage) {
-    return `${request.method} request to ${request.url}`;
+    let msg = `${request.method} request to ${request.url}`;
+
+    if (request.body && request.body.length > 0) {
+        msg += ` with body \`${request.body}\``;
+    }
+
+    return msg;
 }

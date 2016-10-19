@@ -31,6 +31,7 @@
   "homepage": "https://github.com/pimterry/http-server-mock#readme",
   "devDependencies": {
     "chai": "^3.5.0",
+    "chai-as-promised": "^6.0.0",
     "mocha": "^3.0.2",
     "request": "^2.75.0",
     "request-promise-native": "^1.0.3",
@@ -44,6 +45,7 @@
     "node": ">=4.0.0"
   },
   "dependencies": {
+    "lodash": "^4.16.4",
     "portfinder": "^1.0.9"
   }
 }
