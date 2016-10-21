@@ -11,6 +11,11 @@ export default class PartialMockRule {
 
     private matcher: RequestMatcher;
 
+    withHeaders(headers: { [key: string]: string }) {
+        this.matcher = combineMatchers(this.matcher, headersMatcher(headers));
+        return this;
+    }
+
     withForm(formData: { [key: string]: string }): PartialMockRule {
         this.matcher = combineMatchers(this.matcher, formDataMatcher(formData));
         return this;
@@ -45,6 +50,15 @@ function simpleMatcher(method: Method, path: string): RequestMatcher {
     return matcher;
 }
 
+function headersMatcher(headers: { [key: string]: string }): RequestMatcher {
+    let lowerCasedHeaders = _.mapKeys(headers, (value, key) => key.toLowerCase());
+    let matcher = <RequestMatcher> ((request) =>
+        _.isMatch(request.headers, lowerCasedHeaders)
+    );
+    matcher.explain = () => `with headers including ${JSON.stringify(headers)}`;
+    return matcher;
+}
+
 function formDataMatcher(formData: { [key: string]: string }): RequestMatcher {
     let matcher = <RequestMatcher> ((request) =>
         request.headers["content-type"] &&
@@ -54,6 +68,7 @@ function formDataMatcher(formData: { [key: string]: string }): RequestMatcher {
     matcher.explain = () => `with form data including ${JSON.stringify(formData)}`;
     return matcher;
 }
+
 function simpleResponder(status: number, data?: string): RequestHandler {
     let responder = <RequestHandler> async function(request: Request, response: express.Response) {
         response.writeHead(status);
