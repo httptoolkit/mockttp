@@ -2,3 +2,5 @@ src/
 test/
 dist/test
 .env
+wallaby.js
+.travis.yml

@@ -9,10 +9,12 @@
     "buildOnSave": true,
     "include": [
         "../custom-typings/*.d.ts",
-        "**/*.ts"
+        "**/*.ts",
+        "../node_modules/@types/**/*.d.ts"
     ],
     "filesGlob": [
         "../custom-typings/*.d.ts",
-        "**/*.ts"
+        "**/*.ts",
+        "../node_modules/@types/**/*.d.ts"
     ]
 }
