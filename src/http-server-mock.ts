@@ -62,6 +62,13 @@ export default class HttpServerMock {
         return "http://localhost:" + this.server.address().port;
     }
 
+    get proxyEnv() {
+        return {
+            HTTP_PROXY: this.url,
+            HTTPS_PROXY: this.url
+        }
+    }
+
     urlFor(path: string): string {
         return this.url + path;
     }
