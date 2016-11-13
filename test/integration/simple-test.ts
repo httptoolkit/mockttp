@@ -2,7 +2,7 @@ import HttpServerMock = require("../../src/main");
 import request = require("request-promise-native");
 import expect from "../expect";
 
-describe("HTTP Server Mock", function () {
+describe("Basic HTTP mocking", function () {
     let server = new HttpServerMock();
 
     beforeEach(() => server.start());
@@ -23,56 +23,5 @@ describe("HTTP Server Mock", function () {
         expect(result).to.be.instanceof(Error);
         expect(result.statusCode).to.equal(503);
         expect(result.message).to.include("No rules were found matching this request");
-    });
-
-    describe("form matching", () => {
-        beforeEach(() => {
-            server.post("/")
-                  .withForm({ shouldMatch: "yes" })
-                  .thenReply(200, "matched");
-        });
-
-        it("should match requests by form data", async () => {
-            let response = await request.post(server.url, {
-                form: { shouldMatch: "yes" }
-            });
-            expect(response).to.equal("matched");
-        });
-
-        it("shouldn't match requests without form data", async () => {
-            await expect(request.post(server.url)).to.eventually.be.rejected;
-        });
-
-        it("shouldn't match requests with the wrong form data", async () => {
-            await expect(request.post(server.url, {
-                form: { shouldMatch: "no" }
-            })).to.eventually.be.rejected;
-        });
-    });
-
-    describe("header matching", () => {
-        beforeEach(() => {
-            server.get("/")
-                  .withHeaders({ "X-Should-Match": "yes" })
-                  .thenReply(200, "matched header");
-        });
-
-        it("should match requests with the matching header", async () => {
-            let response = await request.get(server.url, {
-                headers: { "X-Should-Match": "yes" }
-            });
-            expect(response).to.equal("matched header");
-        });
-
-        it("should not match requests with no (extra) headers", async () => {
-            await expect(request.get(server.url)).to.eventually.be.rejected;
-
-        });
-
-        it("should not match requests with the wrong header value", async () => {
-            await expect(request.get(server.url, {
-                headers: { "X-Should-Match": "no" }
-            })).to.eventually.be.rejected;
-        });
     });
 });
