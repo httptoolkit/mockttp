@@ -24,5 +24,5 @@ export default function destroyable(server: http.Server): DestroyableServer  {
     }
   };
 
-  return server;
+  return (<DestroyableServer> server);
 }
