@@ -3,7 +3,8 @@
         "target": "es5",
         "module": "commonjs",
         "declaration": false,
-        "outDir": "../dist/test"
+        "outDir": "../dist/test",
+        "strict": true
     },
     "compileOnSave": true,
     "buildOnSave": true,

@@ -51,7 +51,7 @@ function simpleMatcher(method: Method, path: string): RequestMatcher {
 }
 
 function headersMatcher(headers: { [key: string]: string }): RequestMatcher {
-    let lowerCasedHeaders = _.mapKeys(headers, (value, key) => key.toLowerCase());
+    let lowerCasedHeaders = _.mapKeys(headers, (value: string, key: string) => key.toLowerCase());
     let matcher = <RequestMatcher> ((request) =>
         _.isMatch(request.headers, lowerCasedHeaders)
     );

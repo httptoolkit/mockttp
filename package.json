@@ -43,7 +43,7 @@
     "rimraf": "^2.5.4",
     "sinon": "^1.17.5",
     "sinon-chai": "^2.8.0",
-    "typescript": "^2.1.0-dev.20161018"
+    "typescript": "^2.3.0"
   },
   "engines": {
     "node": ">=4.0.0"
