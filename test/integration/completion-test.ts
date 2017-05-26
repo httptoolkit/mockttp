@@ -12,14 +12,11 @@ describe("HTTP mock rule completion", function () {
         server.get("/endpoint").thenReply(200, "first response");
         server.get("/endpoint").thenReply(200, "second response");
 
-        let firstResponse = await request.get(server.urlFor("/endpoint"));
-        expect(firstResponse).to.equal("first response");
-
-        let secondResponse = await request.get(server.urlFor("/endpoint"));
-        expect(secondResponse).to.equal("second response");
+        expect(await request.get(server.urlFor("/endpoint"))).to.equal("first response");
+        expect(await request.get(server.urlFor("/endpoint"))).to.equal("second response");
     });
 
-    it("should continue triggering the last rule given indefinitely", async () => {
+    it("should continue triggering the last provided rule indefinitely", async () => {
         server.get("/endpoint").thenReply(200, "first response");
         server.get("/endpoint").thenReply(200, "second response");
 

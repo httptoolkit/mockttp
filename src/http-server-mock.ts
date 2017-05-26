@@ -2,6 +2,7 @@ import http = require("http");
 import portfinder = require("portfinder");
 import express = require("express");
 import bodyParser = require('body-parser');
+import _ = require('lodash');
 
 import { Method, Request } from "./common-types";
 import { MockRule } from "./rules/mock-rule-types";
@@ -74,28 +75,23 @@ export default class HttpServerMock {
     }
 
     get(url: string): PartialMockRule {
-        return new PartialMockRule(this.addRule, Method.GET, url);
+        return new PartialMockRule(Method.GET, url, this.addRule);
     }
 
     post(url: string): PartialMockRule {
-        return new PartialMockRule(this.addRule, Method.POST, url);
+        return new PartialMockRule(Method.POST, url, this.addRule);
     }
 
     put(url: string): PartialMockRule {
-        return new PartialMockRule(this.addRule, Method.PUT, url);
-    }
-
-    private addRule = (rule: MockRule) => {
-        this.rules.push(rule);
+        return new PartialMockRule(Method.PUT, url, this.addRule);
     }
 
     private async handleRequest(request: Request, response: express.Response) {
         try {
             let matchingRules = this.rules.filter((r) => r.matches(request));
+            let nextRule = matchingRules.filter((r) => !this.isComplete(r, matchingRules))[0]
 
-            if (matchingRules.length > 0) {
-                let nextRule = matchingRules.filter((r) => !r.isComplete())[0] ||
-                               matchingRules[matchingRules.length - 1];
+            if (nextRule) {
                 if (this.debug) console.log(`Request matched rule: ${nextRule.explain()}`);
                 await nextRule.handleRequest(request, response);
             } else {
@@ -113,6 +109,20 @@ export default class HttpServerMock {
             }
         } catch (e) {
             console.error("Failed to handle request", e);
+        }
+    }
+
+    private addRule = (rule: MockRule) => {
+        this.rules.push(rule);
+    }
+
+    private isComplete = (rule: MockRule, matchingRules: MockRule[]) => {
+        if (rule.isComplete) {
+            return rule.isComplete();
+        } else if (matchingRules[matchingRules.length - 1] === rule) {
+            return false;
+        } else {
+            return rule.callCount !== 0;
         }
     }
 }

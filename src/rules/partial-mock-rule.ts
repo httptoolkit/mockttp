@@ -5,11 +5,12 @@ import { Method, Request } from "../common-types";
 import { MockRule, RequestMatcher, RequestHandler, RuleCompletionChecker } from "./mock-rule-types";
 
 export default class PartialMockRule {
-    constructor(private addRule: (rule: MockRule) => void, method: Method, path: string) {
+    constructor(method: Method, path: string, private addRule: (rule: MockRule) => void) {
         this.matcher = simpleMatcher(method, path);
     }
 
     private matcher: RequestMatcher;
+    private isComplete?: RuleCompletionChecker;
 
     withHeaders(headers: { [key: string]: string }) {
         this.matcher = combineMatchers(this.matcher, headersMatcher(headers));
@@ -22,14 +23,22 @@ export default class PartialMockRule {
     }
 
     thenReply(status: number, data?: string): MockRule {
-        let completionHandler = triggerOnce();
-
-        let rule = {
-            matches: this.matcher,
-            handleRequest: completionHandler.wrap(simpleResponder(status, data)), // TODO: Should wrap whole rule?
-            isComplete: completionHandler,
-            explain: () => `Match requests ${rule.matches.explain()} and ${rule.handleRequest.explain()}, ${completionHandler.explain()}.`
+        const explain = () => {
+            let explanation = `Match requests ${rule.matches.explain()}, and then ${rule.handleRequest.explain()}`;
+            if (this.isComplete) {
+                explanation += `, ${this.isComplete.explain()}.`;
+            }
+            return explanation;
         }
+
+        const rule: MockRule = {
+            matches: this.matcher,
+            callCount: 0,
+            handleRequest: wrapHandler(() => rule.callCount++, simpleResponder(status, data)),
+            isComplete: this.isComplete,
+            explain: explain
+        }
+
         this.addRule(rule);
         return rule;
     }
@@ -78,18 +87,20 @@ function simpleResponder(status: number, data?: string): RequestHandler {
     return responder;
 }
 
+function wrapHandler(beforeHook: (request: Request) => void, handler: RequestHandler): RequestHandler {
+    let wrappedHandler = <RequestHandler> ((request: Request, response: express.Response) => {
+        beforeHook(request);
+        return handler(request, response);
+    });
+    wrappedHandler.explain = handler.explain;
+    return wrappedHandler;
+}
+
 function triggerOnce(): RuleCompletionChecker {
     let callCount = 0;
-    let isComplete = <RuleCompletionChecker> (() => callCount > 0);
-
-    isComplete.wrap = (handler: RequestHandler) => {
-        let wrappedHandler = <RequestHandler> ((request: Request, response: express.Response) => {
-            callCount += 1;
-            return handler(request, response);
-        });
-        wrappedHandler.explain = handler.explain;
-        return wrappedHandler;
-    };
+    let isComplete = <RuleCompletionChecker> (function () {
+        return this.callCount > 0;
+    });
 
     isComplete.explain = () => "once";
 
