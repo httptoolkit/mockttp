@@ -3,6 +3,13 @@ import _ = require("lodash");
 
 import { Method, Request } from "../common-types";
 import { MockRule, RequestMatcher, RequestHandler, RuleCompletionChecker } from "./mock-rule-types";
+import {
+    always,
+    once,
+    twice,
+    thrice,
+    times
+} from './completion-checkers';
 
 export default class PartialMockRule {
     constructor(method: Method, path: string, private addRule: (rule: MockRule) => void) {
@@ -22,6 +29,31 @@ export default class PartialMockRule {
         return this;
     }
 
+    always(): PartialMockRule {
+        this.isComplete = always;
+        return this;
+    }
+
+    once(): PartialMockRule {
+        this.isComplete = once;
+        return this;
+    }
+
+    twice(): PartialMockRule {
+        this.isComplete = twice;
+        return this;
+    }
+
+    thrice(): PartialMockRule {
+        this.isComplete = thrice;
+        return this;
+    }
+
+    times(n: number): PartialMockRule {
+        this.isComplete = times(n);
+        return this;
+    }
+
     thenReply(status: number, data?: string): MockRule {
         const explain = () => {
             let explanation = `Match requests ${rule.matches.explain()}, and then ${rule.handleRequest.explain()}`;
@@ -34,7 +66,10 @@ export default class PartialMockRule {
         const rule: MockRule = {
             matches: this.matcher,
             callCount: 0,
-            handleRequest: wrapHandler(() => rule.callCount++, simpleResponder(status, data)),
+            handleRequest: wrapHandler(
+                () => rule.callCount++,
+                simpleResponder(status, data)
+            ),
             isComplete: this.isComplete,
             explain: explain
         }
@@ -94,15 +129,4 @@ function wrapHandler(beforeHook: (request: Request) => void, handler: RequestHan
     });
     wrappedHandler.explain = handler.explain;
     return wrappedHandler;
-}
-
-function triggerOnce(): RuleCompletionChecker {
-    let callCount = 0;
-    let isComplete = <RuleCompletionChecker> (function () {
-        return this.callCount > 0;
-    });
-
-    isComplete.explain = () => "once";
-
-    return isComplete;
 }
