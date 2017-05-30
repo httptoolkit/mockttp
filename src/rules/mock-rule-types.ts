@@ -6,7 +6,8 @@ export interface MockRule extends Explainable {
     handleRequest: RequestHandler;
     isComplete?: RuleCompletionChecker;
 
-    requestCount: number;
+    readonly requestCount: number;
+    requests: Request[];
 }
 
 export type RequestMatcher = ((request: Request) => boolean) & Explainable;

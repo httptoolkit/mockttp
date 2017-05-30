@@ -65,13 +65,17 @@ export default class PartialMockRule {
 
         const rule: MockRule = {
             matches: this.matcher,
-            requestCount: 0,
             handleRequest: wrapHandler(
-                () => rule.requestCount++,
+                (request) => rule.requests.push(request),
                 simpleResponder(status, data)
             ),
             isComplete: this.isComplete,
-            explain: explain
+            explain: explain,
+
+            get requestCount() {
+                return this.requests.length;
+            },
+            requests: []
         }
 
         this.addRule(rule);
