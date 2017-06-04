@@ -1,7 +1,7 @@
 import express = require("express");
 import _ = require("lodash");
 
-import { Method, Request } from "../common-types";
+import { Method, Request } from "../types";
 import { MockRule, RequestMatcher, RequestHandler, RuleCompletionChecker } from "./mock-rule-types";
 import {
     always,

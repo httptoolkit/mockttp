@@ -1,5 +1,5 @@
 import { RuleCompletionChecker, MockRule } from './mock-rule-types';
-import { Explainable } from "../common-types";
+import { Explainable } from "../types";
 
 export var always: RuleCompletionChecker = withExplanation(
     () => false,

@@ -1,5 +1,5 @@
 import express = require("express");
-import { Explainable, Request } from "../common-types";
+import { Explainable, Request } from "../types";
 
 export interface MockRule extends Explainable {
     matches: RequestMatcher

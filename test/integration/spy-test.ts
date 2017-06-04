@@ -1,5 +1,5 @@
 import HttpServerMock = require("../../src/main");
-import { Request } from "../../src/common-types";
+import { Request } from "../../src/types";
 import request = require("request-promise-native");
 import expect from "../expect";
 

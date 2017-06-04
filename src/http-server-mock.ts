@@ -4,7 +4,7 @@ import express = require("express");
 import bodyParser = require('body-parser');
 import _ = require('lodash');
 
-import { Method, Request } from "./common-types";
+import { Method, Request } from "./types";
 import { MockRule } from "./rules/mock-rule-types";
 import PartialMockRule from "./rules/partial-mock-rule";
 import destroyable, { DestroyableServer } from "./destroyable-server";
