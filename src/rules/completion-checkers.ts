@@ -8,7 +8,7 @@ export var always: RuleCompletionChecker = withExplanation(
 
 function checkTimes(n: number): () => boolean {
     return function (this: MockRule) {
-        return this.requestCount >= n;
+        return this.requests.length >= n;
     }
 }
 

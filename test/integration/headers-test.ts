@@ -1,9 +1,9 @@
-import HttpServerMock = require("../../src/main");
+import { MockServer } from "../..";
 import request = require("request-promise-native");
 import expect from "../expect";
 
 describe("Header matching", function () {
-    let server = new HttpServerMock();
+    let server = new MockServer();
 
     beforeEach(() => server.start());
     afterEach(() => server.stop());
@@ -23,7 +23,6 @@ describe("Header matching", function () {
 
     it("should not match requests with no (extra) headers", async () => {
         await expect(request.get(server.url)).to.eventually.be.rejected;
-
     });
 
     it("should not match requests with the wrong header value", async () => {

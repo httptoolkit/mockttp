@@ -1,4 +1,8 @@
 import HttpServerMock from "./http-server-mock";
+import { Request } from "./types";
 
-// Export our internal ES6 modules to fit normal CommonJS conventions
-export = HttpServerMock;
+export var MockServer = HttpServerMock;
+
+export interface MockedEndpoint {
+    getSeenRequests(): Request[]
+}

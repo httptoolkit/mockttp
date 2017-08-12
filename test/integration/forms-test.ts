@@ -1,9 +1,9 @@
-import HttpServerMock = require("../../src/main");
+import { MockServer } from "../..";
 import request = require("request-promise-native");
 import expect from "../expect";
 
 describe("Form data matching", function () {
-    let server = new HttpServerMock();
+    let server = new MockServer();
 
     beforeEach(() => server.start());
     afterEach(() => server.stop());

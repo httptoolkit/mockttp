@@ -2,7 +2,7 @@ import express = require("express");
 import _ = require("lodash");
 
 import { Method, Request } from "../types";
-import { MockRule, RequestMatcher, RequestHandler, RuleCompletionChecker } from "./mock-rule-types";
+import { MockRule, RequestMatcher, RequestHandler, RuleCompletionChecker, MockedEndpoint } from "./mock-rule-types";
 import {
     always,
     once,
@@ -54,7 +54,7 @@ export default class PartialMockRule {
         return this;
     }
 
-    thenReply(status: number, data?: string): MockRule {
+    thenReply(status: number, data?: string): Promise<MockedEndpoint> {
         const explain = () => {
             let explanation = `Match requests ${rule.matches.explain()}, and then ${rule.handleRequest.explain()}`;
             if (this.isComplete) {
@@ -72,14 +72,14 @@ export default class PartialMockRule {
             isComplete: this.isComplete,
             explain: explain,
 
-            get requestCount() {
-                return this.requests.length;
-            },
             requests: []
-        }
+        };
 
         this.addRule(rule);
-        return rule;
+
+        return Promise.resolve({
+            getSeenRequests: () => Promise.resolve<Request[]>(_.clone(rule.requests))
+        });
     }
 }
 

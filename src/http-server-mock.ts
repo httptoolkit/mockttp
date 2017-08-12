@@ -122,7 +122,7 @@ export default class HttpServerMock {
         } else if (matchingRules[matchingRules.length - 1] === rule) {
             return false;
         } else {
-            return rule.requestCount !== 0;
+            return rule.requests.length !== 0;
         }
     }
 }

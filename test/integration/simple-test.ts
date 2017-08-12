@@ -1,9 +1,9 @@
-import HttpServerMock = require("../../src/main");
+import { MockServer } from "../..";
 import request = require("request-promise-native");
 import expect from "../expect";
 
 describe("Basic HTTP mocking", function () {
-    let server = new HttpServerMock();
+    let server = new MockServer();
 
     beforeEach(() => server.start());
     afterEach(() => server.stop());

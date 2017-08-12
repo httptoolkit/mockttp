@@ -1,9 +1,9 @@
-import HttpServerMock = require("../../src/main");
+import { MockServer } from "../..";
 import request = require("request-promise-native");
 import expect from "../expect";
 
 describe("HTTP mock rule completion", function () {
-    let server = new HttpServerMock();
+    let server = new MockServer();
 
     beforeEach(() => server.start());
     afterEach(() => server.stop());
@@ -35,7 +35,7 @@ describe("HTTP mock rule completion", function () {
         expect(secondResponse).to.equal("endless response");
     });
 
-    it("should run explicitly once() rules only every once", async () => {
+    it("should run explicitly once() rules only once", async () => {
         server.get("/endpoint").once().thenReply(200, "first");
         server.get("/endpoint").once().thenReply(200, "second");
 
