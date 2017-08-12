@@ -14,3 +14,8 @@ export interface Request extends express.Request {
 export interface Explainable {
     explain(): string;
 }
+
+export interface ProxyConfig {
+    HTTP_PROXY: string;
+    HTTPS_PROXY: string;
+}

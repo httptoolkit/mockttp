@@ -4,7 +4,7 @@ import express = require("express");
 import bodyParser = require('body-parser');
 import _ = require('lodash');
 
-import { Method, Request } from "./types";
+import { Method, Request, ProxyConfig } from "./types";
 import { MockRule } from "./rules/mock-rule-types";
 import PartialMockRule from "./rules/partial-mock-rule";
 import destroyable, { DestroyableServer } from "./destroyable-server";
@@ -63,7 +63,7 @@ export default class HttpServerMock {
         return "http://localhost:" + this.server.address().port;
     }
 
-    get proxyEnv() {
+    get proxyEnv(): ProxyConfig {
         return {
             HTTP_PROXY: this.url,
             HTTPS_PROXY: this.url
