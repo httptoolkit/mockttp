@@ -8,9 +8,10 @@ import { Method, Request, ProxyConfig } from "./types";
 import { MockRule } from "./rules/mock-rule-types";
 import PartialMockRule from "./rules/partial-mock-rule";
 import destroyable, { DestroyableServer } from "./destroyable-server";
+import HttpServerMock from "./http-server-mock-types";
 
 // Provides all the external API, uses that to build and manage the rules list, and interrogate our recorded requests
-export default class HttpServerMock {
+export default class HttpServerMockServer implements HttpServerMock {
     private rules: MockRule[] = [];
     private debug: boolean = false;
 
