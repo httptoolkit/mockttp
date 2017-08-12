@@ -1,5 +1,4 @@
-import { MockServer } from "../..";
-import { Request } from "../../src/types";
+import { MockServer, Request } from "../..";
 import request = require("request-promise-native");
 import expect from "../expect";
 

@@ -1,5 +1,5 @@
 import HttpServerMock from "./http-server-mock";
-import { Request } from "./types";
+export { Request } from "./types";
 
 export var MockServer = HttpServerMock;
 
