@@ -1,7 +1,7 @@
 import PartialMockRule from "./rules/partial-mock-rule";
 import { ProxyConfig } from "./types";
 
-export default interface HttpServerMock {
+export interface HttpServerMock {
     start(port?: number): Promise<void>;
     stop(): Promise<void>;
 
