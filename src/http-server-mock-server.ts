@@ -41,13 +41,7 @@ export default class HttpServerMockServer implements HttpServerMock {
     }
 
     async stop(): Promise<void> {
-        await new Promise<void>((resolve, reject) => {
-            try {
-                this.server.destroy(resolve);
-            } catch (e) {
-                reject(e);
-            }
-        });
+        await this.server.destroy();
         this.reset();
     }
 
