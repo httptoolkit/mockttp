@@ -5,7 +5,8 @@ import destroyable, { DestroyableServer } from "../destroyable-server";
 import bodyParser = require('body-parser');
 import { graphqlExpress } from 'apollo-server-express';
 import { buildSchema, GraphQLSchema } from 'graphql';
-import { getResolver } from "./standalone-resolver";
+import HttpServerMockServer from "../http-server-mock-server";
+import { StandaloneModel } from "./standalone-model";
 
 export class HttpServerMockStandalone {
     static readonly DEFAULT_PORT = 45456;
@@ -13,36 +14,43 @@ export class HttpServerMockStandalone {
     private app: express.Application = express();
     private server: DestroyableServer;
 
-    constructor(private schema: GraphQLSchema) {
-        this.app.use('/graphql', bodyParser.json(), graphqlExpress({
-            schema,
-            rootValue: getResolver()
-        }));
+    private schemaLoaded: Promise<void>;
+    private mockServer: HttpServerMockServer = new HttpServerMockServer();
+
+    constructor() {
+        this.schemaLoaded = this.loadSchema('schema.gql').then((schema) => {
+            this.app.use('/graphql', bodyParser.json(), graphqlExpress({
+                schema,
+                rootValue: new StandaloneModel(this.mockServer)
+            }));
+        });
     }
 
-    start() {
+    loadSchema(schemaFilename: string): Promise<GraphQLSchema> {
+        return new Promise((resolve, reject) => {
+            fs.readFile(path.join(__dirname, schemaFilename), 'utf8', (err, schemaString) => {
+                if (err) reject(err);
+                else resolve(buildSchema(schemaString));
+            });
+        });
+    }
+
+    async start() {
         const port = HttpServerMockStandalone.DEFAULT_PORT;
 
-        return new Promise<void>((resolve, reject) => {
+        // Wait for the mock server & schema before we start the admin server
+        await this.mockServer.start();
+        await this.schemaLoaded;
+
+        await new Promise<void>((resolve, reject) => {
             this.server = destroyable(this.app.listen(port, resolve));
         });
     }
 
-    async stop() {
-        await this.server.destroy();
+    stop() {
+        return Promise.all([
+            this.server.destroy(),
+            this.mockServer.stop()
+        ]);
     }
-}
-
-function getSchema(filename: string): Promise<GraphQLSchema> {
-    return new Promise((resolve, reject) => {
-        fs.readFile(path.join(__dirname, filename), 'utf8', (err, schemaString) => {
-            if (err) reject(err);
-            else resolve(buildSchema(schemaString));
-        });
-    });
-}
-
-export async function getStandalone() {
-    const schema = await getSchema('schema.gql')
-    return new HttpServerMockStandalone(schema);
 }

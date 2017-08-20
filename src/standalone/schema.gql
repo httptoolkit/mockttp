@@ -1,5 +1,6 @@
 type Query {
     mockedEndpoints: [MockedEndpoint!]!
+    urlFor(path: String): String
 }
 
 type MockedEndpoint {
@@ -8,18 +9,18 @@ type MockedEndpoint {
 }
 
 type Request {
-    id: ID!
     body: String
 }
 
 type Mutation {
-    addRule(rule: MockRule): MockedEndpoint
-    reset: Boolean
+    addRule(input: MockRule): MockedEndpoint!
+    reset: Boolean!
 }
 
 input MockRule {
     matcher: RuleMatcher!
     completionChecker: RuleCompletionChecker!
+    response: RuleResponse!
 }
 
 input RuleMatcher {
@@ -28,9 +29,9 @@ input RuleMatcher {
 }
 
 enum Method {
-    GET
-    POST
-    PUT
+    get
+    post
+    put
 }
 
 enum RuleCompletionChecker {
@@ -38,4 +39,9 @@ enum RuleCompletionChecker {
     once
     twice
     thrice
+}
+
+input RuleResponse {
+    status: Int!
+    body: String
 }

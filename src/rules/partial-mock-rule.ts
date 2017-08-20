@@ -1,5 +1,6 @@
 import express = require("express");
 import _ = require("lodash");
+import uuid = require("uuid/v1");
 
 import { Method, Request } from "../types";
 import { MockRule, RequestMatcher, RequestHandler, RuleCompletionChecker, MockedEndpoint } from "./mock-rule-types";
@@ -63,7 +64,15 @@ export default class PartialMockRule {
             return explanation;
         }
 
+        const id = uuid();
+
+        const endpoint = {
+            id,
+            getSeenRequests: () => Promise.resolve<Request[]>(_.clone(rule.requests))
+        };
+
         const rule: MockRule = {
+            id,
             matches: this.matcher,
             handleRequest: wrapHandler(
                 (request) => rule.requests.push(request),
@@ -72,14 +81,13 @@ export default class PartialMockRule {
             isComplete: this.isComplete,
             explain: explain,
 
-            requests: []
+            requests: [],
+            getMockedEndpoint: () => endpoint
         };
 
         this.addRule(rule);
 
-        return Promise.resolve({
-            getSeenRequests: () => Promise.resolve<Request[]>(_.clone(rule.requests))
-        });
+        return Promise.resolve(rule.getMockedEndpoint());
     }
 }
 

@@ -3,16 +3,19 @@ import { Explainable, Request } from "../types";
 
 // The external interface of a rule, for users to later verify with
 export interface MockedEndpoint {
-    getSeenRequests(): Promise<Request[]>
+    id: string;
+    getSeenRequests(): Promise<Request[]>;
 }
 
 // The internal representation of the mocked endpoint
 export interface MockRule extends Explainable {
-    matches: RequestMatcher
+    id: string;
+    matches: RequestMatcher;
     handleRequest: RequestHandler;
     isComplete?: RuleCompletionChecker;
 
     requests: Request[];
+    getMockedEndpoint(): MockedEndpoint;
 }
 
 export type RequestMatcher = ((request: Request) => boolean) & Explainable;

@@ -5,7 +5,7 @@ import bodyParser = require('body-parser');
 import _ = require('lodash');
 
 import { Method, Request, ProxyConfig } from "./types";
-import { MockRule } from "./rules/mock-rule-types";
+import { MockRule, MockedEndpoint } from "./rules/mock-rule-types";
 import PartialMockRule from "./rules/partial-mock-rule";
 import destroyable, { DestroyableServer } from "./destroyable-server";
 import { HttpServerMock } from "./http-server-mock-types";
@@ -52,6 +52,10 @@ export default class HttpServerMockServer implements HttpServerMock {
     reset() {
         this.rules = [];
         this.debug = false;
+    }
+
+    get mockedEndpoints(): MockedEndpoint[] {
+        return this.rules.map((rule) => rule.getMockedEndpoint());
     }
 
     get url(): string {

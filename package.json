@@ -7,7 +7,7 @@
   "scripts": {
     "build": "rimraf dist/* && tsc -p src && cp src/standalone/schema.gql dist/standalone/schema.gql",
     "test": "npm run build && mocha -r ts-node/register 'test/**/*-test.ts'",
-    "standalone": "npm run build && node -e 'require(\".\").getStandalone().then((s) => s.start())'",
+    "standalone": "npm run build && node -e 'require(\".\").getStandalone().start()'",
     "graphiql": "npm run build && node ./standalone-graphiql.js",
     "prepublish": "npm run build"
   },
@@ -59,11 +59,13 @@
     "@types/graphql": "^0.10.2",
     "@types/lodash": "^4.14.37",
     "@types/node": "^6.0.45",
+    "@types/uuid": "^3.4.0",
     "apollo-server-express": "^1.1.0",
     "body-parser": "^1.15.2",
     "express": "^4.14.0",
     "graphql": "^0.10.5",
     "lodash": "^4.16.4",
-    "portfinder": "^1.0.9"
+    "portfinder": "^1.0.9",
+    "uuid": "^3.1.0"
   }
 }
