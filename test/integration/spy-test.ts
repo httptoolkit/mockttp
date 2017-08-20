@@ -1,9 +1,9 @@
-import { MockServer, Request } from "../..";
+import { getLocal, Request } from "../..";
 import request = require("request-promise-native");
 import expect from "../expect";
 
 describe("HTTP request spying", function () {
-    let server = new MockServer();
+    let server = getLocal();
 
     beforeEach(() => server.start());
     afterEach(() => server.stop());

@@ -1,12 +1,12 @@
 import _ = require("lodash");
-import { MockServer } from "../..";
+import { getLocal } from "../..";
 import request = require("request-promise-native");
 import expect from "../expect";
 
 const INITIAL_ENV = _.cloneDeep(process.env);
 
 describe("HTTP Server Mock when used as a proxy", function () {
-    let server = new MockServer();
+    let server = getLocal();
 
     beforeEach(() => server.start());
     afterEach(async () => {

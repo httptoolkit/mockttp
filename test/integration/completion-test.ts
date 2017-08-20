@@ -1,9 +1,9 @@
-import { MockServer } from "../..";
+import { getLocal } from "../..";
 import request = require("request-promise-native");
 import expect from "../expect";
 
 describe("HTTP mock rule completion", function () {
-    let server = new MockServer();
+    let server = getLocal();
 
     beforeEach(() => server.start());
     afterEach(() => server.stop());
