@@ -59,7 +59,6 @@
     "@types/node": "^6.0.45",
     "apollo-server-express": "^1.1.0",
     "body-parser": "^1.15.2",
-    "cors": "^2.8.4",
     "express": "^4.14.0",
     "graphql": "^0.10.5",
     "lodash": "^4.16.4",

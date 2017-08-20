@@ -1,10 +1,9 @@
 import fs = require('fs');
 import path = require('path');
 import express = require('express');
-import cors = require('cors');
 import destroyable, { DestroyableServer } from "../destroyable-server";
 import bodyParser = require('body-parser');
-import { graphqlExpress } from 'apollo-server-express';
+import { graphqlExpress, graphiqlExpress } from 'apollo-server-express';
 import { buildSchema, GraphQLSchema } from 'graphql';
 import { getResolver } from "./standalone-resolver";
 
@@ -15,11 +14,12 @@ export class HttpServerMockStandalone {
     private server: DestroyableServer;
 
     constructor(private schema: GraphQLSchema) {
-        this.app.use(cors());
-        this.app.options('*', cors()) 
         this.app.use('/graphql', bodyParser.json(), graphqlExpress({
             schema,
             rootValue: getResolver()
+        }));
+        this.app.use('/graphiql', graphiqlExpress({
+            endpointURL: '/graphql',
         }));
     }
 
