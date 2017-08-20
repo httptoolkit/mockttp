@@ -3,7 +3,7 @@ import path = require('path');
 import express = require('express');
 import destroyable, { DestroyableServer } from "../destroyable-server";
 import bodyParser = require('body-parser');
-import { graphqlExpress, graphiqlExpress } from 'apollo-server-express';
+import { graphqlExpress } from 'apollo-server-express';
 import { buildSchema, GraphQLSchema } from 'graphql';
 import { getResolver } from "./standalone-resolver";
 
@@ -17,9 +17,6 @@ export class HttpServerMockStandalone {
         this.app.use('/graphql', bodyParser.json(), graphqlExpress({
             schema,
             rootValue: getResolver()
-        }));
-        this.app.use('/graphiql', graphiqlExpress({
-            endpointURL: '/graphql',
         }));
     }
 
