@@ -1,0 +1,41 @@
+type Query {
+    mockedEndpoints: [MockedEndpoint!]!
+}
+
+type MockedEndpoint {
+    id: ID!
+    seenRequests: [Request!]!
+}
+
+type Request {
+    id: ID!
+    body: String
+}
+
+type Mutation {
+    addRule(rule: MockRule): MockedEndpoint
+    reset: Boolean
+}
+
+input MockRule {
+    matcher: RuleMatcher!
+    completionChecker: RuleCompletionChecker!
+}
+
+input RuleMatcher {
+    method: Method!
+    url: String!
+}
+
+enum Method {
+    GET
+    POST
+    PUT
+}
+
+enum RuleCompletionChecker {
+    always
+    once
+    twice
+    thrice
+}

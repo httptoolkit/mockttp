@@ -4,7 +4,14 @@
         "module": "commonjs",
         "declaration": true,
         "outDir": "../dist",
-        "strict": true
+        "strict": true,
+        "lib": [
+            "dom",
+            "es5",
+            "scripthost",
+            // Required for graphql (but it does actually bring its own polyfill)
+            "esnext.asynciterable"
+        ]
     },
     "compileOnSave": true,
     "buildOnSave": true,

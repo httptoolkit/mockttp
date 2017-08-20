@@ -1,4 +1,5 @@
 import HttpServerMockServer from "./http-server-mock-server";
+import { HttpServerMockStandalone, getStandalone } from "./standalone/http-server-mock-standalone";
 
 import { HttpServerMock } from "./http-server-mock-types";
 export { Request } from "./types";
@@ -10,3 +11,5 @@ export interface MockedEndpoint {
 export function getLocal(): HttpServerMock {
     return new HttpServerMockServer();
 }
+
+export { getStandalone }
