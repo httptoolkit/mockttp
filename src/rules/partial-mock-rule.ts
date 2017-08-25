@@ -56,10 +56,12 @@ export default class PartialMockRule {
     }
 
     thenReply(status: number, data?: string): Promise<MockedEndpoint> {
-        const explain = () => {
-            let explanation = `Match requests ${rule.matches.explain()}, and then ${rule.handleRequest.explain()}`;
+        const explain = function (this: MockRule) {
+            let explanation = `Match requests ${this.matches.explain.apply(this)}, ` +
+            `and then ${this.handleRequest.explain.apply(this)}`;
+
             if (this.isComplete) {
-                explanation += `, ${this.isComplete.explain()}.`;
+                explanation += `, ${this.isComplete.explain.apply(this)}.`;
             }
             return explanation;
         }
@@ -93,7 +95,9 @@ export default class PartialMockRule {
 
 function combineMatchers(matcherA: RequestMatcher, matcherB: RequestMatcher): RequestMatcher {
     let matcher = <RequestMatcher> ((request) => matcherA(request) && matcherB(request));
-    matcher.explain = () => `${matcherA.explain()} and ${matcherB.explain()}`;
+    matcher.explain = function (this: MockRule) {
+        return `${matcherA.explain.apply(this)} and ${matcherB.explain.apply(this)}`;
+    }
     return matcher;
 }
 

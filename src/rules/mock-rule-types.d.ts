@@ -18,9 +18,13 @@ export interface MockRule extends Explainable {
     getMockedEndpoint(): MockedEndpoint;
 }
 
-export type RequestMatcher = ((request: Request) => boolean) & Explainable;
-export type RequestHandler = ((request: Request, response: express.Response) => Promise<void>) & Explainable;
+export interface RuleExplainable extends Explainable {
+    explain(this: MockRule): string;
+}
 
-export interface RuleCompletionChecker extends Explainable {
+export type RequestMatcher = ((request: Request) => boolean) & RuleExplainable;
+export type RequestHandler = ((request: Request, response: express.Response) => Promise<void>) & RuleExplainable;
+
+export interface RuleCompletionChecker extends RuleExplainable {
     (this: MockRule): boolean;
 }
