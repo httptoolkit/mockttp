@@ -99,7 +99,6 @@ export default class HttpServerMockServer implements HttpServerMock {
                 response.writeHead(503, `Request for unmocked endpoint`);
                 response.write("No rules were found matching this request.\n");
                 response.write(`This request was: ${explainRequest(request)}\n\n`);
-                // TODO: You could match this with...
 
                 response.write("The configured rules are:\n");
                 this.rules.forEach((rule) => response.write(rule.explain() + "\n"));

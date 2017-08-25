@@ -62,7 +62,6 @@ describe("HTTP mock rule completion", function () {
 
         let fourthResult = await request.get(server.urlFor("/endpoint")).catch(e => e);
 
-        // TODO: Build a chai helper that matches this automatically
         expect(fourthResult).to.be.instanceof(Error);
         expect(fourthResult.statusCode).to.equal(503);
         expect(fourthResult.message).to.include("No rules were found matching this request");

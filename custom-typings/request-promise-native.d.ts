@@ -1,5 +1,3 @@
-// Taken directly from https://github.com/DefinitelyTyped/DefinitelyTyped/blob/master/request-promise-native/request-promise-native.d.ts
-// TODO: Remove this once @types/request-promise-native has been published (imminently)
 declare module 'request-promise-native' {
     import request = require('request');
     import http = require('http');
