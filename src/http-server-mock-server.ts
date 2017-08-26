@@ -62,6 +62,12 @@ export default class HttpServerMockServer implements HttpServerMock {
         return "http://localhost:" + this.server.address().port;
     }
 
+    get port(): number | null {
+        if (!this.server) return null
+
+        return this.server.address().port;
+    }
+
     get proxyEnv(): ProxyConfig {
         return {
             HTTP_PROXY: this.url,
