@@ -7,26 +7,34 @@ import { graphqlExpress } from 'apollo-server-express';
 import { buildSchema, GraphQLSchema } from 'graphql';
 import HttpServerMockServer from "../http-server-mock-server";
 import { StandaloneModel } from "./standalone-model";
+import * as _ from "lodash";
+
+export const DEFAULT_PORT = 45456;
 
 export class HttpServerMockStandalone {
-    static readonly DEFAULT_PORT = 45456;
-
     private app: express.Application = express();
-    private server: DestroyableServer;
+    private server: DestroyableServer | null = null;
 
-    private schemaLoaded: Promise<void>;
-    private mockServer: HttpServerMockServer = new HttpServerMockServer();
+    private schema: Promise<GraphQLSchema>;
+    private mockServers: HttpServerMockServer[] = [];
 
     constructor() {
-        this.schemaLoaded = this.loadSchema('schema.gql').then((schema) => {
-            this.app.use('/graphql', bodyParser.json(), graphqlExpress({
-                schema,
-                rootValue: new StandaloneModel(this.mockServer)
-            }));
+        this.schema = this.loadSchema('schema.gql');
+
+        this.app.post('/start', async (req, res) => {
+            const port = req.query.port;
+
+            const mockServerPath = await this.startMockServer(port);
+
+            const config: MockServerConfig = {
+                root: `http://localhost:${this.server!.address().port}${mockServerPath}`
+            };
+
+            res.json(config);
         });
     }
 
-    loadSchema(schemaFilename: string): Promise<GraphQLSchema> {
+    private loadSchema(schemaFilename: string): Promise<GraphQLSchema> {
         return new Promise((resolve, reject) => {
             fs.readFile(path.join(__dirname, schemaFilename), 'utf8', (err, schemaString) => {
                 if (err) reject(err);
@@ -36,21 +44,52 @@ export class HttpServerMockStandalone {
     }
 
     async start() {
-        const port = HttpServerMockStandalone.DEFAULT_PORT;
+        if (this.server) throw new Error('Standalone server already running');
 
-        // Wait for the mock server & schema before we start the admin server
-        await this.mockServer.start();
-        await this.schemaLoaded;
+        // Make sure the mock schema is ready before we start the admin server
+        await this.schema;
 
         await new Promise<void>((resolve, reject) => {
-            this.server = destroyable(this.app.listen(port, resolve));
+            this.server = destroyable(this.app.listen(DEFAULT_PORT, resolve));
         });
     }
 
+    private async startMockServer(port?: number): Promise<string> {
+        const mockServer = new HttpServerMockServer();
+        this.mockServers.push(mockServer);
+        await mockServer.start(port);
+
+        const mockServerPath = '/server/' + mockServer.port
+
+        this.app.post(`${mockServerPath}/stop`, async (req, res) => {
+            await mockServer.stop();
+            this.mockServers = _.reject(this.mockServers, mockServer);
+
+            res.status(200).send(JSON.stringify({
+                success: true
+            }));
+        });
+        this.app.use(mockServerPath, bodyParser.json(), graphqlExpress({
+            schema: await this.schema,
+            rootValue: new StandaloneModel(mockServer)
+        }));
+
+        return mockServerPath;
+    }
+
     stop() {
+        if (!this.server) return;
+
         return Promise.all([
             this.server.destroy(),
-            this.mockServer.stop()
-        ]);
+        ].concat(
+            this.mockServers.map((s) => s.stop())
+        )).then(() => {
+            this.server = null;
+        });
     }
+}
+
+export interface MockServerConfig {
+    root: string
 }
