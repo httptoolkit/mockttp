@@ -14,7 +14,7 @@ export interface MockRuleInput {
     }
 }
 
-interface MockedEndpointOutput {
+export interface MockedEndpointOutput {
     id: string,
     seenRequests: Request[]
 }
@@ -30,19 +30,24 @@ function addRule(
 async function formatEndpointOutput(endpoint: MockedEndpoint): Promise<MockedEndpointOutput> {
     return {
         id: endpoint.id,
-        seenRequests: await endpoint.getSeenRequests()
+        seenRequests: (await endpoint.getSeenRequests()).map((request) => {
+            request.body = JSON.stringify(request.body);
+            return request;
+        })
     };
 }
 
 export class StandaloneModel {
-    constructor(private mockServer: HttpServerMockServer) { }
+    constructor(
+        private mockServer: HttpServerMockServer
+    ) { }
 
     mockedEndpoints() {
-        this.mockServer.mockedEndpoints.map(formatEndpointOutput)
+        return this.mockServer.mockedEndpoints.map(formatEndpointOutput);
     }
 
     addRule({ input }: { input: MockRuleInput }) {
-        addRule(this.mockServer, input).then(formatEndpointOutput)
+        return addRule(this.mockServer, input).then(formatEndpointOutput)
     }
 
     reset() {
@@ -50,7 +55,7 @@ export class StandaloneModel {
         return true;
     }
 
-    urlFor({ path }: { path: string }) {
-        this.mockServer.urlFor(path);
+    urlFor ({ path }: { path: string }) {
+        return this.mockServer.urlFor(path);
     }
 }
