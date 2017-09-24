@@ -59,7 +59,7 @@ export class HttpServerMockStandalone {
         this.mockServers.push(mockServer);
         await mockServer.start(port);
 
-        const mockServerPath = '/server/' + mockServer.port
+        const mockServerPath = '/server/' + mockServer.port;
 
         this.app.post(`${mockServerPath}/stop`, async (req, res) => {
             await mockServer.stop();

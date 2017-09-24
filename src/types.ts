@@ -10,6 +10,8 @@ export interface Request extends express.Request {
     body: any; // Added by body-parser
 }
 
+export interface Response extends express.Response { }
+
 export interface Explainable {
     explain(): string;
 }

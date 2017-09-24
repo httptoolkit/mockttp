@@ -5,10 +5,11 @@ import bodyParser = require('body-parser');
 import _ = require('lodash');
 
 import { Method, Request, ProxyConfig } from "./types";
-import { MockRule, MockedEndpoint } from "./rules/mock-rule-types";
+import { MockedEndpoint, MockRuleData } from "./rules/mock-rule-types";
 import PartialMockRule from "./rules/partial-mock-rule";
 import destroyable, { DestroyableServer } from "./destroyable-server";
 import { HttpServerMock } from "./http-server-mock-types";
+import { MockRule } from "./rules/mock-rule";
 
 // Provides all the external API, uses that to build and manage the rules list, and interrogate our recorded requests
 export default class HttpServerMockServer implements HttpServerMock {
@@ -116,8 +117,10 @@ export default class HttpServerMockServer implements HttpServerMock {
         }
     }
 
-    private addRule = (rule: MockRule) => {
+    private addRule = (ruleData: MockRuleData): Promise<MockedEndpoint> => {
+        const rule = new MockRule(ruleData);
         this.rules.push(rule);
+        return Promise.resolve(rule.getMockedEndpoint());
     }
 
     private isComplete = (rule: MockRule, matchingRules: MockRule[]) => {

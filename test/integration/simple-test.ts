@@ -24,4 +24,22 @@ describe("Basic HTTP mocking", function () {
         expect(result.statusCode).to.equal(503);
         expect(result.message).to.include("No rules were found matching this request");
     });
+
+    it("should explain itself", async () => {
+        server.get("/endpointA").once().thenReply(200, "nice request!");
+        server.post("/endpointB").withHeaders({ 'h': 'v' }).withForm({ key: 'value' }).thenReply(500);
+        server.put("/endpointC").always().thenReply(200, "good headers");
+
+        await request.get(server.urlFor("/endpointA"));
+        let error = await request.get(server.urlFor("/non-existent-endpoint")).catch(e => e);
+
+        expect(error.response.body).to.equal(`No rules were found matching this request.
+This request was: GET request to /non-existent-endpoint
+
+The configured rules are:
+Match requests making GETs for /endpointA, and then respond with status 200 and body "nice request!", once (done).
+Match requests making POSTs for /endpointB, with headers including {"h":"v"}, and with form data including {"key":"value"}, and then respond with status 500.
+Match requests making PUTs for /endpointC, and then respond with status 200 and body "good headers", always (seen 0).
+`);
+    });
 });

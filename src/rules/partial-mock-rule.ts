@@ -1,148 +1,87 @@
-import express = require("express");
-import _ = require("lodash");
-import uuid = require("uuid/v1");
-
 import { Method, Request } from "../types";
-import { MockRule, RequestMatcher, RequestHandler, RuleCompletionChecker, MockedEndpoint } from "./mock-rule-types";
-import {
-    always,
-    once,
-    twice,
-    thrice,
-    times
-} from './completion-checkers';
 
+import {
+    MockedEndpoint,
+    MockRuleData
+} from "./mock-rule-types";
+
+import {
+    CompletionCheckerData,
+    AlwaysData,
+    TimesData,
+    ThriceData,
+    TwiceData,
+    OnceData
+} from "./completion-checkers";
+
+import {
+    SimpleMatcherData,
+    MatcherData,
+    HeaderMatcherData,
+    FormDataMatcherData
+} from "./matchers";
+
+import { SimpleHandlerData } from "./handlers";
+
+/**
+ * Fluently builds mock rule data, passing it to the initial
+ * callback once it's built & complete, and returning the (eventually)
+ * defined endpoint to the consuming code once it's been registered
+ */
 export default class PartialMockRule {
-    constructor(method: Method, path: string, private addRule: (rule: MockRule) => void) {
-        this.matcher = simpleMatcher(method, path);
+    constructor(
+        method: Method,
+        path: string,
+        private addRule: (rule: MockRuleData) => Promise<MockedEndpoint>)
+    {
+        this.matchers = [new SimpleMatcherData(method, path)];
     }
 
-    private matcher: RequestMatcher;
-    private isComplete?: RuleCompletionChecker;
+    private matchers: MatcherData[];
+    private isComplete?: CompletionCheckerData;
 
     withHeaders(headers: { [key: string]: string }) {
-        this.matcher = combineMatchers(this.matcher, headersMatcher(headers));
+        this.matchers.push(new HeaderMatcherData(headers));
         return this;
     }
 
     withForm(formData: { [key: string]: string }): PartialMockRule {
-        this.matcher = combineMatchers(this.matcher, formDataMatcher(formData));
+        this.matchers.push(new FormDataMatcherData(formData));
         return this;
     }
 
     always(): PartialMockRule {
-        this.isComplete = always;
+        this.isComplete = new AlwaysData();
         return this;
     }
 
     once(): PartialMockRule {
-        this.isComplete = once;
+        this.isComplete = new OnceData();
         return this;
     }
 
     twice(): PartialMockRule {
-        this.isComplete = twice;
+        this.isComplete = new TwiceData();
         return this;
     }
 
     thrice(): PartialMockRule {
-        this.isComplete = thrice;
+        this.isComplete = new ThriceData();
         return this;
     }
 
     times(n: number): PartialMockRule {
-        this.isComplete = times(n);
+        this.isComplete = new TimesData(n);
         return this;
     }
 
     thenReply(status: number, data?: string): Promise<MockedEndpoint> {
-        const explain = function (this: MockRule) {
-            let explanation = `Match requests ${this.matches.explain.apply(this)}, ` +
-            `and then ${this.handleRequest.explain.apply(this)}`;
-
-            if (this.isComplete) {
-                explanation += `, ${this.isComplete.explain.apply(this)}.`;
-            }
-            return explanation;
-        }
-
-        const id = uuid();
-
-        const endpoint = {
-            id,
-            getSeenRequests: () => Promise.resolve<Request[]>(_.clone(rule.requests))
+        const rule: MockRuleData = {
+            matchers: this.matchers,
+            completionChecker: this.isComplete,
+            handler: new SimpleHandlerData(status, data)
         };
 
-        const rule: MockRule = {
-            id,
-            matches: this.matcher,
-            handleRequest: wrapHandler(
-                (request) => rule.requests.push(request),
-                simpleResponder(status, data)
-            ),
-            isComplete: this.isComplete,
-            explain: explain,
-
-            requests: [],
-            getMockedEndpoint: () => endpoint
-        };
-
-        this.addRule(rule);
-
-        return Promise.resolve(rule.getMockedEndpoint());
+        return this.addRule(rule);
     }
-}
-
-function combineMatchers(matcherA: RequestMatcher, matcherB: RequestMatcher): RequestMatcher {
-    let matcher = <RequestMatcher> ((request) => matcherA(request) && matcherB(request));
-    matcher.explain = function (this: MockRule) {
-        return `${matcherA.explain.apply(this)} and ${matcherB.explain.apply(this)}`;
-    }
-    return matcher;
-}
-
-function simpleMatcher(method: Method, path: string): RequestMatcher {
-    let methodName = Method[method];
-    let matcher = <RequestMatcher> ((request: Request) =>
-        request.method === methodName && request.url === path
-    );
-    matcher.explain = () => `making ${methodName}s for ${path}`;
-    return matcher;
-}
-
-function headersMatcher(headers: { [key: string]: string }): RequestMatcher {
-    let lowerCasedHeaders = _.mapKeys(headers, (value: string, key: string) => key.toLowerCase());
-    let matcher = <RequestMatcher> ((request) =>
-        _.isMatch(request.headers, lowerCasedHeaders)
-    );
-    matcher.explain = () => `with headers including ${JSON.stringify(headers)}`;
-    return matcher;
-}
-
-function formDataMatcher(formData: { [key: string]: string }): RequestMatcher {
-    let matcher = <RequestMatcher> ((request) =>
-        request.headers["content-type"] &&
-        request.headers["content-type"].indexOf("application/x-www-form-urlencoded") !== -1 &&
-        _.isMatch(request.body, formData)
-    );
-    matcher.explain = () => `with form data including ${JSON.stringify(formData)}`;
-    return matcher;
-}
-
-function simpleResponder(status: number, data?: string): RequestHandler {
-    let responder = <RequestHandler> async function(request: Request, response: express.Response) {
-        response.writeHead(status);
-        response.end(data || "");
-    }
-    responder.explain = () => `respond with status ${status}` + (data ? ` and body "${data}"` : "");
-    return responder;
-}
-
-function wrapHandler(beforeHook: (request: Request) => void, handler: RequestHandler): RequestHandler {
-    let wrappedHandler = <RequestHandler> ((request: Request, response: express.Response) => {
-        beforeHook(request);
-        return handler(request, response);
-    });
-    wrappedHandler.explain = handler.explain;
-    return wrappedHandler;
 }
