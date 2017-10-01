@@ -1,6 +1,7 @@
+import * as _ from "lodash";
+
 import { Request, Method } from "../types";
 import { RequestMatcher } from "./mock-rule-types";
-import * as _ from "lodash";
 import { MockRule } from "./mock-rule";
 
 export type MatcherData = (

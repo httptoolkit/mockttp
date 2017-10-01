@@ -55,7 +55,7 @@ export class StandaloneModel {
         return true;
     }
 
-    urlFor ({ path }: { path: string }) {
+    urlFor({ path }: { path: string }) {
         return this.mockServer.urlFor(path);
     }
 }
