@@ -6,7 +6,8 @@
   "types": "src/main.ts",
   "scripts": {
     "build": "rimraf dist/* && tsc -p src && cp src/standalone/schema.gql dist/standalone/schema.gql",
-    "test": "npm run build && mocha -r ts-node/register 'test/**/*-test.ts'",
+    "test": "npm run build && npm run test:mocha",
+    "test:mocha": "mocha -r ts-node/register 'test/**/*-test.ts'",
     "standalone": "npm run build && node -e 'require(\".\").getStandalone().start()'",
     "graphiql": "npm run build && node ./standalone-graphiql.js",
     "prepublish": "npm run build"
