@@ -25,6 +25,15 @@ describe("Basic HTTP mocking", function () {
         expect(result.message).to.include("No rules were found matching this request");
     });
 
+    it("can proxy requests to made to any other hosts", async () => {
+        await server.get("http://google.com").thenReply(200, "Not really google");
+
+        let proxiedRequest = request.defaults({ proxy: server.url });
+        let response = await proxiedRequest.get("http://google.com");
+
+        expect(response).to.equal("Not really google");
+    });
+
     it("should explain itself", async () => {
         server.get("/endpointA").once().thenReply(200, "nice request!");
         server.post("/endpointB").withHeaders({ 'h': 'v' }).withForm({ key: 'value' }).thenReply(500);

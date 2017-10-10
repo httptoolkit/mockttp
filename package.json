@@ -60,6 +60,7 @@
     "@types/graphql": "^0.10.2",
     "@types/lodash": "^4.14.37",
     "@types/node": "^6.0.45",
+    "@types/normalize-url": "^1.9.1",
     "@types/uuid": "^3.4.0",
     "apollo-server-express": "^1.1.0",
     "body-parser": "^1.15.2",
@@ -67,6 +68,7 @@
     "fetch-ponyfill": "^4.1.0",
     "graphql": "^0.10.5",
     "lodash": "^4.16.4",
+    "normalize-url": "^1.9.1",
     "portfinder": "^1.0.9",
     "typed-error": "^2.0.0",
     "uuid": "^3.1.0"

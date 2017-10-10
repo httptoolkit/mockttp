@@ -3,6 +3,7 @@ import * as _ from "lodash";
 import { Request, Method } from "../types";
 import { RequestMatcher } from "./mock-rule-types";
 import { MockRule } from "./mock-rule";
+import normalizeUrl from "../util/normalize-url";
 
 export type MatcherData = (
     SimpleMatcherData |
@@ -77,8 +78,10 @@ type MatcherBuilder<D extends MatcherData> = (data: D) => RequestMatcher
 const matcherBuilders: { [T in MatcherType]: MatcherBuilder<MatcherDataLookup[T]> } = {
     simple: (data: SimpleMatcherData): RequestMatcher => {
         let methodName = Method[data.method];
+        let url = normalizeUrl(data.path);
+
         let matcher = <RequestMatcher> ((request: Request) =>
-            request.method === methodName && request.url === data.path
+            request.method === methodName && normalizeUrl(request.url) === url
         );
         matcher.explain = () => `making ${methodName}s for ${data.path}`;
         return matcher;
