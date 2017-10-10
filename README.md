@@ -36,7 +36,7 @@ Ok, let's summarize. HTTP server mock lets you:
 ## Get Testing
 
 ```typescript
-const request = require("node-fetch");
+const request = require("request");
 const mockServer = require("http-server-mock").getLocal();
 
 describe("Http-server-mock", () => {
@@ -73,7 +73,7 @@ describe("Http-server-mock", () => {
     });
 
     it("also allows request verification", async () => {
-        const endpointMock = await mockServer.get("/mocked-endpoint").thenReply(200, "what have we here?");
+        const endpointMock = await mockServer.get("/mocked-endpoint").thenReply(200, "hmm?");
 
         await request.get(mockServer.urlFor("/mocked-endpoint"));
 
