@@ -3,12 +3,6 @@ import { MatcherData } from "./matchers";
 import { CompletionCheckerData } from "./completion-checkers";
 import { HandlerData } from "./handlers";
 
-// The external interface of a rule, for users to later verify with
-export interface MockedEndpoint {
-    id: string;
-    getSeenRequests(): Promise<Request[]>;
-}
-
 // The internal representation of the mocked endpoint
 export interface MockRule extends Explainable {
     id: string;
@@ -17,7 +11,6 @@ export interface MockRule extends Explainable {
     isComplete?: RuleCompletionChecker;
 
     requests: Request[];
-    getMockedEndpoint(): MockedEndpoint;
 }
 
 export interface MockRuleData {

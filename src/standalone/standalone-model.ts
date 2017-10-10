@@ -1,61 +1,139 @@
-import HttpServerMockServer from "../http-server-mock-server";
-import { Method, Request } from "../types";
-import { MockedEndpoint } from "../rules/mock-rule-types";
+import * as _ from "lodash";
+import {
+  GraphQLScalarType,
+  Kind,
+  ObjectValueNode,
+  ListValueNode,
+  ValueNode
+} from "graphql";
 
-export interface MockRuleInput {
-    matcher: {
-        method: 'get' | 'post' | 'put',
-        url: string
-    },
-    completionChecker: 'always' | 'once' | 'twice' | 'thrice',
-    response: {
-        status: number,
-        body?: string
+import { MatcherData, buildMatchers } from "../rules/matchers";
+import { HandlerData } from "../rules/handlers";
+import { CompletionCheckerData } from "../rules/completion-checkers";
+import HttpServerMockServer from "../server/http-server-mock-server";
+import { Method, Request, MockedEndpoint, MockedEndpointData } from "../types";
+import { MockRuleData } from "../rules/mock-rule-types";
+
+function astToObject<T>(ast: ObjectValueNode): T {
+    return <T> _.zipObject(
+        ast.fields.map((f) => f.name.value),
+        ast.fields.map((f) => f.value)
+    );
+}
+
+function parseAnyAst(ast: ValueNode): any {
+    switch (ast.kind) {
+        case Kind.OBJECT:
+            return astToObject<HandlerData>(ast);
+        case Kind.LIST:
+            return ast.values.map(parseAnyAst);
+        case Kind.BOOLEAN:
+        case Kind.ENUM:
+        case Kind.FLOAT:
+        case Kind.INT:
+        case Kind.STRING:
+            return ast.value;
+        case Kind.NULL:
+            return null;
+        case Kind.VARIABLE:
+            throw new Error("No idea what parsing a 'variable' means");
     }
 }
 
-export interface MockedEndpointOutput {
-    id: string,
-    seenRequests: Request[]
-}
-
-function addRule(
-    mockServer: HttpServerMockServer,
-    { matcher, completionChecker, response }: MockRuleInput
-): Promise<MockedEndpoint> {
-    let rule = mockServer[matcher.method](matcher.url);
-    return rule[completionChecker]().thenReply(response.status, response.body);
-}
-
-async function formatEndpointOutput(endpoint: MockedEndpoint): Promise<MockedEndpointOutput> {
+async function buildMockedEndpointData(endpoint: MockedEndpoint): Promise<MockedEndpointData> {
     return {
         id: endpoint.id,
-        seenRequests: (await endpoint.getSeenRequests()).map((request) => {
-            request.body = JSON.stringify(request.body);
-            return request;
-        })
+        seenRequests: (await endpoint.getSeenRequests())
     };
 }
 
-export class StandaloneModel {
-    constructor(
-        private mockServer: HttpServerMockServer
-    ) { }
+const ScalarResolvers = {
+    RequestMatcher: new GraphQLScalarType({
+        name: 'RequestMatcher',
+        description: 'Matcher for requests',
+        serialize: (value) => {
+            throw new Error('Matchers are input only values')
+        },
+        parseValue: (v) => v,
+        parseLiteral(ast) {
+            if (ast.kind === Kind.OBJECT) {
+                return astToObject<MatcherData>(ast);
+            } else return null;
+        }
+    }),
 
-    mockedEndpoints() {
-        return this.mockServer.mockedEndpoints.map(formatEndpointOutput);
-    }
+    RequestHandler: new GraphQLScalarType({
+        name: 'RequestHandler',
+        description: 'Handler for requests',
+        serialize: (value) => {
+            throw new Error('Handlers are input only values')
+        },
+        parseValue: (v) => v,
+        parseLiteral(ast) {
+            if (ast.kind === Kind.OBJECT) {
+                return astToObject<HandlerData>(ast);
+            } else return null;
+        }
+    }),
 
-    addRule({ input }: { input: MockRuleInput }) {
-        return addRule(this.mockServer, input).then(formatEndpointOutput)
-    }
+    RuleCompletionChecker: new GraphQLScalarType({
+        name: 'RuleCompletionChecker',
+        description: 'Completion checkers for requests',
+        serialize: (value) => {
+            throw new Error('Completion checkers are input only values')
+        },
+        parseValue: (v) => v,
+        parseLiteral(ast) {
+            if (ast.kind === Kind.OBJECT) {
+                return astToObject<CompletionCheckerData>(ast);
+            } else return null;
+        }
+    }),
+    
+    Any: new GraphQLScalarType({
+        name: 'Any',
+        description: 'Wildcard Anything! Here be dragons',
+        serialize: (value: any) => {
+            return JSON.stringify(value);
+        },
+        parseValue: (input: string): any => JSON.parse(input),
+        parseLiteral: parseAnyAst
+    }),
+};
 
-    reset() {
-        this.mockServer.reset();
-        return true;
-    }
+export function buildStandaloneModel(mockServer: HttpServerMockServer) {
+    return {
+        Query: {
+            mockedEndpoints: (): Promise<MockedEndpointData[]> => {
+                return Promise.all(mockServer.mockedEndpoints.map(buildMockedEndpointData));
+            },
 
-    urlFor({ path }: { path: string }) {
-        return this.mockServer.urlFor(path);
-    }
+            mockedEndpoint: (__: any, { id }: { id: string }): Promise<MockedEndpointData> | null => {
+                let endpoint = _.find(mockServer.mockedEndpoints, (endpoint: MockedEndpoint) => {
+                    return endpoint.id === id;
+                });
+
+                if (!endpoint) return null;
+
+                return buildMockedEndpointData(endpoint);
+            }
+        },
+
+        Mutation: {
+            addRule: async (__: any, { input }: { input: MockRuleData }) => {
+                return mockServer.addRule(input);
+            },
+
+            reset: () => {
+                mockServer.reset();
+                return true;
+            },
+
+            stop: () => {
+                throw new Error('...stop?');
+            }
+        },
+
+        ...ScalarResolvers
+    };
 }

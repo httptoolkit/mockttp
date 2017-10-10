@@ -1,6 +1,6 @@
 type Query {
     mockedEndpoints: [MockedEndpoint!]!
-    urlFor(path: String): String
+    mockedEndpoint(id: ID!): MockedEndpoint
 }
 
 type MockedEndpoint {
@@ -9,39 +9,29 @@ type MockedEndpoint {
 }
 
 type Request {
-    body: String
+    protocol: String!
+    method: String!
+    url: String!
+    path: String!
+    hostname: String!
+
+    headers: Any!
+    body: Any!
 }
 
 type Mutation {
-    addRule(input: MockRule): MockedEndpoint!
+    addRule(input: MockRule!): MockedEndpoint!
     reset: Boolean!
+    stop: Boolean!
 }
 
 input MockRule {
-    matcher: RuleMatcher!
-    completionChecker: RuleCompletionChecker!
-    response: RuleResponse!
+    matchers: [RequestMatcher!]!
+    handler: RequestHandler!
+    completionChecker: RuleCompletionChecker
 }
 
-input RuleMatcher {
-    method: Method!
-    url: String!
-}
-
-enum Method {
-    get
-    post
-    put
-}
-
-enum RuleCompletionChecker {
-    always
-    once
-    twice
-    thrice
-}
-
-input RuleResponse {
-    status: Int!
-    body: String
-}
+scalar Any
+scalar RequestMatcher
+scalar RequestHandler
+scalar RuleCompletionChecker

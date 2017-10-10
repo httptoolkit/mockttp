@@ -1,7 +1,6 @@
-import { Method, Request } from "../types";
+import { Method, Request, MockedEndpoint } from "../types";
 
 import {
-    MockedEndpoint,
     MockRuleData
 } from "./mock-rule-types";
 

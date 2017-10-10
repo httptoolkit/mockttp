@@ -7,7 +7,6 @@ import {
   RuleExplainable,
   RuleCompletionChecker,
   RequestHandler,
-  MockedEndpoint,
   RequestMatcher,
   MockRuleData
 } from "./mock-rule-types";
@@ -17,6 +16,14 @@ import {
   CompletionCheckerData,
   buildCompletionChecker
 } from "./completion-checkers";
+
+export function serializeRuleData(data: MockRuleData) {
+    return {
+        matchers: data.matchers,
+        handler: data.handler,
+        completionChecker: data.completionChecker
+    }
+};
 
 export class MockRule implements MockRuleInterface {
     public matches: RequestMatcher;
@@ -44,14 +51,6 @@ export class MockRule implements MockRuleInterface {
         }
         recordRequest.explain = handler.explain;
         return recordRequest;
-    }
-
-    getMockedEndpoint(): MockedEndpoint {
-        return {
-            id: this.id,
-            getSeenRequests: () =>
-                Promise.resolve<Request[]>(_.clone(this.requests))
-        };
     }
 
     explain(): string {

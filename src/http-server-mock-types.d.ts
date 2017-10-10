@@ -8,8 +8,10 @@ export interface HttpServerMock {
     enableDebug(): void;
     reset(): void;
 
-    url: string;
-    proxyEnv: ProxyConfig;
+    url: string | null;
+    port: number | null;
+    proxyEnv: ProxyConfig | null;
+
     urlFor(path: string): string;
 
     get(url: string): PartialMockRule;

@@ -6,11 +6,29 @@ export enum Method {
     PUT
 }
 
-export interface Request extends express.Request {
-    body: any; // Added by body-parser
+export interface Request {
+    protocol: string;
+    method: string;
+    url: string;
+    path: string;
+    hostname: string;
+
+    headers: { [key: string]: string; };
+    body: any;
 }
 
 export interface Response extends express.Response { }
+
+// The external interface of a rule, for users to later verify with
+export interface MockedEndpoint {
+    id: string;
+    getSeenRequests(): Promise<Request[]>;
+}
+
+export interface MockedEndpointData {
+    id: string;
+    seenRequests: Request[];
+}
 
 export interface Explainable {
     explain(): string;

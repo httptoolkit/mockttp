@@ -4,12 +4,13 @@ import express = require("express");
 import bodyParser = require('body-parser');
 import _ = require('lodash');
 
-import { Method, Request, ProxyConfig } from "./types";
-import { MockedEndpoint, MockRuleData } from "./rules/mock-rule-types";
-import PartialMockRule from "./rules/partial-mock-rule";
-import destroyable, { DestroyableServer } from "./destroyable-server";
-import { HttpServerMock } from "./http-server-mock-types";
-import { MockRule } from "./rules/mock-rule";
+import { Method, Request, ProxyConfig } from "../types";
+import { MockRuleData } from "../rules/mock-rule-types";
+import PartialMockRule from "../rules/partial-mock-rule";
+import destroyable, { DestroyableServer } from "../util/destroyable-server";
+import { HttpServerMock } from "../http-server-mock-types";
+import { MockRule } from "../rules/mock-rule";
+import { MockedEndpoint } from "./mocked-endpoint";
 
 // Provides all the external API, uses that to build and manage the rules list, and interrogate our recorded requests
 export default class HttpServerMockServer implements HttpServerMock {
@@ -42,6 +43,8 @@ export default class HttpServerMockServer implements HttpServerMock {
     }
 
     async stop(): Promise<void> {
+        if (this.debug) console.log(`Stopping server at ${this.url}`);
+
         await this.server.destroy();
         this.reset();
     }
@@ -56,20 +59,24 @@ export default class HttpServerMockServer implements HttpServerMock {
     }
 
     get mockedEndpoints(): MockedEndpoint[] {
-        return this.rules.map((rule) => rule.getMockedEndpoint());
+        return this.rules.map((rule) => new MockedEndpoint(rule));
     }
 
-    get url(): string {
+    get url(): string | null {
+        if (!this.server) return null;
+
         return "http://localhost:" + this.server.address().port;
     }
 
     get port(): number | null {
-        if (!this.server) return null
+        if (!this.server) return null;
 
         return this.server.address().port;
     }
 
-    get proxyEnv(): ProxyConfig {
+    get proxyEnv(): ProxyConfig | null {
+        if (!this.url) return null;
+
         return {
             HTTP_PROXY: this.url,
             HTTPS_PROXY: this.url
@@ -90,6 +97,12 @@ export default class HttpServerMockServer implements HttpServerMock {
 
     put(url: string): PartialMockRule {
         return new PartialMockRule(Method.PUT, url, this.addRule);
+    }
+
+    public addRule = (ruleData: MockRuleData): Promise<MockedEndpoint> => {
+        const rule = new MockRule(ruleData);
+        this.rules.push(rule);
+        return Promise.resolve(new MockedEndpoint(rule));
     }
 
     private async handleRequest(request: Request, response: express.Response) {
@@ -115,12 +128,6 @@ export default class HttpServerMockServer implements HttpServerMock {
         } catch (e) {
             console.error("Failed to handle request", e);
         }
-    }
-
-    private addRule = (ruleData: MockRuleData): Promise<MockedEndpoint> => {
-        const rule = new MockRule(ruleData);
-        this.rules.push(rule);
-        return Promise.resolve(rule.getMockedEndpoint());
     }
 
     private isComplete = (rule: MockRule, matchingRules: MockRule[]) => {
