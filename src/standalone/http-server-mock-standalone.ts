@@ -104,8 +104,8 @@ export class HttpServerMockStandalone {
         };
     }
 
-    stop() {
-        if (!this.server) return;
+    stop(): Promise<void> {
+        if (!this.server) return Promise.resolve<void>();
 
         return Promise.all([
             this.server.destroy(),
