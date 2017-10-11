@@ -8,7 +8,8 @@
     "http-server-mock": "./dist/standalone/standalone-bin.js"
   },
   "scripts": {
-    "build": "rimraf dist/* && tsc -p src && cp src/standalone/schema.gql dist/standalone/schema.gql",
+    "prebuild": "rimraf dist/*",
+    "build": "tsc -p src && cp src/standalone/schema.gql dist/standalone/schema.gql",
     "test": "npm run build && npm run test:mocha",
     "test:mocha": "mocha -r ts-node/register 'test/**/*-test.ts'",
     "standalone": "npm run build && node -e 'require(\".\").getStandalone().start()'",
