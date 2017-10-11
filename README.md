@@ -33,6 +33,12 @@ Ok, let's summarize. HTTP server mock lets you:
 * **Debug your tests easily**, with full explainability of all mock matches & misses and an extra detailed debug mode
 * Use promises (and even async/await) and get **strong typing** (with TypeScript) throughout your test code
 
+## Get Started
+
+```bash
+npm install --save-dev http-server-mock
+```
+
 ## Get Testing
 
 ```typescript
@@ -55,17 +61,18 @@ describe("Http-server-mock", () => {
     it("works best with async/await", async () => {
         await mockServer.get("/mocked-endpoint").thenReply(200, "Tip top testing")
 
-        // Want to be agnostic to the mock port, to run tests in parallel? Try .urlFor():
+        // Want to be agnostic to the mock port, to run tests in parallel?
+        // Try mockServer.url or .urlFor(path):
         let response = await request.get(mockServer.urlFor("/mocked-endpoint"));
 
         expect(response).to.equal("Tip top testing");
     });
 
-    it("can proxy requests to made to any other hosts", async () => {
-        await server.get("http://google.com").thenReply(200, "I can't believe it's not google!");
+    it("can proxy requests made to any other hosts", async () => {
+        await mockServer.get("http://google.com").thenReply(200, "I can't believe it's not google!");
 
         // One of the _many_ ways to enable an HTTP proxy:
-        let proxiedRequest = request.defaults({ proxy: server.url });
+        let proxiedRequest = request.defaults({ proxy: mockServer.url });
 
         let response = await proxiedRequest.get("http://google.com");
 
