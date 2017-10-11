@@ -222,4 +222,16 @@ export default class HttpServerMockClient implements HttpServerMock {
     put(url: string): PartialMockRule {
         return new PartialMockRule(Method.PUT, url, this.addRule);
     }
+    
+    delete(url: string): PartialMockRule {
+        return new PartialMockRule(Method.DELETE, url, this.addRule);
+    }
+
+    patch(url: string): PartialMockRule {
+        return new PartialMockRule(Method.PATCH, url, this.addRule);
+    }
+
+    options(url: string): PartialMockRule {
+        return new PartialMockRule(Method.OPTIONS, url, this.addRule);
+    }
 }

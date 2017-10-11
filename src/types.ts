@@ -3,7 +3,10 @@ import express = require("express");
 export enum Method {
     GET,
     POST,
-    PUT
+    PUT,
+    DELETE,
+    PATCH,
+    OPTIONS
 }
 
 export interface Request {

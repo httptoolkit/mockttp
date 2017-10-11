@@ -17,4 +17,7 @@ export interface HttpServerMock {
     get(url: string): PartialMockRule;
     post(url: string): PartialMockRule;
     put(url: string): PartialMockRule;
+    delete(url: string): PartialMockRule;
+    patch(url: string): PartialMockRule;
+    options(url: string): PartialMockRule;
 }
