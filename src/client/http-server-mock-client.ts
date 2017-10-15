@@ -146,20 +146,20 @@ export default class HttpServerMockClient implements HttpServerMock {
         )).data;
     }
 
-    get url(): string | null {
-        if (!this.mockServerConfig) return null;
+    get url(): string {
+        if (!this.mockServerConfig) throw new Error('Cannot get url before server is started');
 
-        return this.mockServerConfig.mockRoot;
+        return this.mockServerConfig!.mockRoot;
     }
 
-    get port(): number | null {
-        if (!this.mockServerConfig) return null;
+    get port(): number {
+        if (!this.mockServerConfig) throw new Error('Cannot get port before server is started');
 
-        return this.mockServerConfig.port;
+        return this.mockServerConfig!.port;
     }
-    
-    get proxyEnv(): ProxyConfig | null {
-        if (!this.url) return null;
+
+    get proxyEnv(): ProxyConfig {
+        if (!this.mockServerConfig) throw new Error('Cannot get proxyEnv before server is started');
 
         return {
             HTTP_PROXY: this.url,

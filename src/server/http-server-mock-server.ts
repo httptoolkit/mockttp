@@ -73,20 +73,20 @@ export default class HttpServerMockServer implements HttpServerMock {
         return this.rules.map((rule) => new MockedEndpoint(rule));
     }
 
-    get url(): string | null {
-        if (!this.server) return null;
+    get url(): string {
+        if (!this.server) throw new Error('Cannot get url before server is started');
 
         return "http://localhost:" + this.server.address().port;
     }
 
-    get port(): number | null {
-        if (!this.server) return null;
+    get port(): number {
+        if (!this.server) throw new Error('Cannot get port before server is started');
 
         return this.server.address().port;
     }
 
-    get proxyEnv(): ProxyConfig | null {
-        if (!this.url) return null;
+    get proxyEnv(): ProxyConfig {
+        if (!this.server) throw new Error('Cannot get proxyEnv before server is started');
 
         return {
             HTTP_PROXY: this.url,

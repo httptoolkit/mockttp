@@ -8,9 +8,9 @@ export interface HttpServerMock {
     enableDebug(): void;
     reset(): void;
 
-    url: string | null;
-    port: number | null;
-    proxyEnv: ProxyConfig | null;
+    url: string;
+    port: number;
+    proxyEnv: ProxyConfig;
 
     urlFor(path: string): string;
 
