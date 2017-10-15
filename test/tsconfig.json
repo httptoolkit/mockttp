@@ -2,7 +2,14 @@
     "compilerOptions": {
         "target": "es5",
         "module": "commonjs",
-        "strict": true
+        "strict": true,
+        "lib": [
+            "dom",
+            "es5",
+            "scripthost",
+            // Required for graphql (but it does actually bring its own polyfill)
+            "esnext.asynciterable"
+        ]
     },
     "compileOnSave": true,
     "buildOnSave": true,

@@ -1,6 +1,5 @@
 import { getLocal } from "../..";
-import request = require("request-promise-native");
-import expect from "../expect";
+import { expect, fetch, Headers } from "../test-utils";
 
 describe("Header matching", function () {
     let server = getLocal();
@@ -15,19 +14,26 @@ describe("Header matching", function () {
     });
 
     it("should match requests with the matching header", async () => {
-        let response = await request.get(server.url, {
-            headers: { "X-Should-Match": "yes" }
+        let response = await fetch(server.url, {
+            mode: 'cors', // In a browser, you can only send custom headers with CORS enabled
+            headers: new Headers({ "X-Should-Match": "yes" })
         });
-        expect(response).to.equal("matched header");
+        expect(await response.text()).to.equal("matched header");
     });
 
     it("should not match requests with no (extra) headers", async () => {
-        await expect(request.get(server.url)).to.eventually.be.rejected;
+        let response = await fetch(server.url, {
+            mode: 'cors'
+        })
+
+        expect(response.status).to.equal(503);
     });
 
     it("should not match requests with the wrong header value", async () => {
-        await expect(request.get(server.url, {
-            headers: { "X-Should-Match": "no" }
-        })).to.eventually.be.rejected;
+        let response = await fetch(server.url, {
+            mode: 'cors',
+            headers: new Headers({ "X-Should-Match": "no" })
+        });
+        expect(response.status).to.equal(503);
     });
 });

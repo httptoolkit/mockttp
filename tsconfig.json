@@ -2,7 +2,7 @@
     "compilerOptions": {
         "target": "es5",
         "module": "commonjs",
-        "outDir": "../dist",
+        "outDir": "./dist",
         "strict": true,
         "lib": [
             "dom",
@@ -15,13 +15,13 @@
     "compileOnSave": true,
     "buildOnSave": true,
     "include": [
-        "../custom-typings/*.d.ts",
-        "**/*.ts",
-        "../node_modules/@types/**/*.d.ts"
+        "custom-typings/*.d.ts",
+        "src/**/*.ts",
+        "node_modules/@types/**/*.d.ts"
     ],
     "filesGlob": [
-        "../custom-typings/*.d.ts",
+        "custom-typings/*.d.ts",
         "**/*.ts",
-        "../node_modules/@types/**/*.d.ts"
+        "node_modules/@types/**/*.d.ts"
     ]
 }

@@ -177,5 +177,9 @@ function explainRequest(request: Request) {
         msg += ` with body \`${request.body}\``;
     }
 
+    if (!_.isEmpty(request.headers)) {
+        msg += ` with headers:\n${JSON.stringify(request.headers, null, 2)}`;
+    }
+
     return msg;
 }

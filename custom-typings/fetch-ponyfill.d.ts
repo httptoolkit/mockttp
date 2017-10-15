@@ -1,9 +1,9 @@
 declare module 'fetch-ponyfill' {
     function getFetch(): {
         fetch: typeof fetch,
-        Headers: Headers,
-        Request: Request,
-        Response: Response
+        Headers: typeof Headers,
+        Request: typeof Request,
+        Response: typeof Response
     }
 
     export = getFetch;

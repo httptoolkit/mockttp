@@ -9,9 +9,9 @@ import {
 } from "../rules/mock-rule-types";
 import PartialMockRule from "../rules/partial-mock-rule";
 import { HttpServerMock } from "../http-server-mock-types";
-import { HttpServerMockStandalone, MockServerConfig, DEFAULT_PORT } from "../standalone/http-server-mock-standalone";
+import { MockServerConfig } from "../standalone/http-server-mock-standalone";
 import { serializeRuleData } from "../rules/mock-rule";
-import { MockedEndpointData } from "../types";
+import { MockedEndpointData, DEFAULT_STANDALONE_PORT } from "../types";
 import { MockedEndpointClient } from "./mocked-endpoint-client";
 
 export class ConnectionError extends TypedError { }
@@ -45,7 +45,7 @@ interface MockedEndpointState {
 }
 
 export default class HttpServerMockClient implements HttpServerMock {
-    private readonly standaloneServerUrl = `http://localhost:${DEFAULT_PORT}`;
+    private readonly standaloneServerUrl = `http://localhost:${DEFAULT_STANDALONE_PORT}`;
 
     private mockServerConfig: MockServerConfig | undefined;
 

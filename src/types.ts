@@ -1,5 +1,7 @@
 import express = require("express");
 
+export const DEFAULT_STANDALONE_PORT = 45456;
+
 export enum Method {
     GET,
     POST,

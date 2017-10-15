@@ -1,6 +1,5 @@
-import { getLocal, Request } from "../..";
-import request = require("request-promise-native");
-import expect from "../expect";
+import { getLocal } from "../..";
+import { expect, fetch } from "../test-utils";
 
 describe("HTTP request spying", function () {
     let server = getLocal();
@@ -18,7 +17,7 @@ describe("HTTP request spying", function () {
     it("should let you spy on the urls of requests that happened", async () => {
         const endpointMock = await server.get("/mocked-endpoint").thenReply(200, "mocked data");
 
-        await request.get(server.urlFor("/mocked-endpoint"));
+        await fetch(server.urlFor("/mocked-endpoint"));
 
         const seenRequests = await endpointMock.getSeenRequests();
         expect(seenRequests.length).to.equal(1);
@@ -30,7 +29,7 @@ describe("HTTP request spying", function () {
 
         const seenRequests = await endpointMock.getSeenRequests();
 
-        await request.get(server.urlFor("/mocked-endpoint"));
+        await fetch(server.urlFor("/mocked-endpoint"));
 
         expect(seenRequests).to.deep.equal([]);
     });

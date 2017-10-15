@@ -10,8 +10,7 @@ import { makeExecutableSchema } from 'graphql-tools';
 import HttpServerMockServer from "../server/http-server-mock-server";
 import { buildStandaloneModel } from "./standalone-model";
 import * as _ from "lodash";
-
-export const DEFAULT_PORT = 45456;
+import { DEFAULT_STANDALONE_PORT } from '../types';
 
 export interface StandaloneServerOptions {
     debug?: boolean;
@@ -77,7 +76,7 @@ export class HttpServerMockStandalone {
         if (this.server) throw new Error('Standalone server already running');
 
         await new Promise<void>((resolve, reject) => {
-            this.server = destroyable(this.app.listen(DEFAULT_PORT, resolve));
+            this.server = destroyable(this.app.listen(DEFAULT_STANDALONE_PORT, resolve));
         });
     }
 
