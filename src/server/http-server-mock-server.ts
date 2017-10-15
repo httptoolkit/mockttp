@@ -1,6 +1,7 @@
 import http = require("http");
 import portfinder = require("portfinder");
 import express = require("express");
+import cors = require("cors");
 import bodyParser = require("body-parser");
 import _ = require("lodash");
 
@@ -13,6 +14,7 @@ import { MockRule } from "../rules/mock-rule";
 import { MockedEndpoint } from "./mocked-endpoint";
 
 export interface MockServerOptions {
+    cors?: boolean;
     debug?: boolean;
 }
 
@@ -28,6 +30,10 @@ export default class HttpServerMockServer implements HttpServerMock {
         this.debug = options.debug || false;
         this.app = express();
 
+        if (options.cors) {
+            if (this.debug) console.log('Enabling CORS');
+            this.app.use(cors());
+        }
         this.app.use(bodyParser.json());
         this.app.use(bodyParser.urlencoded({ extended: true }));
         this.app.use(this.handleRequest.bind(this));

@@ -1,6 +1,7 @@
 import fs = require('fs');
 import path = require('path');
 import express = require('express');
+import cors = require('cors');
 import destroyable, { DestroyableServer } from "../util/destroyable-server";
 import bodyParser = require('body-parser');
 import { graphqlExpress } from 'apollo-server-express';
@@ -27,6 +28,7 @@ export class HttpServerMockStandalone {
         this.debug = options.debug || false;
         if (this.debug) console.log('Standalone server started in debug mode');
 
+        this.app.use(cors());
         this.app.post('/start', async (req, res) => {
             try {
                 const port = req.query.port;
@@ -84,6 +86,7 @@ export class HttpServerMockStandalone {
     private async startMockServer(port?: number): Promise<{ mockPort: number, mockServer: HttpServerMockServer }> {
         const mockServer = new HttpServerMockServer({
             debug: this.debug,
+            cors: true // Standalone servers are primarily for browser usage, and browsers need cors
         });
         this.mockServers.push(mockServer);
         await mockServer.start(port);
