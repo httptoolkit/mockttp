@@ -1,19 +1,39 @@
 #!/usr/bin/env node
+import _ = require('lodash');
 import childProcess = require('child_process');
 import HttpServerMock = require('../..');
 
-let args = process.argv;
-if (args[2] !== '-c' || args[3] == null) {
+handleArgs(process.argv).catch((e) => {
+    console.error(e);
+    process.exit(1);
+});
+
+async function handleArgs(args: string[]) {
+    let debug = false;
+
+    for (let i of _.range(2, args.length)) {
+        if (args[i] === '-c') {
+            let remainingArgs = args.slice(i+1);
+            await runCommandWithServer(remainingArgs.join(' '), debug);
+            return;
+        } else if (args[i] === '-d') {
+            debug = true;
+        } else {
+            break;
+        }
+    }
+
     console.log("Usage: http-server-mock -c <test command>");
     process.exit(1);
 }
 
-const server = HttpServerMock.getStandalone();
-server.start().then(() => {
-    let realCommand = args.slice(3).join(' ');
-    let realProcess = childProcess.spawn(realCommand, [], {
+async function runCommandWithServer(command: string, debug: boolean) {
+    const server = HttpServerMock.getStandalone({ debug });
+    await server.start();
+
+    let realProcess = childProcess.spawn(command, [], {
         shell: true,
-        stdio: 'inherit',
+        stdio: 'inherit'
     });
 
     realProcess.on('error', (error) => {
@@ -33,7 +53,4 @@ server.start().then(() => {
             }
         });
     });
-}).catch((e) => {
-    console.error(e);
-    process.exit(1);
-});
+}

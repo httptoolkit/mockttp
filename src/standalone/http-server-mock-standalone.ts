@@ -12,13 +12,21 @@ import * as _ from "lodash";
 
 export const DEFAULT_PORT = 45456;
 
+export interface StandaloneServerOptions {
+    debug?: boolean;
+}
+
 export class HttpServerMockStandalone {
+    private debug: boolean;
     private app: express.Application = express();
     private server: DestroyableServer | null = null;
 
     private mockServers: HttpServerMockServer[] = [];
 
-    constructor() {
+    constructor(options: StandaloneServerOptions = {}) {
+        this.debug = options.debug || false;
+        if (this.debug) console.log('Standalone server started in debug mode');
+
         this.app.post('/start', async (req, res) => {
             try {
                 const port = req.query.port;
@@ -27,7 +35,7 @@ export class HttpServerMockStandalone {
                     res.status(409).json({
                         error: `Cannot start: mock server is already running on port ${port}`
                     });
-                    return
+                    return;
                 }
 
                 const { mockPort, mockServer } = await this.startMockServer(port);
@@ -74,7 +82,9 @@ export class HttpServerMockStandalone {
     private routers: { [port: number]: express.Router } = { };
 
     private async startMockServer(port?: number): Promise<{ mockPort: number, mockServer: HttpServerMockServer }> {
-        const mockServer = new HttpServerMockServer();
+        const mockServer = new HttpServerMockServer({
+            debug: this.debug,
+        });
         this.mockServers.push(mockServer);
         await mockServer.start(port);
 

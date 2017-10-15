@@ -12,15 +12,20 @@ import { HttpServerMock } from "../http-server-mock-types";
 import { MockRule } from "../rules/mock-rule";
 import { MockedEndpoint } from "./mocked-endpoint";
 
+export interface MockServerOptions {
+    debug?: boolean;
+}
+
 // Provides all the external API, uses that to build and manage the rules list, and interrogate our recorded requests
 export default class HttpServerMockServer implements HttpServerMock {
     private rules: MockRule[] = [];
-    private debug: boolean = false;
+    private debug: boolean;
 
     private app: express.Application;
     private server: DestroyableServer;
 
-    constructor() {
+    constructor(options: MockServerOptions = {}) {
+        this.debug = options.debug || false;
         this.app = express();
 
         this.app.use(bodyParser.json());

@@ -1,6 +1,6 @@
 import HttpServerMockServer from "./server/http-server-mock-server";
 import HttpServerMockClient from "./client/http-server-mock-client";
-import { HttpServerMockStandalone } from "./standalone/http-server-mock-standalone";
+import { HttpServerMockStandalone, StandaloneServerOptions } from "./standalone/http-server-mock-standalone";
 
 import { HttpServerMock } from "./http-server-mock-types";
 export { Request } from "./types";
@@ -17,6 +17,6 @@ export function getRemote(): HttpServerMock {
     return new HttpServerMockClient();
 }
 
-export function getStandalone(): HttpServerMockStandalone {
-    return new HttpServerMockStandalone();
+export function getStandalone(options: StandaloneServerOptions = {}): HttpServerMockStandalone {
+    return new HttpServerMockStandalone(options);
 }
