@@ -139,12 +139,18 @@ export default class HttpServerMockServer implements HttpServerMock {
             } else {
                 if (this.debug) console.warn(`Unmatched request received: ${explainRequest(request)}`);
 
+                response.setHeader('Content-Type', 'text/plain');
                 response.writeHead(503, `Request for unmocked endpoint`);
+
                 response.write("No rules were found matching this request.\n");
                 response.write(`This request was: ${explainRequest(request)}\n\n`);
 
-                response.write("The configured rules are:\n");
-                this.rules.forEach((rule) => response.write(rule.explain() + "\n"));
+                if (this.rules.length > 0) {
+                    response.write("The configured rules are:\n");
+                    this.rules.forEach((rule) => response.write(rule.explain() + "\n"));
+                } else {
+                    response.write("There are no rules configured.\n");
+                }
 
                 response.end();
             }
