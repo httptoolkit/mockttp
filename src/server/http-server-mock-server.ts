@@ -9,7 +9,7 @@ import { Method, Request, ProxyConfig } from "../types";
 import { MockRuleData } from "../rules/mock-rule-types";
 import PartialMockRule from "../rules/partial-mock-rule";
 import destroyable, { DestroyableServer } from "../util/destroyable-server";
-import { HttpServerMock } from "../http-server-mock-types";
+import { HttpServerMock, AbstractHttpServerMock } from "../http-server-mock";
 import { MockRule } from "../rules/mock-rule";
 import { MockedEndpoint } from "./mocked-endpoint";
 
@@ -19,7 +19,7 @@ export interface MockServerOptions {
 }
 
 // Provides all the external API, uses that to build and manage the rules list, and interrogate our recorded requests
-export default class HttpServerMockServer implements HttpServerMock {
+export default class HttpServerMockServer extends AbstractHttpServerMock implements HttpServerMock {
     private rules: MockRule[] = [];
     private debug: boolean;
 
@@ -27,6 +27,7 @@ export default class HttpServerMockServer implements HttpServerMock {
     private server: DestroyableServer;
 
     constructor(options: MockServerOptions = {}) {
+        super();
         this.debug = options.debug || false;
         this.app = express();
 
@@ -83,43 +84,6 @@ export default class HttpServerMockServer implements HttpServerMock {
         if (!this.server) throw new Error('Cannot get port before server is started');
 
         return this.server.address().port;
-    }
-
-    get proxyEnv(): ProxyConfig {
-        if (!this.server) throw new Error('Cannot get proxyEnv before server is started');
-
-        return {
-            HTTP_PROXY: this.url,
-            HTTPS_PROXY: this.url
-        }
-    }
-
-    urlFor(path: string): string {
-        return this.url + path;
-    }
-
-    get(url: string): PartialMockRule {
-        return new PartialMockRule(Method.GET, url, this.addRule);
-    }
-
-    post(url: string): PartialMockRule {
-        return new PartialMockRule(Method.POST, url, this.addRule);
-    }
-
-    put(url: string): PartialMockRule {
-        return new PartialMockRule(Method.PUT, url, this.addRule);
-    }
-    
-    delete(url: string): PartialMockRule {
-        return new PartialMockRule(Method.DELETE, url, this.addRule);
-    }
-
-    patch(url: string): PartialMockRule {
-        return new PartialMockRule(Method.PATCH, url, this.addRule);
-    }
-
-    options(url: string): PartialMockRule {
-        return new PartialMockRule(Method.OPTIONS, url, this.addRule);
     }
 
     public addRule = (ruleData: MockRuleData): Promise<MockedEndpoint> => {

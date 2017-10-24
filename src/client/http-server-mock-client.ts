@@ -8,7 +8,7 @@ import {
   MockRuleData
 } from "../rules/mock-rule-types";
 import PartialMockRule from "../rules/partial-mock-rule";
-import { HttpServerMock } from "../http-server-mock-types";
+import { HttpServerMock, AbstractHttpServerMock } from "../http-server-mock";
 import { MockServerConfig } from "../standalone/http-server-mock-standalone";
 import { serializeRuleData } from "../rules/mock-rule";
 import { MockedEndpointData, DEFAULT_STANDALONE_PORT } from "../types";
@@ -44,7 +44,7 @@ interface MockedEndpointState {
     seenRequests: RequestData[]
 }
 
-export default class HttpServerMockClient implements HttpServerMock {
+export default class HttpServerMockClient extends AbstractHttpServerMock implements HttpServerMock {
     private readonly standaloneServerUrl = `http://localhost:${DEFAULT_STANDALONE_PORT}`;
 
     private mockServerConfig: MockServerConfig | undefined;
@@ -158,20 +158,7 @@ export default class HttpServerMockClient implements HttpServerMock {
         return this.mockServerConfig!.port;
     }
 
-    get proxyEnv(): ProxyConfig {
-        if (!this.mockServerConfig) throw new Error('Cannot get proxyEnv before server is started');
-
-        return {
-            HTTP_PROXY: this.url,
-            HTTPS_PROXY: this.url
-        }
-    }
-
-    urlFor(path: string): string {
-        return this.url + path;
-    }
-
-    private addRule = async (rule: MockRuleData): Promise<MockedEndpoint> => {
+    public addRule = async (rule: MockRuleData): Promise<MockedEndpoint> => {
         let ruleId = (await this.queryMockServer<{
             data: { addRule: { id: string } }
         }>(
@@ -209,29 +196,5 @@ export default class HttpServerMockClient implements HttpServerMock {
         );
 
         return result.data.mockedEndpoint;
-    }
-
-    get(url: string): PartialMockRule {
-        return new PartialMockRule(Method.GET, url, this.addRule);
-    }
-
-    post(url: string): PartialMockRule {
-        return new PartialMockRule(Method.POST, url, this.addRule);
-    }
-
-    put(url: string): PartialMockRule {
-        return new PartialMockRule(Method.PUT, url, this.addRule);
-    }
-    
-    delete(url: string): PartialMockRule {
-        return new PartialMockRule(Method.DELETE, url, this.addRule);
-    }
-
-    patch(url: string): PartialMockRule {
-        return new PartialMockRule(Method.PATCH, url, this.addRule);
-    }
-
-    options(url: string): PartialMockRule {
-        return new PartialMockRule(Method.OPTIONS, url, this.addRule);
     }
 }

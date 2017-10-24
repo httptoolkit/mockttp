@@ -1,6 +1,6 @@
 import HttpServerMockClient from "./client/http-server-mock-client";
 
-import { HttpServerMock } from "./http-server-mock-types";
+import { HttpServerMock } from "./http-server-mock";
 export { Request } from "./types";
 
 export interface MockedEndpoint {
