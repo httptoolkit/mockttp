@@ -1,4 +1,5 @@
 import getFetch = require("fetch-ponyfill");
+import URLSearchParamsPolyfill = require('url-search-params');
 
 import chai = require("chai");
 import sinonChai = require("sinon-chai");
@@ -19,8 +20,8 @@ export const Headers = fetchPonyfill.Headers;
 export const Request = fetchPonyfill.Request;
 export const Response = fetchPonyfill.Response;
 
-export const URLSearchParams: typeof window.URLSearchParams = (isNode() || !window.URLSearchParams) ?
-    require('url').URLSearchParams : window.URLSearchParams
+export const URLSearchParams: typeof window.URLSearchParams = ((isNode() || !window.URLSearchParams) ?
+    require('url').URLSearchParams : window.URLSearchParams) || URLSearchParamsPolyfill;
 
 export const expect = chai.expect;
 
