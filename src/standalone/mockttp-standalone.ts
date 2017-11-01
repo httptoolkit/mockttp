@@ -59,7 +59,6 @@ export class MockttpStandalone {
         });
     }
 
-
     private loadSchema(schemaFilename: string, mockServer: MockttpServer): Promise<GraphQLSchema> {
         return new Promise<string>((resolve, reject) => {
             fs.readFile(path.join(__dirname, schemaFilename), 'utf8', (err, schemaString) => {
