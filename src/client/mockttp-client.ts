@@ -1,6 +1,6 @@
 import TypedError = require('typed-error');
 import getFetch = require('fetch-ponyfill');
-const fetch = getFetch().fetch;
+const { fetch, Headers } = getFetch();
 
 import { ProxyConfig, Method, MockedEndpoint } from "../types";
 import {
@@ -105,9 +105,9 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
         try {
             return await this.requestFromMockServer<T>('/', {
                 method: 'POST',
-                headers: {
+                headers: new Headers({
                     'Content-Type': 'application/json'
-                },
+                }),
                 body: JSON.stringify({ query, variables })
             });
         } catch (e) {

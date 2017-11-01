@@ -1,5 +1,5 @@
 import { getLocal } from "../..";
-import { expect, fetch, URLSearchParams } from "../test-utils";
+import { expect, fetch, Headers, URLSearchParams } from "../test-utils";
 
 describe("Form data matching", function () {
     let server = getLocal();
@@ -19,9 +19,9 @@ describe("Form data matching", function () {
 
         return expect(fetch(server.url, {
             method: 'POST',
-            headers: {
+            headers: new Headers({
               'Content-Type': 'application/x-www-form-urlencoded'
-            },
+            }),
             body: form
         })).to.have.responseText("matched");
     });
@@ -32,9 +32,9 @@ describe("Form data matching", function () {
 
         return expect(fetch(server.url, {
             method: 'POST',
-            headers: {
+            headers: new Headers({
               'Content-Type': 'application/x-www-form-urlencoded'
-            },
+            }),
             body: form
         })).not.to.have.responseText("matched");
     });
@@ -42,9 +42,9 @@ describe("Form data matching", function () {
     it("shouldn't match requests without form data", async () => {
         return expect(fetch(server.url, {
             method: 'POST',
-            headers: {
+            headers: new Headers({
               'Content-Type': 'application/x-www-form-urlencoded'
-            },
+            }),
         })).not.to.have.responseText("matched");
     });
 });

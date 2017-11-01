@@ -13,11 +13,12 @@ import { CompletionCheckerData } from "../rules/completion-checkers";
 import MockttpServer from "../server/mockttp-server";
 import { Method, Request, MockedEndpoint, MockedEndpointData } from "../types";
 import { MockRuleData } from "../rules/mock-rule-types";
+import { IResolvers } from "graphql-tools/dist/Interfaces";
 
 function astToObject<T>(ast: ObjectValueNode): T {
     return <T> _.zipObject(
         ast.fields.map((f) => f.name.value),
-        ast.fields.map((f) => f.value)
+        ast.fields.map((f) => parseAnyAst(f.value))
     );
 }
 
@@ -101,8 +102,8 @@ const ScalarResolvers = {
     }),
 };
 
-export function buildStandaloneModel(mockServer: MockttpServer) {
-    return {
+export function buildStandaloneModel(mockServer: MockttpServer): IResolvers {
+    return <any> {
         Query: {
             mockedEndpoints: (): Promise<MockedEndpointData[]> => {
                 return Promise.all(mockServer.mockedEndpoints.map(buildMockedEndpointData));
