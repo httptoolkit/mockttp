@@ -90,3 +90,7 @@ describe("Mockttp", () => {
     });
 });
 ```
+
+## Credits
+
+* Many thanks to https://github.com/vieiralucas for donating the package name!
