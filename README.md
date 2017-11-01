@@ -28,10 +28,10 @@ Ok, let's summarize. Mockttp lets you:
 * Fake server responses and verify requests made by your code
 * **Mock HTTP requests from inside & outside your process/browser tab**, including subprocesses, native code, remote devices, and more.
 * Stub and mock requests transparently, as an **HTTP mocking proxy**, as well as serving traffic directly
-* **Mock servers from both node and browsers** (universal/'isomorphic' HTTP mocking)
+* **Mock servers for node & browsers with the same code** (universal/'isomorphic' HTTP mocking)
 * **Safely mock HTTP in parallel**, with autoconfiguration of ports, mock URLs and proxy settings
 * **Debug your tests easily**, with full explainability of all mock matches & misses and an extra detailed debug mode
-* Use promises (and even async/await) and get **strong typing** (with TypeScript) throughout your test code
+* Write modern tests, with promises all the way down and **strong typing** (with TypeScript) throughout.
 
 ## Get Started
 
