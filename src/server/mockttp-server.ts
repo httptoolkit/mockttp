@@ -9,7 +9,7 @@ import { Method, Request, ProxyConfig } from "../types";
 import { MockRuleData } from "../rules/mock-rule-types";
 import PartialMockRule from "../rules/partial-mock-rule";
 import destroyable, { DestroyableServer } from "../util/destroyable-server";
-import { HttpServerMock, AbstractHttpServerMock } from "../http-server-mock";
+import { Mockttp, AbstractMockttp } from "../mockttp";
 import { MockRule } from "../rules/mock-rule";
 import { MockedEndpoint } from "./mocked-endpoint";
 
@@ -19,7 +19,7 @@ export interface MockServerOptions {
 }
 
 // Provides all the external API, uses that to build and manage the rules list, and interrogate our recorded requests
-export default class HttpServerMockServer extends AbstractHttpServerMock implements HttpServerMock {
+export default class MockttpServer extends AbstractMockttp implements Mockttp {
     private rules: MockRule[] = [];
     private debug: boolean;
 

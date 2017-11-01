@@ -7,7 +7,7 @@ import bodyParser = require('body-parser');
 import { graphqlExpress } from 'apollo-server-express';
 import { GraphQLSchema, GraphQLScalarType } from 'graphql';
 import { makeExecutableSchema } from 'graphql-tools';
-import HttpServerMockServer from "../server/http-server-mock-server";
+import MockttpServer from "../server/mockttp-server";
 import { buildStandaloneModel } from "./standalone-model";
 import * as _ from "lodash";
 import { DEFAULT_STANDALONE_PORT } from '../types';
@@ -16,12 +16,12 @@ export interface StandaloneServerOptions {
     debug?: boolean;
 }
 
-export class HttpServerMockStandalone {
+export class MockttpStandalone {
     private debug: boolean;
     private app: express.Application = express();
     private server: DestroyableServer | null = null;
 
-    private mockServers: HttpServerMockServer[] = [];
+    private mockServers: MockttpServer[] = [];
 
     constructor(options: StandaloneServerOptions = {}) {
         this.debug = options.debug || false;
@@ -60,7 +60,7 @@ export class HttpServerMockStandalone {
     }
 
 
-    private loadSchema(schemaFilename: string, mockServer: HttpServerMockServer): Promise<GraphQLSchema> {
+    private loadSchema(schemaFilename: string, mockServer: MockttpServer): Promise<GraphQLSchema> {
         return new Promise<string>((resolve, reject) => {
             fs.readFile(path.join(__dirname, schemaFilename), 'utf8', (err, schemaString) => {
                 if (err) reject(err);
@@ -82,8 +82,8 @@ export class HttpServerMockStandalone {
 
     private routers: { [port: number]: express.Router } = { };
 
-    private async startMockServer(port?: number): Promise<{ mockPort: number, mockServer: HttpServerMockServer }> {
-        const mockServer = new HttpServerMockServer({
+    private async startMockServer(port?: number): Promise<{ mockPort: number, mockServer: MockttpServer }> {
+        const mockServer = new MockttpServer({
             debug: this.debug,
             cors: true // Standalone servers are primarily for browser usage, and browsers need cors
         });

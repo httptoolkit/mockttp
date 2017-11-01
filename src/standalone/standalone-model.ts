@@ -10,7 +10,7 @@ import {
 import { MatcherData, buildMatchers } from "../rules/matchers";
 import { HandlerData } from "../rules/handlers";
 import { CompletionCheckerData } from "../rules/completion-checkers";
-import HttpServerMockServer from "../server/http-server-mock-server";
+import MockttpServer from "../server/mockttp-server";
 import { Method, Request, MockedEndpoint, MockedEndpointData } from "../types";
 import { MockRuleData } from "../rules/mock-rule-types";
 
@@ -101,7 +101,7 @@ const ScalarResolvers = {
     }),
 };
 
-export function buildStandaloneModel(mockServer: HttpServerMockServer) {
+export function buildStandaloneModel(mockServer: MockttpServer) {
     return {
         Query: {
             mockedEndpoints: (): Promise<MockedEndpointData[]> => {

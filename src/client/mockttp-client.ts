@@ -8,8 +8,8 @@ import {
   MockRuleData
 } from "../rules/mock-rule-types";
 import PartialMockRule from "../rules/partial-mock-rule";
-import { HttpServerMock, AbstractHttpServerMock } from "../http-server-mock";
-import { MockServerConfig } from "../standalone/http-server-mock-standalone";
+import { Mockttp, AbstractMockttp } from "../mockttp";
+import { MockServerConfig } from "../standalone/mockttp-standalone";
 import { serializeRuleData } from "../rules/mock-rule";
 import { MockedEndpointData, DEFAULT_STANDALONE_PORT } from "../types";
 import { MockedEndpointClient } from "./mocked-endpoint-client";
@@ -44,7 +44,7 @@ interface MockedEndpointState {
     seenRequests: RequestData[]
 }
 
-export default class HttpServerMockClient extends AbstractHttpServerMock implements HttpServerMock {
+export default class MockttpClient extends AbstractMockttp implements Mockttp {
     private readonly standaloneServerUrl = `http://localhost:${DEFAULT_STANDALONE_PORT}`;
 
     private mockServerConfig: MockServerConfig | undefined;

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import _ = require('lodash');
 import childProcess = require('child_process');
-import HttpServerMock = require('../..');
+import Mockttp = require('../..');
 
 handleArgs(process.argv).catch((e) => {
     console.error(e);
@@ -23,12 +23,12 @@ async function handleArgs(args: string[]) {
         }
     }
 
-    console.log("Usage: http-server-mock -c <test command>");
+    console.log("Usage: mockttp -c <test command>");
     process.exit(1);
 }
 
 async function runCommandWithServer(command: string, debug: boolean) {
-    const server = HttpServerMock.getStandalone({ debug });
+    const server = Mockttp.getStandalone({ debug });
     await server.start();
 
     let realProcess = childProcess.spawn(command, [], {

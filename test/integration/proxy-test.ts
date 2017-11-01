@@ -6,7 +6,7 @@ import { expect, nodeOnly } from "../test-utils";
 const INITIAL_ENV = _.cloneDeep(process.env);
 
 nodeOnly(() => {
-    describe("HTTP Server Mock when used as a proxy with `request`", function () {
+    describe("Mockttp when used as a proxy with `request`", function () {
         let server = getLocal();
 
         beforeEach(() => server.start());

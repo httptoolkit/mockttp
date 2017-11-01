@@ -1,12 +1,12 @@
 {
-  "name": "http-server-mock",
+  "name": "mockttp",
   "version": "0.2.0",
   "description": "Mock HTTP server for testing HTTP clients and stubbing webservices",
   "main": "dist/main.js",
   "browser": "dist/main-browser.js",
   "types": "src/main.ts",
   "bin": {
-    "http-server-mock": "./dist/standalone/standalone-bin.js"
+    "mockttp": "./dist/standalone/standalone-bin.js"
   },
   "scripts": {
     "prebuild": "rimraf dist/*",
@@ -20,12 +20,13 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/pimterry/http-server-mock.git"
+    "url": "git+https://github.com/pimterry/mockttp.git"
   },
   "keywords": [
     "testing",
     "test",
     "mock",
+    "mockttp",
     "stub",
     "fake",
     "http",
@@ -34,9 +35,9 @@
   "author": "Tim Perry <pimterry@gmail.com>",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/pimterry/http-server-mock/issues"
+    "url": "https://github.com/pimterry/mockttp/issues"
   },
-  "homepage": "https://github.com/pimterry/http-server-mock#readme",
+  "homepage": "https://github.com/pimterry/mockttp#readme",
   "devDependencies": {
     "@types/chai": "^3.4.34",
     "@types/chai-as-promised": "0.0.29",

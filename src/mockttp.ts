@@ -2,7 +2,7 @@ import PartialMockRule from "./rules/partial-mock-rule";
 import { ProxyConfig, MockedEndpoint, Method } from "./types";
 import { MockRuleData } from "./rules/mock-rule-types";
 
-export interface HttpServerMock {
+export interface Mockttp {
     start(port?: number): Promise<void>;
     stop(): Promise<void>;
 
@@ -23,7 +23,7 @@ export interface HttpServerMock {
     options(url: string): PartialMockRule;
 }
 
-export abstract class AbstractHttpServerMock {
+export abstract class AbstractMockttp {
     abstract get url(): string;
     abstract addRule: (ruleData: MockRuleData) => Promise<MockedEndpoint>;
 

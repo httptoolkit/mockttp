@@ -1,6 +1,6 @@
-# HTTP Server Mock [![Travis Build Status](https://img.shields.io/travis/pimterry/http-server-mock.svg)](https://travis-ci.org/pimterry/http-server-mock)
+# Mockttp [![Travis Build Status](https://img.shields.io/travis/pimterry/mockttp.svg)](https://travis-ci.org/pimterry/mockttp)
 
-**HTTP Server Mock is the HTTP integration tool you've been searching for these long years.**
+**Mockttp is the HTTP integration tool you've been searching for these long years.**
 
 Write JS tests that _truly_ integration test your HTTP. Quickly build a fake server, or
 transparently proxy requests your code sends to other domains. Write mocks that work
@@ -8,7 +8,7 @@ universally in node and the browser. Get strong types built-in & promises throug
 with a library designed for modern JS & async/await, and enjoy helpful debuggability
 with self-explaining mocks.
 
-HTTP Server Mock lets you truly integration test your HTTP requests with thorough
+Mockttp lets you truly integration test your HTTP(S) requests with thorough
 library-agnostic HTTP mocking that can mock requests from your code, your dependencies,
 your subprocesses, native code, your server (from your browser), every crazy npm library
 you've installed and even remote devices (if they use your machine as a proxy). See
@@ -16,13 +16,13 @@ the actual requests that would be made, and write tests that check what will rea
 hit the wire, and how your whole stack will handle the response, not just the function
 calls you think you'll make.
 
-HTTP integration testing is a mess, and HTTP Server Mock is here to make it better.
+HTTP integration testing is a mess, and Mockttp is here to make it better.
 
 _This is all still in early development, not quite complete or stable, and subject to change!_
 
 ## Er, what?
 
-Ok, let's summarize. HTTP server mock lets you:
+Ok, let's summarize. Mockttp lets you:
 
 * Write **easy, fast & reliable node.js & browser HTTP integration tests**
 * Fake server responses and verify requests made by your code
@@ -36,16 +36,16 @@ Ok, let's summarize. HTTP server mock lets you:
 ## Get Started
 
 ```bash
-npm install --save-dev http-server-mock
+npm install --save-dev mockttp
 ```
 
 ## Get Testing
 
 ```typescript
 const request = require("request");
-const mockServer = require("http-server-mock").getLocal();
+const mockServer = require("mockttp").getLocal();
 
-describe("Http-server-mock", () => {
+describe("Mockttp", () => {
     beforeEach(() => mockServer.start(8080));
     afterEach(() => mockServer.stop());
 

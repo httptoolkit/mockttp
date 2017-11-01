@@ -1,22 +1,22 @@
-import HttpServerMockServer from "./server/http-server-mock-server";
-import HttpServerMockClient from "./client/http-server-mock-client";
-import { HttpServerMockStandalone, StandaloneServerOptions } from "./standalone/http-server-mock-standalone";
+import MockttpServer from "./server/mockttp-server";
+import MockttpClient from "./client/mockttp-client";
+import { MockttpStandalone, StandaloneServerOptions } from "./standalone/mockttp-standalone";
 
-import { HttpServerMock } from "./http-server-mock";
+import { Mockttp } from "./mockttp";
 export { Request } from "./types";
 
 export interface MockedEndpoint {
     getSeenRequests(): Request[]
 }
 
-export function getLocal(): HttpServerMock {
-    return new HttpServerMockServer();
+export function getLocal(): Mockttp {
+    return new MockttpServer();
 }
 
-export function getRemote(): HttpServerMock {
-    return new HttpServerMockClient();
+export function getRemote(): Mockttp {
+    return new MockttpClient();
 }
 
-export function getStandalone(options: StandaloneServerOptions = {}): HttpServerMockStandalone {
-    return new HttpServerMockStandalone(options);
+export function getStandalone(options: StandaloneServerOptions = {}): MockttpStandalone {
+    return new MockttpStandalone(options);
 }

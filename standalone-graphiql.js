@@ -6,9 +6,9 @@
 
 var graphiqlExpress = require('apollo-server-express').graphiqlExpress;
 var opn = require('opn');
-var httpServerMock = require('.');
+var Mockttp = require('.');
 
-var standalone = httpServerMock.getStandalone();
+var standalone = Mockttp.getStandalone();
 // Add a debug UI to the server
 standalone.app.use('/graphiql', graphiqlExpress({
     endpointURL: '/graphql',
