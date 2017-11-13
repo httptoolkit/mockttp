@@ -104,7 +104,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
                 if (this.debug) console.warn(`Unmatched request received: ${explainRequest(request)}`);
 
                 response.setHeader('Content-Type', 'text/plain');
-                response.writeHead(503, `Request for unmocked endpoint`);
+                response.writeHead(503, "Request for unmocked endpoint");
 
                 response.write("No rules were found matching this request.\n");
                 response.write(`This request was: ${explainRequest(request)}\n\n`);
@@ -115,6 +115,8 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
                 } else {
                     response.write("There are no rules configured.\n");
                 }
+
+                response.write(suggestRule(request));
 
                 response.end();
             }
@@ -134,7 +136,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
     }
 }
 
-function explainRequest(request: Request) {
+function explainRequest(request: Request): string {
     let msg = `${request.method} request to ${request.url}`;
 
     if (request.body && request.body.length > 0) {
@@ -144,6 +146,23 @@ function explainRequest(request: Request) {
     if (!_.isEmpty(request.headers)) {
         msg += ` with headers:\n${JSON.stringify(request.headers, null, 2)}`;
     }
+
+    return msg;
+}
+
+function suggestRule(request: Request): string {
+    let msg = "You can fix this by adding a rule to match this request, for example:\n"
+
+    msg += `mockServer.${request.method.toLowerCase()}("${request.path}")`;
+
+    let isFormRequest = request.headers["content-type"] && request.headers["content-type"].indexOf("application/x-www-form-urlencoded") > -1;
+    let hasFormBody = _.isPlainObject(request.body) && !_.isEmpty(request.body);
+
+    if (isFormRequest && hasFormBody) {
+        msg += `.withForm(${JSON.stringify(request.body)})`;
+    }
+
+    msg += '.thenReply(200, "your response");';
 
     return msg;
 }

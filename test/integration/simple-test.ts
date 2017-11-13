@@ -35,23 +35,4 @@ describe("Basic HTTP mocking", function () {
             expect(await response.text()).to.equal("Not really google");
         });
     });
-
-    it("should explain itself", async () => {
-        await server.get("/endpointA").once().thenReply(200, "nice request!");
-        await server.post("/endpointB").withHeaders({ 'h': 'v' }).withForm({ key: 'value' }).thenReply(500);
-        await server.put("/endpointC").always().thenReply(200, "good headers");
-
-        await fetch(server.urlFor("/endpointA"));
-        let response = await fetch(server.urlFor("/non-existent-endpoint"));
-
-        let text = await response.text();
-
-        expect(text).to.include(`No rules were found matching this request.
-This request was: GET request to /non-existent-endpoint `);
-        expect(text).to.include(`The configured rules are:
-Match requests making GETs for /endpointA, and then respond with status 200 and body "nice request!", once (done).
-Match requests making POSTs for /endpointB, with headers including {"h":"v"}, and with form data including {"key":"value"}, and then respond with status 500.
-Match requests making PUTs for /endpointC, and then respond with status 200 and body "good headers", always (seen 0).
-`);
-    });
 });

@@ -30,7 +30,7 @@ Ok, let's summarize. Mockttp lets you:
 * Stub and mock requests transparently, as an **HTTP mocking proxy**, as well as serving traffic directly
 * **Mock servers for node & browsers with the same code** (universal/'isomorphic' HTTP mocking)
 * **Safely mock HTTP in parallel**, with autoconfiguration of ports, mock URLs and proxy settings
-* **Debug your tests easily**, with full explainability of all mock matches & misses and an extra detailed debug mode
+* **Debug your tests easily**, with full explainability of all mock matches & misses, mock autosuggestions, and an extra detailed debug mode
 * Write modern tests, with promises all the way down and **strong typing** (with TypeScript) throughout.
 
 ## Get Started
