@@ -16,7 +16,7 @@
     "test:browser": "ts-node ./src/standalone/standalone-bin.ts -c karma start",
     "standalone": "npm run build && node -e 'require(\".\").getStandalone({ debug: true }).start()'",
     "graphiql": "npm run build && node ./standalone-graphiql.js",
-    "prepublish": "npm run build"
+    "prepack": "npm run build"
   },
   "repository": {
     "type": "git",
