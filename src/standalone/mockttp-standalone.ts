@@ -1,4 +1,4 @@
-import fs = require('fs');
+import fs = require('../util/fs');
 import path = require('path');
 import express = require('express');
 import cors = require('cors');
@@ -60,12 +60,8 @@ export class MockttpStandalone {
     }
 
     private loadSchema(schemaFilename: string, mockServer: MockttpServer): Promise<GraphQLSchema> {
-        return new Promise<string>((resolve, reject) => {
-            fs.readFile(path.join(__dirname, schemaFilename), 'utf8', (err, schemaString) => {
-                if (err) reject(err);
-                else resolve(schemaString);
-            });
-        }).then((schemaString) => makeExecutableSchema({
+        return fs.readFile(path.join(__dirname, schemaFilename), 'utf8')
+        .then((schemaString) => makeExecutableSchema({
             typeDefs: schemaString,
             resolvers: buildStandaloneModel(mockServer)
         }));

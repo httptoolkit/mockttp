@@ -1,0 +1,1 @@
+declare module 'node-forge'; // TODO: replace with proper typings
