@@ -1,4 +1,4 @@
-import MockttpServer from "./server/mockttp-server";
+import MockttpServer, { MockServerOptions } from "./server/mockttp-server";
 import MockttpClient from "./client/mockttp-client";
 import { MockttpStandalone, StandaloneServerOptions } from "./standalone/mockttp-standalone";
 
@@ -9,8 +9,10 @@ export interface MockedEndpoint {
     getSeenRequests(): Request[]
 }
 
-export function getLocal(): Mockttp {
-    return new MockttpServer();
+export { Mockttp };
+
+export function getLocal(options: MockServerOptions = {}): Mockttp {
+    return new MockttpServer(options);
 }
 
 export function getRemote(): Mockttp {

@@ -1,12 +1,12 @@
 import net = require("net");
 import http = require("http");
 
-export interface DestroyableServer extends http.Server {
+export interface DestroyableServer extends net.Server {
     destroy(): Promise<void>;
 }
 
 // Mostly from https://github.com/isaacs/server-destroy (which seems to be unmaintained)
-export default function destroyable(server: http.Server): DestroyableServer  {
+export default function destroyable(server: net.Server): DestroyableServer  {
   const connections: { [key: string]: net.Socket } = {};
 
   server.on('connection', function(conn: net.Socket) {

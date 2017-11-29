@@ -7,7 +7,7 @@ import bodyParser = require('body-parser');
 import { graphqlExpress } from 'apollo-server-express';
 import { GraphQLSchema, GraphQLScalarType } from 'graphql';
 import { makeExecutableSchema } from 'graphql-tools';
-import MockttpServer from "../server/mockttp-server";
+import MockttpServer, { MockServerOptions } from "../server/mockttp-server";
 import { buildStandaloneModel } from "./standalone-model";
 import * as _ from "lodash";
 import { DEFAULT_STANDALONE_PORT } from '../types';
@@ -28,9 +28,13 @@ export class MockttpStandalone {
         if (this.debug) console.log('Standalone server started in debug mode');
 
         this.app.use(cors());
+        this.app.use(bodyParser.json());
+
         this.app.post('/start', async (req, res) => {
             try {
-                const port = req.query.port;
+                const port: number | undefined = req.query.port ?
+                    parseInt(req.query.port, 10) : undefined;
+                const options: MockServerOptions = req.body || {};
 
                 if (port != null && this.routers[port] != null) {
                     res.status(409).json({
@@ -39,11 +43,11 @@ export class MockttpStandalone {
                     return;
                 }
 
-                const { mockPort, mockServer } = await this.startMockServer(port);
+                const { mockPort, mockServer } = await this.startMockServer(options, port);
 
                 const config: MockServerConfig = {
                     port: mockPort,
-                    mockRoot: mockServer.urlFor('')
+                    mockRoot: mockServer.url
                 };
 
                 res.json(config);
@@ -77,11 +81,13 @@ export class MockttpStandalone {
 
     private routers: { [port: number]: express.Router } = { };
 
-    private async startMockServer(port?: number): Promise<{ mockPort: number, mockServer: MockttpServer }> {
-        const mockServer = new MockttpServer({
-            debug: this.debug,
-            cors: true // Standalone servers are primarily for browser usage, and browsers need cors
-        });
+    private async startMockServer(options: MockServerOptions, port?: number): Promise<{
+        mockPort: number,
+        mockServer: MockttpServer
+    }> {
+        const mockServer = new MockttpServer(_.defaults({
+            debug: this.debug // Use debug mode if the client requests it, or if the standalone has it set
+        }, options));
         this.mockServers.push(mockServer);
         await mockServer.start(port);
 

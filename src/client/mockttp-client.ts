@@ -1,5 +1,6 @@
 import TypedError = require('typed-error');
 import getFetch = require('fetch-ponyfill');
+import _ = require('lodash');
 const { fetch, Headers } = getFetch();
 
 import { ProxyConfig, Method, MockedEndpoint } from "../types";
@@ -13,6 +14,7 @@ import { MockServerConfig } from "../standalone/mockttp-standalone";
 import { serializeRuleData } from "../rules/mock-rule";
 import { MockedEndpointData, DEFAULT_STANDALONE_PORT } from "../types";
 import { MockedEndpointClient } from "./mocked-endpoint-client";
+import { MockServerOptions } from '../server/mockttp-server';
 
 export class ConnectionError extends TypedError { }
 
@@ -47,7 +49,17 @@ interface MockedEndpointState {
 export default class MockttpClient extends AbstractMockttp implements Mockttp {
     private readonly standaloneServerUrl = `http://localhost:${DEFAULT_STANDALONE_PORT}`;
 
+    private mockServerOptions: MockServerOptions;
     private mockServerConfig: MockServerConfig | undefined;
+
+    constructor(mockServerOptions: MockServerOptions = {}) {
+        super();
+        this.mockServerOptions = _.defaults(mockServerOptions, {
+            // Browser clients generally want cors enabled. For other clients, it doesn't hurt.
+            // TODO: Maybe detect whether we're in a browser in future
+            cors: true
+        });
+    }
 
     private async requestFromStandalone<T>(path: string, options?: RequestInit): Promise<T> {
         const url = `${this.standaloneServerUrl}${path}`;
@@ -121,7 +133,11 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
 
         const path = port ? `/start?port=${port}` : '/start';
         this.mockServerConfig = await this.requestFromStandalone<MockServerConfig>(path, {
-            method: 'POST'
+            method: 'POST',
+            headers: new Headers({
+                'Content-Type': 'application/json'
+            }),
+            body: JSON.stringify(this.mockServerOptions)
         });
     }
 
