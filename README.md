@@ -26,7 +26,8 @@ Ok, let's summarize. Mockttp lets you:
 
 * Write **easy, fast & reliable node.js & browser HTTP integration tests**
 * Fake server responses and verify requests made by your code
-* **Mock HTTP requests from inside & outside your process/browser tab**, including subprocesses, native code, remote devices, and more.
+* **Intercept, mock and proxy HTTPS too**, with built-in certificate generation
+* **Mock HTTP requests from inside & outside your process/tab**, including subprocesses, native code, remote devices, and more
 * Stub and mock requests transparently, as an **HTTP mocking proxy**, as well as serving traffic directly
 * **Mock servers for node & browsers with the same code** (universal/'isomorphic' HTTP mocking)
 * **Safely mock HTTP in parallel**, with autoconfiguration of ports, mock URLs and proxy settings
