@@ -138,7 +138,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
                     });
 
                     http.createServer((req: http.IncomingMessage, res: http.ServerResponse) => {
-                        req.url = 'https://' + targetHost + req.url;
+                        req.url = `https://${targetHost}:${port}${req.url}`;
                         return this.app(<express.Request> req, <express.Response> res);
                     }).emit('connection', tlsSocket);
                 });

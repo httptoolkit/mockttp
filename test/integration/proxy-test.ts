@@ -43,22 +43,33 @@ nodeOnly(() => {
                 return server.start();
             });
 
-            it("should mock proxied HTTP with request + process.env", async () => {
-                process.env = _.merge({}, process.env, server.proxyEnv);
+            describe("using request + process.env", () => {
+                it("should mock proxied HTTP", async () => {
+                    process.env = _.merge({}, process.env, server.proxyEnv);
 
-                server.get("http://example.com/endpoint").thenReply(200, "mocked data");
+                    server.get("http://example.com/endpoint").thenReply(200, "mocked data");
 
-                let response = await request.get("http://example.com/endpoint");
-                expect(response).to.equal("mocked data");
-            });
+                    let response = await request.get("http://example.com/endpoint");
+                    expect(response).to.equal("mocked data");
+                });
+                
+                it("should mock proxied HTTPS", async () => {
+                    process.env = _.merge({}, process.env, server.proxyEnv);
 
-            it("should mock proxied HTTPS with request + process.env", async () => {
-                process.env = _.merge({}, process.env, server.proxyEnv);
+                    server.get("https://example.com/endpoint").thenReply(200, "mocked data");
 
-                server.get("https://example.com/endpoint").thenReply(200, "mocked data");
+                    let response = await request.get("https://example.com/endpoint");
+                    expect(response).to.equal("mocked data");
+                });
 
-                let response = await request.get("https://example.com/endpoint");
-                expect(response).to.equal("mocked data");
+                it("should mock proxied HTTPS with a specific port", async () => {
+                    process.env = _.merge({}, process.env, server.proxyEnv);
+
+                    server.get("https://example.com:1234/endpoint").thenReply(200, "mocked data");
+
+                    let response = await request.get("https://example.com:1234/endpoint");
+                    expect(response).to.equal("mocked data");
+                });
             });
         });
     });
