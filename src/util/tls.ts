@@ -8,6 +8,10 @@ export type GeneratedCertificate = {
     cert: string
 };
 
+// This is slightly slow (~100ms), so do it once upfront, not for
+// every separate CA or even cert.
+const KEYS = pki.rsa.generateKeyPair(1024);
+
 export class CA {
     private caCert: { subject: any };
     private caKey: {};
@@ -19,13 +23,12 @@ export class CA {
     ) {
         this.caKey = pki.privateKeyFromPem(caKey);
         this.caCert = pki.certificateFromPem(caCert);
-        this.certKeys = pki.rsa.generateKeyPair(1024);
     }
 
     generateCertificate(domain: string): GeneratedCertificate {
         let cert = pki.createCertificate();
         
-        cert.publicKey = this.certKeys.publicKey;
+        cert.publicKey = KEYS.publicKey;
         cert.serialNumber = uuid().replace(/-/g, '');
     
         cert.validity.notBefore = new Date();
@@ -60,7 +63,7 @@ export class CA {
         cert.sign(this.caKey, md.sha256.create());
 
         return {
-            key: pki.privateKeyToPem(this.certKeys.privateKey),
+            key: pki.privateKeyToPem(KEYS.privateKey),
             cert: pki.certificateToPem(cert)
         };
     }
