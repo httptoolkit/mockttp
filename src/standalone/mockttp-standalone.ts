@@ -31,6 +31,8 @@ export class MockttpStandalone {
         this.app.use(bodyParser.json());
 
         this.app.post('/start', async (req, res) => {
+            if (this.debug) console.log('Standalone starting mock server on port', req.query.port);
+
             try {
                 const port: number | undefined = req.query.port ?
                     parseInt(req.query.port, 10) : undefined;

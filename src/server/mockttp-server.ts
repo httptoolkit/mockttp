@@ -83,12 +83,12 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         this.app.use(this.handleRequest.bind(this));
     }
 
-    async start(port?: number): Promise<void> {
-        if (!_.isInteger(port) && !_.isUndefined(port)) {
-            throw new Error(`Cannot start server with port ${port}. If passed, the port must be an integer`);
+    async start(portParam?: number): Promise<void> {
+        if (!_.isInteger(portParam) && !_.isUndefined(portParam)) {
+            throw new Error(`Cannot start server with port ${portParam}. If passed, the port must be an integer`);
         }
 
-        port = (port || await new Promise<number>((resolve, reject) => {
+        const port = (portParam || await new Promise<number>((resolve, reject) => {
             portfinder.getPort((err, port) => {
                 if (err) reject(err);
                 else resolve(port);
@@ -101,31 +101,46 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
             let { key, cert } = await this.httpsOptions;
             const ca = new CA(key, cert);
 
-            return new Promise<void>((resolve, reject) => {
-                this.server = destroyable(https.createServer({
-                    key,
-                    cert,
-                    ca: [cert],
-                    // TODO: Fix node types for this callback
-                    SNICallback: (domain, cb: any) => {
-                        try {
-                            const generatedCertificate = ca.generateCertificate(domain);
-                            cb(null, tls.createSecureContext({
-                                key: generatedCertificate.key,
-                                cert: generatedCertificate.cert
-                            }))
-                        } catch (e) {
-                            console.error('Cert generation error', e);
-                            cb(e);
-                        }
+            this.server = destroyable(https.createServer({
+                key,
+                cert,
+                ca: [cert],
+                // TODO: Fix node types for this callback
+                SNICallback: (domain, cb: any) => {
+                    try {
+                        const generatedCert = ca.generateCertificate(domain);
+                        cb(null, tls.createSecureContext({
+                            key: generatedCert.key,
+                            cert: generatedCert.cert
+                        }))
+                    } catch (e) {
+                        console.error('Cert generation error', e);
+                        cb(e);
                     }
-                }, this.app).listen(port, resolve));
-            });
+                }
+            }, this.app).listen(port));
         } else {
             return new Promise<void>((resolve, reject) => {
                 this.server = destroyable(this.app.listen(port, resolve));
             });
         }
+
+        return new Promise<void>((resolve, reject) => {
+            this.server.on('listening', resolve);
+            this.server.on('error', (e: any) => {
+                // Although we try to pick a free port, we may have race conditions, if something else
+                // takes the same port at the same time. If you haven't explicitly picked a port, and
+                // we do have a collision, simply try again.
+                if (e.code === 'EADDRINUSE' && !portParam) {
+                    if (this.debug) console.log('Address in use, retrying...');
+
+                    this.server.close(); // Don't bother waiting for this, it can stop on its own time
+                    resolve(this.start(portParam));
+                } else {
+                    throw e;
+                }
+            });
+        });
     }
 
     async stop(): Promise<void> {

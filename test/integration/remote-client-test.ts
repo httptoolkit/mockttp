@@ -94,7 +94,7 @@ nodeOnly(() => {
                 const port = client.port!;
 
                 await expect(getRemote().start(port))
-                    .to.eventually.be.rejectedWith('Cannot start: mock server is already running on port 8000');
+                    .to.eventually.be.rejectedWith(`Cannot start: mock server is already running on port ${port}`);
             });
         });
 
