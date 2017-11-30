@@ -8,7 +8,7 @@ describe("An HTTPS server", () => {
             https: {
                 keyPath: './test/fixtures/test-ca.key',
                 certPath: './test/fixtures/test-ca.pem'
-            } // TODO: Should this be on `.start` instead, so you can configure it per-instance?
+            }
         });
 
         beforeEach(() => server.start());
@@ -21,6 +21,11 @@ describe("An HTTPS server", () => {
         it("can handle HTTPS requests", async () => {
             await server.get('/').thenReply(200, "Super secure response");
             return expect(fetch(server.url)).to.have.responseText("Super secure response");
+        });
+
+        it("can handle HTTP requests", async () => {
+            await server.get('/').thenReply(200, "Super secure response");
+            return expect(fetch(server.url.replace('https', 'http'))).to.have.responseText("Super secure response");
         });
     });
 });

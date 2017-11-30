@@ -5,24 +5,24 @@
 import net = require("net");
 import http = require("http");
 import https = require("https");
-import EventEmitter = require("events");
+import { EventEmitter } from "events";
 import tls = require('tls');
 import portfinder = require("portfinder");
 import express = require("express");
 import uuid = require('uuid/v4');
-
 import cors = require("cors");
 import _ = require("lodash");
 
 import { OngoingRequest, CompletedRequest, CompletedResponse, OngoingResponse } from "../types";
 import { MockRuleData } from "../rules/mock-rule-types";
 import { CAOptions, getCA } from '../util/tls';
-import destroyable, { DestroyableServer } from "../util/destroyable-server";
+import { DestroyableServer } from "../util/destroyable-server";
 import { Mockttp, AbstractMockttp, MockttpOptions } from "../mockttp";
 import { MockRule } from "../rules/mock-rule";
+import { MockedEndpoint } from "./mocked-endpoint";
+import { createComboServer } from "./http-combo-server";
 import { filter } from "../util/promise";
 
-import { MockedEndpoint } from "./mocked-endpoint";
 import {
     parseBody,
     waitForCompletedRequest,
@@ -30,11 +30,10 @@ import {
     waitForCompletedResponse,
 } from "./request-utils";
 
-
 /**
  * A in-process Mockttp implementation. This starts servers on the local machine in the
  * current process, and exposes methods to directly manage them.
- * 
+ *
  * This class does not work in browsers, as it expects to be able to start HTTP servers.
  */
 export default class MockttpServer extends AbstractMockttp implements Mockttp {
@@ -81,73 +80,12 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
         if (this.debug) console.log(`Starting mock server on port ${port}`);
 
-        if (this.httpsOptions) {
-            const ca = await getCA(this.httpsOptions);
-            const defaultCert = ca.generateCertificate('localhost');
+        this.server = await createComboServer({
+            debug: this.debug,
+            https: this.httpsOptions
+        }, this.app);
 
-            this.server = destroyable(https.createServer({
-                key: defaultCert.key,
-                cert: defaultCert.cert,
-                ca: [defaultCert.ca],
-                // TODO: Fix DT's node types for this callback - Error should be Error|null
-                SNICallback: (domain, cb: any) => {
-                    if (this.debug) console.log(`Generating server certificate for ${domain}`);
-
-                    const generatedCert = ca.generateCertificate(domain);
-                    cb(null, tls.createSecureContext({
-                        key: generatedCert.key,
-                        cert: generatedCert.cert
-                    }));
-                }
-            }, this.app).listen(port));
-
-            this.server.addListener('connect', (req: http.IncomingMessage, socket: net.Socket) => {
-                const [ targetHost, port ] = req.url!.split(':');
-
-                if (this.debug) console.log(`Proxying connection for ${targetHost}, with HTTP CONNECT tunnel`);
-                const generatedCert = ca.generateCertificate(targetHost);
-
-                socket.write('HTTP/' + req.httpVersion + ' 200 OK\r\n\r\n', 'UTF-8', () => {
-                    let tlsSocket = new tls.TLSSocket(socket, {
-                        isServer: true,
-                        server: this.server,
-                        secureContext: tls.createSecureContext(generatedCert)
-                    });
-                    tlsSocket.on('error', (e: Error) => {
-                        if (this.debug) {
-                            console.warn(`Error in proxy TLS connection:\n${e}`);
-                        } else {
-                            console.warn(`Error in proxy TLS connection: ${e.message}`);
-                        }
-
-                        // We can't recover from this - just try to close the underlying socket.
-                        try { socket.destroy(); } catch (e) {}
-                    });
-
-                    // This is a little crazy, but only a little. We create a server to handle HTTP parsing etc, but
-                    // never listen on any ports or anything, we just hand it a live socket. Setup is pretty cheap here
-                    // (instantiate, sets up as event emitter, registers some events & properties, that's it), and
-                    // this is the easiest way I can see to put targetHost into the URL, without reimplementing HTTP.
-                    http.createServer((req: http.IncomingMessage, res: http.ServerResponse) => {
-                        req.url = `https://${targetHost}:${port}${req.url}`;
-                        return this.app(<express.Request> req, <express.Response> res);
-                    }).emit('connection', tlsSocket);
-                });
-
-                socket.on('error', (e: Error) => {
-                    if (this.debug) {
-                        console.warn(`Error in connection to HTTPS proxy:\n${e}`);
-                    } else {
-                        console.warn(`Error in connection to HTTPS proxy: ${e.message}`);
-                    }
-
-                    // We can't recover from this - just try to close the socket.
-                    try { socket.destroy(); } catch (e) {}
-                });
-            });
-        } else {
-            this.server = destroyable(this.app.listen(port));
-        }
+        this.server!.listen(port);
 
         return new Promise<void>((resolve, reject) => {
             this.server!.on('listening', resolve);
@@ -158,7 +96,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
                 if (e.code === 'EADDRINUSE' && !portParam) {
                     if (this.debug) console.log('Address in use, retrying...');
 
-                    this.server!.close(); // Don't bother waiting for this, it can stop on its own time
+                    this.server!.destroy(); // Don't bother waiting for this, it can stop on its own time
                     resolve(this.start());
                 } else {
                     throw e;

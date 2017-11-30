@@ -25,7 +25,7 @@ describe("Form data matching", function () {
             body: form
         })).to.have.responseText("matched");
     });
-    
+
     it("shouldn't match requests with the wrong form data", async () => {
         let form = new URLSearchParams();
         form.set('shouldMatch', 'no');
