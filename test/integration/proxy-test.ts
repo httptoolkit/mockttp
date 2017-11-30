@@ -1,5 +1,5 @@
 import _ = require("lodash");
-import { getLocal } from "../..";
+import { getLocal, Mockttp } from "../..";
 import request = require("request-promise-native");
 import { expect, nodeOnly } from "../test-utils";
 
@@ -7,21 +7,59 @@ const INITIAL_ENV = _.cloneDeep(process.env);
 
 nodeOnly(() => {
     describe("Mockttp when used as a proxy with `request`", function () {
-        let server = getLocal();
 
-        beforeEach(() => server.start());
+        let server: Mockttp;
+
         afterEach(async () => {
             await server.stop();
             process.env = INITIAL_ENV;
         });
 
-        it("should mock proxied HTTP GETs", async () => {
-            process.env = _.merge({}, process.env, server.proxyEnv);
+        describe("with a default config", () => {
 
-            server.get("http://example.com/endpoint").thenReply(200, "mocked data");
+            beforeEach(() => {
+                server = getLocal();
+                return server.start();
+            });
 
-            let response = await request.get("http://example.com/endpoint");
-            expect(response).to.equal("mocked data");
+            it("should mock proxied HTTP with request + process.env", async () => {
+                process.env = _.merge({}, process.env, server.proxyEnv);
+
+                server.get("http://example.com/endpoint").thenReply(200, "mocked data");
+
+                let response = await request.get("http://example.com/endpoint");
+                expect(response).to.equal("mocked data");
+            });
+        });
+
+        describe("with an HTTPS config", () => {
+            beforeEach(() => {
+                server = getLocal({
+                    https: {
+                        keyPath: './test/fixtures/test-ca.key',
+                        certPath: './test/fixtures/test-ca.pem'
+                    }
+                });
+                return server.start();
+            });
+
+            it("should mock proxied HTTP with request + process.env", async () => {
+                process.env = _.merge({}, process.env, server.proxyEnv);
+
+                server.get("http://example.com/endpoint").thenReply(200, "mocked data");
+
+                let response = await request.get("http://example.com/endpoint");
+                expect(response).to.equal("mocked data");
+            });
+
+            it("should mock proxied HTTPS with request + process.env", async () => {
+                process.env = _.merge({}, process.env, server.proxyEnv);
+
+                server.get("https://example.com/endpoint").thenReply(200, "mocked data");
+
+                let response = await request.get("https://example.com/endpoint");
+                expect(response).to.equal("mocked data");
+            });
         });
     });
 });

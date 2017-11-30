@@ -1,14 +1,15 @@
+import net = require("net");
 import http = require("http");
 import https = require("https");
 import tls = require('tls');
 import portfinder = require("portfinder");
 import express = require("express");
 
-import fs = require("../util/fs");
 import cors = require("cors");
 import bodyParser = require("body-parser");
 import _ = require("lodash");
 
+import * as fs from '../util/fs';
 import { Method, Request, ProxyConfig } from "../types";
 import { MockRuleData } from "../rules/mock-rule-types";
 import PartialMockRule from "../rules/partial-mock-rule";
@@ -107,6 +108,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
                 ca: [cert],
                 // TODO: Fix node types for this callback
                 SNICallback: (domain, cb: any) => {
+                    if (this.debug) console.log(`Generating certificate for ${domain}`);
                     try {
                         const generatedCert = ca.generateCertificate(domain);
                         cb(null, tls.createSecureContext({
@@ -119,6 +121,28 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
                     }
                 }
             }, this.app).listen(port));
+
+            this.server.addListener('connect', (req: http.IncomingMessage, socket: net.Socket) => {
+                const [ targetHost, port ] = req.url!.split(':');
+                if (this.debug) console.log(`Proxying connection to ${targetHost}`);
+
+                socket.write('HTTP/' + req.httpVersion + ' 200 OK\r\n\r\n', 'UTF-8', () => {
+                    const generatedCert = ca.generateCertificate(targetHost);
+
+                    let tlsSocket = new tls.TLSSocket(socket, {
+                        isServer: true,
+                        secureContext: tls.createSecureContext({
+                            key: generatedCert.key,
+                            cert: generatedCert.cert
+                        })
+                    });
+
+                    http.createServer((req: http.IncomingMessage, res: http.ServerResponse) => {
+                        req.url = 'https://' + targetHost + req.url;
+                        return this.app(<express.Request> req, <express.Response> res);
+                    }).emit('connection', tlsSocket);
+                });
+            });
         } else {
             return new Promise<void>((resolve, reject) => {
                 this.server = destroyable(this.app.listen(port, resolve));
