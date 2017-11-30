@@ -135,7 +135,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
                     if (this.debug) console.log('Address in use, retrying...');
 
                     this.server.close(); // Don't bother waiting for this, it can stop on its own time
-                    resolve(this.start(portParam));
+                    resolve(this.start());
                 } else {
                     throw e;
                 }
