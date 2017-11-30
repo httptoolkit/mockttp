@@ -19,10 +19,16 @@ module.exports = (wallaby) => {
       // want wallaby to run on raw source. This is a simple remap of paths to lets us do that.
       'test/integration/*.ts': file => {
         return file.content.replace(
-        /("|')..\/..("|')/g,
-        '"../../src/main"'
-      );
-    }
+          /("|')..\/..("|')/g,
+          '"../../src/main"'
+        );
+      }
+    },
+
+    workers: {
+      initial: 4,
+      regular: 1,
+      restart: true
     },
 
     testFramework: 'mocha',
