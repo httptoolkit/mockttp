@@ -8,6 +8,11 @@
   "bin": {
     "mockttp": "./dist/standalone/standalone-bin.js"
   },
+  "files": [
+    "dist",
+    "src",
+    "custom-typings"
+  ],
   "scripts": {
     "prebuild": "rimraf dist/*",
     "build": "tsc && cp src/standalone/schema.gql dist/standalone/schema.gql",

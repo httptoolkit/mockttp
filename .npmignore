@@ -1,5 +1,0 @@
-src/
-test/
-.env
-wallaby.js
-.travis.yml
