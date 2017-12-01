@@ -13,7 +13,7 @@ export type HandlerDataLookup = {
 }
 
 export class SimpleHandlerData {
-    readonly type = 'simple';
+    readonly type: 'simple' = 'simple';
 
     constructor(
         public status: number,

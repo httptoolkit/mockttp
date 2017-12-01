@@ -19,27 +19,27 @@ export type CompletionCheckerDataLookup = {
 }
 
 export class AlwaysData {
-    readonly type = 'always';
+    readonly type: 'always' = 'always';
     constructor() {}
 }
 
 export class OnceData {
-    readonly type = 'once';
+    readonly type: 'once' = 'once';
     constructor() {}
 }
 
 export class TwiceData {
-    readonly type = 'twice';
+    readonly type: 'twice' = 'twice';
     constructor() {}
 }
 
 export class ThriceData {
-    readonly type = 'thrice';
+    readonly type: 'thrice' = 'thrice';
     constructor() {}
 }
 
 export class TimesData {
-    readonly type = 'times';
+    readonly type: 'times' = 'times';
     constructor(public count: number) { }
 }
 

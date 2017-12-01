@@ -10,12 +10,10 @@ import {
   RequestMatcher,
   MockRuleData
 } from "./mock-rule-types";
-import { buildMatchers, MatcherData } from "./matchers";
-import { HandlerData, buildHandler } from "./handlers";
-import {
-  CompletionCheckerData,
-  buildCompletionChecker
-} from "./completion-checkers";
+
+import * as matching from "./matchers";
+import * as handling from "./handlers";
+import * as completion from "./completion-checkers";
 
 export function serializeRuleData(data: MockRuleData) {
     return {
@@ -38,9 +36,9 @@ export class MockRule implements MockRuleInterface {
         handler,
         completionChecker
     }: MockRuleData) {
-        this.matches = buildMatchers(matchers);
-        this.handleRequest = this.recordRequests(buildHandler(handler));
-        this.isComplete = buildCompletionChecker(completionChecker);
+        this.matches = matching.buildMatchers(matchers);
+        this.handleRequest = this.recordRequests(handling.buildHandler(handler));
+        this.isComplete = completion.buildCompletionChecker(completionChecker);
     }
 
     // Wrap the handler, to add the request to this.requests when it's done

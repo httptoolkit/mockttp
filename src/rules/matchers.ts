@@ -20,7 +20,7 @@ export type MatcherDataLookup = {
 }
 
 export class SimpleMatcherData {
-    readonly type = 'simple';
+    readonly type: 'simple' = 'simple';
 
     constructor(
         public method: Method,
@@ -29,7 +29,7 @@ export class SimpleMatcherData {
 }
 
 export class HeaderMatcherData {
-    readonly type = 'header';
+    readonly type: 'header' = 'header';
 
     constructor(
         public headers: { [key: string]: string },
@@ -37,7 +37,7 @@ export class HeaderMatcherData {
 }
 
 export class FormDataMatcherData {
-    readonly type = 'form-data';
+    readonly type: 'form-data' = 'form-data';
 
     constructor(
         public formData: { [key: string]: string }

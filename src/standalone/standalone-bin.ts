@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import _ = require('lodash');
 import childProcess = require('child_process');
-import Mockttp = require('../..');
+import Mockttp = require('../main');
 
 handleArgs(process.argv).catch((e) => {
     console.error(e);

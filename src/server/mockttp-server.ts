@@ -19,11 +19,12 @@ import { Mockttp, AbstractMockttp } from "../mockttp";
 import { MockRule } from "../rules/mock-rule";
 import { MockedEndpoint } from "./mocked-endpoint";
 
-type HttpsOptions = {
+export type HttpsOptions = {
     key: string
     cert: string
 };
-type HttpsPathOptions = {
+
+export type HttpsPathOptions = {
     keyPath: string;
     certPath: string;
 }
