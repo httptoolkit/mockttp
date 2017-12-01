@@ -16,6 +16,7 @@ export class CA {
     private caCert: { subject: any };
     private caKey: {};
     private certKeys: { publicKey: {}, privateKey: {} };
+    private certCache: { [domain: string]: GeneratedCertificate };
 
     constructor(
         caKey: PEM,
@@ -23,9 +24,13 @@ export class CA {
     ) {
         this.caKey = pki.privateKeyFromPem(caKey);
         this.caCert = pki.certificateFromPem(caCert);
+        this.certCache = {};
     }
 
     generateCertificate(domain: string): GeneratedCertificate {
+        // TODO: Expire domains from the cache? Based on their actual expiry?
+        if (this.certCache[domain]) return this.certCache[domain];
+
         let cert = pki.createCertificate();
         
         cert.publicKey = KEYS.publicKey;
@@ -62,9 +67,12 @@ export class CA {
     
         cert.sign(this.caKey, md.sha256.create());
 
-        return {
+        const generatedCertificate = {
             key: pki.privateKeyToPem(KEYS.privateKey),
             cert: pki.certificateToPem(cert)
         };
+        
+        this.certCache[domain] = generatedCertificate;
+        return generatedCertificate;
     }
 }
