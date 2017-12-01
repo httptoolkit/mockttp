@@ -4,6 +4,7 @@
         "module": "commonjs",
         "outDir": "./dist",
         "declaration": true, 
+        "sourceMap": true,
         "strict": true,
         "lib": [
             "dom",
