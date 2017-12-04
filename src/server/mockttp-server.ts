@@ -253,7 +253,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
 async function explainRequest(request: OngoingRequest): Promise<string> {
     let msg = `${request.method} request to ${request.url}`;
 
-    let bodyText = request.body.asText();
+    let bodyText = await request.body.asText();
     if (bodyText) msg += ` with body \`${bodyText}\``;
 
     if (!_.isEmpty(request.headers)) {

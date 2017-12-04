@@ -60,14 +60,39 @@ Match requests making GETs for /endpoint, and then respond with status 200 and b
 
         let text = await response.text();
 
-        expect(text).to.include(`No rules were found matching this request.
-This request was: GET request to /non-existent-endpoint `);
+        expect(text).to.include(`No rules were found matching this request.`);
         expect(text).to.include(`The configured rules are:
 Match requests making GETs for /endpointA, and then respond with status 200 and body "nice request!", once (done).
 Match requests making POSTs for /endpointB, with headers including {"h":"v"}, and with form data including {"key":"value"}, and then respond with status 500.
 Match requests making PUTs for /endpointC, and then respond with status 200 and body "good headers", always (seen 0).
 `);
     });
+
+    it("should explain received unmatched requests", async () => {
+        await expect(fetch(server.urlFor("/endpoint")))
+        .to.have.responseText(/This request was: GET request to \/endpoint/);
+    });
+
+    it("should explain the headers of received unmatched requests", async () => {
+        await expect(fetch(server.urlFor("/endpoint"), {
+            headers: new Headers({
+                abc: '123'
+            })
+        })).to.have.responseText(/This request was: GET request to \/endpoint with headers:\n{[.\s\S]+"abc": "123"[.\s\S]+}/);
+    });
+
+    it("should explain the body of received unmatched requests", async () => {
+        let form = new URLSearchParams();
+        form.set('a', '123');
+
+        await expect(fetch(server.urlFor("/endpoint"), {
+            method: 'POST',
+            headers: new Headers({
+              'Content-Type': 'application/x-www-form-urlencoded'
+            }),
+            body: form
+        })).to.have.responseText(/This request was: POST request to \/endpoint with body `a=123`/);
+    });    
 
     it("should provide suggestions for new GET rules you could use", async () => {
         let response = await fetch(server.urlFor("/endpoint"));
