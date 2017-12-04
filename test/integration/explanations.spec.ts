@@ -51,8 +51,9 @@ Match requests making GETs for /endpoint, and then respond with status 200 and b
     });
 
     it("should explain more complex rule matchers", async () => {
+        await server.anyRequest().withHeaders({ 'h': 'v' }).thenReply(200);
         await server.get("/endpointA").once().thenReply(200, "nice request!");
-        await server.post("/endpointB").withHeaders({ 'h': 'v' }).withForm({ key: 'value' }).thenReply(500);
+        await server.post("/endpointB").withForm({ key: 'value' }).thenReply(500);
         await server.put("/endpointC").always().thenReply(200, "good headers");
 
         await fetch(server.urlFor("/endpointA"));
@@ -62,8 +63,9 @@ Match requests making GETs for /endpoint, and then respond with status 200 and b
 
         expect(text).to.include(`No rules were found matching this request.`);
         expect(text).to.include(`The configured rules are:
+Match requests for any method and path, and with headers including {"h":"v"}, and then respond with status 200.
 Match requests making GETs for /endpointA, and then respond with status 200 and body "nice request!", once (done).
-Match requests making POSTs for /endpointB, with headers including {"h":"v"}, and with form data including {"key":"value"}, and then respond with status 500.
+Match requests making POSTs for /endpointB, and with form data including {"key":"value"}, and then respond with status 500.
 Match requests making PUTs for /endpointC, and then respond with status 200 and body "good headers", always (seen 0).
 `);
     });

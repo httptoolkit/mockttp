@@ -17,7 +17,8 @@ import {
     SimpleMatcherData,
     MatcherData,
     HeaderMatcherData,
-    FormDataMatcherData
+    FormDataMatcherData,
+    WildcardMatcherData
 } from "./matchers";
 
 import { SimpleHandlerData, PassThroughHandlerData } from "./handlers";
@@ -28,15 +29,29 @@ import { SimpleHandlerData, PassThroughHandlerData } from "./handlers";
  * defined endpoint to the consuming code once it's been registered
  */
 export default class PartialMockRule {
+    private addRule: (rule: MockRuleData) => Promise<MockedEndpoint>;
+
+    constructor(addRule: (rule: MockRuleData) => Promise<MockedEndpoint>)
     constructor(
         method: Method,
         path: string,
-        private addRule: (rule: MockRuleData) => Promise<MockedEndpoint>)
-    {
-        this.matchers = [new SimpleMatcherData(method, path)];
+        addRule: (rule: MockRuleData) => Promise<MockedEndpoint>
+    )
+    constructor(
+        methodOrAddRule: Method | ((rule: MockRuleData) => Promise<MockedEndpoint>),
+        path?: string,
+        addRule?: (rule: MockRuleData) => Promise<MockedEndpoint>
+    ) {
+        if (methodOrAddRule instanceof Function) {
+            this.matchers.push(new WildcardMatcherData());
+            this.addRule = methodOrAddRule;
+        } else {
+            this.matchers.push(new SimpleMatcherData(methodOrAddRule, path!));
+            this.addRule = addRule!;
+        }
     }
 
-    private matchers: MatcherData[];
+    private matchers: MatcherData[] = [];
     private isComplete?: CompletionCheckerData;
 
     withHeaders(headers: { [key: string]: string }) {

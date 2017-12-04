@@ -16,6 +16,7 @@ export interface Mockttp {
 
     urlFor(path: string): string;
 
+    anyRequest(): PartialMockRule;
     get(url: string): PartialMockRule;
     post(url: string): PartialMockRule;
     put(url: string): PartialMockRule;
@@ -51,6 +52,10 @@ export abstract class AbstractMockttp {
 
     urlFor(path: string): string {
         return this.url + path;
+    }
+
+    anyRequest(): PartialMockRule {
+        return new PartialMockRule(this.addRule);
     }
 
     get(url: string): PartialMockRule {

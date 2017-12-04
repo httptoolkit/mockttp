@@ -6,6 +6,7 @@ import { MockRule } from "./mock-rule";
 import normalizeUrl from "../util/normalize-url";
 
 export type MatcherData = (
+    WildcardMatcherData |
     SimpleMatcherData |
     HeaderMatcherData |
     FormDataMatcherData
@@ -14,9 +15,14 @@ export type MatcherData = (
 export type MatcherType = MatcherData['type'];
 
 export type MatcherDataLookup = {
+    'wildcard': WildcardMatcherData,
     'simple': SimpleMatcherData,
     'header': HeaderMatcherData,
     'form-data': FormDataMatcherData
+}
+
+export class WildcardMatcherData {
+    readonly type: 'wildcard' = 'wildcard';
 }
 
 export class SimpleMatcherData {
@@ -72,6 +78,10 @@ export function buildMatcher
 type MatcherBuilder<D extends MatcherData> = (data: D) => RequestMatcher
 
 const matcherBuilders: { [T in MatcherType]: MatcherBuilder<MatcherDataLookup[T]> } = {
+    wildcard: (): RequestMatcher => {
+        return _.assign(() => true, { explain: () => 'for any method and path' })
+    },
+
     simple: (data: SimpleMatcherData): RequestMatcher => {
         let methodName = Method[data.method];
         let url = normalizeUrl(data.path);

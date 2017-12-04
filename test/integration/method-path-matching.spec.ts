@@ -46,4 +46,10 @@ responses by hand.`);
 
         expect(result.status).to.equal(503);
     });
+
+    it("should allowing matching all requests, with a wildcard", async () => {
+        await server.anyRequest().thenReply(200, "wildcard response");
+
+        await expect(fetch(server.urlFor('/any-old-endpoint'))).to.have.responseText('wildcard response');
+    });
 });
