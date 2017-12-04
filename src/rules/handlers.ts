@@ -1,16 +1,20 @@
 import _ = require('lodash');
+import http = require('http');
+import https = require('https');
 import express = require("express");
 import { OngoingRequest } from "../types";
 import { RequestHandler } from "./mock-rule-types";
 
 export type HandlerData = (
-    SimpleHandlerData
+    SimpleHandlerData |
+    PassThroughHandlerData
 );
 
 export type HandlerType = HandlerData['type'];
 
 export type HandlerDataLookup = {
     'simple': SimpleHandlerData,
+    'passthrough': PassThroughHandlerData
 }
 
 export class SimpleHandlerData {
@@ -20,6 +24,10 @@ export class SimpleHandlerData {
         public status: number,
         public data?: string
     ) {}
+}
+
+export class PassThroughHandlerData {
+    readonly type: 'passthrough' = 'passthrough';
 }
 
 type HandlerBuilder<D extends HandlerData> = (data: D) => RequestHandler;
@@ -40,6 +48,38 @@ const handlerBuilders: { [T in HandlerType]: HandlerBuilder<HandlerDataLookup[T]
             response.writeHead(status);
             response.end(data || "");
         }, { explain: () => `respond with status ${status}` + (data ? ` and body "${data}"` : "") });
+        return responder;
+    },
+    passthrough: (): RequestHandler => {
+        let responder = _.assign(async function(request: OngoingRequest, response: express.Response) {
+            let { protocol, method, hostname, path, headers } = request;
+            
+            let makeRequest = protocol === 'https' ? https.request : http.request;
+
+            return new Promise<void>((resolve, reject) => {
+                let req = makeRequest({
+                    protocol: protocol + ':',
+                    method,
+                    hostname,
+                    path,
+                    headers
+                }, (res) => {
+                    res.pipe(response);
+                    res.on('end', resolve);
+                    res.on('error', reject);
+                });
+                
+                request.body.rawStream.pipe(req);
+
+                req.on('error', (e) => {
+                    try {
+                        response.writeHead(502);
+                    } catch (e) {}
+                    response.end(`Error connecting to upstream server: ${e}`);
+                    reject(e);
+                });
+            });
+        }, { explain: () => 'pass the request through to the real server' });
         return responder;
     }
 };

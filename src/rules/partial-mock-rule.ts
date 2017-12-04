@@ -20,7 +20,7 @@ import {
     FormDataMatcherData
 } from "./matchers";
 
-import { SimpleHandlerData } from "./handlers";
+import { SimpleHandlerData, PassThroughHandlerData } from "./handlers";
 
 /**
  * Fluently builds mock rule data, passing it to the initial
@@ -79,6 +79,16 @@ export default class PartialMockRule {
             matchers: this.matchers,
             completionChecker: this.isComplete,
             handler: new SimpleHandlerData(status, data)
+        };
+
+        return this.addRule(rule);
+    }
+
+    thenPassThrough(): Promise<MockedEndpoint> {
+        const rule: MockRuleData = {
+            matchers: this.matchers,
+            completionChecker: this.isComplete,
+            handler: new PassThroughHandlerData()
         };
 
         return this.addRule(rule);

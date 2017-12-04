@@ -7,6 +7,7 @@ const INITIAL_ENV = _.cloneDeep(process.env);
 
 nodeOnly(() => {
     describe("Mockttp when used as a proxy with `request`", function () {
+        this.timeout(10000);
 
         let server: Mockttp;
 
@@ -17,36 +18,44 @@ nodeOnly(() => {
 
         describe("with a default config", () => {
 
-            beforeEach(() => {
+            beforeEach(async () => {
                 server = getLocal();
-                return server.start();
+                await server.start();
+                process.env = _.merge({}, process.env, server.proxyEnv);
             });
 
             it("should mock proxied HTTP with request + process.env", async () => {
-                process.env = _.merge({}, process.env, server.proxyEnv);
-
                 server.get("http://example.com/endpoint").thenReply(200, "mocked data");
 
                 let response = await request.get("http://example.com/endpoint");
                 expect(response).to.equal("mocked data");
             });
+
+            it("should be able to pass through requests", async () => {
+                server.get("http://example.com/").thenPassThrough();
+
+                let response = await request.get("http://example.com/");
+                expect(response).to.include(
+                    "This domain is established to be used for illustrative examples in documents."
+                );
+            });
         });
 
         describe("with an HTTPS config", () => {
-            beforeEach(() => {
+            beforeEach(async () => {
                 server = getLocal({
                     https: {
                         keyPath: './test/fixtures/test-ca.key',
                         certPath: './test/fixtures/test-ca.pem'
                     }
                 });
-                return server.start();
+
+                await server.start();
+                process.env = _.merge({}, process.env, server.proxyEnv);
             });
 
             describe("using request + process.env", () => {
                 it("should mock proxied HTTP", async () => {
-                    process.env = _.merge({}, process.env, server.proxyEnv);
-
                     server.get("http://example.com/endpoint").thenReply(200, "mocked data");
 
                     let response = await request.get("http://example.com/endpoint");
@@ -54,8 +63,6 @@ nodeOnly(() => {
                 });
                 
                 it("should mock proxied HTTPS", async () => {
-                    process.env = _.merge({}, process.env, server.proxyEnv);
-
                     server.get("https://example.com/endpoint").thenReply(200, "mocked data");
 
                     let response = await request.get("https://example.com/endpoint");
@@ -63,12 +70,21 @@ nodeOnly(() => {
                 });
 
                 it("should mock proxied HTTPS with a specific port", async () => {
-                    process.env = _.merge({}, process.env, server.proxyEnv);
-
                     server.get("https://example.com:1234/endpoint").thenReply(200, "mocked data");
 
                     let response = await request.get("https://example.com:1234/endpoint");
                     expect(response).to.equal("mocked data");
+                });
+                
+                it("should be able to pass through requests with a body", async () => {
+                    server.post("https://httpbin.org/post").thenPassThrough();
+                    
+                    let response = await request.post({
+                        url: "https://httpbin.org/post",
+                        json: { "test": true }
+                    });
+
+                    expect(response.data).to.equal('{"test":true}');
                 });
             });
         });
