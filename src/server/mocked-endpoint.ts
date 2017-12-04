@@ -13,6 +13,7 @@ export class MockedEndpoint implements MockedEndpointInterface {
     }
 
     getSeenRequests(): Promise<CompletedRequest[]> {
-        return Promise.resolve<CompletedRequest[]>(_.clone(this.rule.requests))
+        // Wait for all completed running requests to have all their details available
+        return Promise.all<CompletedRequest>(this.rule.requests);
     }
 }

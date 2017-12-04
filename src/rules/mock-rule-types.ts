@@ -10,7 +10,7 @@ export interface MockRule extends Explainable {
     handleRequest: RequestHandler;
     isComplete?: RuleCompletionChecker;
 
-    requests: CompletedRequest[];
+    requests: Promise<CompletedRequest>[];
 }
 
 export interface MockRuleData {

@@ -29,7 +29,7 @@ export class MockRule implements MockRuleInterface {
     public handleRequest: RequestHandler;
 
     public id: string = uuid();
-    public requests: CompletedRequest[] = [];
+    public requests: Promise<CompletedRequest>[] = [];
 
     constructor({
         matchers,
@@ -46,22 +46,33 @@ export class MockRule implements MockRuleInterface {
         const thisRule = this;
 
         const recordRequest = <RequestHandler> function recordRequest(this: any, req: OngoingRequest, res: Response) {
-            return handler.apply(this, arguments)
-            .then(async () => thisRule.requests.push(_(req).pick([
-                'protocol',
-                'method',
-                'url',
-                'hostname',
-                'path',
-                'headers'
-            ]).assign({
-                body: {
-                    buffer: await req.body.asBuffer(),
-                    text: await req.body.asText().catch(() => undefined),
-                    json: await req.body.asJson().catch(() => undefined),
-                    formData: await req.body.asFormData().catch(() => undefined)
-                }
-            }).valueOf()));
+            const handlerArgs = arguments;
+            let completedAndRecordedPromise = (async (resolve, reject) => {
+                await handler.apply(this, handlerArgs);
+
+                let result = _(req).pick([
+                    'protocol',
+                    'method',
+                    'url',
+                    'hostname',
+                    'path',
+                    'headers'
+                ]).assign({
+                    body: {
+                        buffer: await req.body.asBuffer(),
+                        text: await req.body.asText().catch(() => undefined),
+                        json: await req.body.asJson().catch(() => undefined),
+                        formData: await req.body.asFormData().catch(() => undefined)
+                    }
+                }).valueOf();
+
+                return result;
+            })();
+            
+            // Requests are added to rule.requests as soon as they start being handled.
+            thisRule.requests.push(completedAndRecordedPromise);
+
+            return completedAndRecordedPromise.then(() => {});
         };
 
         recordRequest.explain = handler.explain;
