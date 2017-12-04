@@ -23,9 +23,33 @@ export interface Mockttp {
     options(url: string): PartialMockRule;
 }
 
+export type HttpsOptions = {
+    key: string
+    cert: string
+};
+
+export type HttpsPathOptions = {
+    keyPath: string;
+    certPath: string;
+}
+
+export interface MockttpOptions {
+    cors?: boolean;
+    debug?: boolean;
+    https?: HttpsOptions | HttpsPathOptions
+}
+
 export abstract class AbstractMockttp {
+    protected cors: boolean;
+    protected debug: boolean;
+
     abstract get url(): string;
     abstract addRule: (ruleData: MockRuleData) => Promise<MockedEndpoint>;
+
+    constructor(options: MockttpOptions) {
+        this.debug = options.debug || false;
+        this.cors = options.cors || false;
+    }
 
     get proxyEnv(): ProxyConfig {
         return {
@@ -59,6 +83,13 @@ export abstract class AbstractMockttp {
     }
 
     options(url: string): PartialMockRule {
+        if (this.cors) {
+            throw new Error(`Cannot mock OPTIONS requests with CORS enabled.
+
+You can disable CORS by passing { cors: false } to getLocal/getRemote, but this may cause issues \
+connecting to your mock server from browsers, unless you mock all required OPTIONS preflight \
+responses by hand.`);
+        }
         return new PartialMockRule(Method.OPTIONS, url, this.addRule);
     }
 

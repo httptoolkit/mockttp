@@ -9,12 +9,11 @@ import {
   MockRuleData
 } from "../rules/mock-rule-types";
 import PartialMockRule from "../rules/partial-mock-rule";
-import { Mockttp, AbstractMockttp } from "../mockttp";
+import { Mockttp, AbstractMockttp, MockttpOptions } from "../mockttp";
 import { MockServerConfig } from "../standalone/mockttp-standalone";
 import { serializeRuleData } from "../rules/mock-rule";
 import { MockedEndpointData, DEFAULT_STANDALONE_PORT } from "../types";
 import { MockedEndpointClient } from "./mocked-endpoint-client";
-import { MockServerOptions } from '../server/mockttp-server';
 
 export class ConnectionError extends TypedError { }
 
@@ -49,16 +48,16 @@ interface MockedEndpointState {
 export default class MockttpClient extends AbstractMockttp implements Mockttp {
     private readonly standaloneServerUrl = `http://localhost:${DEFAULT_STANDALONE_PORT}`;
 
-    private mockServerOptions: MockServerOptions;
+    private mockServerOptions: MockttpOptions;
     private mockServerConfig: MockServerConfig | undefined;
 
-    constructor(mockServerOptions: MockServerOptions = {}) {
-        super();
-        this.mockServerOptions = _.defaults(mockServerOptions, {
+    constructor(mockServerOptions: MockttpOptions = {}) {
+        super(_.defaults(mockServerOptions, {
             // Browser clients generally want cors enabled. For other clients, it doesn't hurt.
             // TODO: Maybe detect whether we're in a browser in future
             cors: true
-        });
+        }));
+        this.mockServerOptions = mockServerOptions;
     }
 
     private async requestFromStandalone<T>(path: string, options?: RequestInit): Promise<T> {

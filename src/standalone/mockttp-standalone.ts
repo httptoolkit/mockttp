@@ -7,10 +7,11 @@ import bodyParser = require('body-parser');
 import { graphqlExpress } from 'apollo-server-express';
 import { GraphQLSchema, GraphQLScalarType } from 'graphql';
 import { makeExecutableSchema } from 'graphql-tools';
-import MockttpServer, { MockServerOptions } from "../server/mockttp-server";
+import MockttpServer from "../server/mockttp-server";
 import { buildStandaloneModel } from "./standalone-model";
 import * as _ from "lodash";
 import { DEFAULT_STANDALONE_PORT } from '../types';
+import { MockttpOptions } from '../mockttp';
 
 export interface StandaloneServerOptions {
     debug?: boolean;
@@ -36,7 +37,7 @@ export class MockttpStandalone {
             try {
                 const port: number | undefined = req.query.port ?
                     parseInt(req.query.port, 10) : undefined;
-                const options: MockServerOptions = req.body || {};
+                const options: MockttpOptions = req.body || {};
 
                 if (port != null && this.routers[port] != null) {
                     res.status(409).json({
@@ -83,7 +84,7 @@ export class MockttpStandalone {
 
     private routers: { [port: number]: express.Router } = { };
 
-    private async startMockServer(options: MockServerOptions, port?: number): Promise<{
+    private async startMockServer(options: MockttpOptions, port?: number): Promise<{
         mockPort: number,
         mockServer: MockttpServer
     }> {

@@ -15,27 +15,12 @@ import { MockRuleData } from "../rules/mock-rule-types";
 import PartialMockRule from "../rules/partial-mock-rule";
 import { CA } from '../util/tls';
 import destroyable, { DestroyableServer } from "../util/destroyable-server";
-import { Mockttp, AbstractMockttp } from "../mockttp";
+import { Mockttp, AbstractMockttp, HttpsOptions, HttpsPathOptions, MockttpOptions } from "../mockttp";
 import { MockRule } from "../rules/mock-rule";
 import { MockedEndpoint } from "./mocked-endpoint";
 import { parseBody } from "./parse-body";
 import { filter } from "../util/promise";
 
-export type HttpsOptions = {
-    key: string
-    cert: string
-};
-
-export type HttpsPathOptions = {
-    keyPath: string;
-    certPath: string;
-}
-
-export interface MockServerOptions {
-    cors?: boolean;
-    debug?: boolean;
-    https?: HttpsOptions | HttpsPathOptions
-}
 
 // TODO: Refactor this into the CA?
 function buildHttpsOptions(options: HttpsOptions | HttpsPathOptions | undefined): Promise<HttpsOptions> | undefined {
@@ -63,23 +48,23 @@ function buildHttpsOptions(options: HttpsOptions | HttpsPathOptions | undefined)
 export default class MockttpServer extends AbstractMockttp implements Mockttp {
     private rules: MockRule[] = [];
 
-    private debug: boolean;
     private httpsOptions: Promise<HttpsOptions> | undefined;
 
     private app: express.Application;
     private server: DestroyableServer;
 
-    constructor(options: MockServerOptions = {}) {
-        super();
-        this.debug = options.debug || false;
+    constructor(options: MockttpOptions = {}) {
+        super(options);
 
         this.httpsOptions = buildHttpsOptions(options.https);
 
         this.app = express();
 
-        if (options.cors) {
+        if (this.cors) {
             if (this.debug) console.log('Enabling CORS');
-            this.app.use(cors());
+            this.app.use(cors({
+                methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']
+            }));
         }
 
         this.app.use(parseBody);

@@ -1,18 +1,17 @@
 import MockttpClient from "./client/mockttp-client";
 
-import { Mockttp } from "./mockttp";
-import { MockServerOptions } from "./server/mockttp-server";
+import { Mockttp, MockttpOptions } from "./mockttp";
 export { OngoingRequest, CompletedRequest } from "./types";
 
 export interface MockedEndpoint {
     getSeenRequests(): Request[]
 }
 
-export function getLocal(options: MockServerOptions = {}): Mockttp {
+export function getLocal(options: MockttpOptions = {}): Mockttp {
     return new MockttpClient(options);
 }
 
-export function getRemote(options: MockServerOptions = {}): Mockttp {
+export function getRemote(options: MockttpOptions = {}): Mockttp {
     return new MockttpClient(options);
 }
 
