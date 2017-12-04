@@ -7,7 +7,7 @@ const INITIAL_ENV = _.cloneDeep(process.env);
 
 nodeOnly(() => {
     describe("Mockttp when used as a proxy with `request`", function () {
-        this.timeout(10000);
+        this.timeout(5000);
 
         let server: Mockttp;
 
@@ -85,6 +85,19 @@ nodeOnly(() => {
                     });
 
                     expect(response.data).to.equal('{"test":true}');
+                });
+                
+                it("should be able to verify requests passed through with a body", async () => {
+                    const endpointMock = await server.post("https://httpbin.org/post").thenPassThrough();
+                    
+                    let response = await request.post({
+                        url: "https://httpbin.org/post",
+                        json: { "test": true }
+                    });
+
+                    const seenRequests = await endpointMock.getSeenRequests();
+                    expect(seenRequests.length).to.equal(1);
+                    expect(await seenRequests[0].body.text).to.equal('{"test":true}');
                 });
             });
         });

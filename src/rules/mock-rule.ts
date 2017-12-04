@@ -48,6 +48,9 @@ export class MockRule implements MockRuleInterface {
         const recordRequest = <RequestHandler> function recordRequest(this: any, req: OngoingRequest, res: Response) {
             const handlerArgs = arguments;
             let completedAndRecordedPromise = (async (resolve, reject) => {
+                // Start recording before the data starts piping, so we don't miss anything.                
+                let buffer = req.body.asBuffer();
+
                 await handler.apply(this, handlerArgs);
 
                 let result = _(req).pick([
@@ -59,7 +62,7 @@ export class MockRule implements MockRuleInterface {
                     'headers'
                 ]).assign({
                     body: {
-                        buffer: await req.body.asBuffer(),
+                        buffer: await buffer,
                         text: await req.body.asText().catch(() => undefined),
                         json: await req.body.asJson().catch(() => undefined),
                         formData: await req.body.asFormData().catch(() => undefined)
