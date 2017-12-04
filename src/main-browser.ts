@@ -12,8 +12,8 @@ export function getLocal(options: MockServerOptions = {}): Mockttp {
     return new MockttpClient(options);
 }
 
-export function getRemote(): Mockttp {
-    return new MockttpClient();
+export function getRemote(options: MockServerOptions = {}): Mockttp {
+    return new MockttpClient(options);
 }
 
 export function getStandalone(options: any = {}): never {
