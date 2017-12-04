@@ -8,10 +8,10 @@ module.exports = (wallaby) => {
       'src/**/*.gql',
       'test/**/*.ts',
       'test/fixtures/**/*',
-      '!test/**/*-test.ts'
+      '!test/**/*.spec.ts'
     ],
     tests: [
-      'test/**/*-test.ts'
+      'test/**/*.spec.ts'
     ],
 
     preprocessors: {

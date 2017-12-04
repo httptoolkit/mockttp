@@ -5,7 +5,7 @@ module.exports = function(config) {
     config.set({
         frameworks: ['mocha', 'chai'],
         files: [
-            'test/**/*-test.ts'
+            'test/**/*.spec.ts'
         ],
         mime: { 'text/x-typescript': ['ts'] },
         webpack: {
