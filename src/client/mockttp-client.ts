@@ -123,8 +123,14 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                 body: JSON.stringify({ query, variables })
             });
         } catch (e) {
-            let graphQLErrors = (await e.response.json()).errors;
-            throw new GraphQLError(e, graphQLErrors);
+            try {
+                let graphQLErrors = (await e.response.json()).errors;
+                throw new GraphQLError(e, graphQLErrors);
+            } catch (e2) {
+                // If we fail to get a proper JSON graphql error, just throw the
+                // underlying exception without decoration
+                throw e;
+            }
         }
     }
 
