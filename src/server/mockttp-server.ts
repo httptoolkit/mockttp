@@ -10,7 +10,7 @@ import bodyParser = require("body-parser");
 import _ = require("lodash");
 
 import * as fs from '../util/fs';
-import { Method, Request, ProxyConfig } from "../types";
+import { Method, OngoingRequest, CompletedRequest, ProxyConfig } from "../types";
 import { MockRuleData } from "../rules/mock-rule-types";
 import PartialMockRule from "../rules/partial-mock-rule";
 import { CA } from '../util/tls';
@@ -18,6 +18,8 @@ import destroyable, { DestroyableServer } from "../util/destroyable-server";
 import { Mockttp, AbstractMockttp } from "../mockttp";
 import { MockRule } from "../rules/mock-rule";
 import { MockedEndpoint } from "./mocked-endpoint";
+import { parseBody } from "./parse-body";
+import { filter } from "../util/promise";
 
 export type HttpsOptions = {
     key: string
@@ -80,8 +82,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
             this.app.use(cors());
         }
 
-        this.app.use(bodyParser.json());
-        this.app.use(bodyParser.urlencoded({ extended: true }));
+        this.app.use(parseBody);
         this.app.use(this.handleRequest.bind(this));
     }
 
@@ -210,22 +211,23 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         return Promise.resolve(new MockedEndpoint(rule));
     }
 
-    private async handleRequest(request: Request, response: express.Response) {
+    private async handleRequest(request: OngoingRequest, response: express.Response) {
         try {
-            let matchingRules = this.rules.filter((r) => r.matches(request));
+            let matchingRules = await filter(this.rules, (r) => r.matches(request));
             let nextRule = matchingRules.filter((r) => !this.isComplete(r, matchingRules))[0]
 
             if (nextRule) {
                 if (this.debug) console.log(`Request matched rule: ${nextRule.explain()}`);
                 await nextRule.handleRequest(request, response);
             } else {
-                if (this.debug) console.warn(`Unmatched request received: ${explainRequest(request)}`);
+                let requestExplanation = await explainRequest(request);
+                if (this.debug) console.warn(`Unmatched request received: ${requestExplanation}`);
 
                 response.setHeader('Content-Type', 'text/plain');
                 response.writeHead(503, "Request for unmocked endpoint");
 
                 response.write("No rules were found matching this request.\n");
-                response.write(`This request was: ${explainRequest(request)}\n\n`);
+                response.write(`This request was: ${requestExplanation}\n\n`);
 
                 if (this.rules.length > 0) {
                     response.write("The configured rules are:\n");
@@ -234,12 +236,17 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
                     response.write("There are no rules configured.\n");
                 }
 
-                response.write(suggestRule(request));
+                response.write(await suggestRule(request));
 
                 response.end();
             }
         } catch (e) {
             console.error("Failed to handle request", e);
+            
+            // Do whatever we can to tell the client we broke
+            try { response.writeHead(500, 'Server error'); } catch (e) {}
+            try { response.write(`Server error ${e}`); } catch (e) {}
+            try { response.end(); } catch (e) {}
         }
     }
 
@@ -254,12 +261,11 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
     }
 }
 
-function explainRequest(request: Request): string {
+async function explainRequest(request: OngoingRequest): Promise<string> {
     let msg = `${request.method} request to ${request.url}`;
 
-    if (request.body && request.body.length > 0) {
-        msg += ` with body \`${request.body}\``;
-    }
+    let bodyText = request.body.asText();
+    if (bodyText) msg += ` with body \`${bodyText}\``;
 
     if (!_.isEmpty(request.headers)) {
         msg += ` with headers:\n${JSON.stringify(request.headers, null, 2)}`;
@@ -268,16 +274,16 @@ function explainRequest(request: Request): string {
     return msg;
 }
 
-function suggestRule(request: Request): string {
+async function suggestRule(request: OngoingRequest): Promise<string> {
     let msg = "You can fix this by adding a rule to match this request, for example:\n"
 
     msg += `mockServer.${request.method.toLowerCase()}("${request.path}")`;
 
-    let isFormRequest = request.headers["content-type"] && request.headers["content-type"].indexOf("application/x-www-form-urlencoded") > -1;
-    let hasFormBody = _.isPlainObject(request.body) && !_.isEmpty(request.body);
+    let isFormRequest = !!request.headers["content-type"] && request.headers["content-type"].indexOf("application/x-www-form-urlencoded") > -1;
+    let formBody = await request.body.asFormData().catch(() => undefined);
 
-    if (isFormRequest && hasFormBody) {
-        msg += `.withForm(${JSON.stringify(request.body)})`;
+    if (isFormRequest && !!formBody) {
+        msg += `.withForm(${JSON.stringify(formBody)})`;
     }
 
     msg += '.thenReply(200, "your response");';

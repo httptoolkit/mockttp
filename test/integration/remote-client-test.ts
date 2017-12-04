@@ -1,4 +1,4 @@
-import { getLocal, getRemote, getStandalone, Request } from "../..";
+import { getLocal, getRemote, getStandalone } from "../..";
 import request = require("request-promise-native");
 import { expect, fetch, nodeOnly, browserOnly } from "../test-utils";
 

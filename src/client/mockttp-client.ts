@@ -209,7 +209,9 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                             path,
                             hostname,
                             headers,
-                            body
+                            body {
+                                text
+                            }
                         }
                     }
             }`, {

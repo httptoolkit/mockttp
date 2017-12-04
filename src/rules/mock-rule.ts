@@ -1,7 +1,7 @@
 import uuid = require("uuid/v4");
 import * as _ from "lodash";
 
-import { Request, Response } from "../types";
+import { OngoingRequest, CompletedRequest, Response } from "../types";
 import {
   MockRule as MockRuleInterface,
   RuleExplainable,
@@ -29,7 +29,7 @@ export class MockRule implements MockRuleInterface {
     public handleRequest: RequestHandler;
 
     public id: string = uuid();
-    public requests: Request[] = [];
+    public requests: CompletedRequest[] = [];
 
     constructor({
         matchers,
@@ -44,9 +44,26 @@ export class MockRule implements MockRuleInterface {
     // Wrap the handler, to add the request to this.requests when it's done
     private recordRequests(handler: RequestHandler): RequestHandler {
         const thisRule = this;
-        const recordRequest = <RequestHandler> function recordRequest(this: any, req: Request, res: Response) {
-            return handler.apply(this, arguments).then(() => thisRule.requests.push(req));
-        }
+
+        const recordRequest = <RequestHandler> function recordRequest(this: any, req: OngoingRequest, res: Response) {
+            return handler.apply(this, arguments)
+            .then(async () => thisRule.requests.push(_(req).pick([
+                'protocol',
+                'method',
+                'url',
+                'hostname',
+                'path',
+                'headers'
+            ]).assign({
+                body: {
+                    buffer: await req.body.asBuffer(),
+                    text: await req.body.asText().catch(() => undefined),
+                    json: await req.body.asJson().catch(() => undefined),
+                    formData: await req.body.asFormData().catch(() => undefined)
+                }
+            }).valueOf()));
+        };
+
         recordRequest.explain = handler.explain;
         return recordRequest;
     }

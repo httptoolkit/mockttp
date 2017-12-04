@@ -1,3 +1,4 @@
+import stream = require('stream');
 import express = require("express");
 
 export const DEFAULT_STANDALONE_PORT = 45456;
@@ -19,7 +20,26 @@ export interface Request {
     hostname: string;
 
     headers: { [key: string]: string; };
-    body: any;
+}
+
+export interface OngoingRequest extends Request {
+    body: {
+        rawStream: stream.Readable,
+
+        asBuffer: () => Promise<Buffer>,
+        asText: () => Promise<string>,
+        asJson: () => Promise<object>,
+        asFormData: () => Promise<{ [key: string]: string }>
+    }
+}
+
+export interface CompletedRequest extends Request {
+    body: {
+        buffer: Buffer,
+        text: string | undefined,
+        json: object | undefined,
+        formData: { [key: string]: string } | undefined
+    }
 }
 
 export interface Response extends express.Response { }
@@ -27,12 +47,12 @@ export interface Response extends express.Response { }
 // The external interface of a rule, for users to later verify with
 export interface MockedEndpoint {
     id: string;
-    getSeenRequests(): Promise<Request[]>;
+    getSeenRequests(): Promise<CompletedRequest[]>;
 }
 
 export interface MockedEndpointData {
     id: string;
-    seenRequests: Request[];
+    seenRequests: CompletedRequest[];
 }
 
 export interface Explainable {

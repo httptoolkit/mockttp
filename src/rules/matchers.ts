@@ -1,6 +1,6 @@
 import * as _ from "lodash";
 
-import { Request, Method } from "../types";
+import { OngoingRequest, Method } from "../types";
 import { RequestMatcher } from "./mock-rule-types";
 import { MockRule } from "./mock-rule";
 import normalizeUrl from "../util/normalize-url";
@@ -47,20 +47,16 @@ export class FormDataMatcherData {
 export function buildMatchers(matcherPartData: MatcherData[]): RequestMatcher {
     const matchers = matcherPartData.map(buildMatcher);
 
-    const matchRequest = <RequestMatcher> function matchRequest(req: Request) {
-        return _.every(matchers, (m) => m(req));
-    }
-
-    matchRequest.explain = function (this: MockRule) {
+    return _.assign(async function matchRequest(req: OngoingRequest) {
+        return _.every(await Promise.all(matchers.map((m) => m(req))));
+    }, { explain: function (this: MockRule) {
         if (matchers.length === 1) return matchers[0].explain.apply(this);
 
         // Oxford comma separate our matcher explanations
         return matchers.slice(0, -1)
         .map((m) => <string> m.explain.apply(this))
         .join(', ') + ', and ' + matchers.slice(-1)[0].explain.apply(this);
-    }
-
-    return matchRequest;
+    } });
 }
 
 export function buildMatcher
@@ -80,37 +76,32 @@ const matcherBuilders: { [T in MatcherType]: MatcherBuilder<MatcherDataLookup[T]
         let methodName = Method[data.method];
         let url = normalizeUrl(data.path);
 
-        let matcher = <RequestMatcher> ((request: Request) =>
+        return _.assign((request: OngoingRequest) =>
             request.method === methodName && normalizeUrl(request.url) === url
-        );
-        matcher.explain = () => `making ${methodName}s for ${data.path}`;
-        return matcher;
+        , { explain: () => `making ${methodName}s for ${data.path}` });
     },
 
     header: (data: HeaderMatcherData): RequestMatcher => {
         let lowerCasedHeaders = _.mapKeys(data.headers, (value: string, key: string) => key.toLowerCase());
-        let matcher = <RequestMatcher> ((request) =>
-            _.isMatch(request.headers, lowerCasedHeaders)
-        );
-        matcher.explain = () => `with headers including ${JSON.stringify(data.headers)}`;
-        return matcher;
+        return _.assign(
+            (request: OngoingRequest) => _.isMatch(request.headers, lowerCasedHeaders)
+        , { explain: () => `with headers including ${JSON.stringify(data.headers)}` });
     },
 
     'form-data': (data: FormDataMatcherData): RequestMatcher => {
-        let matcher = <RequestMatcher> ((request) =>
-            request.headers["content-type"] &&
+        return _.assign(async (request: OngoingRequest) =>
+            !!request.headers["content-type"] &&
             request.headers["content-type"].indexOf("application/x-www-form-urlencoded") !== -1 &&
-            _.isMatch(request.body, data.formData)
-        );
-        matcher.explain = () => `with form data including ${JSON.stringify(data.formData)}`;
-        return matcher;
+            _.isMatch(await request.body.asFormData(), data.formData)
+        , { explain: () => `with form data including ${JSON.stringify(data.formData)}` });
     }
 };
 
 function combineMatchers(matcherA: RequestMatcher, matcherB: RequestMatcher): RequestMatcher {
-    let matcher = <RequestMatcher> ((request) => matcherA(request) && matcherB(request));
-    matcher.explain = function (this: MockRule) {
-        return `${matcherA.explain.apply(this)} and ${matcherB.explain.apply(this)}`;
-    }
-    return matcher;
+    return _.assign(
+        (request: OngoingRequest) => matcherA(request) && matcherB(request),
+        { explain: function (this: MockRule) {
+            return `${matcherA.explain.apply(this)} and ${matcherB.explain.apply(this)}`;
+        } }
+    );
 };

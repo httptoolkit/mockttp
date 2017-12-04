@@ -1,4 +1,4 @@
-import { Explainable, Request, Response, Method } from "../types";
+import { Explainable, OngoingRequest, CompletedRequest, Response, Method } from "../types";
 import { MatcherData } from "./matchers";
 import { CompletionCheckerData } from "./completion-checkers";
 import { HandlerData } from "./handlers";
@@ -10,7 +10,7 @@ export interface MockRule extends Explainable {
     handleRequest: RequestHandler;
     isComplete?: RuleCompletionChecker;
 
-    requests: Request[];
+    requests: CompletedRequest[];
 }
 
 export interface MockRuleData {
@@ -23,8 +23,8 @@ export interface RuleExplainable extends Explainable {
     explain(this: MockRule): string;
 }
 
-export type RequestMatcher = ((request: Request) => boolean) & RuleExplainable;
-export type RequestHandler = ((request: Request, response: Response) => Promise<void>) & RuleExplainable;
+export type RequestMatcher = ((request: OngoingRequest) => boolean | Promise<boolean>) & RuleExplainable;
+export type RequestHandler = ((request: OngoingRequest, response: Response) => Promise<void>) & RuleExplainable;
 
 export interface RuleCompletionChecker extends RuleExplainable {
     (this: MockRule): boolean;

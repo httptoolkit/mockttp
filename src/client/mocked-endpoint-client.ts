@@ -1,4 +1,4 @@
-import { MockedEndpointData, MockedEndpoint, Request } from "../types";
+import { MockedEndpointData, MockedEndpoint, CompletedRequest } from "../types";
 
 export class MockedEndpointClient implements MockedEndpoint {
 
@@ -7,7 +7,7 @@ export class MockedEndpointClient implements MockedEndpoint {
         private getMockedEndpointData: () => Promise<MockedEndpointData | null>
     ) { }
 
-    public async getSeenRequests(): Promise<Request[]> {
+    public async getSeenRequests(): Promise<CompletedRequest[]> {
         const mockedEndpointData = await this.getMockedEndpointData();
         if (mockedEndpointData === null) throw new Error("Can't get seen requests for unknown mocked endpoint");
 

@@ -2,7 +2,7 @@ import MockttpClient from "./client/mockttp-client";
 
 import { Mockttp } from "./mockttp";
 import { MockServerOptions } from "./server/mockttp-server";
-export { Request } from "./types";
+export { OngoingRequest, CompletedRequest } from "./types";
 
 export interface MockedEndpoint {
     getSeenRequests(): Request[]

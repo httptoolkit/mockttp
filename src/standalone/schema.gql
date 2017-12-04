@@ -16,7 +16,14 @@ type Request {
     hostname: String!
 
     headers: Any!
-    body: Any!
+    body: RequestBody!
+}
+
+type RequestBody {
+    buffer: Any!
+    text: String
+    json: Any
+    formData: Any
 }
 
 type Mutation {

@@ -1,5 +1,6 @@
+import _ = require('lodash');
 import express = require("express");
-import { Request } from "../types";
+import { OngoingRequest } from "../types";
 import { RequestHandler } from "./mock-rule-types";
 
 export type HandlerData = (
@@ -35,11 +36,10 @@ export function buildHandler
 
 const handlerBuilders: { [T in HandlerType]: HandlerBuilder<HandlerDataLookup[T]> } = {
     simple: ({ data, status }: SimpleHandlerData): RequestHandler => {
-        let responder = <RequestHandler> async function(request: Request, response: express.Response) {
+        let responder = _.assign(async function(request: OngoingRequest, response: express.Response) {
             response.writeHead(status);
             response.end(data || "");
-        }
-        responder.explain = () => `respond with status ${status}` + (data ? ` and body "${data}"` : "");
+        }, { explain: () => `respond with status ${status}` + (data ? ` and body "${data}"` : "") });
         return responder;
     }
 };

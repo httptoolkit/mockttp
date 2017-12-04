@@ -3,7 +3,7 @@ import MockttpClient from "./client/mockttp-client";
 import { MockttpStandalone, StandaloneServerOptions } from "./standalone/mockttp-standalone";
 
 import { Mockttp } from "./mockttp";
-export { Request } from "./types";
+export { OngoingRequest, CompletedRequest } from "./types";
 
 export interface MockedEndpoint {
     getSeenRequests(): Request[]

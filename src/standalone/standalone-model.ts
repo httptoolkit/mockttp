@@ -11,7 +11,7 @@ import { MatcherData, buildMatchers } from "../rules/matchers";
 import { HandlerData } from "../rules/handlers";
 import { CompletionCheckerData } from "../rules/completion-checkers";
 import MockttpServer from "../server/mockttp-server";
-import { Method, Request, MockedEndpoint, MockedEndpointData } from "../types";
+import { Method, CompletedRequest, MockedEndpoint, MockedEndpointData } from "../types";
 import { MockRuleData } from "../rules/mock-rule-types";
 import { IResolvers } from "graphql-tools/dist/Interfaces";
 
