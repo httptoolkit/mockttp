@@ -1,4 +1,5 @@
 import _ = require('lodash');
+import url = require('url');
 import http = require('http');
 import https = require('https');
 import express = require("express");
@@ -53,6 +54,12 @@ const handlerBuilders: { [T in HandlerType]: HandlerBuilder<HandlerDataLookup[T]
     passthrough: (): RequestHandler => {
         let responder = _.assign(async function(request: OngoingRequest, response: express.Response) {
             let { protocol, method, hostname, path, headers } = request;
+            
+            if (!url.parse(request.url).host) {
+                throw new Error(
+`Cannot pass through request to ${request.url}, since it doesn't specify an upstream host.
+To pass requests through, use the mock server as a proxy whilst making requests to the real target server.`);
+            }
             
             let makeRequest = protocol === 'https' ? https.request : http.request;
 

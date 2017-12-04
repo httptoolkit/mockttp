@@ -95,4 +95,15 @@ mockServer.get("/endpoint").thenReply(200, "your response");`);
         expect(text).to.include(`You can fix this by adding a rule to match this request, for example:
 mockServer.post("/endpoint").withForm({"shouldMatch":"yes"}).thenReply(200, "your response");`);
     });
+
+    it("should explain why passthrough fails for non-proxy requests", async () => {        
+        server.get("/endpoint").thenPassThrough();
+
+        let result = await fetch(server.urlFor("/endpoint"));
+
+        expect(result.status).to.equal(500);
+        let body = await result.text();
+        expect(body).to.include('Cannot pass through request to /endpoint, since it doesn\'t specify an upstream host.');
+        expect(body).to.include('To pass requests through, use the mock server as a proxy whilst making requests to the real target server.');
+    });
 });
