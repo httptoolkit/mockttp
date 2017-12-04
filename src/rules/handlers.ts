@@ -52,7 +52,7 @@ const handlerBuilders: { [T in HandlerType]: HandlerBuilder<HandlerDataLookup[T]
         return responder;
     },
     passthrough: (): RequestHandler => {
-        let responder = _.assign(async function(request: OngoingRequest, response: express.Response) {
+        return _.assign(async function(request: OngoingRequest, response: express.Response) {
             let { protocol, method, hostname, path, headers } = request;
             
             if (!url.parse(request.url).host) {
@@ -87,6 +87,5 @@ To pass requests through, use the mock server as a proxy whilst making requests 
                 });
             });
         }, { explain: () => 'pass the request through to the real server' });
-        return responder;
     }
 };

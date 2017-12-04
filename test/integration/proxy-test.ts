@@ -25,14 +25,14 @@ nodeOnly(() => {
             });
 
             it("should mock proxied HTTP with request + process.env", async () => {
-                server.get("http://example.com/endpoint").thenReply(200, "mocked data");
+                await server.get("http://example.com/endpoint").thenReply(200, "mocked data");
 
                 let response = await request.get("http://example.com/endpoint");
                 expect(response).to.equal("mocked data");
             });
 
             it("should be able to pass through requests", async () => {
-                server.get("http://example.com/").thenPassThrough();
+                await server.get("http://example.com/").thenPassThrough();
 
                 let response = await request.get("http://example.com/");
                 expect(response).to.include(
@@ -56,28 +56,28 @@ nodeOnly(() => {
 
             describe("using request + process.env", () => {
                 it("should mock proxied HTTP", async () => {
-                    server.get("http://example.com/endpoint").thenReply(200, "mocked data");
+                    await server.get("http://example.com/endpoint").thenReply(200, "mocked data");
 
                     let response = await request.get("http://example.com/endpoint");
                     expect(response).to.equal("mocked data");
                 });
                 
                 it("should mock proxied HTTPS", async () => {
-                    server.get("https://example.com/endpoint").thenReply(200, "mocked data");
+                    await server.get("https://example.com/endpoint").thenReply(200, "mocked data");
 
                     let response = await request.get("https://example.com/endpoint");
                     expect(response).to.equal("mocked data");
                 });
 
                 it("should mock proxied HTTPS with a specific port", async () => {
-                    server.get("https://example.com:1234/endpoint").thenReply(200, "mocked data");
+                    await server.get("https://example.com:1234/endpoint").thenReply(200, "mocked data");
 
                     let response = await request.get("https://example.com:1234/endpoint");
                     expect(response).to.equal("mocked data");
                 });
                 
                 it("should be able to pass through requests with a body", async () => {
-                    server.post("https://httpbin.org/post").thenPassThrough();
+                    await server.post("https://httpbin.org/post").thenPassThrough();
                     
                     let response = await request.post({
                         url: "https://httpbin.org/post",

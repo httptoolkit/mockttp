@@ -11,8 +11,6 @@ export class MockedEndpointClient implements MockedEndpoint {
         const mockedEndpointData = await this.getMockedEndpointData();
         if (mockedEndpointData === null) throw new Error("Can't get seen requests for unknown mocked endpoint");
 
-        let seenRequestsData = mockedEndpointData.seenRequests;
-
-        return seenRequestsData;
+        return mockedEndpointData.seenRequests;
     }
 }
