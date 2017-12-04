@@ -6,49 +6,24 @@ import portfinder = require("portfinder");
 import express = require("express");
 
 import cors = require("cors");
-import bodyParser = require("body-parser");
 import _ = require("lodash");
 
-import * as fs from '../util/fs';
 import { Method, OngoingRequest, CompletedRequest, ProxyConfig } from "../types";
 import { MockRuleData } from "../rules/mock-rule-types";
 import PartialMockRule from "../rules/partial-mock-rule";
-import { CA } from '../util/tls';
+import { CAOptions, getCA } from '../util/tls';
 import destroyable, { DestroyableServer } from "../util/destroyable-server";
-import { Mockttp, AbstractMockttp, HttpsOptions, HttpsPathOptions, MockttpOptions } from "../mockttp";
+import { Mockttp, AbstractMockttp, MockttpOptions } from "../mockttp";
 import { MockRule } from "../rules/mock-rule";
 import { MockedEndpoint } from "./mocked-endpoint";
 import { parseBody } from "./parse-body";
 import { filter } from "../util/promise";
 
-
-// TODO: Refactor this into the CA?
-function buildHttpsOptions(options: HttpsOptions | HttpsPathOptions | undefined): Promise<HttpsOptions> | undefined {
-    if (!options) return undefined;
-    // TODO: is there a nice way to avoid these casts?
-    if ((<any>options).key && (<any>options).cert) {
-        return Promise.resolve(<HttpsOptions> options);
-    }
-    if ((<any>options).keyPath && (<any>options).certPath) {
-        let pathOptions = <HttpsPathOptions> options;
-        return Promise.all([
-            fs.readFile(pathOptions.keyPath, 'utf8'),
-            fs.readFile(pathOptions.certPath, 'utf8')
-        ]).then(([ keyContents, certContents ]) => ({
-            key: keyContents,
-            cert: certContents
-        }));
-    }
-    else {
-        throw new Error('Unrecognized https option: you need to provide either a keyPath & certPath, or a key & cert.')
-    }
-}
-
 // Provides all the external API, uses that to build and manage the rules list, and interrogate our recorded requests
 export default class MockttpServer extends AbstractMockttp implements Mockttp {
     private rules: MockRule[] = [];
 
-    private httpsOptions: Promise<HttpsOptions> | undefined;
+    private httpsOptions: CAOptions | undefined;
 
     private app: express.Application;
     private server: DestroyableServer;
@@ -56,7 +31,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
     constructor(options: MockttpOptions = {}) {
         super(options);
 
-        this.httpsOptions = buildHttpsOptions(options.https);
+        this.httpsOptions = options.https;
 
         this.app = express();
 
@@ -86,26 +61,22 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         if (this.debug) console.log(`Starting mock server on port ${port}`);
 
         if (this.httpsOptions) {
-            let { key, cert } = await this.httpsOptions;
-            const ca = new CA(key, cert);
+            const ca = await getCA(this.httpsOptions);
+            const defaultCert = ca.generateCertificate('localhost');
 
             this.server = destroyable(https.createServer({
-                key,
-                cert,
-                ca: [cert],
+                key: defaultCert.key,
+                cert: defaultCert.cert,
+                ca: [defaultCert.ca],
                 // TODO: Fix node types for this callback
                 SNICallback: (domain, cb: any) => {
                     if (this.debug) console.log(`Generating certificate for ${domain}`);
-                    try {
-                        const generatedCert = ca.generateCertificate(domain);
-                        cb(null, tls.createSecureContext({
-                            key: generatedCert.key,
-                            cert: generatedCert.cert
-                        }))
-                    } catch (e) {
-                        console.error('Cert generation error', e);
-                        cb(e);
-                    }
+                    
+                    const generatedCert = ca.generateCertificate(domain);
+                    cb(null, tls.createSecureContext({
+                        key: generatedCert.key,
+                        cert: generatedCert.cert
+                    }));
                 }
             }, this.app).listen(port));
 

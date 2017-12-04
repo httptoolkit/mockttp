@@ -1,6 +1,7 @@
 import PartialMockRule from "./rules/partial-mock-rule";
 import { ProxyConfig, MockedEndpoint, Method } from "./types";
 import { MockRuleData } from "./rules/mock-rule-types";
+import { CAOptions } from './util/tls';
 
 export interface Mockttp {
     start(port?: number): Promise<void>;
@@ -23,20 +24,10 @@ export interface Mockttp {
     options(url: string): PartialMockRule;
 }
 
-export type HttpsOptions = {
-    key: string
-    cert: string
-};
-
-export type HttpsPathOptions = {
-    keyPath: string;
-    certPath: string;
-}
-
 export interface MockttpOptions {
     cors?: boolean;
     debug?: boolean;
-    https?: HttpsOptions | HttpsPathOptions
+    https?: CAOptions
 }
 
 export abstract class AbstractMockttp {
