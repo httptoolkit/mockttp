@@ -53,24 +53,32 @@ const handlerBuilders: { [T in HandlerType]: HandlerBuilder<HandlerDataLookup[T]
     },
     passthrough: (): RequestHandler => {
         return _.assign(async function(request: OngoingRequest, response: express.Response) {
-            let { protocol, method, hostname, path, headers } = request;
+            const { method, originalUrl, headers } = request;
+            const { protocol, hostname, port, path } = url.parse(originalUrl);
             
-            if (!url.parse(request.url).host) {
+            if (!hostname) {
                 throw new Error(
 `Cannot pass through request to ${request.url}, since it doesn't specify an upstream host.
 To pass requests through, use the mock server as a proxy whilst making requests to the real target server.`);
             }
             
-            let makeRequest = protocol === 'https' ? https.request : http.request;
+            let makeRequest = protocol === 'https:' ? https.request : http.request;
 
             return new Promise<void>((resolve, reject) => {
                 let req = makeRequest({
-                    protocol: protocol + ':',
+                    protocol,
                     method,
                     hostname,
+                    port,
                     path,
                     headers
                 }, (res) => {
+                    Object.keys(res.headers).forEach((header) => {
+                        response.setHeader(header, res.headers[header]!);
+                    });
+
+                    response.status(res.statusCode!);
+                    
                     res.pipe(response);
                     res.on('end', resolve);
                     res.on('error', reject);

@@ -23,6 +23,8 @@ export interface Request {
 }
 
 export interface OngoingRequest extends Request {
+    originalUrl: string;
+    
     body: {
         rawStream: stream.Readable,
 

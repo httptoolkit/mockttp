@@ -39,6 +39,17 @@ nodeOnly(() => {
                     "This domain is established to be used for illustrative examples in documents."
                 );
             });
+
+            it("should be able to pass through request headers", async () => {
+                await server.get("http://example.com/").thenPassThrough();
+
+                let response = await request.get({
+                    uri: "http://example.com/",
+                    resolveWithFullResponse: true
+                });
+
+                expect(response.headers['content-type']).to.equal('text/html');
+            });
         });
 
         describe("with an HTTPS config", () => {
@@ -85,6 +96,14 @@ nodeOnly(() => {
                     });
 
                     expect(response.data).to.equal('{"test":true}');
+                });
+
+                it("should be able to pass through requests with parameters", async () => {
+                    await server.get("https://httpbin.org/get?a=b").thenPassThrough();
+
+                    let response = JSON.parse(await request.get("https://httpbin.org/get?a=b"));
+
+                    expect(response.args.a).to.equal('b');
                 });
                 
                 it("should be able to verify requests passed through with a body", async () => {
