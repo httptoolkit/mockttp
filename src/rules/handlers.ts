@@ -74,7 +74,13 @@ To pass requests through, use the mock server as a proxy whilst making requests 
                     headers
                 }, (serverRes) => {
                     Object.keys(serverRes.headers).forEach((header) => {
-                        clientRes.setHeader(header, serverRes.headers[header]!);
+                        try {
+                            clientRes.setHeader(header, serverRes.headers[header]!);
+                        } catch (e) {
+                            // A surprising number of real sites have slightly invalid headers (e.g. extra spaces)
+                            // If we hit any, just drop that header and print a message.
+                            console.log(`Error setting header on passthrough response: ${e.message}`);
+                        }
                     });
 
                     clientRes.status(serverRes.statusCode!);
