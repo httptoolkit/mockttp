@@ -17,6 +17,14 @@ export default function destroyable(server: net.Server): DestroyableServer  {
     });
   });
 
+  server.on('secureConnection', function(conn: net.Socket) {
+    const key = conn.remoteAddress + ':' + conn.remotePort;
+    connections[key] = conn;
+    conn.on('close', function() {
+      delete connections[key];
+    });
+  });
+
   (<DestroyableServer> server).destroy = function() {
     return new Promise<void>((resolve, reject) => {
       server.close((err: any) => {
