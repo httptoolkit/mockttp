@@ -97,10 +97,10 @@ export class CA {
             dataEncipherment: true
         }, {
             name: 'subjectAltName',
-            altNames: {
+            altNames: [{
                 type: 2,
                 value: domain
-            }
+            }]
         }]);
     
         cert.sign(this.caKey, md.sha256.create());
