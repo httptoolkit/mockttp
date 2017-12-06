@@ -68,9 +68,9 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
                 key: defaultCert.key,
                 cert: defaultCert.cert,
                 ca: [defaultCert.ca],
-                // TODO: Fix node types for this callback
+                // TODO: Fix DT's node types for this callback - Error should be Error|null
                 SNICallback: (domain, cb: any) => {
-                    if (this.debug) console.log(`Generating certificate for ${domain}`);
+                    if (this.debug) console.log(`Generating server certificate for ${domain}`);
                     
                     const generatedCert = ca.generateCertificate(domain);
                     cb(null, tls.createSecureContext({
@@ -82,23 +82,46 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
             this.server.addListener('connect', (req: http.IncomingMessage, socket: net.Socket) => {
                 const [ targetHost, port ] = req.url!.split(':');
-                if (this.debug) console.log(`Proxying connection to ${targetHost}`);
+
+                if (this.debug) console.log(`Proxying connection for ${targetHost}, with HTTP CONNECT tunnel`);
+                const generatedCert = ca.generateCertificate(targetHost);
 
                 socket.write('HTTP/' + req.httpVersion + ' 200 OK\r\n\r\n', 'UTF-8', () => {
-                    const generatedCert = ca.generateCertificate(targetHost);
-
                     let tlsSocket = new tls.TLSSocket(socket, {
                         isServer: true,
-                        secureContext: tls.createSecureContext({
-                            key: generatedCert.key,
-                            cert: generatedCert.cert
-                        })
+                        server: this.server,
+                        secureContext: tls.createSecureContext(generatedCert)
+                    });
+                    tlsSocket.on('error', (e: Error) => {
+                        if (this.debug) {
+                            console.warn(`Error in proxy TLS connection:\n${e}`);
+                        } else {
+                            console.warn(`Error in proxy TLS connection: ${e.message}`);
+                        }
+                        
+                        // We can't recover from this - just try to close the underlying socket.
+                        try { socket.destroy(); } catch (e) {}
                     });
 
+                    // This is a little crazy, but only a little. We create a server to handle HTTP parsing etc, but
+                    // never listen on any ports or anything, we just hand it a live socket. Setup is pretty cheap here
+                    // (instantiate, sets up as event emitter, registers some events & properties, that's it), and
+                    // this is the easiest way I can see to put targetHost into the URL, without reimplementing HTTP.
                     http.createServer((req: http.IncomingMessage, res: http.ServerResponse) => {
                         req.url = `https://${targetHost}:${port}${req.url}`;
                         return this.app(<express.Request> req, <express.Response> res);
                     }).emit('connection', tlsSocket);
+                });
+
+                socket.on('error', (e: Error) => {
+                    if (this.debug) {
+                        console.warn(`Error in connection to HTTPS proxy:\n${e}`);
+                    } else {
+                        console.warn(`Error in connection to HTTPS proxy: ${e.message}`);
+                    }
+
+                    // We can't recover from this - just try to close the socket.
+                    try { socket.destroy(); } catch (e) {}
                 });
             });
         } else {
@@ -168,6 +191,8 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
     }
 
     private async handleRequest(request: OngoingRequest, response: express.Response) {
+        if (this.debug) console.log(`Handling request for ${request.url}`);
+
         try {
             let matchingRules = await filter(this.rules, (r) => r.matches(request));
             let nextRule = matchingRules.filter((r) => !this.isComplete(r, matchingRules))[0]
@@ -192,9 +217,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
                     response.write("There are no rules configured.\n");
                 }
 
-                response.write(await suggestRule(request));
-
-                response.end();
+                response.end(await suggestRule(request));
             }
         } catch (e) {
             if (this.debug) {
@@ -203,10 +226,12 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
                 console.error("Failed to handle request", e.message);
             }
             
+            // Make sure any errors here don't kill the process
+            response.on('error', (e) => {});
+
             // Do whatever we can to tell the client we broke
-            try { response.writeHead(500, 'Server error'); } catch (e) {}
-            try { response.write(`Server error ${e}`); } catch (e) {}
-            try { response.end(); } catch (e) {}
+            try { response.writeHead(e.statusCode || 500, e.statusMessage || 'Server error'); } catch (e) {}
+            try { response.end(`Error: ${e}`); } catch (e) {}
         }
     }
 

@@ -52,45 +52,43 @@ const handlerBuilders: { [T in HandlerType]: HandlerBuilder<HandlerDataLookup[T]
         return responder;
     },
     passthrough: (): RequestHandler => {
-        return _.assign(async function(request: OngoingRequest, response: express.Response) {
-            const { method, originalUrl, headers } = request;
+        return _.assign(async function(clientReq: OngoingRequest, clientRes: express.Response) {
+            const { method, originalUrl, headers } = clientReq;
             const { protocol, hostname, port, path } = url.parse(originalUrl);
             
             if (!hostname) {
                 throw new Error(
-`Cannot pass through request to ${request.url}, since it doesn't specify an upstream host.
+`Cannot pass through request to ${clientReq.url}, since it doesn't specify an upstream host.
 To pass requests through, use the mock server as a proxy whilst making requests to the real target server.`);
             }
             
             let makeRequest = protocol === 'https:' ? https.request : http.request;
 
             return new Promise<void>((resolve, reject) => {
-                let req = makeRequest({
+                let serverReq = makeRequest({
                     protocol,
                     method,
                     hostname,
                     port,
                     path,
                     headers
-                }, (res) => {
-                    Object.keys(res.headers).forEach((header) => {
-                        response.setHeader(header, res.headers[header]!);
+                }, (serverRes) => {
+                    Object.keys(serverRes.headers).forEach((header) => {
+                        clientRes.setHeader(header, serverRes.headers[header]!);
                     });
 
-                    response.status(res.statusCode!);
+                    clientRes.status(serverRes.statusCode!);
                     
-                    res.pipe(response);
-                    res.on('end', resolve);
-                    res.on('error', reject);
+                    serverRes.pipe(clientRes);
+                    serverRes.on('end', resolve);
+                    serverRes.on('error', reject);
                 });
                 
-                request.body.rawStream.pipe(req);
+                clientReq.body.rawStream.pipe(serverReq);
 
-                req.on('error', (e) => {
-                    try {
-                        response.writeHead(502);
-                    } catch (e) {}
-                    response.end(`Error connecting to upstream server: ${e}`);
+                serverReq.on('error', (e: any) => {
+                    e.statusCode = 502;
+                    e.statusMessage = 'Error communicating with upstream server';
                     reject(e);
                 });
             });
