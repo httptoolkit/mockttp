@@ -1,4 +1,5 @@
 import * as _ from "lodash";
+
 import {
   GraphQLScalarType,
   Kind,
@@ -6,6 +7,8 @@ import {
   ListValueNode,
   ValueNode
 } from "graphql";
+import { IResolvers } from "graphql-tools/dist/Interfaces";
+import { PubSub } from "graphql-subscriptions";
 
 import { MatcherData, buildMatchers } from "../rules/matchers";
 import { HandlerData } from "../rules/handlers";
@@ -13,7 +16,8 @@ import { CompletionCheckerData } from "../rules/completion-checkers";
 import MockttpServer from "../server/mockttp-server";
 import { Method, CompletedRequest, MockedEndpoint, MockedEndpointData } from "../types";
 import { MockRuleData } from "../rules/mock-rule-types";
-import { IResolvers } from "graphql-tools/dist/Interfaces";
+
+const REQUEST_RECEIVED_TOPIC = 'request-received';
 
 function astToObject<T>(ast: ObjectValueNode): T {
     return <T> _.zipObject(
@@ -103,6 +107,14 @@ const ScalarResolvers = {
 };
 
 export function buildStandaloneModel(mockServer: MockttpServer): IResolvers {
+    const pubsub = new PubSub();
+
+    mockServer.on('request', (request) => {
+        pubsub.publish(REQUEST_RECEIVED_TOPIC, {
+            requestReceived: request
+        })
+    });
+
     return <any> {
         Query: {
             mockedEndpoints: (): Promise<MockedEndpointData[]> => {
@@ -132,6 +144,12 @@ export function buildStandaloneModel(mockServer: MockttpServer): IResolvers {
 
             stop: () => {
                 throw new Error('...stop?');
+            }
+        },
+
+        Subscription: {
+            requestReceived: {
+                subscribe: () => pubsub.asyncIterator(REQUEST_RECEIVED_TOPIC)
             }
         },
 

@@ -1,9 +1,11 @@
 import TypedError = require('typed-error');
 import getFetch = require('fetch-ponyfill');
 import _ = require('lodash');
+import * as WebSocket from 'universal-websocket-client';
+import { SubscriptionClient } from 'subscriptions-transport-ws';
 const { fetch, Headers } = getFetch();
 
-import { ProxyConfig, Method, MockedEndpoint } from "../types";
+import { ProxyConfig, Method, MockedEndpoint, OngoingRequest } from "../types";
 import {
   MockRule,
   MockRuleData
@@ -193,6 +195,38 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
         )).data.addRule.id;
 
         return new MockedEndpointClient(ruleId, this.getEndpointData(ruleId));
+    }
+
+    public on(event: 'request', callback: (req: OngoingRequest) => void): Promise<void> {
+        if (event !== 'request') return Promise.resolve();
+
+        const url = `ws://localhost:${DEFAULT_STANDALONE_PORT}/server/${this.mockServerConfig!.port}/`;
+        const client = new SubscriptionClient(url, { }, WebSocket);
+
+        let result = client.request({
+            operationName: 'OnRequest',
+            query: `subscription OnRequest {
+                requestReceived {
+                    url,
+                    method,
+                    path
+                }
+            }`
+        });
+
+        result.subscribe({
+            next: (value) => {
+                if (value.data) callback((<any> value.data).requestReceived);
+            },
+            error: (e) => {
+                if (this.debug) console.warn('Error in request subscription:', e);
+            }
+        });
+
+        return new Promise((resolve, reject) => {
+            client.onConnected(resolve);
+            client.onDisconnected(reject);
+        });
     }
 
     private getEndpointData = (ruleId: string) => async (): Promise<MockedEndpointData | null> => {

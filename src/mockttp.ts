@@ -1,5 +1,5 @@
 import PartialMockRule from "./rules/partial-mock-rule";
-import { ProxyConfig, MockedEndpoint, Method } from "./types";
+import { ProxyConfig, MockedEndpoint, Method, OngoingRequest } from "./types";
 import { MockRuleData } from "./rules/mock-rule-types";
 import { CAOptions } from './util/tls';
 
@@ -23,6 +23,8 @@ export interface Mockttp {
     delete(url: string): PartialMockRule;
     patch(url: string): PartialMockRule;
     options(url: string): PartialMockRule;
+
+    on(event: 'request', callback: (req: OngoingRequest) => void): Promise<void>;
 }
 
 export interface MockttpOptions {
@@ -37,6 +39,7 @@ export abstract class AbstractMockttp {
 
     abstract get url(): string;
     abstract addRule: (ruleData: MockRuleData) => Promise<MockedEndpoint>;
+    abstract on(event: 'request', callback: (req: OngoingRequest) => void): Promise<void>;
 
     constructor(options: MockttpOptions) {
         this.debug = options.debug || false;

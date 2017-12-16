@@ -38,6 +38,10 @@ input MockRule {
     completionChecker: RuleCompletionChecker
 }
 
+type Subscription {
+    requestReceived: Request!
+}
+
 scalar Any
 scalar RequestMatcher
 scalar RequestHandler

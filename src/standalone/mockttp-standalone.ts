@@ -1,15 +1,20 @@
-import fs = require('../util/fs');
-import path = require('path');
-import express = require('express');
-import cors = require('cors');
-import destroyable, { DestroyableServer } from "../util/destroyable-server";
-import bodyParser = require('body-parser');
+import * as path from 'path';
+import * as fs from '../util/fs';
+import * as _ from "lodash";
+import * as express from 'express';
+import * as cors from 'cors';
+import * as http from 'http';
+import * as net from 'net';
+import * as bodyParser from 'body-parser';
+
 import { graphqlExpress } from 'apollo-server-express';
-import { GraphQLSchema, GraphQLScalarType } from 'graphql';
+import { GraphQLSchema, GraphQLScalarType, execute, subscribe } from 'graphql';
 import { makeExecutableSchema } from 'graphql-tools';
+import { SubscriptionServer } from 'subscriptions-transport-ws';
+
+import destroyable, { DestroyableServer } from "../util/destroyable-server";
 import MockttpServer from "../server/mockttp-server";
 import { buildStandaloneModel } from "./standalone-model";
-import * as _ from "lodash";
 import { DEFAULT_STANDALONE_PORT } from '../types';
 import { MockttpOptions } from '../mockttp';
 
@@ -79,10 +84,30 @@ export class MockttpStandalone {
 
         await new Promise<void>((resolve, reject) => {
             this.server = destroyable(this.app.listen(DEFAULT_STANDALONE_PORT, resolve));
+
+            this.server.on('upgrade', (req: Request, socket: net.Socket, head: Buffer) => {
+                let serverMatch = req.url.match(/\/server\/(\d+)\/?$/)
+                if (serverMatch) {
+                    let port = parseInt(serverMatch[1], 10);
+                    if (this.subscriptionServers[port]) {
+                        let wsServer = (<any> this.subscriptionServers[port]).wsServer;
+                        wsServer.handleUpgrade(req, socket, head, (ws: net.Socket) => {
+                            wsServer.emit('connection', ws);
+                        });
+                    } else {
+                        console.warn(`Unrecognized websocket request for unknown server port ${port}`);
+                        socket.destroy();
+                    }
+                } else {
+                    console.warn(`Unrecognized websocket request for ${req.url}`);
+                    socket.destroy();
+                }
+            });
         });
     }
 
     private routers: { [port: number]: express.Router } = { };
+    private subscriptionServers: { [port: number]: SubscriptionServer } = { };
 
     private async startMockServer(options: MockttpOptions, port?: number): Promise<{
         mockPort: number,
@@ -110,8 +135,16 @@ export class MockttpStandalone {
             }));
         });
 
+        const schema = await this.loadSchema('schema.gql', mockServer);
+
+        this.subscriptionServers[mockPort] = SubscriptionServer.create({
+            schema, execute, subscribe
+        }, {
+            noServer: true
+        });
+
         mockServerRouter.use(bodyParser.json(), graphqlExpress({
-            schema: await this.loadSchema('schema.gql', mockServer)
+            schema
         }));
 
         return {

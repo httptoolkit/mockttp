@@ -27,6 +27,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
     private app: express.Application;
     private server: DestroyableServer;
+    private requestListeners: Array<(req: OngoingRequest) => void> = [];
 
     constructor(options: MockttpOptions = {}) {
         super(options);
@@ -190,8 +191,21 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         return Promise.resolve(new MockedEndpoint(rule));
     }
 
+    public on(event: 'request', callback: (req: OngoingRequest) => void): Promise<void> {
+        this.requestListeners.push(callback);
+        return Promise.resolve();
+    }
+
+    private announceRequestAsync(request: OngoingRequest) {
+        this.requestListeners.forEach((listener) => {
+            setImmediate(() => listener(request));
+        });
+    }
+
     private async handleRequest(request: OngoingRequest, response: express.Response) {
         if (this.debug) console.log(`Handling request for ${request.url}`);
+
+        this.announceRequestAsync(request);
 
         try {
             let matchingRules = await filter(this.rules, (r) => r.matches(request));
