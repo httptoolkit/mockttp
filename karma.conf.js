@@ -41,7 +41,7 @@ module.exports = function(config) {
             ChromeWithCert: {
                 base: 'Chrome', // TODO: Find a way to ignore certs with ChromeHeadless in here
                 // This is the fingerprint for the test-ca.pem CA cert
-                flags: ['--ignore-certificate-errors-spki-list=AvVrqB/anBbJ+KRCMH/anWgZbeE0Y28JtqYB0+2MDmE=']
+                flags: ['--ignore-certificate-errors-spki-list=dV1LxiEDeQEtLjeMCGZ4ON7Mu1TvULkgt/kg1DGk/vM=']
             }
         },
 
