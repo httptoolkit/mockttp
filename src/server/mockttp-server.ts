@@ -1,6 +1,7 @@
 import net = require("net");
 import http = require("http");
 import https = require("https");
+import EventEmitter = require("events");
 import tls = require('tls');
 import portfinder = require("portfinder");
 import express = require("express");
@@ -27,12 +28,14 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
     private app: express.Application;
     private server: DestroyableServer;
-    private requestListeners: Array<(req: OngoingRequest) => void> = [];
+
+    private eventEmitter: EventEmitter;
 
     constructor(options: MockttpOptions = {}) {
         super(options);
 
         this.httpsOptions = options.https;
+        this.eventEmitter = new EventEmitter();
 
         this.app = express();
 
@@ -192,14 +195,12 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
     }
 
     public on(event: 'request', callback: (req: OngoingRequest) => void): Promise<void> {
-        this.requestListeners.push(callback);
+        this.eventEmitter.on(event, callback);
         return Promise.resolve();
     }
 
     private announceRequestAsync(request: OngoingRequest) {
-        this.requestListeners.forEach((listener) => {
-            setImmediate(() => listener(request));
-        });
+        setImmediate(() => this.eventEmitter.emit('request', request));
     }
 
     private async handleRequest(request: OngoingRequest, response: express.Response) {
