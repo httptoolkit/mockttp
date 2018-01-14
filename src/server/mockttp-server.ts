@@ -177,11 +177,12 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
     async checkSeenRequestsAllRoutes(): Promise<any> {
         var mockedEndpoints = this.mockedEndpoints;
-        var result = [];
+        var requests;
         for (var mockedEndpoint of mockedEndpoints) {
-            result.push(mockedEndpoint.getSeenRequestsBasic());
+            if (!requests) requests = mockedEndpoint.getSeenRequestsBasic();
+            else requests = requests.concat(mockedEndpoint.getSeenRequestsBasic());   
         }
-        return result;
+        return requests;
     }
 
     enableDebug() {
