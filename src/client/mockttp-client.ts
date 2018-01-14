@@ -128,6 +128,10 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
         }
     }
 
+    async checkSeenRequestsAllRoutes(): Promise<any> {
+        return [];
+    }
+
     async start(port?: number): Promise<void> {
         if (this.mockServerConfig) throw new Error('Server is already started');
 

@@ -5,6 +5,7 @@ import { MockRuleData } from "./rules/mock-rule-types";
 export interface Mockttp {
     start(port?: number): Promise<void>;
     stop(): Promise<void>;
+    checkSeenRequestsAllRoutes(): Promise<any>;
 
     enableDebug(): void;
     reset(): void;
