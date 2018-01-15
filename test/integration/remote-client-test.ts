@@ -96,6 +96,21 @@ nodeOnly(() => {
                 await expect(getRemote().start(port))
                     .to.eventually.be.rejectedWith(`Cannot start: mock server is already running on port ${port}`);
             });
+
+            it("should get seen requests all routes", async () => {
+                client.get("/mocked-endpoint-1").thenReply(200, "mocked data 1");
+                client.get("/mocked-endpoint-2").thenReply(200, "mocked data 2");
+                
+                await request.get(client.urlFor("/mocked-endpoint-1"));
+                await request.get(client.urlFor("/mocked-endpoint-2"));
+
+                var requests = await client.checkSeenRequestsAllRoutes();
+                expect(requests.length).to.equal(2);
+                expect(requests[0].url).to.equal("/mocked-endpoint-1");
+                expect(requests[0].method).to.equal("GET");
+                expect(requests[1].url).to.equal("/mocked-endpoint-2");
+                expect(requests[1].method).to.equal("GET");
+            });
         });
 
         describe("with no server available", () => {
