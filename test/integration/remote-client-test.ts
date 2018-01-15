@@ -99,17 +99,23 @@ nodeOnly(() => {
 
             it("should get seen requests all routes", async () => {
                 client.get("/mocked-endpoint-1").thenReply(200, "mocked data 1");
-                client.get("/mocked-endpoint-2").thenReply(200, "mocked data 2");
+                client.get("/mocked-endpoint-1").thenReply(200, "mocked data 2");
+                client.get("/mocked-endpoint-2").thenReply(200, "mocked data 3");
                 
+                await request.get(client.urlFor("/mocked-endpoint-1"));
                 await request.get(client.urlFor("/mocked-endpoint-1"));
                 await request.get(client.urlFor("/mocked-endpoint-2"));
 
                 var requests = await client.checkSeenRequestsAllRoutes();
-                expect(requests.length).to.equal(2);
-                expect(requests[0].url).to.equal("/mocked-endpoint-1");
-                expect(requests[0].method).to.equal("GET");
-                expect(requests[1].url).to.equal("/mocked-endpoint-2");
-                expect(requests[1].method).to.equal("GET");
+                expect(Object.keys(requests).length).to.equal(2);
+                expect(requests['/mocked-endpoint-1'].length).to.equal(2);
+                expect(requests['/mocked-endpoint-1'][0].url).to.equal('/mocked-endpoint-1');
+                expect(requests['/mocked-endpoint-1'][0].method).to.equal('GET');
+                expect(requests['/mocked-endpoint-1'][1].url).to.equal('/mocked-endpoint-1');
+                expect(requests['/mocked-endpoint-1'][1].method).to.equal('GET');
+                expect(requests['/mocked-endpoint-2'].length).to.equal(1);
+                expect(requests['/mocked-endpoint-2'][0].url).to.equal('/mocked-endpoint-2');
+                expect(requests['/mocked-endpoint-2'][0].method).to.equal('GET');
             });
         });
 

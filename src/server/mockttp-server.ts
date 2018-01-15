@@ -35,6 +35,13 @@ export interface MockServerOptions {
     https?: HttpsOptions | HttpsPathOptions
 }
 
+interface RequestData {
+    [key: string]: [{
+        url: string,
+        method: string
+    }]
+}
+
 // TODO: Refactor this into the CA?
 function buildHttpsOptions(options: HttpsOptions | HttpsPathOptions | undefined): Promise<HttpsOptions> | undefined {
     if (!options) return undefined;
@@ -177,12 +184,24 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
     async checkSeenRequestsAllRoutes(): Promise<any> {
         var mockedEndpoints = this.mockedEndpoints;
-        var requests;
+        var data: RequestData = {};
         for (var mockedEndpoint of mockedEndpoints) {
-            if (!requests) requests = mockedEndpoint.getSeenRequestsBasic();
-            else requests = requests.concat(mockedEndpoint.getSeenRequestsBasic());   
+            var requests = mockedEndpoint.getSeenRequestsBasic();
+            for (var request of requests) {
+                if (!data.hasOwnProperty(request.path)) {
+                    data[request.path] = [{
+                        url: request.url,
+                        method: request.method
+                    }];
+                } else {
+                    data[request.path].push({
+                        url: request.url,
+                        method: request.method
+                    });
+                }
+            }
         }
-        return requests;
+        return data;
     }
 
     enableDebug() {
