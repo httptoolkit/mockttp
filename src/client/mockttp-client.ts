@@ -129,7 +129,10 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
     }
 
     async checkSeenRequestsAllRoutes(): Promise<any> {
-        return [];
+        var requests = await this.requestFromMockServer<any>('/checkSeenRequestsAllRoutes', {
+            method: 'GET'
+        });
+        return requests;
     }
 
     async start(port?: number): Promise<void> {
