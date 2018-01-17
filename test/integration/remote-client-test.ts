@@ -97,25 +97,32 @@ nodeOnly(() => {
                     .to.eventually.be.rejectedWith(`Cannot start: mock server is already running on port ${port}`);
             });
 
-            it("should get seen requests all routes", async () => {
-                client.get("/mocked-endpoint-1").thenReply(200, "mocked data 1");
-                client.get("/mocked-endpoint-1").thenReply(200, "mocked data 2");
-                client.get("/mocked-endpoint-2").thenReply(200, "mocked data 3");
+            it("should get true when all requests for all routes were seen", async () => {
+                client.get("/mocked-endpoint-1?foo=bar_1").thenReply(200, "mocked data 1");
+                client.get("/mocked-endpoint-1?foo=bar_2").thenReply(200, "mocked data 2");
+                client.get("/mocked-endpoint-2?foo=bar_3").thenReply(200, "mocked data 3");
                 
-                await request.get(client.urlFor("/mocked-endpoint-1"));
-                await request.get(client.urlFor("/mocked-endpoint-1"));
-                await request.get(client.urlFor("/mocked-endpoint-2"));
+                await request.get(client.urlFor("/mocked-endpoint-1?foo=bar_1"));
+                await request.get(client.urlFor("/mocked-endpoint-1?foo=bar_2"));
+                await request.get(client.urlFor("/mocked-endpoint-2?foo=bar_3"));
 
-                var requests = await client.checkSeenRequestsAllRoutes();
-                expect(Object.keys(requests).length).to.equal(2);
-                expect(requests['/mocked-endpoint-1'].length).to.equal(2);
-                expect(requests['/mocked-endpoint-1'][0].url).to.equal('/mocked-endpoint-1');
-                expect(requests['/mocked-endpoint-1'][0].method).to.equal('GET');
-                expect(requests['/mocked-endpoint-1'][1].url).to.equal('/mocked-endpoint-1');
-                expect(requests['/mocked-endpoint-1'][1].method).to.equal('GET');
-                expect(requests['/mocked-endpoint-2'].length).to.equal(1);
-                expect(requests['/mocked-endpoint-2'][0].url).to.equal('/mocked-endpoint-2');
-                expect(requests['/mocked-endpoint-2'][0].method).to.equal('GET');
+                var checkSeenRequestsAllRoutes = await client.checkSeenRequestsAllRoutes();
+                expect(checkSeenRequestsAllRoutes).to.be.true;
+            });
+
+            it("should throw error when not all requests for all routes were seen", async () => {
+                client.get("/mocked-endpoint-1?foo=bar_1").thenReply(200, "mocked data 1");
+                client.get("/mocked-endpoint-1?foo=bar_2").thenReply(200, "mocked data 2");
+                client.get("/mocked-endpoint-2?foo=bar_3").thenReply(200, "mocked data 3");
+                
+                await request.get(client.urlFor("/mocked-endpoint-1?foo=bar_1"));
+                await request.get(client.urlFor("/mocked-endpoint-1?foo=bar_2"));
+
+                try {
+                    await client.checkSeenRequestsAllRoutes();
+                } catch (error) {
+                    expect(error.message).to.equal(`Request to http://localhost:45456/server/8000/checkSeenRequestsAllRoutes failed, with status 500 with message "no requests for mocked endpoint: /mocked-endpoint-2"`);
+                }
             });
         });
 

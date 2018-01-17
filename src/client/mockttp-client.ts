@@ -104,10 +104,9 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
         let response = await fetch(url, options);
 
         if (response.status >= 400) {
-            throw new RequestError(
-                `Request to ${url} failed, with status ${response.status}`,
-                response
-            );
+            var body = await response.json();
+            var error_msg = `Request to ${url} failed, with status ${response.status}${(body) ? ` with message "${body.message}"` : ``}`;
+            throw new RequestError(error_msg, response);
         } else {
             return response.json();
         }
@@ -129,10 +128,14 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
     }
 
     async checkSeenRequestsAllRoutes(): Promise<any> {
-        var requests = await this.requestFromMockServer<any>('/checkSeenRequestsAllRoutes', {
-            method: 'GET'
-        });
-        return requests;
+        try {
+            var requests = await this.requestFromMockServer<any>('/checkSeenRequestsAllRoutes', {
+                method: 'GET'
+            });
+            return requests;
+        } catch (error) {
+            return Promise.reject(error);
+        }
     }
 
     async start(port?: number): Promise<void> {

@@ -102,6 +102,7 @@
     "normalize-url": "^1.9.1",
     "portfinder": "^1.0.9",
     "typed-error": "^2.0.0",
+    "url-parse": "^1.2.0",
     "uuid": "^3.1.0"
   }
 }

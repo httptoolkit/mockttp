@@ -35,11 +35,8 @@ export interface MockServerOptions {
     https?: HttpsOptions | HttpsPathOptions
 }
 
-interface RequestData {
-    [key: string]: [{
-        url: string,
-        method: string
-    }]
+export interface RequestData {
+    [key: string]: any[]
 }
 
 // TODO: Refactor this into the CA?
@@ -183,25 +180,37 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
     }
 
     async checkSeenRequestsAllRoutes(): Promise<any> {
+        var requests = this.getSeparatedRequestsByPath();
+        for (var request in requests) {
+            if (requests[request].length === 0)
+            return Promise.reject(new Error(`no requests for mocked endpoint: ${request}`));
+        }
+        return true;
+    }
+
+    getSeparatedRequestsByPath(): RequestData {
         var mockedEndpoints = this.mockedEndpoints;
-        var data: RequestData = {};
+        var separatedRequests: RequestData = {};
         for (var mockedEndpoint of mockedEndpoints) {
             var requests = mockedEndpoint.getSeenRequestsBasic();
             for (var request of requests) {
-                if (!data.hasOwnProperty(request.path)) {
-                    data[request.path] = [{
-                        url: request.url,
-                        method: request.method
-                    }];
+                if (!separatedRequests.hasOwnProperty(request.path)) {
+                    if (request.url && request.method)
+                        separatedRequests[request.path] = [{
+                            url: request.url,
+                            method: request.method
+                        }];
+                    else separatedRequests[request.path] = [];
                 } else {
-                    data[request.path].push({
-                        url: request.url,
-                        method: request.method
-                    });
+                    if (request.url && request.method)
+                        separatedRequests[request.path].push({
+                            url: request.url,
+                            method: request.method
+                        });
                 }
             }
         }
-        return data;
+        return separatedRequests;
     }
 
     enableDebug() {

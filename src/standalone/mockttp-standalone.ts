@@ -99,9 +99,12 @@ export class MockttpStandalone {
         this.routers[mockPort] = mockServerRouter;
 
         mockServerRouter.get('/checkSeenRequestsAllRoutes', async (req, res) => {
-            var requests = await mockServer.checkSeenRequestsAllRoutes();
-
-            res.status(200).send(JSON.stringify(requests));
+            try {
+                var checkRequests = await mockServer.checkSeenRequestsAllRoutes();
+                res.status(200).send(JSON.stringify(checkRequests));
+            } catch (error) {
+                res.status(500).send(JSON.stringify({ message : error.message }));
+            }
         });
 
         mockServerRouter.post('/stop', async (req, res) => {
