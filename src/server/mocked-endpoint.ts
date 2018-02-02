@@ -11,7 +11,7 @@ export interface Data {
 
 export class MockedEndpoint implements MockedEndpointInterface {
 
-    constructor (private rule: MockRule) { };
+    constructor(private rule: MockRule) { };
 
     get id() {
         return this.rule.id;

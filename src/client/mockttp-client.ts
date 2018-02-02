@@ -5,8 +5,8 @@ const { fetch, Headers } = getFetch();
 
 import { ProxyConfig, Method, MockedEndpoint } from "../types";
 import {
-  MockRule,
-  MockRuleData
+    MockRule,
+    MockRuleData
 } from "../rules/mock-rule-types";
 import PartialMockRule from "../rules/partial-mock-rule";
 import { Mockttp, AbstractMockttp } from "../mockttp";
@@ -30,7 +30,7 @@ export class RequestError extends TypedError {
 export class GraphQLError extends RequestError {
     constructor(
         error: RequestError,
-        public errors: [ { message: string } ]
+        public errors: [{ message: string }]
     ) {
         super(
             `GraphQL request failed, with errors:\n${errors.map((e) => e.message).join('\n')}`,
@@ -195,7 +195,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
             }`, {
                 newRule: serializeRuleData(rule)
             }
-        )).data.addRule.id;
+            )).data.addRule.id;
 
         return new MockedEndpointClient(ruleId, this.getEndpointData(ruleId));
     }
@@ -219,7 +219,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
             }`, {
                 id: ruleId
             }
-        );
+            );
 
         return result.data.mockedEndpoint;
     }

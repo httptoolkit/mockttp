@@ -44,14 +44,14 @@ function buildHttpsOptions(options: HttpsOptions | HttpsPathOptions | undefined)
     if (!options) return undefined;
     // TODO: is there a nice way to avoid these casts?
     if ((<any>options).key && (<any>options).cert) {
-        return Promise.resolve(<HttpsOptions> options);
+        return Promise.resolve(<HttpsOptions>options);
     }
     if ((<any>options).keyPath && (<any>options).certPath) {
-        let pathOptions = <HttpsPathOptions> options;
+        let pathOptions = <HttpsPathOptions>options;
         return Promise.all([
             fs.readFile(pathOptions.keyPath, 'utf8'),
             fs.readFile(pathOptions.certPath, 'utf8')
-        ]).then(([ keyContents, certContents ]) => ({
+        ]).then(([keyContents, certContents]) => ({
             key: keyContents,
             cert: certContents
         }));
@@ -128,7 +128,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
             }, this.app).listen(port));
 
             this.server.addListener('connect', (req: http.IncomingMessage, socket: net.Socket) => {
-                const [ targetHost, port ] = req.url!.split(':');
+                const [targetHost, port] = req.url!.split(':');
                 if (this.debug) console.log(`Proxying connection to ${targetHost}`);
 
                 socket.write('HTTP/' + req.httpVersion + ' 200 OK\r\n\r\n', 'UTF-8', () => {
@@ -144,7 +144,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
                     http.createServer((req: http.IncomingMessage, res: http.ServerResponse) => {
                         req.url = `https://${targetHost}:${port}${req.url}`;
-                        return this.app(<express.Request> req, <express.Response> res);
+                        return this.app(<express.Request>req, <express.Response>res);
                     }).emit('connection', tlsSocket);
                 });
             });
