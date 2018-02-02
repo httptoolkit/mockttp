@@ -35,10 +35,6 @@ export interface MockServerOptions {
     https?: HttpsOptions | HttpsPathOptions
 }
 
-export interface RequestData {
-    [key: string]: any[]
-}
-
 // TODO: Refactor this into the CA?
 function buildHttpsOptions(options: HttpsOptions | HttpsPathOptions | undefined): Promise<HttpsOptions> | undefined {
     if (!options) return undefined;
@@ -179,38 +175,14 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         this.reset();
     }
 
-    async checkSeenRequestsAllRoutes(): Promise<any> {
-        var requests = this.getSeparatedRequestsByPath();
-        for (var request in requests) {
-            if (requests[request].length === 0)
-            return Promise.reject(new Error(`no requests for mocked endpoint: ${request}`));
-        }
-        return true;
-    }
-
-    getSeparatedRequestsByPath(): RequestData {
+    async pendingMocks(): Promise<any> {
         var mockedEndpoints = this.mockedEndpoints;
-        var separatedRequests: RequestData = {};
+        var result: string[] = [];
         for (var mockedEndpoint of mockedEndpoints) {
-            var requests = mockedEndpoint.getSeenRequestsBasic();
-            for (var request of requests) {
-                if (!separatedRequests.hasOwnProperty(request.path)) {
-                    if (request.url && request.method)
-                        separatedRequests[request.path] = [{
-                            url: request.url,
-                            method: request.method
-                        }];
-                    else separatedRequests[request.path] = [];
-                } else {
-                    if (request.url && request.method)
-                        separatedRequests[request.path].push({
-                            url: request.url,
-                            method: request.method
-                        });
-                }
-            }
+            var requests = mockedEndpoint.pendingMocks();
+            result = result.concat(requests);
         }
-        return separatedRequests;
+        return result;
     }
 
     enableDebug() {

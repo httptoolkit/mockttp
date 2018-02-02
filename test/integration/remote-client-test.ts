@@ -97,7 +97,7 @@ nodeOnly(() => {
                     .to.eventually.be.rejectedWith(`Cannot start: mock server is already running on port ${port}`);
             });
 
-            it("should get true when all requests for all routes were seen", async () => {
+            it("should not be any pending mocks", async () => {
                 client.get("/mocked-endpoint-1?foo=bar_1").thenReply(200, "mocked data 1");
                 client.get("/mocked-endpoint-1?foo=bar_2").thenReply(200, "mocked data 2");
                 client.get("/mocked-endpoint-2?foo=bar_3").thenReply(200, "mocked data 3");
@@ -106,11 +106,11 @@ nodeOnly(() => {
                 await request.get(client.urlFor("/mocked-endpoint-1?foo=bar_2"));
                 await request.get(client.urlFor("/mocked-endpoint-2?foo=bar_3"));
 
-                var checkSeenRequestsAllRoutes = await client.checkSeenRequestsAllRoutes();
-                expect(checkSeenRequestsAllRoutes).to.be.true;
+                var pendingMocks = await client.pendingMocks();
+                expect(pendingMocks).to.be.empty;
             });
 
-            it("should throw error when not all requests for all routes were seen", async () => {
+            it("should be one pending mock", async () => {
                 client.get("/mocked-endpoint-1?foo=bar_1").thenReply(200, "mocked data 1");
                 client.get("/mocked-endpoint-1?foo=bar_2").thenReply(200, "mocked data 2");
                 client.get("/mocked-endpoint-2?foo=bar_3").thenReply(200, "mocked data 3");
@@ -118,11 +118,43 @@ nodeOnly(() => {
                 await request.get(client.urlFor("/mocked-endpoint-1?foo=bar_1"));
                 await request.get(client.urlFor("/mocked-endpoint-1?foo=bar_2"));
 
-                try {
-                    await client.checkSeenRequestsAllRoutes();
-                } catch (error) {
-                    expect(error.message).to.equal(`Request to http://localhost:45456/server/8000/checkSeenRequestsAllRoutes failed, with status 500 with message "no requests for mocked endpoint: /mocked-endpoint-2"`);
-                }
+                var pendingMocks = await client.pendingMocks();
+                expect(pendingMocks.length).to.equal(1);
+                expect(pendingMocks[0]).to.equal('GET /mocked-endpoint-2?foo=bar_3');
+            });
+
+            it("should be pending mocks", async () => {
+                client.get("/mocked-endpoint-1?foo=bar_1").thenReply(200, "mocked data 1");
+                client.get("/mocked-endpoint-1?foo=bar_2").thenReply(200, "mocked data 2");
+                client.get("/mocked-endpoint-2?foo=bar_3").thenReply(200, "mocked data 3");
+                client.get("/mocked-endpoint-2?foo=bar_4").thenReply(200, "mocked data 4");
+                client.get("/mocked-endpoint-3?foo=bar_5").thenReply(200, "mocked data 5");
+                
+                await request.get(client.urlFor("/mocked-endpoint-1?foo=bar_1"));
+                await request.get(client.urlFor("/mocked-endpoint-2?foo=bar_3"));
+
+                var pendingMocks = await client.pendingMocks();
+                expect(pendingMocks.length).to.equal(3);
+                expect(pendingMocks[0]).to.equal('GET /mocked-endpoint-1?foo=bar_2');
+                expect(pendingMocks[1]).to.equal('GET /mocked-endpoint-2?foo=bar_4');
+                expect(pendingMocks[2]).to.equal('GET /mocked-endpoint-3?foo=bar_5');
+            });
+
+            it.only("should get correct method names in pending mock messages", async () => {
+                client.get("/mocked-endpoint-1").thenReply(200, "");
+                client.post("/mocked-endpoint-1").thenReply(200, "");
+                client.put("/mocked-endpoint-1").thenReply(200, "");
+                client.delete("/mocked-endpoint-1").thenReply(200, "");
+                client.patch("/mocked-endpoint-1").thenReply(200, "");
+                client.options("/mocked-endpoint-1").thenReply(200, "");
+
+                var pendingMocks = await client.pendingMocks();
+                expect(pendingMocks[0]).to.equal('GET /mocked-endpoint-1');
+                expect(pendingMocks[1]).to.equal('POST /mocked-endpoint-1');
+                expect(pendingMocks[2]).to.equal('PUT /mocked-endpoint-1');
+                expect(pendingMocks[3]).to.equal('DELETE /mocked-endpoint-1');
+                expect(pendingMocks[4]).to.equal('PATCH /mocked-endpoint-1');
+                expect(pendingMocks[5]).to.equal('OPTIONS /mocked-endpoint-1');
             });
         });
 
