@@ -42,55 +42,80 @@ npm install --save-dev mockttp
 
 ## Get Testing
 
+To run an HTTP integration test, you need to :
+
+* Start a Mockttp server
+* Mock the endpoints you're interested in
+* Make some real HTTP requests
+* Assert on the results
+
+Here's a minimal example of all that, using Mocha, Chai & Superagent, which works out of the box in Node and all modern browsers:
+
 ```typescript
-const request = require("request");
+const superagent = require("superagent");
 const mockServer = require("mockttp").getLocal();
 
 describe("Mockttp", () => {
+    // Start your server
     beforeEach(() => mockServer.start(8080));
+    afterEach(() => mockserver.stop());
+
+    it("lets you mock requests, and assert on the results", () => {
+        // Mock your endpoints
+        await mockServer.get("/mocked-path").thenReply(200, "A mocked response")
+
+        // Make a request
+        let response = await superagent.get("http://localhost:8080/mocked-path"));
+
+        // Assert on the results
+        expect(response.text).to.equal("A mocked response");
+    });
+});
+```
+
+Easy! Let's take a look at some of the more fancy features:
+
+```typescript
+const superagent = require("superagent");
+const mockServer = require("mockttp").getLocal();
+
+describe("Mockttp", () => {
+    // Note there's no start port here!
+    beforeEach(() => mockServer.start());
     afterEach(() => mockServer.stop());
 
-    it("mocks requests", () => {
-        return mockServer.get("/mocked-endpoint").thenReply(200, "How delightful")
-        .then(() =>
-            request.get("http://localhost:8080/mocked-endpoint")
-        ).then((response) =>
-            expect(response).to.equal("How delightful")
-        );
-    });
-
-    it("works best with async/await", async () => {
+    it("lets you mock without specifying a port, allowing parallel testing", async () => {
         await mockServer.get("/mocked-endpoint").thenReply(200, "Tip top testing")
 
-        // Want to be agnostic to the mock port, to run tests in parallel?
-        // Try mockServer.url or .urlFor(path):
-        let response = await request.get(mockServer.urlFor("/mocked-endpoint"));
+        // Try mockServer.url or .urlFor(path) to get a unique URL
+        let response = await superagent.get(mockServer.urlFor("/mocked-endpoint"));
 
-        expect(response).to.equal("Tip top testing");
+        expect(response.text).to.equal("Tip top testing");
     });
 
-    it("can proxy requests made to any other hosts", async () => {
-        await mockServer.get("http://google.com").thenReply(200, "I can't believe it's not google!");
-
-        // One of the _many_ ways to enable an HTTP proxy:
-        let proxiedRequest = request.defaults({ proxy: mockServer.url });
-
-        let response = await proxiedRequest.get("http://google.com");
-
-        expect(response).to.equal("I can't believe it's not google!");
-    });
-
-    it("also allows request verification", async () => {
+    it("lets you verify the request details the mockttp server receives", async () => {
         const endpointMock = await mockServer.get("/mocked-endpoint").thenReply(200, "hmm?");
 
-        await request.get(mockServer.urlFor("/mocked-endpoint"));
+        await superagent.get(mockServer.urlFor("/mocked-endpoint"));
 
         const requests = await endpointMock.getSeenRequests();
         expect(requests.length).to.equal(1);
         expect(requests[0].url).to.equal("/mocked-endpoint");
     });
+
+    it("lets you proxy requests made to any other hosts", async () => {
+        await mockServer.get("http://google.com").thenReply(200, "I can't believe it's not google!");
+
+        // One of the many ways to use a proxy - this assumes Node & superagent-proxy.
+        // In a browser, you can simply use the browser settings instead.
+        let response = await superagent.get("http://google.com").proxy(server.url);
+
+        expect(response).to.equal("I can't believe it's not google!");
+    });
 });
 ```
+
+These examples uses Mocha, Chai and Superagent, but none of those are required: Mockttp will work with any testing tools that can handle promises (and with minor tweaks, many that can't), and can mock requests from any library, tool or device you might care to use.
 
 ## Credits
 
