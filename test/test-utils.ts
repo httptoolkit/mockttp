@@ -1,3 +1,6 @@
+import * as sourceMapSupport from 'source-map-support'
+sourceMapSupport.install({ handleUncaughtExceptions: false });
+
 import getFetch = require("fetch-ponyfill");
 import URLSearchParamsPolyfill = require('url-search-params');
 
