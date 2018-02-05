@@ -140,7 +140,7 @@ nodeOnly(() => {
                 expect(pendingMocks[2]).to.equal('GET /mocked-endpoint-3?foo=bar_5');
             });
 
-            it.only("should get correct method names in pending mock messages", async () => {
+            it("should get correct method names in pending mock messages", async () => {
                 client.get("/mocked-endpoint-1").thenReply(200, "");
                 client.post("/mocked-endpoint-1").thenReply(200, "");
                 client.put("/mocked-endpoint-1").thenReply(200, "");
