@@ -8,10 +8,12 @@ import _ = require('lodash');
 import * as WebSocket from 'universal-websocket-client';
 import { SubscriptionClient } from 'subscriptions-transport-ws';
 
-/**
- * @hidden
- */
-const { fetch, Headers } = getFetch();
+const {
+    /** @hidden */
+    fetch,
+    /** @hidden */
+    Headers
+} = getFetch();
 
 import { ProxyConfig, Method, MockedEndpoint, OngoingRequest } from "../types";
 import {
@@ -48,8 +50,10 @@ export class GraphQLError extends RequestError {
     }
 }
 
+/** @hidden */
 interface RequestData { }
 
+/** @hidden */
 interface MockedEndpointState {
     id: string;
     seenRequests: RequestData[]

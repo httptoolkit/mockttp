@@ -219,7 +219,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
                 if (this.debug) console.log(`Request matched rule: ${nextRule.explain()}`);
                 await nextRule.handleRequest(request, response);
             } else {
-                let requestExplanation = await explainRequest(request);
+                let requestExplanation = await this.explainRequest(request);
                 if (this.debug) console.warn(`Unmatched request received: ${requestExplanation}`);
 
                 response.setHeader('Content-Type', 'text/plain');
@@ -235,7 +235,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
                     response.write("There are no rules configured.\n");
                 }
 
-                response.end(await suggestRule(request));
+                response.end(await this.suggestRule(request));
             }
         } catch (e) {
             if (this.debug) {
@@ -262,34 +262,34 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
             return rule.requests.length !== 0;
         }
     }
-}
 
-async function explainRequest(request: OngoingRequest): Promise<string> {
-    let msg = `${request.method} request to ${request.url}`;
-
-    let bodyText = await request.body.asText();
-    if (bodyText) msg += ` with body \`${bodyText}\``;
-
-    if (!_.isEmpty(request.headers)) {
-        msg += ` with headers:\n${JSON.stringify(request.headers, null, 2)}`;
+    private async explainRequest(request: OngoingRequest): Promise<string> {
+        let msg = `${request.method} request to ${request.url}`;
+    
+        let bodyText = await request.body.asText();
+        if (bodyText) msg += ` with body \`${bodyText}\``;
+    
+        if (!_.isEmpty(request.headers)) {
+            msg += ` with headers:\n${JSON.stringify(request.headers, null, 2)}`;
+        }
+    
+        return msg;
     }
 
-    return msg;
-}
-
-async function suggestRule(request: OngoingRequest): Promise<string> {
-    let msg = "You can fix this by adding a rule to match this request, for example:\n"
-
-    msg += `mockServer.${request.method.toLowerCase()}("${request.path}")`;
-
-    let isFormRequest = !!request.headers["content-type"] && request.headers["content-type"].indexOf("application/x-www-form-urlencoded") > -1;
-    let formBody = await request.body.asFormData().catch(() => undefined);
-
-    if (isFormRequest && !!formBody) {
-        msg += `.withForm(${JSON.stringify(formBody)})`;
+    private async suggestRule(request: OngoingRequest): Promise<string> {
+        let msg = "You can fix this by adding a rule to match this request, for example:\n"
+    
+        msg += `mockServer.${request.method.toLowerCase()}("${request.path}")`;
+    
+        let isFormRequest = !!request.headers["content-type"] && request.headers["content-type"].indexOf("application/x-www-form-urlencoded") > -1;
+        let formBody = await request.body.asFormData().catch(() => undefined);
+    
+        if (isFormRequest && !!formBody) {
+            msg += `.withForm(${JSON.stringify(formBody)})`;
+        }
+    
+        msg += '.thenReply(200, "your response");';
+    
+        return msg;
     }
-
-    msg += '.thenReply(200, "your response");';
-
-    return msg;
 }
