@@ -1,3 +1,7 @@
+/**
+ * @module MockRule
+ */
+
 import { Method, MockedEndpoint } from "../types";
 
 import {

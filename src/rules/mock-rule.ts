@@ -1,3 +1,7 @@
+/**
+ * @module MockRule
+ */
+
 import uuid = require("uuid/v4");
 import * as _ from "lodash";
 

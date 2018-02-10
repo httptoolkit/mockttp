@@ -1,3 +1,7 @@
+/**
+ * @module Mockttp
+ */
+
 import PartialMockRule from "./rules/partial-mock-rule";
 import { ProxyConfig, MockedEndpoint, Method, OngoingRequest } from "./types";
 import { MockRuleData } from "./rules/mock-rule-types";
@@ -33,6 +37,9 @@ export interface MockttpOptions {
     https?: CAOptions
 }
 
+/**
+ * @hidden
+ */
 export abstract class AbstractMockttp {
     protected cors: boolean;
     protected debug: boolean;

@@ -1,3 +1,7 @@
+/**
+ * @module Internal
+ */
+
 import * as uuid from 'uuid/v4';
 import { pki, md } from 'node-forge';
 

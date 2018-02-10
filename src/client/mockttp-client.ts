@@ -1,8 +1,16 @@
+/**
+ * @module Mockttp
+ */
+
 import TypedError = require('typed-error');
 import getFetch = require('fetch-ponyfill');
 import _ = require('lodash');
 import * as WebSocket from 'universal-websocket-client';
 import { SubscriptionClient } from 'subscriptions-transport-ws';
+
+/**
+ * @hidden
+ */
 const { fetch, Headers } = getFetch();
 
 import { ProxyConfig, Method, MockedEndpoint, OngoingRequest } from "../types";

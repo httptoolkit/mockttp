@@ -1,3 +1,7 @@
+/**
+ * @module Internal
+ */
+
 export async function filter<T>(
     array: T[],
     test: (t: T) => Promise<boolean> | boolean

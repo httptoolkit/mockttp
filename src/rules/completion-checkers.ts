@@ -1,3 +1,7 @@
+/**
+ * @module MockRuleData
+ */
+
 import { RuleCompletionChecker, MockRule, RuleExplainable } from './mock-rule-types';
 
 export type CompletionCheckerData = (

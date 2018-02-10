@@ -15,7 +15,9 @@
   ],
   "scripts": {
     "prebuild": "rimraf dist/*",
-    "build": "tsc && cp src/standalone/schema.gql dist/standalone/schema.gql",
+    "build": "npm run build:src && npm run build:doc",
+    "build:src": "tsc && cp src/standalone/schema.gql dist/standalone/schema.gql",
+    "build:doc": "typedoc --excludeExternals --gitRevision master --readme none --exclude '**/+(main-browser|standalone-bin).ts' --out typedoc/ src/ custom-typings/",
     "test": "npm run build && npm run test:mocha && npm run test:browser",
     "test:mocha": "NODE_EXTRA_CA_CERTS=./test/fixtures/test-ca.pem mocha -r ts-node/register 'test/**/*.spec.ts'",
     "test:browser": "ts-node ./src/standalone/standalone-bin.ts -c karma start",
@@ -85,6 +87,8 @@
     "tmp-promise": "^1.0.3",
     "ts-loader": "^2.3.7",
     "ts-node": "^3.3.0",
+    "typedoc": "^0.10.0",
+    "typedoc-plugin-external-module-name": "^1.1.1",
     "typescript": "^2.7.1",
     "url-search-params": "^0.10.0",
     "webpack": "^3.7.1"

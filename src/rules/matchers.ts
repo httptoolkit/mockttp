@@ -1,3 +1,7 @@
+/**
+ * @module MockRuleData
+ */
+
 import * as _ from "lodash";
 
 import { OngoingRequest, Method } from "../types";

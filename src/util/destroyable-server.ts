@@ -1,3 +1,7 @@
+/**
+ * @module Internal
+ */
+
 import net = require("net");
 import http = require("http");
 

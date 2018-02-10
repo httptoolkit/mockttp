@@ -1,3 +1,7 @@
+/**
+ * @module Internal
+ */
+
 import fs = require('fs');
 
 export function readFile(filename: string, encoding: null): Promise<Buffer>;

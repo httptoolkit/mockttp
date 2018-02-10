@@ -1,3 +1,7 @@
+/**
+ * @module Mockttp
+ */
+
 import net = require("net");
 import http = require("http");
 import https = require("https");

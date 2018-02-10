@@ -1,3 +1,7 @@
+/**
+ * @module MockRule
+ */
+
 import { Explainable, OngoingRequest, CompletedRequest, Response, Method } from "../types";
 import { MatcherData } from "./matchers";
 import { CompletionCheckerData } from "./completion-checkers";
@@ -23,8 +27,13 @@ export interface RuleExplainable extends Explainable {
     explain(this: MockRule): string;
 }
 
-export type RequestMatcher = ((request: OngoingRequest) => boolean | Promise<boolean>) & RuleExplainable;
-export type RequestHandler = ((request: OngoingRequest, response: Response) => Promise<void>) & RuleExplainable;
+export interface RequestMatcher extends RuleExplainable {
+    (request: OngoingRequest): boolean | Promise<boolean>;
+}
+
+export interface RequestHandler extends RuleExplainable {
+    (request: OngoingRequest, response: Response): Promise<void>
+}
 
 export interface RuleCompletionChecker extends RuleExplainable {
     (this: MockRule): boolean;
