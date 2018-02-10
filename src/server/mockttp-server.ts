@@ -27,7 +27,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
     private httpsOptions: CAOptions | undefined;
 
     private app: express.Application;
-    private server: DestroyableServer;
+    private server: DestroyableServer | undefined;
 
     private eventEmitter: EventEmitter;
 
@@ -129,21 +129,19 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
                 });
             });
         } else {
-            return new Promise<void>((resolve, reject) => {
-                this.server = destroyable(this.app.listen(port, resolve));
-            });
+            this.server = destroyable(this.app.listen(port));
         }
 
         return new Promise<void>((resolve, reject) => {
-            this.server.on('listening', resolve);
-            this.server.on('error', (e: any) => {
+            this.server!.on('listening', resolve);
+            this.server!.on('error', (e: any) => {
                 // Although we try to pick a free port, we may have race conditions, if something else
                 // takes the same port at the same time. If you haven't explicitly picked a port, and
                 // we do have a collision, simply try again.
                 if (e.code === 'EADDRINUSE' && !portParam) {
                     if (this.debug) console.log('Address in use, retrying...');
 
-                    this.server.close(); // Don't bother waiting for this, it can stop on its own time
+                    this.server!.close(); // Don't bother waiting for this, it can stop on its own time
                     resolve(this.start());
                 } else {
                     throw e;
@@ -155,7 +153,8 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
     async stop(): Promise<void> {
         if (this.debug) console.log(`Stopping server at ${this.url}`);
 
-        await this.server.destroy();
+        if (this.server) await this.server.destroy();
+        
         this.reset();
     }
 

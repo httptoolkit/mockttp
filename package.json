@@ -83,7 +83,7 @@
     "tmp-promise": "^1.0.3",
     "ts-loader": "^2.3.7",
     "ts-node": "^3.3.0",
-    "typescript": "^2.6.2",
+    "typescript": "^2.7.1",
     "url-search-params": "^0.10.0",
     "webpack": "^3.7.1"
   },

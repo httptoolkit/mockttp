@@ -53,7 +53,6 @@ export class CA {
     private caCert: { subject: any };
     private caKey: {};
 
-    private certKeys: { publicKey: {}, privateKey: {} };
     private certCache: { [domain: string]: GeneratedCertificate };
 
     constructor(
