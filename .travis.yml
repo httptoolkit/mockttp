@@ -16,11 +16,14 @@ script:
     - npm run ci
 addons:
     chrome: stable
-deploy:
-    provider: pages
-    skip-cleanup: true
-    local-dir: typedoc
-    github-token: $GITHUB_TOKEN
-    keep-history: true
-    on:
-        branch: master
+jobs:
+    include:
+        - stage: Deploy Docs 
+          deploy:
+            provider: pages
+            skip-cleanup: true
+            local-dir: typedoc
+            github-token: $GITHUB_TOKEN
+            keep-history: true
+            on:
+                branch: master
