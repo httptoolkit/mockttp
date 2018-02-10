@@ -117,6 +117,11 @@ describe("Mockttp", () => {
 
 These examples uses Mocha, Chai and Superagent, but none of those are required: Mockttp will work with any testing tools that can handle promises (and with minor tweaks, many that can't), and can mock requests from any library, tool or device you might care to use.
 
+## Documentation
+
+* [In-depth setup guide](docs/setup.md)
+* [API reference](https://pimterry.github.io/mockttp/modules/mockttp.html)
+
 ## Credits
 
 * Many thanks to https://github.com/vieiralucas for donating the package name!
