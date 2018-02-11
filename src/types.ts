@@ -50,9 +50,20 @@ export interface CompletedRequest extends Request {
 
 export interface Response extends express.Response { }
 
-// The external interface of a rule, for users to later verify with
+/**
+ * A mocked endpoint provides methods to see the current state of
+ * a mock rule.
+ */
 export interface MockedEndpoint {
     id: string;
+    /**
+     * Get the requests that this endpoint has seen so far.
+     * 
+     * This method returns a promise, which resolves with the requests seen
+     * up until now. The returned lists are immutable, so won't change if more
+     * requests rrive in future. Call `getSeenRequests` again later to get
+     * an updated list.
+     */
     getSeenRequests(): Promise<CompletedRequest[]>;
 }
 

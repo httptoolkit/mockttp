@@ -59,6 +59,12 @@ interface MockedEndpointState {
     seenRequests: RequestData[]
 }
 
+/**
+ * A Mockttp implementation, controlling a remote Mockttp standalone server.
+ * 
+ * This starts servers by making requests to the remote standalone server, and exposes
+ * methods to directly manage them.
+ */
 export default class MockttpClient extends AbstractMockttp implements Mockttp {
     private readonly standaloneServerUrl = `http://localhost:${DEFAULT_STANDALONE_PORT}`;
 

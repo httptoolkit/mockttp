@@ -30,12 +30,12 @@ import { OutgoingHttpHeaders } from "http";
 
 /**
  * @class MockRuleBuilder
- * @description
+
  * A builder for defining mock rules. Create one using a method like
- * `.get` or `.post` on a mock server, then call whatever methods you'd like
- * here to define more precise request matching behaviour, control
- * how the request is handled, and how many times this rule should
- * be applied.
+ * `.get(path)` or `.post(path)` on a Mockttp instance, then call
+ * whatever methods you'd like here to define more precise request
+ * matching behaviour, control how the request is handled, and how
+ * many times this rule should be applied.
  * 
  * When you're done, call a `.thenX()` method to register the configured rule
  * with the server. These return a promise for a MockedEndpoint, which can be
@@ -49,6 +49,10 @@ import { OutgoingHttpHeaders } from "http";
 export default class MockRuleBuilder {
     private addRule: (rule: MockRuleData) => Promise<MockedEndpoint>;
 
+    /**
+     * Mock rule builders should be constructed through the Mockttp instance you're
+     * using, not directly. You shouldn't ever need to call this constructor.
+     */
     constructor(addRule: (rule: MockRuleData) => Promise<MockedEndpoint>)
     constructor(
         method: Method,

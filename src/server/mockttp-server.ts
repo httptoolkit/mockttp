@@ -24,7 +24,13 @@ import { MockedEndpoint } from "./mocked-endpoint";
 import { parseBody } from "./parse-body";
 import { filter } from "../util/promise";
 
-// Provides all the external API, uses that to build and manage the rules list, and interrogate our recorded requests
+
+/**
+ * A in-process Mockttp implementation. This starts servers on the local machine in the
+ * current process, and exposes methods to directly manage them.
+ * 
+ * This class does not work in browsers, as it expects to be able to start HTTP servers.
+ */
 export default class MockttpServer extends AbstractMockttp implements Mockttp {
     private rules: MockRule[] = [];
 
