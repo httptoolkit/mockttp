@@ -1,38 +1,34 @@
 # Mockttp [![Travis Build Status](https://img.shields.io/travis/pimterry/mockttp.svg)](https://travis-ci.org/pimterry/mockttp)
 
-**Mockttp is the HTTP integration tool you've been searching for these long years.**
+Mockttp lets you quickly & reliably fake HTTP responses for testing, and assert
+on the requests made by your code.
 
-Write JS tests that _truly_ integration test your HTTP. Quickly build a fake server, or
-transparently proxy requests your code sends to other domains. Write mocks that work
-universally in node and the browser. Get strong types built-in & promises throughout,
-with a library designed for modern JS & async/await, and enjoy helpful debuggability
-with self-explaining mocks.
+There's a lot of tools to do this, but typically by stubbing the HTTP functions in your
+process at the JS level. That ties you to a specific environment, doesn't test the
+real requests that'd be made, and only works for requests made in the same JS processs.
+It's inflexible, limiting and inaccurate, and often unreliable & tricky to debug too.
 
-Mockttp lets you truly integration test your HTTP(S) requests with thorough
-library-agnostic HTTP mocking that can mock requests from your code, your dependencies,
-your subprocesses, native code, your server (from your browser), every crazy npm library
-you've installed and even remote devices (if they use your machine as a proxy). See
-the actual requests that would be made, and write tests that check what will really
-hit the wire, and how your whole stack will handle the response, not just the function
-calls you think you'll make.
+Mockttp is here to make this better.
 
-HTTP integration testing is a mess, and Mockttp is here to make it better.
+Mockttp allows you to do accurate true integration testing, writing one set of tests that
+works out of the box in node or browsers, with support for transparent proxying & HTTPS,
+strong typing & promises throughout, fast & safe parallel testing, and helpful
+built-in debuggability support all the way down.
 
-_This is all still in early development, not quite complete or stable, and subject to change!_
+## Features
 
-## Er, what?
-
-Ok, let's summarize. Mockttp lets you:
+Let's get specific. Mockttp lets you:
 
 * Write **easy, fast & reliable node.js & browser HTTP integration tests**
-* Fake server responses and verify requests made by your code
-* **Intercept, mock and proxy HTTPS too**, with built-in certificate generation
-* **Mock HTTP requests from inside & outside your process/tab**, including subprocesses, native code, remote devices, and more
-* Stub and mock requests transparently, as an **HTTP mocking proxy**, as well as serving traffic directly
-* **Mock servers for node & browsers with the same code** (universal/'isomorphic' HTTP mocking)
-* **Safely mock HTTP in parallel**, with autoconfiguration of ports, mock URLs and proxy settings
+* **Stub server responses** and **verify HTTP requests** made by your code
+* **Intercept HTTPS** too, with built-in self-signed certificate generation
+* **Mock requests inside or outside your process/tab**, including subprocesses, native code, remote devices, and more
+* **Test true real-world behaviour**, seeing the real requests made & exactly what'd really happen, not just the requests you asked for
+* Stub direct requests, or transparently stub requests elsewhere as an **HTTP mocking proxy**
+* **Mock in node & browser tests with the same code** (universal/'isomorphic' HTTP mocking)
+* **Safely mock HTTP in parallel**, with autoconfiguration of ports, mock URLs and proxy settings, for super-charged integration testing
 * **Debug your tests easily**, with full explainability of all mock matches & misses, mock autosuggestions, and an extra detailed debug mode
-* Write modern tests, with promises all the way down and **strong typing** (with TypeScript) throughout.
+* Write modern test code, with promises all the way down, async/await, and **strong typing** (with TypeScript) throughout.
 
 ## Get Started
 
@@ -65,7 +61,7 @@ describe("Mockttp", () => {
         await mockServer.get("/mocked-path").thenReply(200, "A mocked response")
 
         // Make a request
-        let response = await superagent.get("http://localhost:8080/mocked-path"));
+        let response = await superagent.get("http://localhost:8080/mocked-path");
 
         // Assert on the results
         expect(response.text).to.equal("A mocked response");
