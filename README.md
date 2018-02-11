@@ -45,7 +45,7 @@ To run an HTTP integration test, you need to :
 * Make some real HTTP requests
 * Assert on the results
 
-Here's a minimal example of all that, using Mocha, Chai & Superagent, which works out of the box in Node and all modern browsers:
+Here's a simple minimal example of all that using plain promises, Mocha, Chai & Superagent, which works out of the box in Node and modern browsers:
 
 ```typescript
 const superagent = require("superagent");
@@ -56,34 +56,38 @@ describe("Mockttp", () => {
     beforeEach(() => mockServer.start(8080));
     afterEach(() => mockserver.stop());
 
-    it("lets you mock requests, and assert on the results", () => {
+    it("lets you mock requests, and assert on the results", () =>
         // Mock your endpoints
-        await mockServer.get("/mocked-path").thenReply(200, "A mocked response")
-
-        // Make a request
-        let response = await superagent.get("http://localhost:8080/mocked-path");
-
-        // Assert on the results
-        expect(response.text).to.equal("A mocked response");
-    });
+        mockServer.get("/mocked-path").thenReply(200, "A mocked response")
+        .then(() => {
+            // Make a request
+            return superagent.get("http://localhost:8080/mocked-path");
+        }).then(() => {
+            // Assert on the results
+            expect(response.text).to.equal("A mocked response");
+        });
+    );
 });
 ```
 
-Easy! Let's take a look at some of the more fancy features:
+(Want to play with this yourself? Try running a standalone version live on RunKit: https://runkit.com/pimterry/mockttp)
+
+That is pretty easy, but we can make this simpler & more powerful. Let's take a look at some more fancy features:
 
 ```typescript
 const superagent = require("superagent");
 const mockServer = require("mockttp").getLocal();
 
 describe("Mockttp", () => {
-    // Note there's no start port here!
+    // Note that there's no start port here, so we dynamically find a free one instead
     beforeEach(() => mockServer.start());
     afterEach(() => mockServer.stop());
 
     it("lets you mock without specifying a port, allowing parallel testing", async () => {
+        // Simplify promises with async/await in supported environments (Chrome 55+/Node 8+/Babel/TypeScript)
         await mockServer.get("/mocked-endpoint").thenReply(200, "Tip top testing")
 
-        // Try mockServer.url or .urlFor(path) to get a unique URL
+        // Try mockServer.url or .urlFor(path) to get a the dynamic URL for the server's port
         let response = await superagent.get(mockServer.urlFor("/mocked-endpoint"));
 
         expect(response.text).to.equal("Tip top testing");
@@ -94,12 +98,14 @@ describe("Mockttp", () => {
 
         await superagent.get(mockServer.urlFor("/mocked-endpoint"));
 
+        // Inspect the mock to get the requests it received and assert on their details
         const requests = await endpointMock.getSeenRequests();
         expect(requests.length).to.equal(1);
         expect(requests[0].url).to.equal("/mocked-endpoint");
     });
 
     it("lets you proxy requests made to any other hosts", async () => {
+        // Match a full URL instead of just a path to mock proxied requests
         await mockServer.get("http://google.com").thenReply(200, "I can't believe it's not google!");
 
         // One of the many ways to use a proxy - this assumes Node & superagent-proxy.
