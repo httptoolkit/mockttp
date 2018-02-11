@@ -2,7 +2,7 @@
  * @module Mockttp
  */
 
-import PartialMockRule from "./rules/partial-mock-rule";
+import MockRuleBuilder from "./rules/mock-rule-builder";
 import { ProxyConfig, MockedEndpoint, Method, OngoingRequest } from "./types";
 import { MockRuleData } from "./rules/mock-rule-types";
 import { CAOptions } from './util/tls';
@@ -20,13 +20,13 @@ export interface Mockttp {
 
     urlFor(path: string): string;
 
-    anyRequest(): PartialMockRule;
-    get(url: string): PartialMockRule;
-    post(url: string): PartialMockRule;
-    put(url: string): PartialMockRule;
-    delete(url: string): PartialMockRule;
-    patch(url: string): PartialMockRule;
-    options(url: string): PartialMockRule;
+    anyRequest(): MockRuleBuilder;
+    get(url: string): MockRuleBuilder;
+    post(url: string): MockRuleBuilder;
+    put(url: string): MockRuleBuilder;
+    delete(url: string): MockRuleBuilder;
+    patch(url: string): MockRuleBuilder;
+    options(url: string): MockRuleBuilder;
 
     on(event: 'request', callback: (req: OngoingRequest) => void): Promise<void>;
 }
@@ -64,31 +64,31 @@ export abstract class AbstractMockttp {
         return this.url + path;
     }
 
-    anyRequest(): PartialMockRule {
-        return new PartialMockRule(this.addRule);
+    anyRequest(): MockRuleBuilder {
+        return new MockRuleBuilder(this.addRule);
     }
 
-    get(url: string): PartialMockRule {
-        return new PartialMockRule(Method.GET, url, this.addRule);
+    get(url: string): MockRuleBuilder {
+        return new MockRuleBuilder(Method.GET, url, this.addRule);
     }
 
-    post(url: string): PartialMockRule {
-        return new PartialMockRule(Method.POST, url, this.addRule);
+    post(url: string): MockRuleBuilder {
+        return new MockRuleBuilder(Method.POST, url, this.addRule);
     }
 
-    put(url: string): PartialMockRule {
-        return new PartialMockRule(Method.PUT, url, this.addRule);
+    put(url: string): MockRuleBuilder {
+        return new MockRuleBuilder(Method.PUT, url, this.addRule);
     }
     
-    delete(url: string): PartialMockRule {
-        return new PartialMockRule(Method.DELETE, url, this.addRule);
+    delete(url: string): MockRuleBuilder {
+        return new MockRuleBuilder(Method.DELETE, url, this.addRule);
     }
 
-    patch(url: string): PartialMockRule {
-        return new PartialMockRule(Method.PATCH, url, this.addRule);
+    patch(url: string): MockRuleBuilder {
+        return new MockRuleBuilder(Method.PATCH, url, this.addRule);
     }
 
-    options(url: string): PartialMockRule {
+    options(url: string): MockRuleBuilder {
         if (this.cors) {
             throw new Error(`Cannot mock OPTIONS requests with CORS enabled.
 
@@ -96,7 +96,7 @@ You can disable CORS by passing { cors: false } to getLocal/getRemote, but this 
 connecting to your mock server from browsers, unless you mock all required OPTIONS preflight \
 responses by hand.`);
         }
-        return new PartialMockRule(Method.OPTIONS, url, this.addRule);
+        return new MockRuleBuilder(Method.OPTIONS, url, this.addRule);
     }
 
 }

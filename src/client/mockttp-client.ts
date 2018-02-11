@@ -20,7 +20,7 @@ import {
   MockRule,
   MockRuleData
 } from "../rules/mock-rule-types";
-import PartialMockRule from "../rules/partial-mock-rule";
+import MockRuleBuilder from "../rules/mock-rule-builder";
 import { Mockttp, AbstractMockttp, MockttpOptions } from "../mockttp";
 import { MockServerConfig } from "../standalone/mockttp-standalone";
 import { serializeRuleData } from "../rules/mock-rule";

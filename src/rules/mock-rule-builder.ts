@@ -33,7 +33,7 @@ import { OutgoingHttpHeaders } from "http";
  * callback once it's built & complete, and returning the (eventually)
  * defined endpoint to the consuming code once it's been registered
  */
-export default class PartialMockRule {
+export default class MockRuleBuilder {
     private addRule: (rule: MockRuleData) => Promise<MockedEndpoint>;
 
     constructor(addRule: (rule: MockRuleData) => Promise<MockedEndpoint>)
@@ -64,32 +64,32 @@ export default class PartialMockRule {
         return this;
     }
 
-    withForm(formData: { [key: string]: string }): PartialMockRule {
+    withForm(formData: { [key: string]: string }): MockRuleBuilder {
         this.matchers.push(new FormDataMatcherData(formData));
         return this;
     }
 
-    always(): PartialMockRule {
+    always(): MockRuleBuilder {
         this.isComplete = new AlwaysData();
         return this;
     }
 
-    once(): PartialMockRule {
+    once(): MockRuleBuilder {
         this.isComplete = new OnceData();
         return this;
     }
 
-    twice(): PartialMockRule {
+    twice(): MockRuleBuilder {
         this.isComplete = new TwiceData();
         return this;
     }
 
-    thrice(): PartialMockRule {
+    thrice(): MockRuleBuilder {
         this.isComplete = new ThriceData();
         return this;
     }
 
-    times(n: number): PartialMockRule {
+    times(n: number): MockRuleBuilder {
         this.isComplete = new TimesData(n);
         return this;
     }

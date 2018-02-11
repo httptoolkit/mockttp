@@ -15,7 +15,7 @@ import _ = require("lodash");
 
 import { Method, OngoingRequest, CompletedRequest, ProxyConfig } from "../types";
 import { MockRuleData } from "../rules/mock-rule-types";
-import PartialMockRule from "../rules/partial-mock-rule";
+import MockRuleBuilder from "../rules/mock-rule-builder";
 import { CAOptions, getCA } from '../util/tls';
 import destroyable, { DestroyableServer } from "../util/destroyable-server";
 import { Mockttp, AbstractMockttp, MockttpOptions } from "../mockttp";
