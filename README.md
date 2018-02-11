@@ -23,12 +23,12 @@ Let's get specific. Mockttp lets you:
 * **Stub server responses** and **verify HTTP requests** made by your code
 * **Intercept HTTPS** too, with built-in self-signed certificate generation
 * **Mock requests inside or outside your process/tab**, including subprocesses, native code, remote devices, and more
-* **Test true real-world behaviour**, seeing the real requests made & exactly what'd really happen, not just the requests you asked for
+* **Test true real-world behaviour**, verifying the real requests made, and testing exactly how your whole stack will handle a response in reality
 * Stub direct requests, or transparently stub requests elsewhere as an **HTTP mocking proxy**
-* **Mock in node & browser tests with the same code** (universal/'isomorphic' HTTP mocking)
+* **Mock for node & browser tests with the same code** (universal/'isomorphic' HTTP mocking)
 * **Safely mock HTTP in parallel**, with autoconfiguration of ports, mock URLs and proxy settings, for super-charged integration testing
 * **Debug your tests easily**, with full explainability of all mock matches & misses, mock autosuggestions, and an extra detailed debug mode
-* Write modern test code, with promises all the way down, async/await, and **strong typing** (with TypeScript) throughout.
+* Write modern test code, with promises all the way down, async/await, and **strong typing** (with TypeScript) throughout
 
 ## Get Started
 
@@ -38,7 +38,7 @@ npm install --save-dev mockttp
 
 ## Get Testing
 
-To run an HTTP integration test, you need to :
+To run an HTTP integration test, you need to:
 
 * Start a Mockttp server
 * Mock the endpoints you're interested in
