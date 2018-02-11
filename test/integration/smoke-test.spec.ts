@@ -9,9 +9,11 @@ describe("Basic HTTP mocking", function () {
     afterEach(() => server.stop());
 
     it("should mock simple matching GETs", async () => {
-        await server.get("/mocked-endpoint").thenReply(200, "mocked data");
+        await server.get("/mocked-endpoint").thenReply(200, "mocked data", {myHeader: "foo"});
 
         let response = await fetch(server.urlFor("/mocked-endpoint"));
+        
+        expect(await response.headers.get("myHeader")).to.equal("foo")
         expect(await response.text()).to.equal("mocked data");
     });
 
