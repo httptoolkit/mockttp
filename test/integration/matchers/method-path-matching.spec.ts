@@ -1,5 +1,5 @@
-import { getLocal } from "../..";
-import { expect, fetch, browserOnly } from "../test-utils";
+import { getLocal } from "../../..";
+import { expect, fetch, browserOnly } from "../../test-utils";
 
 describe("Method & path request matching", function () {
     let server = getLocal();
