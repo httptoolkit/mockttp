@@ -26,6 +26,7 @@ import {
 } from "./matchers";
 
 import { SimpleHandlerData, PassThroughHandlerData } from "./handlers";
+import { OutgoingHttpHeaders } from "http";
 
 /**
  * Fluently builds mock rule data, passing it to the initial
@@ -93,11 +94,11 @@ export default class PartialMockRule {
         return this;
     }
 
-    thenReply(status: number, data?: string): Promise<MockedEndpoint> {
+    thenReply(status: number, data?: string, headers?: OutgoingHttpHeaders): Promise<MockedEndpoint> {
         const rule: MockRuleData = {
             matchers: this.matchers,
             completionChecker: this.isComplete,
-            handler: new SimpleHandlerData(status, data)
+            handler: new SimpleHandlerData(status, data, headers)
         };
 
         return this.addRule(rule);

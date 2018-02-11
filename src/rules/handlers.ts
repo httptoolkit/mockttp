@@ -27,7 +27,8 @@ export class SimpleHandlerData {
 
     constructor(
         public status: number,
-        public data?: string
+        public data?: string,
+        public headers?: http.OutgoingHttpHeaders
     ) {}
 }
 
@@ -48,11 +49,11 @@ export function buildHandler
 }
 
 const handlerBuilders: { [T in HandlerType]: HandlerBuilder<HandlerDataLookup[T]> } = {
-    simple: ({ data, status }: SimpleHandlerData): RequestHandler => {
+    simple: ({ data, status, headers }: SimpleHandlerData): RequestHandler => {
         let responder = _.assign(async function(request: OngoingRequest, response: express.Response) {
-            response.writeHead(status);
+            response.writeHead(status, headers);
             response.end(data || "");
-        }, { explain: () => `respond with status ${status}` + (data ? ` and body "${data}"` : "") });
+        }, { explain: () => `respond with status ${status}` + (headers ? `, headers ${JSON.stringify(headers)}` : "") + (data ? ` and body "${data}"` : "") });
         return responder;
     },
     passthrough: (): RequestHandler => {
