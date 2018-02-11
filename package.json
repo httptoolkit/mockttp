@@ -8,10 +8,13 @@
   "bin": {
     "mockttp": "./dist/standalone/standalone-bin.js"
   },
+  "runkitExampleFilename": "./docs/runkitExample.js",
   "files": [
     "dist",
     "src",
-    "custom-typings"
+    "custom-typings",
+    "docs",
+    "typedoc"
   ],
   "scripts": {
     "prebuild": "rimraf dist/*",

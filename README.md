@@ -1,4 +1,4 @@
-# Mockttp [![Travis Build Status](https://img.shields.io/travis/pimterry/mockttp.svg)](https://travis-ci.org/pimterry/mockttp)
+# Mockttp [![Travis Build Status](https://img.shields.io/travis/pimterry/mockttp.svg)](https://travis-ci.org/pimterry/mockttp) [![Try Mockttp on RunKit](https://badge.runkitcdn.com/mockttp.svg)](https://npm.runkit.com/mockttp)
 
 Mockttp lets you quickly & reliably fake HTTP responses for testing, and assert
 on the requests made by your code.
@@ -70,7 +70,7 @@ describe("Mockttp", () => {
 });
 ```
 
-(Want to play with this yourself? Try running a standalone version live on RunKit: https://runkit.com/pimterry/mockttp)
+(Want to play with this yourself? Try running a standalone version live on RunKit: https://npm.runkit.com/mockttp)
 
 That is pretty easy, but we can make this simpler & more powerful. Let's take a look at some more fancy features:
 
