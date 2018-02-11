@@ -1,3 +1,7 @@
+/**
+ * @module Internal
+ */
+
 import stream = require('stream');
 import express = require("express");
 

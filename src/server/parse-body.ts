@@ -1,3 +1,7 @@
+/**
+ * @module Internal
+ */
+
 import * as stream from 'stream';
 import * as querystring from 'querystring';
 import * as express from 'express';

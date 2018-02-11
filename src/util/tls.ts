@@ -1,3 +1,7 @@
+/**
+ * @module Internal
+ */
+
 import * as uuid from 'uuid/v4';
 import { pki, md } from 'node-forge';
 
@@ -53,7 +57,6 @@ export class CA {
     private caCert: { subject: any };
     private caKey: {};
 
-    private certKeys: { publicKey: {}, privateKey: {} };
     private certCache: { [domain: string]: GeneratedCertificate };
 
     constructor(

@@ -1,3 +1,7 @@
+/**
+ * @module Mockttp
+ */
+
 import MockttpServer from "./server/mockttp-server";
 import MockttpClient from "./client/mockttp-client";
 import { MockttpStandalone, StandaloneServerOptions } from "./standalone/mockttp-standalone";

@@ -3,6 +3,7 @@
         "target": "es5",
         "module": "commonjs",
         "strict": true,
+        "strictPropertyInitialization": false, // Fails with typed-error
         "lib": [
             "dom",
             "es5",

@@ -1,3 +1,7 @@
+/**
+ * @module Mockttp
+ */
+
 import * as path from 'path';
 import * as fs from '../util/fs';
 import * as _ from "lodash";

@@ -1,3 +1,7 @@
+/**
+ * @module Mockttp
+ */
+
 import net = require("net");
 import http = require("http");
 import https = require("https");
@@ -27,7 +31,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
     private httpsOptions: CAOptions | undefined;
 
     private app: express.Application;
-    private server: DestroyableServer;
+    private server: DestroyableServer | undefined;
 
     private eventEmitter: EventEmitter;
 
@@ -129,21 +133,19 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
                 });
             });
         } else {
-            return new Promise<void>((resolve, reject) => {
-                this.server = destroyable(this.app.listen(port, resolve));
-            });
+            this.server = destroyable(this.app.listen(port));
         }
 
         return new Promise<void>((resolve, reject) => {
-            this.server.on('listening', resolve);
-            this.server.on('error', (e: any) => {
+            this.server!.on('listening', resolve);
+            this.server!.on('error', (e: any) => {
                 // Although we try to pick a free port, we may have race conditions, if something else
                 // takes the same port at the same time. If you haven't explicitly picked a port, and
                 // we do have a collision, simply try again.
                 if (e.code === 'EADDRINUSE' && !portParam) {
                     if (this.debug) console.log('Address in use, retrying...');
 
-                    this.server.close(); // Don't bother waiting for this, it can stop on its own time
+                    this.server!.close(); // Don't bother waiting for this, it can stop on its own time
                     resolve(this.start());
                 } else {
                     throw e;
@@ -155,7 +157,8 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
     async stop(): Promise<void> {
         if (this.debug) console.log(`Stopping server at ${this.url}`);
 
-        await this.server.destroy();
+        if (this.server) await this.server.destroy();
+        
         this.reset();
     }
 
@@ -216,7 +219,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
                 if (this.debug) console.log(`Request matched rule: ${nextRule.explain()}`);
                 await nextRule.handleRequest(request, response);
             } else {
-                let requestExplanation = await explainRequest(request);
+                let requestExplanation = await this.explainRequest(request);
                 if (this.debug) console.warn(`Unmatched request received: ${requestExplanation}`);
 
                 response.setHeader('Content-Type', 'text/plain');
@@ -232,7 +235,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
                     response.write("There are no rules configured.\n");
                 }
 
-                response.end(await suggestRule(request));
+                response.end(await this.suggestRule(request));
             }
         } catch (e) {
             if (this.debug) {
@@ -259,34 +262,34 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
             return rule.requests.length !== 0;
         }
     }
-}
 
-async function explainRequest(request: OngoingRequest): Promise<string> {
-    let msg = `${request.method} request to ${request.url}`;
-
-    let bodyText = await request.body.asText();
-    if (bodyText) msg += ` with body \`${bodyText}\``;
-
-    if (!_.isEmpty(request.headers)) {
-        msg += ` with headers:\n${JSON.stringify(request.headers, null, 2)}`;
+    private async explainRequest(request: OngoingRequest): Promise<string> {
+        let msg = `${request.method} request to ${request.url}`;
+    
+        let bodyText = await request.body.asText();
+        if (bodyText) msg += ` with body \`${bodyText}\``;
+    
+        if (!_.isEmpty(request.headers)) {
+            msg += ` with headers:\n${JSON.stringify(request.headers, null, 2)}`;
+        }
+    
+        return msg;
     }
 
-    return msg;
-}
-
-async function suggestRule(request: OngoingRequest): Promise<string> {
-    let msg = "You can fix this by adding a rule to match this request, for example:\n"
-
-    msg += `mockServer.${request.method.toLowerCase()}("${request.path}")`;
-
-    let isFormRequest = !!request.headers["content-type"] && request.headers["content-type"].indexOf("application/x-www-form-urlencoded") > -1;
-    let formBody = await request.body.asFormData().catch(() => undefined);
-
-    if (isFormRequest && !!formBody) {
-        msg += `.withForm(${JSON.stringify(formBody)})`;
+    private async suggestRule(request: OngoingRequest): Promise<string> {
+        let msg = "You can fix this by adding a rule to match this request, for example:\n"
+    
+        msg += `mockServer.${request.method.toLowerCase()}("${request.path}")`;
+    
+        let isFormRequest = !!request.headers["content-type"] && request.headers["content-type"].indexOf("application/x-www-form-urlencoded") > -1;
+        let formBody = await request.body.asFormData().catch(() => undefined);
+    
+        if (isFormRequest && !!formBody) {
+            msg += `.withForm(${JSON.stringify(formBody)})`;
+        }
+    
+        msg += '.thenReply(200, "your response");';
+    
+        return msg;
     }
-
-    msg += '.thenReply(200, "your response");';
-
-    return msg;
 }

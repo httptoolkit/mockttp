@@ -1,3 +1,7 @@
+/**
+ * @module MockRuleData
+ */
+
 import _ = require('lodash');
 import url = require('url');
 import http = require('http');
