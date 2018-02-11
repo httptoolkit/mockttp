@@ -53,7 +53,7 @@ const handlerBuilders: { [T in HandlerType]: HandlerBuilder<HandlerDataLookup[T]
         let responder = _.assign(async function(request: OngoingRequest, response: express.Response) {
             response.writeHead(status, headers);
             response.end(data || "");
-        }, { explain: () => `respond with status ${status}` + (headers ? `, headers "${headers}"` : "") + (data ? ` and body "${data}"` : "") });
+        }, { explain: () => `respond with status ${status}` + (headers ? `, headers ${JSON.stringify(headers)}` : "") + (data ? ` and body "${data}"` : "") });
         return responder;
     },
     passthrough: (): RequestHandler => {
