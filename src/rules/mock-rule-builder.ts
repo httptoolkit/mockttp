@@ -25,7 +25,7 @@ import {
     WildcardMatcherData
 } from "./matchers";
 
-import { SimpleHandlerData, PassThroughHandlerData } from "./handlers";
+import {SimpleHandlerData, PassThroughHandlerData, CallbackHandlerData} from "./handlers";
 import { OutgoingHttpHeaders } from "http";
 
 /**
@@ -150,6 +150,16 @@ export default class MockRuleBuilder {
             completionChecker: this.isComplete,
             handler: new SimpleHandlerData(status, data, headers)
         };
+
+        return this.addRule(rule);
+    }
+
+    thenCallback(callback: Function): Promise<MockedEndpoint> {
+        const rule: MockRuleData= {
+            matchers: this.matchers,
+            completionChecker: this.isComplete,
+            handler: new CallbackHandlerData(callback)
+        }
 
         return this.addRule(rule);
     }
