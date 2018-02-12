@@ -1,3 +1,7 @@
+/**
+ * @module Internal
+ */
+
 import * as normalizeUrl from "normalize-url";
 
 export default function normalize(url: string): string {

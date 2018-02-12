@@ -6,6 +6,7 @@
         "declaration": true, 
         "sourceMap": true,
         "strict": true,
+        "strictPropertyInitialization": false, // Fails with typed-error
         "lib": [
             "dom",
             "es5",

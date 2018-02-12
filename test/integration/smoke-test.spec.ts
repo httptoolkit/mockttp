@@ -12,6 +12,7 @@ describe("Basic HTTP mocking", function () {
         await server.get("/mocked-endpoint").thenReply(200, "mocked data");
 
         let response = await fetch(server.urlFor("/mocked-endpoint"));
+        
         expect(await response.text()).to.equal("mocked data");
     });
 

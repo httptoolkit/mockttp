@@ -1,3 +1,7 @@
+/**
+ * @module Internal
+ */
+
 import * as _ from "lodash";
 
 import {

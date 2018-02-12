@@ -1,6 +1,6 @@
 {
   "name": "mockttp",
-  "version": "0.5.0",
+  "version": "0.6.1",
   "description": "Mock HTTP server for testing HTTP clients and stubbing webservices",
   "main": "dist/main.js",
   "browser": "dist/main-browser.js",
@@ -8,19 +8,25 @@
   "bin": {
     "mockttp": "./dist/standalone/standalone-bin.js"
   },
+  "runkitExampleFilename": "./docs/runkitExample.js",
   "files": [
     "dist",
     "src",
-    "custom-typings"
+    "custom-typings",
+    "docs",
+    "typedoc"
   ],
   "scripts": {
     "prebuild": "rimraf dist/*",
-    "build": "tsc && cp src/standalone/schema.gql dist/standalone/schema.gql",
+    "build": "npm run build:src && npm run build:doc",
+    "build:src": "tsc && cp src/standalone/schema.gql dist/standalone/schema.gql",
+    "build:doc": "typedoc --excludeExternals --readme none --exclude '**/+(main-browser|standalone-bin).ts' --out typedoc/ src/ custom-typings/",
     "test": "npm run build && npm run test:mocha && npm run test:browser",
     "test:mocha": "NODE_EXTRA_CA_CERTS=./test/fixtures/test-ca.pem mocha -r ts-node/register 'test/**/*.spec.ts'",
     "test:browser": "ts-node ./src/standalone/standalone-bin.ts -c karma start",
     "test:browser:debug": "ts-node ./src/standalone/standalone-bin.ts -c karma start --single-run=false",
     "standalone": "npm run build && node -e 'require(\".\").getStandalone({ debug: true }).start()'",
+    "ci": "npm run test && catch-uncommitted",
     "graphiql": "npm run build && node ./standalone-graphiql.js",
     "prepack": "npm run build"
   },
@@ -57,10 +63,12 @@
     "@types/request": "0.0.31",
     "@types/sinon": "^1.16.31",
     "@types/sinon-chai": "^2.7.27",
+    "@types/source-map-support": "^0.4.0",
     "@types/url-search-params": "^0.10.0",
     "@types/uuid": "^3.4.0",
     "@types/zen-observable": "^0.5.3",
     "apollo-link": "^1.0.5",
+    "catch-uncommitted": "^1.0.0",
     "chai": "^3.5.0",
     "chai-as-promised": "^6.0.0",
     "chai-fetch": "^0.2.0",
@@ -78,10 +86,13 @@
     "rimraf": "^2.5.4",
     "sinon": "^1.17.5",
     "sinon-chai": "^2.8.0",
+    "source-map-support": "^0.5.3",
     "tmp-promise": "^1.0.3",
     "ts-loader": "^2.3.7",
     "ts-node": "^3.3.0",
-    "typescript": "^2.6.2",
+    "typedoc": "^0.10.0",
+    "typedoc-plugin-external-module-name": "^1.1.1",
+    "typescript": "^2.7.1",
     "url-search-params": "^0.10.0",
     "webpack": "^3.7.1"
   },
@@ -99,7 +110,7 @@
     "fetch-ponyfill": "^4.1.0",
     "graphql": "^0.11.3",
     "graphql-subscriptions": "^0.5.5",
-    "graphql-tools": "^2.11.0",
+    "graphql-tools": "~2.18.0",
     "lodash": "^4.16.4",
     "node-forge": "^0.7.1",
     "normalize-url": "^1.9.1",

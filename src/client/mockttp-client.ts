@@ -1,16 +1,26 @@
+/**
+ * @module Mockttp
+ */
+
 import TypedError = require('typed-error');
 import getFetch = require('fetch-ponyfill');
 import _ = require('lodash');
 import * as WebSocket from 'universal-websocket-client';
 import { SubscriptionClient } from 'subscriptions-transport-ws';
-const { fetch, Headers } = getFetch();
+
+const {
+    /** @hidden */
+    fetch,
+    /** @hidden */
+    Headers
+} = getFetch();
 
 import { ProxyConfig, Method, MockedEndpoint, OngoingRequest } from "../types";
 import {
   MockRule,
   MockRuleData
 } from "../rules/mock-rule-types";
-import PartialMockRule from "../rules/partial-mock-rule";
+import MockRuleBuilder from "../rules/mock-rule-builder";
 import { Mockttp, AbstractMockttp, MockttpOptions } from "../mockttp";
 import { MockServerConfig } from "../standalone/mockttp-standalone";
 import { serializeRuleData } from "../rules/mock-rule";
@@ -40,13 +50,21 @@ export class GraphQLError extends RequestError {
     }
 }
 
+/** @hidden */
 interface RequestData { }
 
+/** @hidden */
 interface MockedEndpointState {
     id: string;
     seenRequests: RequestData[]
 }
 
+/**
+ * A Mockttp implementation, controlling a remote Mockttp standalone server.
+ * 
+ * This starts servers by making requests to the remote standalone server, and exposes
+ * methods to directly manage them.
+ */
 export default class MockttpClient extends AbstractMockttp implements Mockttp {
     private readonly standaloneServerUrl = `http://localhost:${DEFAULT_STANDALONE_PORT}`;
 

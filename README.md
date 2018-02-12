@@ -1,38 +1,34 @@
-# Mockttp [![Travis Build Status](https://img.shields.io/travis/pimterry/mockttp.svg)](https://travis-ci.org/pimterry/mockttp)
+# Mockttp [![Travis Build Status](https://img.shields.io/travis/pimterry/mockttp.svg)](https://travis-ci.org/pimterry/mockttp) [![Try Mockttp on RunKit](https://badge.runkitcdn.com/mockttp.svg)](https://npm.runkit.com/mockttp)
 
-**Mockttp is the HTTP integration tool you've been searching for these long years.**
+Mockttp lets you quickly & reliably fake HTTP responses for testing, and assert
+on the requests made by your code.
 
-Write JS tests that _truly_ integration test your HTTP. Quickly build a fake server, or
-transparently proxy requests your code sends to other domains. Write mocks that work
-universally in node and the browser. Get strong types built-in & promises throughout,
-with a library designed for modern JS & async/await, and enjoy helpful debuggability
-with self-explaining mocks.
+There's a lot of tools to do this, but typically by stubbing the HTTP functions in your
+process at the JS level. That ties you to a specific environment, doesn't test the
+real requests that'd be made, and only works for requests made in the same JS processs.
+It's inflexible, limiting and inaccurate, and often unreliable & tricky to debug too.
 
-Mockttp lets you truly integration test your HTTP(S) requests with thorough
-library-agnostic HTTP mocking that can mock requests from your code, your dependencies,
-your subprocesses, native code, your server (from your browser), every crazy npm library
-you've installed and even remote devices (if they use your machine as a proxy). See
-the actual requests that would be made, and write tests that check what will really
-hit the wire, and how your whole stack will handle the response, not just the function
-calls you think you'll make.
+Mockttp is here to make this better.
 
-HTTP integration testing is a mess, and Mockttp is here to make it better.
+Mockttp allows you to do accurate true integration testing, writing one set of tests that
+works out of the box in node or browsers, with support for transparent proxying & HTTPS,
+strong typing & promises throughout, fast & safe parallel testing, and helpful
+built-in debuggability support all the way down.
 
-_This is all still in early development, not quite complete or stable, and subject to change!_
+## Features
 
-## Er, what?
-
-Ok, let's summarize. Mockttp lets you:
+Let's get specific. Mockttp lets you:
 
 * Write **easy, fast & reliable node.js & browser HTTP integration tests**
-* Fake server responses and verify requests made by your code
-* **Intercept, mock and proxy HTTPS too**, with built-in certificate generation
-* **Mock HTTP requests from inside & outside your process/tab**, including subprocesses, native code, remote devices, and more
-* Stub and mock requests transparently, as an **HTTP mocking proxy**, as well as serving traffic directly
-* **Mock servers for node & browsers with the same code** (universal/'isomorphic' HTTP mocking)
-* **Safely mock HTTP in parallel**, with autoconfiguration of ports, mock URLs and proxy settings
+* **Stub server responses** and **verify HTTP requests** made by your code
+* **Intercept HTTPS** too, with built-in self-signed certificate generation
+* **Mock requests inside or outside your process/tab**, including subprocesses, native code, remote devices, and more
+* **Test true real-world behaviour**, verifying the real requests made, and testing exactly how your whole stack will handle a response in reality
+* Stub direct requests, or transparently stub requests elsewhere as an **HTTP mocking proxy**
+* **Mock for node & browser tests with the same code** (universal/'isomorphic' HTTP mocking)
+* **Safely mock HTTP in parallel**, with autoconfiguration of ports, mock URLs and proxy settings, for super-charged integration testing
 * **Debug your tests easily**, with full explainability of all mock matches & misses, mock autosuggestions, and an extra detailed debug mode
-* Write modern tests, with promises all the way down and **strong typing** (with TypeScript) throughout.
+* Write modern test code, with promises all the way down, async/await, and **strong typing** (with TypeScript) throughout
 
 ## Get Started
 
@@ -42,55 +38,91 @@ npm install --save-dev mockttp
 
 ## Get Testing
 
+To run an HTTP integration test, you need to:
+
+* Start a Mockttp server
+* Mock the endpoints you're interested in
+* Make some real HTTP requests
+* Assert on the results
+
+Here's a simple minimal example of all that using plain promises, Mocha, Chai & Superagent, which works out of the box in Node and modern browsers:
+
 ```typescript
-const request = require("request");
+const superagent = require("superagent");
 const mockServer = require("mockttp").getLocal();
 
 describe("Mockttp", () => {
+    // Start your server
     beforeEach(() => mockServer.start(8080));
+    afterEach(() => mockserver.stop());
+
+    it("lets you mock requests, and assert on the results", () =>
+        // Mock your endpoints
+        mockServer.get("/mocked-path").thenReply(200, "A mocked response")
+        .then(() => {
+            // Make a request
+            return superagent.get("http://localhost:8080/mocked-path");
+        }).then(() => {
+            // Assert on the results
+            expect(response.text).to.equal("A mocked response");
+        });
+    );
+});
+```
+
+(Want to play with this yourself? Try running a standalone version live on RunKit: https://npm.runkit.com/mockttp)
+
+That is pretty easy, but we can make this simpler & more powerful. Let's take a look at some more fancy features:
+
+```typescript
+const superagent = require("superagent");
+const mockServer = require("mockttp").getLocal();
+
+describe("Mockttp", () => {
+    // Note that there's no start port here, so we dynamically find a free one instead
+    beforeEach(() => mockServer.start());
     afterEach(() => mockServer.stop());
 
-    it("mocks requests", () => {
-        return mockServer.get("/mocked-endpoint").thenReply(200, "How delightful")
-        .then(() =>
-            request.get("http://localhost:8080/mocked-endpoint")
-        ).then((response) =>
-            expect(response).to.equal("How delightful")
-        );
-    });
-
-    it("works best with async/await", async () => {
+    it("lets you mock without specifying a port, allowing parallel testing", async () => {
+        // Simplify promises with async/await in supported environments (Chrome 55+/Node 8+/Babel/TypeScript)
         await mockServer.get("/mocked-endpoint").thenReply(200, "Tip top testing")
 
-        // Want to be agnostic to the mock port, to run tests in parallel?
-        // Try mockServer.url or .urlFor(path):
-        let response = await request.get(mockServer.urlFor("/mocked-endpoint"));
+        // Try mockServer.url or .urlFor(path) to get a the dynamic URL for the server's port
+        let response = await superagent.get(mockServer.urlFor("/mocked-endpoint"));
 
-        expect(response).to.equal("Tip top testing");
+        expect(response.text).to.equal("Tip top testing");
     });
 
-    it("can proxy requests made to any other hosts", async () => {
-        await mockServer.get("http://google.com").thenReply(200, "I can't believe it's not google!");
-
-        // One of the _many_ ways to enable an HTTP proxy:
-        let proxiedRequest = request.defaults({ proxy: mockServer.url });
-
-        let response = await proxiedRequest.get("http://google.com");
-
-        expect(response).to.equal("I can't believe it's not google!");
-    });
-
-    it("also allows request verification", async () => {
+    it("lets you verify the request details the mockttp server receives", async () => {
         const endpointMock = await mockServer.get("/mocked-endpoint").thenReply(200, "hmm?");
 
-        await request.get(mockServer.urlFor("/mocked-endpoint"));
+        await superagent.get(mockServer.urlFor("/mocked-endpoint"));
 
+        // Inspect the mock to get the requests it received and assert on their details
         const requests = await endpointMock.getSeenRequests();
         expect(requests.length).to.equal(1);
         expect(requests[0].url).to.equal("/mocked-endpoint");
     });
+
+    it("lets you proxy requests made to any other hosts", async () => {
+        // Match a full URL instead of just a path to mock proxied requests
+        await mockServer.get("http://google.com").thenReply(200, "I can't believe it's not google!");
+
+        // One of the many ways to use a proxy - this assumes Node & superagent-proxy.
+        // In a browser, you can simply use the browser settings instead.
+        let response = await superagent.get("http://google.com").proxy(server.url);
+
+        expect(response).to.equal("I can't believe it's not google!");
+    });
 });
 ```
+
+These examples uses Mocha, Chai and Superagent, but none of those are required: Mockttp will work with any testing tools that can handle promises (and with minor tweaks, many that can't), and can mock requests from any library, tool or device you might care to use.
+
+## Documentation
+
+* [In-depth setup guide](docs/setup.md)
+* [API reference](https://pimterry.github.io/mockttp/modules/mockttp.html)
 
 ## Credits
 
