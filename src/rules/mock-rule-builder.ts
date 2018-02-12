@@ -2,7 +2,7 @@
  * @module MockRule
  */
 
-import { Method, MockedEndpoint } from "../types";
+import {CompletedRequest, Method, MockedEndpoint} from "../types";
 
 import {
     MockRuleData
@@ -26,7 +26,7 @@ import {
 } from "./matchers";
 
 import {SimpleHandlerData, PassThroughHandlerData, CallbackHandlerData} from "./handlers";
-import { OutgoingHttpHeaders } from "http";
+import {OutgoingHttpHeaders} from "http";
 
 /**
  * @class MockRuleBuilder
@@ -36,11 +36,11 @@ import { OutgoingHttpHeaders } from "http";
  * whatever methods you'd like here to define more precise request
  * matching behaviour, control how the request is handled, and how
  * many times this rule should be applied.
- * 
+ *
  * When you're done, call a `.thenX()` method to register the configured rule
  * with the server. These return a promise for a MockedEndpoint, which can be
  * used to verify the details of the requests matched by the rule.
- * 
+ *
  * This returns a promise because rule registration can be asynchronous,
  * either when using a remote server or testing in the browser. Wait for the
  * promise returned by `.thenX()` methods to guarantee that the rule has taken
@@ -54,16 +54,12 @@ export default class MockRuleBuilder {
      * using, not directly. You shouldn't ever need to call this constructor.
      */
     constructor(addRule: (rule: MockRuleData) => Promise<MockedEndpoint>)
-    constructor(
-        method: Method,
-        path: string,
-        addRule: (rule: MockRuleData) => Promise<MockedEndpoint>
-    )
-    constructor(
-        methodOrAddRule: Method | ((rule: MockRuleData) => Promise<MockedEndpoint>),
-        path?: string,
-        addRule?: (rule: MockRuleData) => Promise<MockedEndpoint>
-    ) {
+    constructor(method: Method,
+                path: string,
+                addRule: (rule: MockRuleData) => Promise<MockedEndpoint>)
+    constructor(methodOrAddRule: Method | ((rule: MockRuleData) => Promise<MockedEndpoint>),
+                path?: string,
+                addRule?: (rule: MockRuleData) => Promise<MockedEndpoint>) {
         if (methodOrAddRule instanceof Function) {
             this.matchers.push(new WildcardMatcherData());
             this.addRule = methodOrAddRule;
@@ -135,10 +131,10 @@ export default class MockRuleBuilder {
     /**
      * Reply to matched with with given status and (optionally) body
      * and headers.
-     * 
+     *
      * Calling this method registers the rule with the server, so it
      * starts to handle requests.
-     * 
+     *
      * This method returns a promise that resolves with a mocked endpoint.
      * Wait for the promise to confirm that the rule has taken effect
      * before sending requests to be matched. The mocked endpoint
@@ -154,8 +150,14 @@ export default class MockRuleBuilder {
         return this.addRule(rule);
     }
 
-    thenCallback(callback: Function): Promise<MockedEndpoint> {
-        const rule: MockRuleData= {
+    thenCallback(callback: (request: CompletedRequest) => {
+        status?: number;
+        body?: string;
+        headers?: {
+            [key: string]: string;
+        };
+    }): Promise<MockedEndpoint> {
+        const rule: MockRuleData = {
             matchers: this.matchers,
             completionChecker: this.isComplete,
             handler: new CallbackHandlerData(callback)
@@ -166,16 +168,16 @@ export default class MockRuleBuilder {
 
     /**
      * Pass matched requests through to their real destination. This works
-     * for proxied requests only, direct requests will be rejected with 
+     * for proxied requests only, direct requests will be rejected with
      * an error.
-     * 
+     *
      * Calling this method registers the rule with the server, so it
      * starts to handle requests.
-     * 
+     *
      * This method returns a promise that resolves with a mocked endpoint.
      * Wait for the promise to confirm that the rule has taken effect
      * before sending requests to be matched. The mocked endpoint
-     * can be used to assert on the requests matched by this rule.    
+     * can be used to assert on the requests matched by this rule.
      */
     thenPassThrough(): Promise<MockedEndpoint> {
         const rule: MockRuleData = {

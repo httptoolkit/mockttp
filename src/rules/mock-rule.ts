@@ -3,9 +3,9 @@
  */
 
 import uuid = require("uuid/v4");
-import * as _ from "lodash";
 
 import { OngoingRequest, CompletedRequest, Response } from "../types";
+import waitForCompletedRequest from "../util/parse-body";
 import {
   MockRule as MockRuleInterface,
   RuleExplainable,
@@ -57,21 +57,7 @@ export class MockRule implements MockRuleInterface {
 
                 await handler.apply(this, handlerArgs);
 
-                let result = _(req).pick([
-                    'protocol',
-                    'method',
-                    'url',
-                    'hostname',
-                    'path',
-                    'headers'
-                ]).assign({
-                    body: {
-                        buffer: await buffer,
-                        text: await req.body.asText().catch(() => undefined),
-                        json: await req.body.asJson().catch(() => undefined),
-                        formData: await req.body.asFormData().catch(() => undefined)
-                    }
-                }).valueOf();
+                let result = await waitForCompletedRequest(req);
 
                 return result;
             })();

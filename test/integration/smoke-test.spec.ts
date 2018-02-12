@@ -12,8 +12,20 @@ describe("Basic HTTP mocking", function () {
         await server.get("/mocked-endpoint").thenReply(200, "mocked data");
 
         let response = await fetch(server.urlFor("/mocked-endpoint"));
-        
+
         expect(await response.text()).to.equal("mocked data");
+    });
+
+    nodeOnly(() => {
+        it("should mock request via callback", async () => {
+            await server.get("/callback-endpoint").thenCallback(req => {
+                return {status: 200, body: "hello"};
+            });
+
+            let response = await fetch(server.urlFor("/callback-endpoint"));
+
+            expect(await response.text()).to.equal("hello");
+        });
     });
 
     it("should reject non-matching requests", async () => {

@@ -7,8 +7,9 @@ import url = require('url');
 import http = require('http');
 import https = require('https');
 import express = require("express");
-import { OngoingRequest } from "../types";
+import {CompletedRequest, OngoingRequest} from "../types";
 import { RequestHandler } from "./mock-rule-types";
+import waitForCompletedRequest from "../util/parse-body";
 
 export type HandlerData = (
     SimpleHandlerData |
@@ -38,7 +39,14 @@ export class CallbackHandlerData {
     readonly type: 'callback' = 'callback';
 
     constructor(
-        public callback: Function
+        public callback: (request: CompletedRequest) => {
+            status?: number;
+            json?: any;
+            body?: string;
+            headers?: {
+                [key: string]: string;
+            };
+        }
     ) {}
 }
 
@@ -68,50 +76,27 @@ const handlerBuilders: { [T in HandlerType]: HandlerBuilder<HandlerDataLookup[T]
     },
     callback: ({callback}: CallbackHandlerData): RequestHandler => {
         let responder = _.assign(async function(request: OngoingRequest, response: express.Response) {
-            let buffer, text, json, formData;
+            let req = await waitForCompletedRequest(request);
+
+            let outResponse;
             try {
-                buffer = await request.body.asBuffer();
-            } catch (err) {
-                buffer = undefined;
-            }
-            try {
-                text = await request.body.asText();
-            } catch (err) {
-                text = undefined;
-            }
-            try {
-                json = await request.body.asJson();
-            } catch (err) {
-                json = undefined;
-            }
-            try {
-                formData = await request.body.asFormData();
-            } catch (err) {
-                formData = undefined;
-            }
-            const cleanRequest = {
-                protocol: request.protocol,
-                method: request.method,
-                url: request.url,
-                hostname: request.hostname,
-                path: request.path,
-                headers: request.headers,
-                body: { buffer, text, json, formData }
-            }
-            let ourResponse;
-            try {
-                ourResponse = await callback(cleanRequest);
+                outResponse = await callback(req);
             } catch (err) {
                 throw err;
             }
-            if (typeof ourResponse.body === 'object') {
-                ourResponse.body = JSON.stringify(ourResponse.body);
+
+            if (!!outResponse.json) {
+                outResponse.headers = outResponse.headers ? outResponse.headers : {}
+                outResponse.headers['Content-Type'] = outResponse.headers['Content-Type'] || 'application/json';
+                outResponse.body = JSON.stringify(outResponse.json);
+                delete outResponse.json;
             }
+
             const defaultResponse = {
                 status: 200,
                 body: '',
                 headers: {},
-                ...ourResponse
+                ...outResponse
             };
             response.writeHead(defaultResponse.status, defaultResponse.headers);
             response.end(defaultResponse.body || "");

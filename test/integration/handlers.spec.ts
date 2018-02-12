@@ -3,7 +3,7 @@ import { getLocal } from "../..";
 import { expect, fetch, nodeOnly } from "../test-utils";
 
 describe("HTTP mock rule handling", function () {
-    let server = getLocal();
+    let server = getLocal({debug:true});
 
     beforeEach(() => server.start());
     afterEach(() => server.stop());
@@ -33,5 +33,18 @@ describe("HTTP mock rule handling", function () {
         let response = await fetch(server.urlFor("/mocked-endpoint"));
         
         expect(await response.headers.get("Content-Type")).to.equal("text/mocked");
+    });
+
+    nodeOnly(() => {
+        it("should allow mocking body as json with callback", async () => {
+            await server.get("/mocked-endpoint").thenCallback(req => {
+                return {status: 200, json: {myVar: "foo"}}
+            });
+
+            let response = await fetch(server.urlFor("/mocked-endpoint"));
+
+            expect(await response.status).to.equal(200);
+            expect(await response.json()).to.deep.equal({myVar: "foo"});
+        });
     });
 });
