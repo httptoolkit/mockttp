@@ -24,7 +24,6 @@ import { MockedEndpoint } from "./mocked-endpoint";
 import { parseBody } from "./parse-body";
 import { filter } from "../util/promise";
 
-
 /**
  * A in-process Mockttp implementation. This starts servers on the local machine in the
  * current process, and exposes methods to directly manage them.
@@ -97,6 +96,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
             this.server.addListener('connect', (req: http.IncomingMessage, socket: net.Socket) => {
                 const [ targetHost, port ] = req.url!.split(':');
 
+
                 if (this.debug) console.log(`Proxying connection for ${targetHost}, with HTTP CONNECT tunnel`);
                 const generatedCert = ca.generateCertificate(targetHost);
 
@@ -166,6 +166,16 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         if (this.server) await this.server.destroy();
         
         this.reset();
+    }
+
+    async pendingMocks(): Promise<any> {
+        var mockedEndpoints = this.mockedEndpoints;
+        var result: string[] = [];
+        for (var mockedEndpoint of mockedEndpoints) {
+            var requests = mockedEndpoint.pendingMocks();
+            result = result.concat(requests);
+        }
+        return result;
     }
 
     enableDebug() {

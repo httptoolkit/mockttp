@@ -128,6 +128,15 @@ export class MockttpStandalone {
         const mockServerRouter = express.Router();
         this.routers[mockPort] = mockServerRouter;
 
+        mockServerRouter.get('/pendingMocks', async (req, res) => {
+            try {
+                var checkRequests = await mockServer.pendingMocks();
+                res.status(200).send(JSON.stringify(checkRequests));
+            } catch (error) {
+                res.status(500).send(JSON.stringify({ message : error.message }));
+            }
+        });
+
         mockServerRouter.post('/stop', async (req, res) => {
             await mockServer.stop();
 

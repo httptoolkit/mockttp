@@ -28,6 +28,7 @@ export interface Mockttp {
      * Stop the mock server and reset the rules.
      */
     stop(): Promise<void>;
+    pendingMocks(): Promise<any>;
 
     /**
      * Enable extra debug output so you can understand exactly what the server is doing.
