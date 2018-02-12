@@ -3,7 +3,7 @@ import { getLocal } from "../..";
 import { expect, fetch, nodeOnly } from "../test-utils";
 
 describe("HTTP mock rule handling", function () {
-    let server = getLocal({debug:true});
+    let server = getLocal();
 
     beforeEach(() => server.start());
     afterEach(() => server.stop());

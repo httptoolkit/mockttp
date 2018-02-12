@@ -1,4 +1,4 @@
-import {OngoingRequest} from "../types";
+import { OngoingRequest } from "../types";
 import * as _ from "lodash";
 
 /**

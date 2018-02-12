@@ -7,7 +7,7 @@ import url = require('url');
 import http = require('http');
 import https = require('https');
 import express = require("express");
-import {CompletedRequest, OngoingRequest} from "../types";
+import { CompletedRequest, OngoingRequest } from "../types";
 import { RequestHandler } from "./mock-rule-types";
 import waitForCompletedRequest from "../util/parse-body";
 

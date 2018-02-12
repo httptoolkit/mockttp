@@ -2,7 +2,7 @@
  * @module MockRule
  */
 
-import {CompletedRequest, Method, MockedEndpoint} from "../types";
+import { CompletedRequest, Method, MockedEndpoint } from "../types";
 
 import {
     MockRuleData
@@ -25,8 +25,8 @@ import {
     WildcardMatcherData
 } from "./matchers";
 
-import {SimpleHandlerData, PassThroughHandlerData, CallbackHandlerData} from "./handlers";
-import {OutgoingHttpHeaders} from "http";
+import { SimpleHandlerData, PassThroughHandlerData, CallbackHandlerData } from "./handlers";
+import { OutgoingHttpHeaders } from "http";
 
 /**
  * @class MockRuleBuilder
