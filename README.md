@@ -54,7 +54,7 @@ const mockServer = require("mockttp").getLocal();
 describe("Mockttp", () => {
     // Start your server
     beforeEach(() => mockServer.start(8080));
-    afterEach(() => mockserver.stop());
+    afterEach(() => mockServer.stop());
 
     it("lets you mock requests, and assert on the results", () =>
         // Mock your endpoints
