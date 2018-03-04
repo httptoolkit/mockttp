@@ -1,11 +1,11 @@
-import { OngoingRequest } from "../types";
-import * as _ from "lodash";
-
 /**
  * @module Internal
  */
 
-export default async function waitForCompletedRequest(request: OngoingRequest) {
+import * as _ from 'lodash';
+import { OngoingRequest } from "../types";
+
+export async function waitForCompletedRequest(request: OngoingRequest) {
     return _(request).pick([
         'protocol',
         'method',

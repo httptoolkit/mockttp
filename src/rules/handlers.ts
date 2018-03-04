@@ -7,9 +7,10 @@ import url = require('url');
 import http = require('http');
 import https = require('https');
 import express = require("express");
+
+import { waitForCompletedRequest } from '../util/request-utils';
 import { CompletedRequest, OngoingRequest } from "../types";
 import { RequestHandler } from "./mock-rule-types";
-import waitForCompletedRequest from "../util/parse-body";
 
 export type HandlerData = (
     SimpleHandlerData |

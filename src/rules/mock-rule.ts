@@ -4,8 +4,9 @@
 
 import uuid = require("uuid/v4");
 
+import { waitForCompletedRequest } from '../util/request-utils';
+
 import { OngoingRequest, CompletedRequest, Response } from "../types";
-import waitForCompletedRequest from "../util/parse-body";
 import {
   MockRule as MockRuleInterface,
   RuleExplainable,
@@ -57,9 +58,7 @@ export class MockRule implements MockRuleInterface {
 
                 await handler.apply(this, handlerArgs);
 
-                let result = await waitForCompletedRequest(req);
-
-                return result;
+                return waitForCompletedRequest(req);
             })();
             
             // Requests are added to rule.requests as soon as they start being handled.
