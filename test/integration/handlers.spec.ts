@@ -46,5 +46,15 @@ describe("HTTP mock rule handling", function () {
             expect(await response.status).to.equal(200);
             expect(await response.json()).to.deep.equal({myVar: "foo"});
         });
+
+        it("should return a 500 if a callback handler throws an exception", async () => {
+            await server.get("/mocked-endpoint").thenCallback((req) => {
+                throw new Error('Oh no!');
+            });
+
+            let response = await fetch(server.urlFor("/mocked-endpoint"));
+
+            expect(await response.status).to.equal(500);
+        });
     });
 });

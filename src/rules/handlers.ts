@@ -84,8 +84,10 @@ const handlerBuilders: { [T in HandlerType]: HandlerBuilder<HandlerDataLookup[T]
             let outResponse: CallbackHandlerResult;
             try {
                 outResponse = await callback(req);
-            } catch (err) {
-                throw err;
+            } catch (error) {
+                response.writeHead(500, 'Callback handler threw an exception');
+                response.end(error.toString());
+                return;
             }
 
             if (!!outResponse.json) {
