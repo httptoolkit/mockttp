@@ -2,7 +2,7 @@
  * @module MockRule
  */
 
-import { Method, MockedEndpoint } from "../types";
+import { CompletedRequest, Method, MockedEndpoint } from "../types";
 
 import {
     MockRuleData
@@ -25,7 +25,7 @@ import {
     WildcardMatcherData
 } from "./matchers";
 
-import { SimpleHandlerData, PassThroughHandlerData } from "./handlers";
+import { SimpleHandlerData, PassThroughHandlerData, CallbackHandlerData, CallbackHandlerResult } from "./handlers";
 import { OutgoingHttpHeaders } from "http";
 
 /**
@@ -36,11 +36,11 @@ import { OutgoingHttpHeaders } from "http";
  * whatever methods you'd like here to define more precise request
  * matching behaviour, control how the request is handled, and how
  * many times this rule should be applied.
- * 
+ *
  * When you're done, call a `.thenX()` method to register the configured rule
  * with the server. These return a promise for a MockedEndpoint, which can be
  * used to verify the details of the requests matched by the rule.
- * 
+ *
  * This returns a promise because rule registration can be asynchronous,
  * either when using a remote server or testing in the browser. Wait for the
  * promise returned by `.thenX()` methods to guarantee that the rule has taken
@@ -135,10 +135,10 @@ export default class MockRuleBuilder {
     /**
      * Reply to matched with with given status and (optionally) body
      * and headers.
-     * 
+     *
      * Calling this method registers the rule with the server, so it
      * starts to handle requests.
-     * 
+     *
      * This method returns a promise that resolves with a mocked endpoint.
      * Wait for the promise to confirm that the rule has taken effect
      * before sending requests to be matched. The mocked endpoint
@@ -154,18 +154,28 @@ export default class MockRuleBuilder {
         return this.addRule(rule);
     }
 
+    thenCallback(callback: (request: CompletedRequest) => CallbackHandlerResult): Promise<MockedEndpoint> {
+        const rule: MockRuleData = {
+            matchers: this.matchers,
+            completionChecker: this.isComplete,
+            handler: new CallbackHandlerData(callback)
+        }
+
+        return this.addRule(rule);
+    }
+
     /**
      * Pass matched requests through to their real destination. This works
-     * for proxied requests only, direct requests will be rejected with 
+     * for proxied requests only, direct requests will be rejected with
      * an error.
-     * 
+     *
      * Calling this method registers the rule with the server, so it
      * starts to handle requests.
-     * 
+     *
      * This method returns a promise that resolves with a mocked endpoint.
      * Wait for the promise to confirm that the rule has taken effect
      * before sending requests to be matched. The mocked endpoint
-     * can be used to assert on the requests matched by this rule.    
+     * can be used to assert on the requests matched by this rule.
      */
     thenPassThrough(): Promise<MockedEndpoint> {
         const rule: MockRuleData = {

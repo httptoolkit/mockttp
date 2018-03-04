@@ -1,5 +1,5 @@
 import { getLocal } from "../..";
-import { expect, fetch, URLSearchParams, Headers } from "../test-utils";
+import { expect, fetch, URLSearchParams, Headers, nodeOnly } from "../test-utils";
 import * as _ from "lodash";
 
 describe("Mockttp explanation messages", function () {
@@ -68,6 +68,21 @@ Match requests making GETs for /endpointA, and then respond with status 200 and 
 Match requests making POSTs for /endpointB, and with form data including {"key":"value"}, and then respond with status 500.
 Match requests making PUTs for /endpointC, and then respond with status 200 and body "good headers", always (seen 0).
 `);
+    });
+
+    nodeOnly(() => {
+        it("should explain callback handlers", async () => {
+            await server.post("/endpointA").thenCallback(() => ({}));
+            await server.post("/endpointB").thenCallback(function handleRequest() { return {}; });
+
+            let response = await fetch(server.urlFor("/non-existent-endpoint"));
+            let text = await response.text();
+
+            expect(text).to.include(`The configured rules are:
+Match requests making POSTs for /endpointA, and then respond using provided callback.
+Match requests making POSTs for /endpointB, and then respond using provided callback (handleRequest).
+`);
+        });
     });
 
     it("should explain received unmatched requests", async () => {

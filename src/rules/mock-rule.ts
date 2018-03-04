@@ -3,7 +3,8 @@
  */
 
 import uuid = require("uuid/v4");
-import * as _ from "lodash";
+
+import { waitForCompletedRequest } from '../util/request-utils';
 
 import { OngoingRequest, CompletedRequest, Response } from "../types";
 import {
@@ -57,23 +58,7 @@ export class MockRule implements MockRuleInterface {
 
                 await handler.apply(this, handlerArgs);
 
-                let result = _(req).pick([
-                    'protocol',
-                    'method',
-                    'url',
-                    'hostname',
-                    'path',
-                    'headers'
-                ]).assign({
-                    body: {
-                        buffer: await buffer,
-                        text: await req.body.asText().catch(() => undefined),
-                        json: await req.body.asJson().catch(() => undefined),
-                        formData: await req.body.asFormData().catch(() => undefined)
-                    }
-                }).valueOf();
-
-                return result;
+                return waitForCompletedRequest(req);
             })();
             
             // Requests are added to rule.requests as soon as they start being handled.
