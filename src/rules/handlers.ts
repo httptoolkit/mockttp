@@ -77,7 +77,7 @@ const handlerBuilders: { [T in HandlerType]: HandlerBuilder<HandlerDataLookup[T]
         }, { explain: () => `respond with status ${status}` + (headers ? `, headers ${JSON.stringify(headers)}` : "") + (data ? ` and body "${data}"` : "") });
         return responder;
     },
-    callback: ({callback}: CallbackHandlerData): RequestHandler => {
+    callback: ({ callback }: CallbackHandlerData): RequestHandler => {
         let responder = _.assign(async function(request: OngoingRequest, response: express.Response) {
             let req = await waitForCompletedRequest(request);
 

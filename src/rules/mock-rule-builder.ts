@@ -54,12 +54,16 @@ export default class MockRuleBuilder {
      * using, not directly. You shouldn't ever need to call this constructor.
      */
     constructor(addRule: (rule: MockRuleData) => Promise<MockedEndpoint>)
-    constructor(method: Method,
-                path: string,
-                addRule: (rule: MockRuleData) => Promise<MockedEndpoint>)
-    constructor(methodOrAddRule: Method | ((rule: MockRuleData) => Promise<MockedEndpoint>),
-                path?: string,
-                addRule?: (rule: MockRuleData) => Promise<MockedEndpoint>) {
+    constructor(
+        method: Method,
+        path: string,
+        addRule: (rule: MockRuleData) => Promise<MockedEndpoint>
+    )
+    constructor(
+        methodOrAddRule: Method | ((rule: MockRuleData) => Promise<MockedEndpoint>),
+        path?: string,
+        addRule?: (rule: MockRuleData) => Promise<MockedEndpoint>
+    ) {
         if (methodOrAddRule instanceof Function) {
             this.matchers.push(new WildcardMatcherData());
             this.addRule = methodOrAddRule;

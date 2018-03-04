@@ -37,8 +37,8 @@ describe("HTTP mock rule handling", function () {
 
     nodeOnly(() => {
         it("should allow mocking body as json with callback", async () => {
-            await server.get("/mocked-endpoint").thenCallback(req => {
-                return {status: 200, json: {myVar: "foo"}}
+            await server.get("/mocked-endpoint").thenCallback((req) => {
+                return { status: 200, json: { myVar: "foo" } }
             });
 
             let response = await fetch(server.urlFor("/mocked-endpoint"));
