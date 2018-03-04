@@ -154,6 +154,23 @@ export default class MockRuleBuilder {
         return this.addRule(rule);
     }
 
+    /**
+     * Call the given callback for any matched requests that are recieved,
+     * and build a response from the result.
+     * 
+     * The callback should return an object, potentially including various
+     * fields to define the response. All fields are optional, and default
+     * to being empty/blank, except for the status, which defaults to 200.
+     * 
+     * Valid fields are:
+     * - `status` (number)
+     * - `body` (string)
+     * - `headers` (object with string keys & values)
+     * - `json` (object, which will be sent as a JSON response)
+     * 
+     * If the callback throws an exception, the server will return a 500
+     * with the exception message.
+     */
     thenCallback(callback: (request: CompletedRequest) => CallbackHandlerResult): Promise<MockedEndpoint> {
         const rule: MockRuleData = {
             matchers: this.matchers,
