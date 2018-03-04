@@ -90,17 +90,14 @@ const handlerBuilders: { [T in HandlerType]: HandlerBuilder<HandlerDataLookup[T]
                 return;
             }
 
-            if (!!outResponse.json) {
-                outResponse.headers = outResponse.headers ? outResponse.headers : {}
-                outResponse.headers['Content-Type'] = outResponse.headers['Content-Type'] || 'application/json';
+            if (outResponse.json !== undefined) {
+                outResponse.headers = _.assign(outResponse.headers || {}, { 'Content-Type': 'application/json' });
                 outResponse.body = JSON.stringify(outResponse.json);
                 delete outResponse.json;
             }
 
             const defaultResponse = {
                 status: 200,
-                body: '',
-                headers: {},
                 ...outResponse
             };
             response.writeHead(defaultResponse.status, defaultResponse.headers);
