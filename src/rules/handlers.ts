@@ -36,18 +36,20 @@ export class SimpleHandlerData {
     ) {}
 }
 
+export interface CallbackHandlerResult {
+    status?: number;
+    json?: any;
+    body?: string;
+    headers?: {
+        [key: string]: string;
+    };
+}
+
 export class CallbackHandlerData {
     readonly type: 'callback' = 'callback';
 
     constructor(
-        public callback: (request: CompletedRequest) => {
-            status?: number;
-            json?: any;
-            body?: string;
-            headers?: {
-                [key: string]: string;
-            };
-        }
+        public callback: (request: CompletedRequest) => CallbackHandlerResult
     ) {}
 }
 
@@ -79,7 +81,7 @@ const handlerBuilders: { [T in HandlerType]: HandlerBuilder<HandlerDataLookup[T]
         let responder = _.assign(async function(request: OngoingRequest, response: express.Response) {
             let req = await waitForCompletedRequest(request);
 
-            let outResponse;
+            let outResponse: CallbackHandlerResult;
             try {
                 outResponse = await callback(req);
             } catch (err) {
