@@ -103,7 +103,7 @@ const handlerBuilders: { [T in HandlerType]: HandlerBuilder<HandlerDataLookup[T]
             };
             response.writeHead(defaultResponse.status, defaultResponse.headers);
             response.end(defaultResponse.body || "");
-        }, { explain: () => `respond for callback ${callback.toString()}` });
+        }, { explain: () => 'respond using provided callback' + (callback.name ? ` (${callback.name})` : '') });
         return responder;
     },
     passthrough: (): RequestHandler => {
