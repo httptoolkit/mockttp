@@ -27,6 +27,7 @@ import {
 
 import { SimpleHandlerData, PassThroughHandlerData, CallbackHandlerData, CallbackHandlerResult } from "./handlers";
 import { OutgoingHttpHeaders } from "http";
+import { merge } from "lodash";
 
 /**
  * @class MockRuleBuilder
@@ -149,6 +150,31 @@ export default class MockRuleBuilder {
             matchers: this.matchers,
             completionChecker: this.isComplete,
             handler: new SimpleHandlerData(status, data, headers)
+        };
+
+        return this.addRule(rule);
+    }
+
+    /**
+     * Reply to matched with the given status and a JSON object, with optionally more headers.
+     *
+     * This method is shorthand for:
+     * server.get(...).thenReply(status, JSON.stringify(object), { 'Content-Type': 'application/json' })
+     *
+     * This method returns a promise that resolves with a mocked endpoint.
+     * Wait for the promise to confirm that the rule has taken effect
+     * before sending requests to be matched. The mocked endpoint
+     * can be used to assert on the requests matched by this rule.
+     */
+    thenJSON(status: number, data: object, headers: OutgoingHttpHeaders = {}): Promise<MockedEndpoint> {
+
+        const defaultHeaders = { 'Content-Type': 'application/json' };
+        merge(defaultHeaders, headers);
+
+        const rule: MockRuleData = {
+            matchers: this.matchers,
+            completionChecker: this.isComplete,
+            handler: new SimpleHandlerData(status, JSON.stringify(data), defaultHeaders)
         };
 
         return this.addRule(rule);
