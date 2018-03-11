@@ -16,9 +16,17 @@ describe("Basic HTTP mocking", function () {
         expect(await response.text()).to.equal("mocked data");
     });
 
+    it("should mock simple matching request with query params", async () => {
+        await server.get("/v3/address/private/validate", { matchByPath: true }).thenReply(200, "mocked data");
+
+        let response = await fetch(server.urlFor("/v3/address/private/validate?address=jehagukoe@example.com"));
+
+        expect(await response.text()).to.equal("mocked data");
+    });
+
     nodeOnly(() => {
         it("should mock request via callback", async () => {
-            await server.get("/callback-endpoint").thenCallback(req => {
+            await server.get("/callback-endpoint").thenCallback(() => {
                 return {status: 200, body: "hello"};
             });
 

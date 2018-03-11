@@ -5,7 +5,8 @@
 import { CompletedRequest, Method, MockedEndpoint } from "../types";
 
 import {
-    MockRuleData
+    MockRuleData,
+    MockRuleCtx
 } from "./mock-rule-types";
 
 import {
@@ -58,18 +59,20 @@ export default class MockRuleBuilder {
     constructor(
         method: Method,
         path: string,
-        addRule: (rule: MockRuleData) => Promise<MockedEndpoint>
+        addRule: (rule: MockRuleData) => Promise<MockedEndpoint>,
+        ctx?: MockRuleCtx
     )
     constructor(
         methodOrAddRule: Method | ((rule: MockRuleData) => Promise<MockedEndpoint>),
         path?: string,
-        addRule?: (rule: MockRuleData) => Promise<MockedEndpoint>
+        addRule?: (rule: MockRuleData) => Promise<MockedEndpoint>,
+        ctx?: MockRuleCtx,
     ) {
         if (methodOrAddRule instanceof Function) {
             this.matchers.push(new WildcardMatcherData());
             this.addRule = methodOrAddRule;
         } else {
-            this.matchers.push(new SimpleMatcherData(methodOrAddRule, path!));
+            this.matchers.push(new SimpleMatcherData(methodOrAddRule, path!, ctx));
             this.addRule = addRule!;
         }
     }
