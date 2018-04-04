@@ -99,12 +99,18 @@ const ScalarResolvers = {
         }
     }),
     
+    Json: new GraphQLScalarType({
+        name: 'Json',
+        description: 'A JSON entity, serialized as a simple JSON string',
+        serialize: (value: any) => JSON.stringify(value),
+        parseValue: (input: string): any => JSON.parse(input),
+        parseLiteral: parseAnyAst
+    }),
+
     Any: new GraphQLScalarType({
         name: 'Any',
         description: 'Wildcard Anything! Here be dragons',
-        serialize: (value: any) => {
-            return JSON.stringify(value);
-        },
+        serialize: (value: any) => JSON.stringify(value),
         parseValue: (input: string): any => JSON.parse(input),
         parseLiteral: parseAnyAst
     }),

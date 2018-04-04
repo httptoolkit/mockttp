@@ -15,15 +15,15 @@ type Request {
     path: String!
     hostname: String!
 
-    headers: Any!
+    headers: Json!
     body: RequestBody!
 }
 
 type RequestBody {
     buffer: Any!
     text: String
-    json: Any
-    formData: Any
+    json: Json
+    formData: Json
 }
 
 type Mutation {
@@ -43,6 +43,7 @@ type Subscription {
 }
 
 scalar Any
+scalar Json
 scalar RequestMatcher
 scalar RequestHandler
 scalar RuleCompletionChecker

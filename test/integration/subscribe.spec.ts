@@ -16,6 +16,7 @@ describe("Request subscriptions", () => {
 
             let seenRequest = await seenRequestPromise;
             expect(seenRequest.method).to.equal('GET');
+            expect(seenRequest.hostname).to.equal('localhost');
             expect(seenRequest.url).to.equal('/mocked-endpoint');
         });
     });

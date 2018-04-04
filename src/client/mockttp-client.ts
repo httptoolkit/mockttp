@@ -225,16 +225,25 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
             operationName: 'OnRequest',
             query: `subscription OnRequest {
                 requestReceived {
-                    url,
+                    protocol,
                     method,
-                    path
+                    url,
+                    path,
+                    hostname,
+
+                    headers
                 }
             }`
         });
 
         result.subscribe({
             next: (value) => {
-                if (value.data) callback((<any> value.data).requestReceived);
+                if (value.data) {
+                    const request = (<any> value.data).requestReceived;
+                    // TODO: Get a proper graphql client that does this automatically from the schema itself
+                    request.headers = JSON.parse(request.headers);
+                    callback(request);
+                }
             },
             error: (e) => {
                 if (this.debug) console.warn('Error in request subscription:', e);
