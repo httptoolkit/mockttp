@@ -4,6 +4,8 @@
 
 import _ = require('lodash');
 import url = require('url');
+import os = require('os');
+import net = require('net');
 import http = require('http');
 import https = require('https');
 import express = require("express");
@@ -11,6 +13,9 @@ import express = require("express");
 import { waitForCompletedRequest } from '../util/request-utils';
 import { CompletedRequest, OngoingRequest } from "../types";
 import { RequestHandler } from "./mock-rule-types";
+import { IncomingMessage } from 'http';
+
+const IPv6_IPv4_PREFIX = '::ffff:';
 
 export type HandlerData = (
     SimpleHandlerData |
@@ -56,6 +61,23 @@ export class CallbackHandlerData {
 export class PassThroughHandlerData {
     readonly type: 'passthrough' = 'passthrough';
 }
+
+// Passthrough handlers need to spot loops - tracking ongoing request ports and the local machine's
+// ip lets us get pretty close to doing that (for 1 step loops, at least):
+
+// We don't think about interface address changes at all here. Very unlikely to be a problem, but
+// we might want to listen for events/periodically update this list some time in future.
+const localAddresses = _(os.networkInterfaces())
+    .map((interfaceAddresses) => interfaceAddresses.map((addressDetails) => addressDetails.address))
+    .flatten()
+    .valueOf();
+
+// Track currently live ports for forwarded connections, so we can spot requests from them later.
+let currentlyForwardingPorts: Array<number> = [];
+
+const isRequestLoop = (remoteAddress: string, remotePort: number) =>
+    // If the request is local, and from a port we're sending a request on right now, we have a loop
+    _.includes(localAddresses, remoteAddress) && _.includes(currentlyForwardingPorts, remotePort)
 
 type HandlerBuilder<D extends HandlerData> = (data: D) => RequestHandler;
 
@@ -108,16 +130,32 @@ const handlerBuilders: { [T in HandlerType]: HandlerBuilder<HandlerDataLookup[T]
     passthrough: (): RequestHandler => {
         return _.assign(async function(clientReq: OngoingRequest, clientRes: express.Response) {
             const { method, originalUrl, headers } = clientReq;
-            const { protocol, hostname, port, path } = url.parse(originalUrl);
+            let { protocol, hostname, port, path } = url.parse(originalUrl);
+
+            const socket: net.Socket = (<any> clientReq).socket;
+            // If it's ipv4 masquerading as v6, strip back to ipv4
+            const remoteAddress = socket.remoteAddress.replace(/^::ffff:/, '');
+
+            if (isRequestLoop(remoteAddress, socket.remotePort)) {
+                throw new Error(
+`Passthrough loop detected. This probably means you're sending a request directly to a passthrough endpoint, \
+which is forwarding it to the target URL, which is a passthrough endpoint, which is forwarding it to the target \
+URL, which is a passthrough endpoint...
+
+You should either explicitly mock a response for this URL (${originalUrl}), or use the server as a proxy, \
+instead of making requests to it directly`);
+            }
+
+            const hostHeader = headers.host;
 
             if (!hostname) {
-                throw new Error(
-`Cannot pass through request to ${clientReq.url}, since it doesn't specify an upstream host.
-To pass requests through, use the mock server as a proxy whilst making requests to the real target server.`);
+                [ hostname, port ] = hostHeader.split(':');
+                protocol = clientReq.protocol + ':';
             }
 
             let makeRequest = protocol === 'https:' ? https.request : http.request;
 
+            let outgoingPort: null | number = null;
             return new Promise<void>((resolve, reject) => {
                 let serverReq = makeRequest({
                     protocol,
@@ -142,6 +180,22 @@ To pass requests through, use the mock server as a proxy whilst making requests 
                     serverRes.pipe(clientRes);
                     serverRes.on('end', resolve);
                     serverRes.on('error', reject);
+                });
+
+                serverReq.on('socket', (socket: net.Socket) => {
+                    // We want the local port - it's not available until we actually connect
+                    socket.on('connect', () => {
+                        // Add this port to our list of active ports
+                        outgoingPort = socket.localPort;
+                        currentlyForwardingPorts.push(outgoingPort);
+                    });
+                    socket.on('close', () => {
+                        // Remove this port from our list of active ports
+                        currentlyForwardingPorts = currentlyForwardingPorts.filter(
+                            (port) => port !== outgoingPort
+                        );
+                        outgoingPort = null;
+                    });
                 });
 
                 clientReq.body.rawStream.pipe(serverReq);

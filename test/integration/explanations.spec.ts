@@ -139,13 +139,18 @@ mockServer.post("/endpoint").withForm({"shouldMatch":"yes"}).thenReply(200, "you
     });
 
     it("should explain why passthrough fails for non-proxy requests", async () => {        
-        server.get("/endpoint").thenPassThrough();
+        await server.get("/endpoint").thenPassThrough();
 
         let result = await fetch(server.urlFor("/endpoint"));
 
         expect(result.status).to.equal(500);
         let body = await result.text();
-        expect(body).to.include('Cannot pass through request to /endpoint, since it doesn\'t specify an upstream host.');
-        expect(body).to.include('To pass requests through, use the mock server as a proxy whilst making requests to the real target server.');
+        expect(body).to.include(
+`Passthrough loop detected. This probably means you're sending a request directly to a passthrough endpoint, \
+which is forwarding it to the target URL, which is a passthrough endpoint, which is forwarding it to the target \
+URL, which is a passthrough endpoint...
+
+You should either explicitly mock a response for this URL (/endpoint), or use the server as a proxy, \
+instead of making requests to it directly`);
     });
 });

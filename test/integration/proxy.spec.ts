@@ -118,6 +118,17 @@ nodeOnly(() => {
                     expect(seenRequests.length).to.equal(1);
                     expect(await seenRequests[0].body.text).to.equal('{"test":true}');
                 });
+
+                it("should successfully pass through non-proxy requests with a host header", async () => {
+                    server.anyRequest().thenPassThrough();
+                    process.env = INITIAL_ENV;
+
+                    let response = JSON.parse(await request.get(server.urlFor("/get?b=c"), {
+                        headers: { host: 'httpbin.org' }
+                    }));
+
+                    expect(response.args.b).to.equal('c');
+                });
             });
         });
     });
