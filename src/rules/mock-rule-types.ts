@@ -17,6 +17,10 @@ export interface MockRule extends Explainable {
     requests: Promise<CompletedRequest>[];
 }
 
+export interface MockRuleCtx {
+    matchByPath?: boolean
+}
+
 export interface MockRuleData {
     matchers: MatcherData[];
     handler: HandlerData

@@ -5,7 +5,7 @@
 import * as _ from "lodash";
 
 import { OngoingRequest, Method } from "../types";
-import { RequestMatcher } from "./mock-rule-types";
+import { RequestMatcher, MockRuleCtx } from "./mock-rule-types";
 import { MockRule } from "./mock-rule";
 import normalizeUrl from "../util/normalize-url";
 
@@ -34,7 +34,8 @@ export class SimpleMatcherData {
 
     constructor(
         public method: Method,
-        public path: string
+        public path: string,
+        public ctx?: MockRuleCtx
     ) {}
 }
 
@@ -90,9 +91,13 @@ const matcherBuilders: { [T in MatcherType]: MatcherBuilder<MatcherDataLookup[T]
         let methodName = Method[data.method];
         let url = normalizeUrl(data.path);
 
-        return _.assign((request: OngoingRequest) =>
-            request.method === methodName && normalizeUrl(request.url) === url
-        , { explain: () => `making ${methodName}s for ${data.path}` });
+        return _.assign((request: OngoingRequest) => {
+            let matchUrl = normalizeUrl(request.url);
+            if (data.ctx && data.ctx.matchByPath === true) {
+                matchUrl = normalizeUrl(request.path)
+            }
+            return request.method === methodName && matchUrl === url
+        }, { explain: () => `making ${methodName}s for ${data.path}` });
     },
 
     header: (data: HeaderMatcherData): RequestMatcher => {

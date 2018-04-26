@@ -4,7 +4,7 @@
 
 import MockRuleBuilder from "./rules/mock-rule-builder";
 import { ProxyConfig, MockedEndpoint, Method, OngoingRequest } from "./types";
-import { MockRuleData } from "./rules/mock-rule-types";
+import { MockRuleData, MockRuleCtx } from "./rules/mock-rule-types";
 import { CAOptions } from './util/tls';
 
 /**
@@ -78,23 +78,23 @@ export interface Mockttp {
     /**
      * Get a builder for a mock rule that will match GET requests for the given path.
      */
-    get(url: string): MockRuleBuilder;
+    get(url: string, ctx?: MockRuleCtx): MockRuleBuilder;
     /**
      * Get a builder for a mock rule that will match POST requests for the given path.
      */
-    post(url: string): MockRuleBuilder;
+    post(url: string, ctx?: MockRuleCtx): MockRuleBuilder;
     /**
      * Get a builder for a mock rule that will match PUT requests for the given path.
      */
-    put(url: string): MockRuleBuilder;
+    put(url: string, ctx?: MockRuleCtx): MockRuleBuilder;
     /**
      * Get a builder for a mock rule that will match DELETE requests for the given path.
      */
-    delete(url: string): MockRuleBuilder;
+    delete(url: string, ctx?: MockRuleCtx): MockRuleBuilder;
     /**
      * Get a builder for a mock rule that will match PATCH requests for the given path.
      */
-    patch(url: string): MockRuleBuilder;
+    patch(url: string, ctx?: MockRuleCtx): MockRuleBuilder;
     /**
      * Get a builder for a mock rule that will match OPTIONS requests for the given path.
      * 
@@ -108,7 +108,7 @@ export interface Mockttp {
      * but if you're testing in a browser you will need to ensure you mock all OPTIONS
      * requests appropriately so that the browser allows your other requests to be sent.
      */
-    options(url: string): MockRuleBuilder;
+    options(url: string, ctx?: MockRuleCtx): MockRuleBuilder;
 
     /**
      * Subscribe to hear about request details as they're received.
@@ -160,27 +160,27 @@ export abstract class AbstractMockttp {
         return new MockRuleBuilder(this.addRule);
     }
 
-    get(url: string): MockRuleBuilder {
-        return new MockRuleBuilder(Method.GET, url, this.addRule);
+    get(url: string, ctx?: MockRuleCtx): MockRuleBuilder {
+        return new MockRuleBuilder(Method.GET, url, this.addRule, ctx);
     }
 
-    post(url: string): MockRuleBuilder {
-        return new MockRuleBuilder(Method.POST, url, this.addRule);
+    post(url: string, ctx?: MockRuleCtx): MockRuleBuilder {
+        return new MockRuleBuilder(Method.POST, url, this.addRule, ctx);
     }
 
-    put(url: string): MockRuleBuilder {
-        return new MockRuleBuilder(Method.PUT, url, this.addRule);
+    put(url: string, ctx?: MockRuleCtx): MockRuleBuilder {
+        return new MockRuleBuilder(Method.PUT, url, this.addRule, ctx);
     }
     
-    delete(url: string): MockRuleBuilder {
-        return new MockRuleBuilder(Method.DELETE, url, this.addRule);
+    delete(url: string, ctx?: MockRuleCtx): MockRuleBuilder {
+        return new MockRuleBuilder(Method.DELETE, url, this.addRule, ctx);
     }
 
-    patch(url: string): MockRuleBuilder {
-        return new MockRuleBuilder(Method.PATCH, url, this.addRule);
+    patch(url: string, ctx?: MockRuleCtx): MockRuleBuilder {
+        return new MockRuleBuilder(Method.PATCH, url, this.addRule, ctx);
     }
 
-    options(url: string): MockRuleBuilder {
+    options(url: string, ctx?: MockRuleCtx): MockRuleBuilder {
         if (this.cors) {
             throw new Error(`Cannot mock OPTIONS requests with CORS enabled.
 
@@ -188,7 +188,7 @@ You can disable CORS by passing { cors: false } to getLocal/getRemote, but this 
 connecting to your mock server from browsers, unless you mock all required OPTIONS preflight \
 responses by hand.`);
         }
-        return new MockRuleBuilder(Method.OPTIONS, url, this.addRule);
+        return new MockRuleBuilder(Method.OPTIONS, url, this.addRule, ctx);
     }
 
 }
