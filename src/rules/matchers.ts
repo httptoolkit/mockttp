@@ -81,8 +81,12 @@ export function buildMatchers(matcherPartData: MatcherData[]): RequestMatcher {
         return _.every(await Promise.all(matchers.map((m) => m(req))));
     }, { explain: function (this: MockRule) {
         if (matchers.length === 1) return matchers[0].explain.apply(this);
+        if (matchers.length === 2) {
+            // With just two explanations, you can just combine them
+            return `${matchers[0].explain.apply(this)} ${matchers[1].explain.apply(this)}`;
+        }
 
-        // Oxford comma separate our matcher explanations
+        // With 3+, we need to oxford comma separate explanations to make them readable
         return matchers.slice(0, -1)
         .map((m) => <string> m.explain.apply(this))
         .join(', ') + ', and ' + matchers.slice(-1)[0].explain.apply(this);
