@@ -32,17 +32,35 @@ responses by hand.`);
     methods.forEach((methodName: Method) => {
         it(`should match requests by ${methodName}`, async () => {
             await server[methodName]('/').thenReply(200, methodName);
-            
-            return expect(fetch(server.url, {
+
+            let result = await fetch(server.url, {
                 method: methodName.toUpperCase(),
-            })).to.have.responseText(methodName);
+            });
+            
+            expect(result).to.have.responseText(methodName);
         });
+    });
+
+    it("should match requests for a matching regex path", async () => {
+        await server.get(/.*.txt/).thenReply(200, 'Fake file');
+
+        let result = await fetch(server.urlFor('/matching-file.txt'));
+        
+        expect(result).to.have.responseText('Fake file');
     });
 
     it("should reject requests for the wrong path", async () => {
         await server.get("/specific-endpoint").thenReply(200, "mocked data");
 
         let result = await fetch(server.url);
+
+        expect(result.status).to.equal(503);
+    });
+
+    it("should reject requests that don't match a regex path", async () => {
+        await server.get(/.*.txt/).thenReply(200, 'Fake file');
+
+        let result = await fetch(server.urlFor('/non-matching-file.css'));
 
         expect(result.status).to.equal(503);
     });

@@ -77,26 +77,38 @@ export interface Mockttp {
     anyRequest(): MockRuleBuilder;
     /**
      * Get a builder for a mock rule that will match GET requests for the given path.
+     * 
+     * The path can be either a string, or a regular expression to match against.
      */
-    get(url: string): MockRuleBuilder;
+    get(url: string | RegExp): MockRuleBuilder;
     /**
      * Get a builder for a mock rule that will match POST requests for the given path.
+     * 
+     * The path can be either a string, or a regular expression to match against.
      */
-    post(url: string): MockRuleBuilder;
+    post(url: string | RegExp): MockRuleBuilder;
     /**
      * Get a builder for a mock rule that will match PUT requests for the given path.
+     * 
+     * The path can be either a string, or a regular expression to match against.
      */
-    put(url: string): MockRuleBuilder;
+    put(url: string | RegExp): MockRuleBuilder;
     /**
      * Get a builder for a mock rule that will match DELETE requests for the given path.
+     * 
+     * The path can be either a string, or a regular expression to match against.
      */
-    delete(url: string): MockRuleBuilder;
+    delete(url: string | RegExp): MockRuleBuilder;
     /**
      * Get a builder for a mock rule that will match PATCH requests for the given path.
+     * 
+     * The path can be either a string, or a regular expression to match against.
      */
-    patch(url: string): MockRuleBuilder;
+    patch(url: string | RegExp): MockRuleBuilder;
     /**
      * Get a builder for a mock rule that will match OPTIONS requests for the given path.
+     * 
+     * The path can be either a string, or a regular expression to match against.
      * 
      * This can only be used if the `cors` option has been set to false.
      * 
@@ -108,7 +120,7 @@ export interface Mockttp {
      * but if you're testing in a browser you will need to ensure you mock all OPTIONS
      * requests appropriately so that the browser allows your other requests to be sent.
      */
-    options(url: string): MockRuleBuilder;
+    options(url: string | RegExp): MockRuleBuilder;
 
     /**
      * Subscribe to hear about request details as they're received.
@@ -160,27 +172,27 @@ export abstract class AbstractMockttp {
         return new MockRuleBuilder(this.addRule);
     }
 
-    get(url: string): MockRuleBuilder {
+    get(url: string | RegExp): MockRuleBuilder {
         return new MockRuleBuilder(Method.GET, url, this.addRule);
     }
 
-    post(url: string): MockRuleBuilder {
+    post(url: string | RegExp): MockRuleBuilder {
         return new MockRuleBuilder(Method.POST, url, this.addRule);
     }
 
-    put(url: string): MockRuleBuilder {
+    put(url: string | RegExp): MockRuleBuilder {
         return new MockRuleBuilder(Method.PUT, url, this.addRule);
     }
     
-    delete(url: string): MockRuleBuilder {
+    delete(url: string | RegExp): MockRuleBuilder {
         return new MockRuleBuilder(Method.DELETE, url, this.addRule);
     }
 
-    patch(url: string): MockRuleBuilder {
+    patch(url: string | RegExp): MockRuleBuilder {
         return new MockRuleBuilder(Method.PATCH, url, this.addRule);
     }
 
-    options(url: string): MockRuleBuilder {
+    options(url: string | RegExp): MockRuleBuilder {
         if (this.cors) {
             throw new Error(`Cannot mock OPTIONS requests with CORS enabled.
 

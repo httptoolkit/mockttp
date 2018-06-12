@@ -19,11 +19,11 @@ describe("Mockttp explanation messages", function () {
         let responseText = await response.text();
 
         expect(responseText).to.include(`
-Match requests making GETs for /endpoint, and then respond with status 200 and body "1", once (seen 0).
-Match requests making GETs for /endpoint, and then respond with status 200 and body "2/3", twice (seen 0).
-Match requests making GETs for /endpoint, and then respond with status 200 and body "4/5/6", thrice (seen 0).
-Match requests making GETs for /endpoint, and then respond with status 200 and body "7/8/9/10", 4 times (seen 0).
-Match requests making GETs for /endpoint, and then respond with status 200 and body "forever", always (seen 0).
+Match requests making GETs, and for /endpoint, and then respond with status 200 and body "1", once (seen 0).
+Match requests making GETs, and for /endpoint, and then respond with status 200 and body "2/3", twice (seen 0).
+Match requests making GETs, and for /endpoint, and then respond with status 200 and body "4/5/6", thrice (seen 0).
+Match requests making GETs, and for /endpoint, and then respond with status 200 and body "7/8/9/10", 4 times (seen 0).
+Match requests making GETs, and for /endpoint, and then respond with status 200 and body "forever", always (seen 0).
 `);
     });
 
@@ -42,11 +42,11 @@ Match requests making GETs for /endpoint, and then respond with status 200 and b
         let responseText = await response.text();
 
         expect(responseText).to.include(`
-Match requests making GETs for /endpoint, and then respond with status 200 and body "1", once (done).
-Match requests making GETs for /endpoint, and then respond with status 200 and body "2/3", twice (done).
-Match requests making GETs for /endpoint, and then respond with status 200 and body "4/5/6", thrice (done).
-Match requests making GETs for /endpoint, and then respond with status 200 and body "7/8/9/10", 4 times (seen 2).
-Match requests making GETs for /endpoint, and then respond with status 200 and body "forever", always (seen 0).
+Match requests making GETs, and for /endpoint, and then respond with status 200 and body "1", once (done).
+Match requests making GETs, and for /endpoint, and then respond with status 200 and body "2/3", twice (done).
+Match requests making GETs, and for /endpoint, and then respond with status 200 and body "4/5/6", thrice (done).
+Match requests making GETs, and for /endpoint, and then respond with status 200 and body "7/8/9/10", 4 times (seen 2).
+Match requests making GETs, and for /endpoint, and then respond with status 200 and body "forever", always (seen 0).
 `);
     });
 
@@ -63,10 +63,10 @@ Match requests making GETs for /endpoint, and then respond with status 200 and b
 
         expect(text).to.include(`No rules were found matching this request.`);
         expect(text).to.include(`The configured rules are:
-Match requests for any method and path, and with headers including {"h":"v"}, and then respond with status 200.
-Match requests making GETs for /endpointA, and then respond with status 200 and body "nice request!", once (done).
-Match requests making POSTs for /endpointB, and with form data including {"key":"value"}, and then respond with status 500.
-Match requests making PUTs for /endpointC, and then respond with status 200 and body "good headers", always (seen 0).
+Match requests for anything, and with headers including {"h":"v"}, and then respond with status 200.
+Match requests making GETs, and for /endpointA, and then respond with status 200 and body "nice request!", once (done).
+Match requests making POSTs, for /endpointB, and with form data including {"key":"value"}, and then respond with status 500.
+Match requests making PUTs, and for /endpointC, and then respond with status 200 and body "good headers", always (seen 0).
 `);
     });
 
@@ -79,8 +79,8 @@ Match requests making PUTs for /endpointC, and then respond with status 200 and 
             let text = await response.text();
 
             expect(text).to.include(`The configured rules are:
-Match requests making POSTs for /endpointA, and then respond using provided callback.
-Match requests making POSTs for /endpointB, and then respond using provided callback (handleRequest).
+Match requests making POSTs, and for /endpointA, and then respond using provided callback.
+Match requests making POSTs, and for /endpointB, and then respond using provided callback (handleRequest).
 `);
         });
     });

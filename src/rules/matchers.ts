@@ -11,7 +11,9 @@ import normalizeUrl from "../util/normalize-url";
 
 export type MatcherData = (
     WildcardMatcherData |
-    SimpleMatcherData |
+    MethodMatcherData |
+    SimplePathMatcherData |
+    RegexPathMatcherData |
     HeaderMatcherData |
     FormDataMatcherData
 );
@@ -20,7 +22,9 @@ export type MatcherType = MatcherData['type'];
 
 export type MatcherDataLookup = {
     'wildcard': WildcardMatcherData,
-    'simple': SimpleMatcherData,
+    'method': MethodMatcherData,
+    'simple-path': SimplePathMatcherData,
+    'regex-path': RegexPathMatcherData,
     'header': HeaderMatcherData,
     'form-data': FormDataMatcherData
 }
@@ -29,13 +33,29 @@ export class WildcardMatcherData {
     readonly type: 'wildcard' = 'wildcard';
 }
 
-export class SimpleMatcherData {
-    readonly type: 'simple' = 'simple';
+export class MethodMatcherData {
+    readonly type: 'method' = 'method';
 
     constructor(
-        public method: Method,
+        public method: Method
+    ) {}
+}
+
+export class SimplePathMatcherData {
+    readonly type: 'simple-path' = 'simple-path';
+
+    constructor(
         public path: string
     ) {}
+}
+
+export class RegexPathMatcherData {
+    readonly type: 'regex-path' = 'regex-path';
+    readonly regexString: string;
+
+    constructor(regex: RegExp) {
+        this.regexString = regex.source;
+    }
 }
 
 export class HeaderMatcherData {
@@ -83,16 +103,31 @@ type MatcherBuilder<D extends MatcherData> = (data: D) => RequestMatcher
 
 const matcherBuilders: { [T in MatcherType]: MatcherBuilder<MatcherDataLookup[T]> } = {
     wildcard: (): RequestMatcher => {
-        return _.assign(() => true, { explain: () => 'for any method and path' })
+        return _.assign(() => true, { explain: () => 'for anything' })
     },
 
-    simple: (data: SimpleMatcherData): RequestMatcher => {
+    method: (data: MethodMatcherData): RequestMatcher => {
         let methodName = Method[data.method];
+
+        return _.assign((request: OngoingRequest) =>
+            request.method === methodName
+        , { explain: () => `making ${methodName}s` });
+    },
+
+    'simple-path': (data: SimplePathMatcherData): RequestMatcher => {
         let url = normalizeUrl(data.path);
 
         return _.assign((request: OngoingRequest) =>
-            request.method === methodName && normalizeUrl(request.url) === url
-        , { explain: () => `making ${methodName}s for ${data.path}` });
+            normalizeUrl(request.url) === url
+        , { explain: () => `for ${data.path}` });
+    },
+
+    'regex-path': (data: RegexPathMatcherData): RequestMatcher => {
+        let url = new RegExp(data.regexString);
+
+        return _.assign((request: OngoingRequest) =>
+            url.test(normalizeUrl(request.url))
+        , { explain: () => `for paths matching /${data.regexString}/` });
     },
 
     header: (data: HeaderMatcherData): RequestMatcher => {

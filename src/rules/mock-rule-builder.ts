@@ -18,8 +18,10 @@ import {
 } from "./completion-checkers";
 
 import {
-    SimpleMatcherData,
-    MatcherData,
+    MatcherData,    
+    MethodMatcherData,
+    SimplePathMatcherData,
+    RegexPathMatcherData,
     HeaderMatcherData,
     FormDataMatcherData,
     WildcardMatcherData
@@ -57,19 +59,27 @@ export default class MockRuleBuilder {
     constructor(addRule: (rule: MockRuleData) => Promise<MockedEndpoint>)
     constructor(
         method: Method,
-        path: string,
+        path: string | RegExp,
         addRule: (rule: MockRuleData) => Promise<MockedEndpoint>
     )
     constructor(
         methodOrAddRule: Method | ((rule: MockRuleData) => Promise<MockedEndpoint>),
-        path?: string,
+        path?: string | RegExp,
         addRule?: (rule: MockRuleData) => Promise<MockedEndpoint>
     ) {
         if (methodOrAddRule instanceof Function) {
             this.matchers.push(new WildcardMatcherData());
             this.addRule = methodOrAddRule;
+            return;
+        }
+
+        this.matchers.push(new MethodMatcherData(methodOrAddRule));
+        
+        if (path instanceof RegExp) {
+            this.matchers.push(new RegexPathMatcherData(path));
+            this.addRule = addRule!;
         } else {
-            this.matchers.push(new SimpleMatcherData(methodOrAddRule, path!));
+            this.matchers.push(new SimplePathMatcherData(path!));
             this.addRule = addRule!;
         }
     }
