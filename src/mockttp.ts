@@ -106,6 +106,12 @@ export interface Mockttp {
      */
     patch(url: string | RegExp): MockRuleBuilder;
     /**
+     * Get a builder for a mock rule that will match HEAD requests for the given path.
+     * 
+     * The path can be either a string, or a regular expression to match against.
+     */
+    head(url: string | RegExp): MockRuleBuilder;
+    /**
      * Get a builder for a mock rule that will match OPTIONS requests for the given path.
      * 
      * The path can be either a string, or a regular expression to match against.
@@ -190,6 +196,10 @@ export abstract class AbstractMockttp {
 
     patch(url: string | RegExp): MockRuleBuilder {
         return new MockRuleBuilder(Method.PATCH, url, this.addRule);
+    }
+
+    head(url: string | RegExp): MockRuleBuilder {
+        return new MockRuleBuilder(Method.HEAD, url, this.addRule);
     }
 
     options(url: string | RegExp): MockRuleBuilder {

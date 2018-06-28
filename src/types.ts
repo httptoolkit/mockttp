@@ -13,6 +13,7 @@ export enum Method {
     PUT,
     DELETE,
     PATCH,
+    HEAD,
     OPTIONS
 }
 
