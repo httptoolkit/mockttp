@@ -13,7 +13,7 @@ chai.use(sinonChai);
 chai.use(chaiAsPromised);
 chai.use(chaiFetch);
 
-function isNode() {
+export function isNode() {
     return typeof window === 'undefined';
 }
 

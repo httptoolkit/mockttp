@@ -54,7 +54,7 @@ Match requests making GETs for /endpoint, and then respond with status 200 and b
         await server.anyRequest().withHeaders({ 'h': 'v' }).thenReply(200);
         await server.get("/endpointA").once().thenReply(200, "nice request!");
         await server.post("/endpointB").withForm({ key: 'value' }).thenReply(500);
-        await server.put("/endpointC").always().thenReply(200, "good headers");
+        await server.put("/endpointC").always().thenCloseConnection();
 
         await fetch(server.urlFor("/endpointA"));
         let response = await fetch(server.urlFor("/non-existent-endpoint"));
@@ -66,7 +66,7 @@ Match requests making GETs for /endpoint, and then respond with status 200 and b
 Match requests for anything with headers including {"h":"v"}, and then respond with status 200.
 Match requests making GETs for /endpointA, and then respond with status 200 and body "nice request!", once (done).
 Match requests making POSTs, for /endpointB, and with form data including {"key":"value"}, and then respond with status 500.
-Match requests making PUTs for /endpointC, and then respond with status 200 and body "good headers", always (seen 0).
+Match requests making PUTs for /endpointC, and then close the connection, always (seen 0).
 `);
     });
 

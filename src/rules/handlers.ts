@@ -20,7 +20,8 @@ const IPv6_IPv4_PREFIX = '::ffff:';
 export type HandlerData = (
     SimpleHandlerData |
     CallbackHandlerData |
-    PassThroughHandlerData
+    PassThroughHandlerData |
+    CloseConnectionHandlerData
 );
 
 export type HandlerType = HandlerData['type'];
@@ -28,7 +29,8 @@ export type HandlerType = HandlerData['type'];
 export type HandlerDataLookup = {
     'simple': SimpleHandlerData,
     'callback': CallbackHandlerData,
-    'passthrough': PassThroughHandlerData
+    'passthrough': PassThroughHandlerData,
+    'close-connection': CloseConnectionHandlerData
 }
 
 export class SimpleHandlerData {
@@ -60,6 +62,10 @@ export class CallbackHandlerData {
 
 export class PassThroughHandlerData {
     readonly type: 'passthrough' = 'passthrough';
+}
+
+export class CloseConnectionHandlerData {
+    readonly type: 'close-connection' = 'close-connection';
 }
 
 // Passthrough handlers need to spot loops - tracking ongoing request ports and the local machine's
@@ -207,5 +213,12 @@ instead of making requests to it directly`);
                 });
             });
         }, { explain: () => 'pass the request through to the real server' });
-    }
+    },
+    'close-connection': (): RequestHandler => {
+        let responder = _.assign(async function(request: OngoingRequest, response: express.Response) {
+            const socket: net.Socket = (<any> request).socket;
+            socket.end();
+        }, { explain: () => 'close the connection' });
+        return responder;
+    },
 };

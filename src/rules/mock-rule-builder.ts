@@ -27,7 +27,13 @@ import {
     WildcardMatcherData
 } from "./matchers";
 
-import { SimpleHandlerData, PassThroughHandlerData, CallbackHandlerData, CallbackHandlerResult } from "./handlers";
+import { 
+    SimpleHandlerData,
+    PassThroughHandlerData,
+    CallbackHandlerData,
+    CallbackHandlerResult,
+    CloseConnectionHandlerData
+} from "./handlers";
 import { OutgoingHttpHeaders } from "http";
 import { merge } from "lodash";
 
@@ -235,6 +241,28 @@ export default class MockRuleBuilder {
             matchers: this.matchers,
             completionChecker: this.isComplete,
             handler: new PassThroughHandlerData()
+        };
+
+        return this.addRule(rule);
+    }
+
+    /**
+     * Closes connections that match this rule immediately, without
+     * any status code or response.
+     *
+     * Calling this method registers the rule with the server, so it
+     * starts to handle requests.
+     *
+     * This method returns a promise that resolves with a mocked endpoint.
+     * Wait for the promise to confirm that the rule has taken effect
+     * before sending requests to be matched. The mocked endpoint
+     * can be used to assert on the requests matched by this rule.
+     */
+    thenCloseConnection(): Promise<MockedEndpoint> {
+        const rule: MockRuleData = {
+            matchers: this.matchers,
+            completionChecker: this.isComplete,
+            handler: new CloseConnectionHandlerData()
         };
 
         return this.addRule(rule);
