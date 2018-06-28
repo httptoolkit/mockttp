@@ -7,8 +7,8 @@ describe("Method & path request matching", function () {
     beforeEach(() => server.start());
     afterEach(() => server.stop());
 
-    type Method = 'get' | 'post' | 'put' | 'delete' | 'patch' | 'options';
-    let methods: Method[] = [ 'get', 'post', 'put', 'delete', 'patch', 'options' ];
+    type Method = 'get' | 'post' | 'put' | 'delete' | 'patch' | 'head' | 'options';
+    let methods: Method[] = [ 'get', 'post', 'put', 'delete', 'patch', 'head', 'options' ];
 
     browserOnly(() => {
         methods = methods.filter((m) => m !== 'options');

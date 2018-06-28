@@ -24,6 +24,7 @@ import {
     RegexPathMatcherData,
     HeaderMatcherData,
     FormDataMatcherData,
+    RawBodyMatcherData,
     WildcardMatcherData
 } from "./matchers";
 
@@ -106,6 +107,14 @@ export default class MockRuleBuilder {
      */
     withForm(formData: { [key: string]: string }): MockRuleBuilder {
         this.matchers.push(new FormDataMatcherData(formData));
+        return this;
+    }
+
+    /**
+     * Match only requests whose bodies exactly match the given string
+     */
+    withBody(content: string): MockRuleBuilder {
+        this.matchers.push(new RawBodyMatcherData(content));
         return this;
     }
 

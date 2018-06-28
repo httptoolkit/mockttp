@@ -15,7 +15,8 @@ export type MatcherData = (
     SimplePathMatcherData |
     RegexPathMatcherData |
     HeaderMatcherData |
-    FormDataMatcherData
+    FormDataMatcherData |
+    RawBodyMatcherData
 );
 
 export type MatcherType = MatcherData['type'];
@@ -26,7 +27,8 @@ export type MatcherDataLookup = {
     'simple-path': SimplePathMatcherData,
     'regex-path': RegexPathMatcherData,
     'header': HeaderMatcherData,
-    'form-data': FormDataMatcherData
+    'form-data': FormDataMatcherData,
+    'raw-body': RawBodyMatcherData
 }
 
 export class WildcardMatcherData {
@@ -71,6 +73,14 @@ export class FormDataMatcherData {
 
     constructor(
         public formData: { [key: string]: string }
+    ) {}
+}
+
+export class RawBodyMatcherData {
+    readonly type: 'raw-body' = 'raw-body';
+
+    constructor(
+        public content: string
     ) {}
 }
 
@@ -147,6 +157,12 @@ const matcherBuilders: { [T in MatcherType]: MatcherBuilder<MatcherDataLookup[T]
             request.headers["content-type"].indexOf("application/x-www-form-urlencoded") !== -1 &&
             _.isMatch(await request.body.asFormData(), data.formData)
         , { explain: () => `with form data including ${JSON.stringify(data.formData)}` });
+    },
+
+    'raw-body': (data: RawBodyMatcherData): RequestMatcher => {
+        return _.assign(async (request: OngoingRequest) =>
+            (await request.body.asText()) === data.content
+        , { explain: () => `with body '${data.content}'` });
     }
 };
 
