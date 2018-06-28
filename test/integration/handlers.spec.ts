@@ -1,6 +1,6 @@
 import HttpProxyAgent = require('http-proxy-agent');
 import { getLocal } from "../..";
-import { expect, fetch, nodeOnly, isNode } from "../test-utils";
+import { expect, fetch, nodeOnly, isNode, delay } from "../test-utils";
 
 describe("HTTP mock rule handling", function () {
     let server = getLocal();
@@ -45,13 +45,24 @@ describe("HTTP mock rule handling", function () {
         expect(await response.json()).to.deep.equal({myVar: 'foo'});
     });
 
-    it("should allow forcibly close the connection", async () => {
+    it("should allow forcibly closing the connection", async () => {
         await server.get('/mocked-endpoint').thenCloseConnection();
 
         let result = await fetch(server.urlFor('/mocked-endpoint')).catch(e => e);
 
         expect(result).to.be.instanceof(Error);
         expect(result.message).to.contain(isNode() ? 'socket hang up' : 'Network request failed');
+    });
+
+    it("should allow leaving connections to time out", async () => {
+        await server.get('/mocked-endpoint').thenTimeout();
+
+        let result = await Promise.race<any>([
+            fetch(server.urlFor('/mocked-endpoint')),
+            delay(500).then(() => 'timed out')
+        ])
+
+        expect(result).to.equal('timed out');
     });
 
     nodeOnly(() => {

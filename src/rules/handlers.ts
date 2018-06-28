@@ -21,7 +21,8 @@ export type HandlerData = (
     SimpleHandlerData |
     CallbackHandlerData |
     PassThroughHandlerData |
-    CloseConnectionHandlerData
+    CloseConnectionHandlerData |
+    TimeoutHandlerData
 );
 
 export type HandlerType = HandlerData['type'];
@@ -30,7 +31,8 @@ export type HandlerDataLookup = {
     'simple': SimpleHandlerData,
     'callback': CallbackHandlerData,
     'passthrough': PassThroughHandlerData,
-    'close-connection': CloseConnectionHandlerData
+    'close-connection': CloseConnectionHandlerData,
+    'timeout': TimeoutHandlerData
 }
 
 export class SimpleHandlerData {
@@ -66,6 +68,10 @@ export class PassThroughHandlerData {
 
 export class CloseConnectionHandlerData {
     readonly type: 'close-connection' = 'close-connection';
+}
+
+export class TimeoutHandlerData {
+    readonly type: 'timeout' = 'timeout';
 }
 
 // Passthrough handlers need to spot loops - tracking ongoing request ports and the local machine's
@@ -221,4 +227,11 @@ instead of making requests to it directly`);
         }, { explain: () => 'close the connection' });
         return responder;
     },
+    'timeout': (): RequestHandler => {
+        let responder = _.assign(async function(request: OngoingRequest, response: express.Response) {
+            // Do nothing, leaving the socket open, but never sending a response.
+            return;
+        }, { explain: () => 'timeout (never respond)' });
+        return responder;
+    }
 };

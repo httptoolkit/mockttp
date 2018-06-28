@@ -33,7 +33,8 @@ import {
     PassThroughHandlerData,
     CallbackHandlerData,
     CallbackHandlerResult,
-    CloseConnectionHandlerData
+    CloseConnectionHandlerData,
+    TimeoutHandlerData
 } from "./handlers";
 import { OutgoingHttpHeaders } from "http";
 import { merge } from "lodash";
@@ -272,6 +273,28 @@ export default class MockRuleBuilder {
             matchers: this.matchers,
             completionChecker: this.isComplete,
             handler: new CloseConnectionHandlerData()
+        };
+
+        return this.addRule(rule);
+    }
+
+    /**
+     * Hold open connections that match this rule, but never respond
+     * with anything at all, typically causing a timeout on the client side.
+     *
+     * Calling this method registers the rule with the server, so it
+     * starts to handle requests.
+     *
+     * This method returns a promise that resolves with a mocked endpoint.
+     * Wait for the promise to confirm that the rule has taken effect
+     * before sending requests to be matched. The mocked endpoint
+     * can be used to assert on the requests matched by this rule.
+     */
+    thenTimeout(): Promise<MockedEndpoint> {
+        const rule: MockRuleData = {
+            matchers: this.matchers,
+            completionChecker: this.isComplete,
+            handler: new TimeoutHandlerData()
         };
 
         return this.addRule(rule);
