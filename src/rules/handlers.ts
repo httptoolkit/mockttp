@@ -35,12 +35,18 @@ export type HandlerDataLookup = {
     'timeout': TimeoutHandlerData
 }
 
+export type SerializedBuffer = { type: 'Buffer', data: number[] };
+
+function isSerializedBuffer(obj: any): obj is SerializedBuffer {
+    return obj && obj.type === 'Buffer';
+}
+
 export class SimpleHandlerData {
     readonly type: 'simple' = 'simple';
 
     constructor(
         public status: number,
-        public data?: string,
+        public data?: string | Buffer | SerializedBuffer,
         public headers?: http.OutgoingHttpHeaders
     ) {}
 }
@@ -107,6 +113,11 @@ const handlerBuilders: { [T in HandlerType]: HandlerBuilder<HandlerDataLookup[T]
     simple: ({ data, status, headers }: SimpleHandlerData): RequestHandler => {
         let responder = _.assign(async function(request: OngoingRequest, response: express.Response) {
             response.writeHead(status, headers);
+            
+            if (isSerializedBuffer(data)) {
+                data = new Buffer(<any> data);
+            }
+
             response.end(data || "");
         }, { explain: () => `respond with status ${status}` + (headers ? `, headers ${JSON.stringify(headers)}` : "") + (data ? ` and body "${data}"` : "") });
         return responder;
