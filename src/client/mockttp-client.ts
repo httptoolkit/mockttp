@@ -16,7 +16,7 @@ const {
     Headers
 } = getFetch();
 
-import { ProxyConfig, Method, MockedEndpoint, OngoingRequest } from "../types";
+import { ProxyConfig, Method, MockedEndpoint, OngoingRequest, CompletedRequest } from "../types";
 import {
   MockRule,
   MockRuleData
@@ -237,13 +237,13 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
         return new MockedEndpointClient(ruleId, this.getEndpointData(ruleId));
     }
 
-    public on(event: 'request', callback: (req: OngoingRequest) => void): Promise<void> {
+    public on(event: 'request', callback: (req: CompletedRequest) => void): Promise<void> {
         if (event !== 'request') return Promise.resolve();
 
         const url = `ws://localhost:${DEFAULT_STANDALONE_PORT}/server/${this.mockServerConfig!.port}/subscription`;
         const client = new SubscriptionClient(url, { }, WebSocket);
 
-        let result = client.request({
+        client.request({
             operationName: 'OnRequest',
             query: `subscription OnRequest {
                 requestReceived {
@@ -253,12 +253,16 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                     path,
                     hostname,
 
-                    headers
+                    headers,
+                    body {
+                        buffer,
+                        text,
+                        json,
+                        formData
+                    }
                 }
             }`
-        });
-
-        result.subscribe({
+        }).subscribe({
             next: (value) => {
                 if (value.data) {
                     const request = (<any> value.data).requestReceived;
@@ -267,9 +271,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                     callback(request);
                 }
             },
-            error: (e) => {
-                if (this.debug) console.warn('Error in request subscription:', e);
-            }
+            error: (e) => this.debug && console.warn('Error in request subscription:', e)
         });
 
         return new Promise((resolve, reject) => {

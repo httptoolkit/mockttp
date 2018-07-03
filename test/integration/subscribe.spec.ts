@@ -1,4 +1,4 @@
-import { getLocal, getStandalone, getRemote, OngoingRequest } from "../..";
+import { getLocal, getStandalone, getRemote, CompletedRequest } from "../..";
 import { expect, fetch, nodeOnly, delay, getDeferred } from "../test-utils";
 
 describe("Request subscriptions", () => {
@@ -8,16 +8,17 @@ describe("Request subscriptions", () => {
         beforeEach(() => server.start());
         afterEach(() => server.stop());
 
-        it("should notify with request details after a request is made", async () => {
-            let seenRequestPromise = getDeferred<OngoingRequest>();
+        it("should notify with request details & body when a request is ready", async () => {
+            let seenRequestPromise = getDeferred<CompletedRequest>();
             await server.on('request', (r) => seenRequestPromise.resolve(r));
 
-            fetch(server.urlFor("/mocked-endpoint"));
+            fetch(server.urlFor("/mocked-endpoint"), { method: 'POST', body: 'body-text' });
 
             let seenRequest = await seenRequestPromise;
-            expect(seenRequest.method).to.equal('GET');
+            expect(seenRequest.method).to.equal('POST');
             expect(seenRequest.hostname).to.equal('localhost');
             expect(seenRequest.url).to.equal('/mocked-endpoint');
+            expect(seenRequest.body.text).to.equal('body-text');
         });
     });
 
@@ -33,15 +34,17 @@ describe("Request subscriptions", () => {
             afterEach(() => client.stop());
             
             it("should notify with request details after a request is made", async () => {
-                let seenRequestPromise = getDeferred<OngoingRequest>();
+                let seenRequestPromise = getDeferred<CompletedRequest>();
                 await client.on('request', (r) => seenRequestPromise.resolve(r));
 
-                fetch(client.urlFor("/mocked-endpoint"));
+                fetch(client.urlFor("/mocked-endpoint"), { method: 'POST', body: 'body-text' });
 
                 let seenRequest = await seenRequestPromise;
-                expect(seenRequest.method).to.equal('GET');
+                expect(seenRequest.method).to.equal('POST');
                 expect(seenRequest.url).to.equal('/mocked-endpoint');
+                expect(seenRequest.body.text).to.equal('body-text');
             });
+
         });
     });
 });

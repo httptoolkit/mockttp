@@ -3,7 +3,7 @@
  */
 
 import MockRuleBuilder from "./rules/mock-rule-builder";
-import { ProxyConfig, MockedEndpoint, Method, OngoingRequest } from "./types";
+import { ProxyConfig, MockedEndpoint, Method, OngoingRequest, CompletedRequest } from "./types";
 import { MockRuleData } from "./rules/mock-rule-types";
 import { CAOptions } from './util/tls';
 
@@ -130,15 +130,15 @@ export interface Mockttp {
 
     /**
      * Subscribe to hear about request details as they're received.
-     * 
+     *
      * This is only useful in some niche use cases, such as logging all requests seen
      * by the server independently of the rules defined.
-     * 
+     *
      * The callback will be called asynchronously from request handling. This function
      * returns a promise, and the callback is not guaranteed to be registered until
      * the promise is resolved.
      */
-    on(event: 'request', callback: (req: OngoingRequest) => void): Promise<void>;
+    on(event: 'request', callback: (req: CompletedRequest) => void): Promise<void>;
 }
 
 export interface MockttpOptions {
@@ -156,7 +156,7 @@ export abstract class AbstractMockttp {
 
     abstract get url(): string;
     abstract addRule: (ruleData: MockRuleData) => Promise<MockedEndpoint>;
-    abstract on(event: 'request', callback: (req: OngoingRequest) => void): Promise<void>;
+    abstract on(event: 'request', callback: (req: CompletedRequest) => void): Promise<void>;
 
     constructor(options: MockttpOptions) {
         this.debug = options.debug || false;

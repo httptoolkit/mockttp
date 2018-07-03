@@ -23,6 +23,7 @@ import { MockRule } from "../rules/mock-rule";
 import { MockedEndpoint } from "./mocked-endpoint";
 import { parseBody } from "./parse-body";
 import { filter } from "../util/promise";
+import { waitForCompletedRequest } from "../util/request-utils";
 
 
 /**
@@ -203,13 +204,19 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         return Promise.resolve(new MockedEndpoint(rule));
     }
 
-    public on(event: 'request', callback: (req: OngoingRequest) => void): Promise<void> {
+    public on(event: 'request', callback: (req: CompletedRequest) => void): Promise<void> {
         this.eventEmitter.on(event, callback);
         return Promise.resolve();
     }
 
     private announceRequestAsync(request: OngoingRequest) {
-        setImmediate(() => this.eventEmitter.emit('request', request));
+        setImmediate(() => {
+            waitForCompletedRequest(request)
+            .then((req: CompletedRequest) => {
+                this.eventEmitter.emit('request', req);
+            })
+            .catch(console.error);
+        });
     }
 
     private async handleRequest(request: OngoingRequest, response: express.Response) {
@@ -219,7 +226,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
         try {
             let matchingRules = await filter(this.rules, (r) => r.matches(request));
-            let nextRule = matchingRules.filter((r) => !this.isComplete(r, matchingRules))[0]
+            let nextRule = matchingRules.filter((r) => !this.isComplete(r, matchingRules))[0];
 
             if (nextRule) {
                 if (this.debug) console.log(`Request matched rule: ${nextRule.explain()}`);
