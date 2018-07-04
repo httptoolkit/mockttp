@@ -7,7 +7,124 @@ import * as _ from "lodash";
 import { OngoingRequest, Method } from "../types";
 import { RequestMatcher } from "./mock-rule-types";
 import { MockRule } from "./mock-rule";
+import { Serializable } from "../util/serialization";
 import normalizeUrl from "../util/normalize-url";
+
+export class WildcardMatcherData extends Serializable {
+    readonly type: 'wildcard' = 'wildcard';
+
+    buildMatcher() {
+        return _.assign(
+            () => true,
+            { explain: () => 'for anything' }
+        );
+    }
+}
+
+export class MethodMatcherData extends Serializable {
+    readonly type: 'method' = 'method';
+
+    constructor(
+        public method: Method
+    ) {
+        super();
+    }
+    
+    buildMatcher() {
+        let methodName = Method[this.method];
+
+        return _.assign((request: OngoingRequest) =>
+            request.method === methodName
+        , { explain: () => `making ${methodName}s` });
+    }
+}
+
+export class SimplePathMatcherData extends Serializable {
+    readonly type: 'simple-path' = 'simple-path';
+
+    constructor(
+        public path: string
+    ) {
+        super();
+    }
+
+    buildMatcher() {
+        let url = normalizeUrl(this.path);
+
+        return _.assign((request: OngoingRequest) =>
+            normalizeUrl(request.url) === url
+        , { explain: () => `for ${this.path}` });
+    }
+}
+
+export class RegexPathMatcherData extends Serializable {
+    readonly type: 'regex-path' = 'regex-path';
+    readonly regexString: string;
+
+    constructor(regex: RegExp) {
+        super();
+        this.regexString = regex.source;
+    }
+
+    buildMatcher() {
+        let url = new RegExp(this.regexString);
+
+        return _.assign((request: OngoingRequest) =>
+            url.test(normalizeUrl(request.url))
+        , { explain: () => `for paths matching /${this.regexString}/` });
+    }
+}
+
+export class HeaderMatcherData extends Serializable {
+    readonly type: 'header' = 'header';
+
+    constructor(
+        public headers: { [key: string]: string },
+    ) {
+        super();
+    }
+
+    buildMatcher() {
+        let lowerCasedHeaders = _.mapKeys(this.headers, (value: string, key: string) => key.toLowerCase());
+        return _.assign(
+            (request: OngoingRequest) => _.isMatch(request.headers, lowerCasedHeaders)
+        , { explain: () => `with headers including ${JSON.stringify(this.headers)}` });
+    }
+}
+
+export class FormDataMatcherData extends Serializable {
+    readonly type: 'form-data' = 'form-data';
+
+    constructor(
+        public formData: { [key: string]: string }
+    ) {
+        super();
+    }
+
+    buildMatcher() {
+        return _.assign(async (request: OngoingRequest) =>
+            !!request.headers["content-type"] &&
+            request.headers["content-type"].indexOf("application/x-www-form-urlencoded") !== -1 &&
+            _.isMatch(await request.body.asFormData(), this.formData)
+        , { explain: () => `with form data including ${JSON.stringify(this.formData)}` });
+    }
+}
+
+export class RawBodyMatcherData extends Serializable {
+    readonly type: 'raw-body' = 'raw-body';
+
+    constructor(
+        public content: string
+    ) {
+        super();
+    }
+
+    buildMatcher() {
+        return _.assign(async (request: OngoingRequest) =>
+            (await request.body.asText()) === this.content
+        , { explain: () => `with body '${this.content}'` });
+    }
+}
 
 export type MatcherData = (
     WildcardMatcherData |
@@ -19,9 +136,7 @@ export type MatcherData = (
     RawBodyMatcherData
 );
 
-export type MatcherType = MatcherData['type'];
-
-export type MatcherDataLookup = {
+export const MatcherDataLookup = {
     'wildcard': WildcardMatcherData,
     'method': MethodMatcherData,
     'simple-path': SimplePathMatcherData,
@@ -31,61 +146,8 @@ export type MatcherDataLookup = {
     'raw-body': RawBodyMatcherData
 }
 
-export class WildcardMatcherData {
-    readonly type: 'wildcard' = 'wildcard';
-}
-
-export class MethodMatcherData {
-    readonly type: 'method' = 'method';
-
-    constructor(
-        public method: Method
-    ) {}
-}
-
-export class SimplePathMatcherData {
-    readonly type: 'simple-path' = 'simple-path';
-
-    constructor(
-        public path: string
-    ) {}
-}
-
-export class RegexPathMatcherData {
-    readonly type: 'regex-path' = 'regex-path';
-    readonly regexString: string;
-
-    constructor(regex: RegExp) {
-        this.regexString = regex.source;
-    }
-}
-
-export class HeaderMatcherData {
-    readonly type: 'header' = 'header';
-
-    constructor(
-        public headers: { [key: string]: string },
-    ) {}
-}
-
-export class FormDataMatcherData {
-    readonly type: 'form-data' = 'form-data';
-
-    constructor(
-        public formData: { [key: string]: string }
-    ) {}
-}
-
-export class RawBodyMatcherData {
-    readonly type: 'raw-body' = 'raw-body';
-
-    constructor(
-        public content: string
-    ) {}
-}
-
 export function buildMatchers(matcherPartData: MatcherData[]): RequestMatcher {
-    const matchers = matcherPartData.map(buildMatcher);
+    const matchers = matcherPartData.map(m => m.buildMatcher());
 
     return _.assign(async function matchRequest(req: OngoingRequest) {
         return _.every(await Promise.all(matchers.map((m) => m(req))));
@@ -102,69 +164,6 @@ export function buildMatchers(matcherPartData: MatcherData[]): RequestMatcher {
         .join(', ') + ', and ' + matchers.slice(-1)[0].explain.apply(this);
     } });
 }
-
-export function buildMatcher
-    <T extends MatcherType, D extends MatcherDataLookup[T]>
-    (matcherPartData: D): RequestMatcher
-{
-    // Neither of these casts should really be required imo, seem like TS bugs
-    const type = <T> matcherPartData.type;
-    const builder = <MatcherBuilder<D>> matcherBuilders[type];
-    return builder(matcherPartData);
-}
-
-type MatcherBuilder<D extends MatcherData> = (data: D) => RequestMatcher
-
-const matcherBuilders: { [T in MatcherType]: MatcherBuilder<MatcherDataLookup[T]> } = {
-    wildcard: (): RequestMatcher => {
-        return _.assign(() => true, { explain: () => 'for anything' })
-    },
-
-    method: (data: MethodMatcherData): RequestMatcher => {
-        let methodName = Method[data.method];
-
-        return _.assign((request: OngoingRequest) =>
-            request.method === methodName
-        , { explain: () => `making ${methodName}s` });
-    },
-
-    'simple-path': (data: SimplePathMatcherData): RequestMatcher => {
-        let url = normalizeUrl(data.path);
-
-        return _.assign((request: OngoingRequest) =>
-            normalizeUrl(request.url) === url
-        , { explain: () => `for ${data.path}` });
-    },
-
-    'regex-path': (data: RegexPathMatcherData): RequestMatcher => {
-        let url = new RegExp(data.regexString);
-
-        return _.assign((request: OngoingRequest) =>
-            url.test(normalizeUrl(request.url))
-        , { explain: () => `for paths matching /${data.regexString}/` });
-    },
-
-    header: (data: HeaderMatcherData): RequestMatcher => {
-        let lowerCasedHeaders = _.mapKeys(data.headers, (value: string, key: string) => key.toLowerCase());
-        return _.assign(
-            (request: OngoingRequest) => _.isMatch(request.headers, lowerCasedHeaders)
-        , { explain: () => `with headers including ${JSON.stringify(data.headers)}` });
-    },
-
-    'form-data': (data: FormDataMatcherData): RequestMatcher => {
-        return _.assign(async (request: OngoingRequest) =>
-            !!request.headers["content-type"] &&
-            request.headers["content-type"].indexOf("application/x-www-form-urlencoded") !== -1 &&
-            _.isMatch(await request.body.asFormData(), data.formData)
-        , { explain: () => `with form data including ${JSON.stringify(data.formData)}` });
-    },
-
-    'raw-body': (data: RawBodyMatcherData): RequestMatcher => {
-        return _.assign(async (request: OngoingRequest) =>
-            (await request.body.asText()) === data.content
-        , { explain: () => `with body '${data.content}'` });
-    }
-};
 
 function combineMatchers(matcherA: RequestMatcher, matcherB: RequestMatcher): RequestMatcher {
     return _.assign(

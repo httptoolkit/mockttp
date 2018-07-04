@@ -3,6 +3,78 @@
  */
 
 import { RuleCompletionChecker, MockRule, RuleExplainable } from './mock-rule-types';
+import { Serializable } from '../util/serialization';
+
+export class AlwaysData extends Serializable {
+    readonly type: 'always' = 'always';
+
+    buildCompletionChecker() {
+        return withExplanation(
+            () => false,
+            function (this: MockRule) {
+                return explainUntil(this.requests, Infinity, 'always');
+            }
+        );
+    }
+}
+
+export class OnceData extends Serializable {
+    readonly type: 'once' = 'once';
+
+    buildCompletionChecker() {
+        return withExplanation(
+            checkTimes(1),
+            function (this: MockRule) {
+                return explainUntil(this.requests, 1, 'once');
+            }
+        );
+    }
+}
+
+export class TwiceData extends Serializable {
+    readonly type: 'twice' = 'twice';
+
+    buildCompletionChecker() {
+        return withExplanation(
+            checkTimes(2),
+            function (this: MockRule) {
+                return explainUntil(this.requests, 2, 'twice');
+            }
+        )
+    }
+}
+
+export class ThriceData extends Serializable {
+    readonly type: 'thrice' = 'thrice';
+
+    buildCompletionChecker() {
+        return withExplanation(
+            checkTimes(3),
+            function (this: MockRule) {
+                return explainUntil(this.requests, 3, 'thrice');
+            }
+        )
+    }
+}
+
+export class TimesData extends Serializable {
+    readonly type: 'times' = 'times';
+    
+    constructor(public count: number) {
+        super();
+    }
+
+    buildCompletionChecker() {
+        let count = this.count;
+
+        return withExplanation(
+            checkTimes(count),
+            function (this: MockRule) {
+                return explainUntil(this.requests, count, `${count} times`);
+            }
+        )
+    }
+}
 
 export type CompletionCheckerData = (
     AlwaysData |
@@ -12,9 +84,7 @@ export type CompletionCheckerData = (
     TimesData
 )
 
-export type CompletionCheckerType = CompletionCheckerData['type'];
-
-export type CompletionCheckerDataLookup = {
+export const CompletionCheckerDataLookup = {
     'always': AlwaysData,
     'once': OnceData,
     'twice': TwiceData,
@@ -22,77 +92,13 @@ export type CompletionCheckerDataLookup = {
     'times': TimesData
 }
 
-export class AlwaysData {
-    readonly type: 'always' = 'always';
-    constructor() {}
+export function buildCompletionChecker(data?: CompletionCheckerData): RuleCompletionChecker | undefined {
+    if (data) {
+        return data.buildCompletionChecker();
+    } else {
+        return undefined;
+    }
 }
-
-export class OnceData {
-    readonly type: 'once' = 'once';
-    constructor() {}
-}
-
-export class TwiceData {
-    readonly type: 'twice' = 'twice';
-    constructor() {}
-}
-
-export class ThriceData {
-    readonly type: 'thrice' = 'thrice';
-    constructor() {}
-}
-
-export class TimesData {
-    readonly type: 'times' = 'times';
-    constructor(public count: number) { }
-}
-
-type CompletionCheckerBuilder<D extends CompletionCheckerData> = (data: D) => RuleCompletionChecker;
-
-export function buildCompletionChecker
-    <T extends CompletionCheckerType, D extends CompletionCheckerDataLookup[T]>
-    (completionCheckerData?: D): RuleCompletionChecker | undefined
-{
-    if (!completionCheckerData) return;
-
-    // Neither of these casts should really be required imo, seem like TS bugs
-    const type = <T> completionCheckerData.type;
-    const builder = <CompletionCheckerBuilder<D>> completionCheckerBuilders[type];
-    return builder(completionCheckerData);
-}
-
-const completionCheckerBuilders: { [T in CompletionCheckerType]: CompletionCheckerBuilder<CompletionCheckerDataLookup[T]> } = {
-    'always': () => withExplanation(
-        () => false,
-        function (this: MockRule) {
-            return explainUntil(this.requests, Infinity, 'always');
-        }
-    ),
-    'once': () => withExplanation(
-        checkTimes(1),
-        function (this: MockRule) {
-            return explainUntil(this.requests, 1, 'once');
-        }
-    ),
-    'twice': () => withExplanation(
-        checkTimes(2),
-        function (this: MockRule) {
-            return explainUntil(this.requests, 2, 'twice');
-        }
-    ),
-    'thrice': () => withExplanation(
-        checkTimes(3),
-        function (this: MockRule) {
-            return explainUntil(this.requests, 3, 'thrice');
-        }
-    ),
-    'times': ({ count }: TimesData) => withExplanation(
-        checkTimes(count),
-        function (this: MockRule) {
-            return explainUntil(this.requests, count, `${count} times`);
-        }
-    )
-};
 
 function checkTimes(n: number): () => boolean {
     return function (this: MockRule) {

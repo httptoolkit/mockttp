@@ -20,6 +20,7 @@ import { CompletionCheckerData } from "../rules/completion-checkers";
 import MockttpServer from "../server/mockttp-server";
 import { Method, CompletedRequest, MockedEndpoint, MockedEndpointData } from "../types";
 import { MockRuleData } from "../rules/mock-rule-types";
+import { deserializeRuleData } from "../rules/mock-rule";
 
 const REQUEST_RECEIVED_TOPIC = 'request-received';
 
@@ -143,8 +144,8 @@ export function buildStandaloneModel(mockServer: MockttpServer): IResolvers {
         },
 
         Mutation: {
-            addRule: async (__: any, { input }: { input: MockRuleData }) => {
-                return mockServer.addRule(input);
+            addRule: async (__: any, { input }: { input: any }) => {
+                return mockServer.addRule(deserializeRuleData(input));
             },
 
             reset: () => {

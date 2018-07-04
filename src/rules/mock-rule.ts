@@ -4,6 +4,7 @@
 
 import uuid = require("uuid/v4");
 
+import { deserialize } from '../util/serialization';
 import { waitForCompletedRequest } from '../util/request-utils';
 
 import { OngoingRequest, CompletedRequest, Response } from "../types";
@@ -22,11 +23,24 @@ import * as completion from "./completion-checkers";
 
 export function serializeRuleData(data: MockRuleData) {
     return {
-        matchers: data.matchers,
+        matchers: data.matchers.map(m => m.serialize()),
         handler: data.handler,
         completionChecker: data.completionChecker
     }
 };
+
+export function deserializeRuleData(data: any): MockRuleData {
+    return { 
+        matchers: data.matchers.map((m: any) =>
+            deserialize(m, matching.MatcherDataLookup)
+        ),
+        handler: deserialize(data.handler, handling.HandlerDataLookup),
+        completionChecker: data.completionChecker && deserialize(
+            data.completionChecker,
+            completion.CompletionCheckerDataLookup
+        )
+    };
+}
 
 export class MockRule implements MockRuleInterface {
     public matches: RequestMatcher;
