@@ -151,10 +151,6 @@ export function buildStandaloneModel(mockServer: MockttpServer): IResolvers {
             reset: () => {
                 mockServer.reset();
                 return true;
-            },
-
-            stop: () => {
-                throw new Error('...stop?');
             }
         },
 

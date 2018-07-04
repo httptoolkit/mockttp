@@ -29,7 +29,6 @@ type RequestBody {
 type Mutation {
     addRule(input: MockRule!): MockedEndpoint!
     reset: Boolean!
-    stop: Boolean!
 }
 
 input MockRule {
