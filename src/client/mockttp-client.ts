@@ -6,6 +6,7 @@ import TypedError = require('typed-error');
 import getFetch = require('fetch-ponyfill');
 import _ = require('lodash');
 import * as WebSocket from 'universal-websocket-client';
+import connectWebSocketStream = require('websocket-stream');
 import { SubscriptionClient } from 'subscriptions-transport-ws';
 
 const {
@@ -26,6 +27,7 @@ import { MockServerConfig } from "../standalone/mockttp-standalone";
 import { serializeRuleData } from "../rules/mock-rule";
 import { MockedEndpointData, DEFAULT_STANDALONE_PORT } from "../types";
 import { MockedEndpointClient } from "./mocked-endpoint-client";
+import { Duplex } from 'stream';
 
 export class ConnectionError extends TypedError { }
 
@@ -70,6 +72,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
 
     private mockServerOptions: MockttpOptions;
     private mockServerConfig: MockServerConfig | undefined;
+    private mockServerStream: Duplex | undefined;
 
     constructor(mockServerOptions: MockttpOptions = {}) {
         super(_.defaults(mockServerOptions, {
@@ -116,6 +119,17 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
         }
     }
 
+    private openStreamToMockServer(config: MockServerConfig): Promise<Duplex> {
+        const stream = connectWebSocketStream(`ws://localhost:${DEFAULT_STANDALONE_PORT}/server/${config.port}/stream`, {
+            objectMode: true
+        });
+
+        return new Promise((resolve, reject) => {
+            stream.once('connect', () => resolve(stream));
+            stream.once('error', reject);
+        });
+    }
+
     private async requestFromMockServer<T>(path: string, options?: RequestInit): Promise<T> {
         if (!this.mockServerConfig) throw new Error('Not connected to mock server');
 
@@ -157,22 +171,30 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
         if (this.mockServerConfig) throw new Error('Server is already started');
 
         const path = port ? `/start?port=${port}` : '/start';
-        this.mockServerConfig = await this.requestFromStandalone<MockServerConfig>(path, {
+        let mockServerConfig = await this.requestFromStandalone<MockServerConfig>(path, {
             method: 'POST',
             headers: new Headers({
                 'Content-Type': 'application/json'
             }),
             body: JSON.stringify(this.mockServerOptions)
         });
+
+        // Also open a stream connection, for 2-way communication we might need later.
+        this.mockServerStream = await this.openStreamToMockServer(mockServerConfig);
+
+        // We don't persist the config or resolve this promise until everything is set up
+        this.mockServerConfig = mockServerConfig;
     }
 
     async stop(): Promise<void> {
         if (!this.mockServerConfig) return;
 
+        this.mockServerStream!.end();
         await this.requestFromMockServer<void>('/stop', {
             method: 'POST'
         });
-        this.mockServerConfig = undefined;
+
+        this.mockServerConfig = this.mockServerStream = undefined;
     }
 
     enableDebug(): void {
@@ -208,7 +230,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                         id
                     }
             }`, {
-                newRule: serializeRuleData(rule)
+                newRule: serializeRuleData(rule, { clientStream: this.mockServerStream })
             }
         )).data.addRule.id;
 
@@ -218,7 +240,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
     public on(event: 'request', callback: (req: OngoingRequest) => void): Promise<void> {
         if (event !== 'request') return Promise.resolve();
 
-        const url = `ws://localhost:${DEFAULT_STANDALONE_PORT}/server/${this.mockServerConfig!.port}/`;
+        const url = `ws://localhost:${DEFAULT_STANDALONE_PORT}/server/${this.mockServerConfig!.port}/subscription`;
         const client = new SubscriptionClient(url, { }, WebSocket);
 
         let result = client.request({

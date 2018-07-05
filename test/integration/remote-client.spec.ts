@@ -43,6 +43,16 @@ nodeOnly(() => {
                 expect(response).to.equal("mocked data");
             });
 
+            it("should successfully mock requests with live interactions as normal", async () => {
+                const endpointMock = await client.get("/mocked-endpoint").thenCallback((req) => {
+                    return { status: 200, body: 'mocked data' }
+                });
+
+                const response = await request.get(client.urlFor("/mocked-endpoint"));
+
+                expect(response).to.equal("mocked data");
+            });
+
             it("should let you verify requests as normal", async () => {
                 const endpointMock = await client.get("/mocked-endpoint").thenReply(200, "mocked data");
                 await request.get(client.urlFor("/mocked-endpoint"));

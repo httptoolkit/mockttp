@@ -4,7 +4,7 @@
 
 import uuid = require("uuid/v4");
 
-import { deserialize } from '../util/serialization';
+import { deserialize, SerializationOptions } from '../util/serialization';
 import { waitForCompletedRequest } from '../util/request-utils';
 
 import { OngoingRequest, CompletedRequest, Response } from "../types";
@@ -21,23 +21,24 @@ import * as matching from "./matchers";
 import * as handling from "./handlers";
 import * as completion from "./completion-checkers";
 
-export function serializeRuleData(data: MockRuleData) {
+export function serializeRuleData(data: MockRuleData, options?: SerializationOptions) {
     return {
-        matchers: data.matchers.map(m => m.serialize()),
-        handler: data.handler,
-        completionChecker: data.completionChecker
+        matchers: data.matchers.map(m => m.serialize(options)),
+        handler: data.handler.serialize(options),
+        completionChecker: data.completionChecker && data.completionChecker.serialize(options)
     }
 };
 
-export function deserializeRuleData(data: any): MockRuleData {
+export function deserializeRuleData(data: any, options?: SerializationOptions): MockRuleData {
     return { 
         matchers: data.matchers.map((m: any) =>
-            deserialize(m, matching.MatcherDataLookup)
+            deserialize(m, matching.MatcherDataLookup, options)
         ),
-        handler: deserialize(data.handler, handling.HandlerDataLookup),
+        handler: deserialize(data.handler, handling.HandlerDataLookup, options),
         completionChecker: data.completionChecker && deserialize(
             data.completionChecker,
-            completion.CompletionCheckerDataLookup
+            completion.CompletionCheckerDataLookup,
+            options
         )
     };
 }

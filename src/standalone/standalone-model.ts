@@ -21,6 +21,7 @@ import MockttpServer from "../server/mockttp-server";
 import { Method, CompletedRequest, MockedEndpoint, MockedEndpointData } from "../types";
 import { MockRuleData } from "../rules/mock-rule-types";
 import { deserializeRuleData } from "../rules/mock-rule";
+import { Duplex } from "stream";
 
 const REQUEST_RECEIVED_TOPIC = 'request-received';
 
@@ -117,7 +118,7 @@ const ScalarResolvers = {
     }),
 };
 
-export function buildStandaloneModel(mockServer: MockttpServer): IResolvers {
+export function buildStandaloneModel(mockServer: MockttpServer, stream: Duplex): IResolvers {
     const pubsub = new PubSub();
 
     mockServer.on('request', (request) => {
@@ -145,7 +146,7 @@ export function buildStandaloneModel(mockServer: MockttpServer): IResolvers {
 
         Mutation: {
             addRule: async (__: any, { input }: { input: any }) => {
-                return mockServer.addRule(deserializeRuleData(input));
+                return mockServer.addRule(deserializeRuleData(input, { clientStream: stream }));
             },
 
             reset: () => {

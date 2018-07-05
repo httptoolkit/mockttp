@@ -15,12 +15,15 @@ import { graphqlExpress } from 'apollo-server-express';
 import { GraphQLSchema, GraphQLScalarType, execute, subscribe } from 'graphql';
 import { makeExecutableSchema } from 'graphql-tools';
 import { SubscriptionServer } from 'subscriptions-transport-ws';
+import connectWebSocketStream = require('websocket-stream');
+import DuplexPassthrough = require('duplex-passthrough');
 
 import destroyable, { DestroyableServer } from "../util/destroyable-server";
 import MockttpServer from "../server/mockttp-server";
 import { buildStandaloneModel } from "./standalone-model";
 import { DEFAULT_STANDALONE_PORT } from '../types';
 import { MockttpOptions } from '../mockttp';
+import { Duplex, PassThrough } from 'stream';
 
 export interface StandaloneServerOptions {
     debug?: boolean;
@@ -75,11 +78,11 @@ export class MockttpStandalone {
         });
     }
 
-    private loadSchema(schemaFilename: string, mockServer: MockttpServer): Promise<GraphQLSchema> {
+    private loadSchema(schemaFilename: string, mockServer: MockttpServer, stream: Duplex): Promise<GraphQLSchema> {
         return fs.readFile(path.join(__dirname, schemaFilename), 'utf8')
         .then((schemaString) => makeExecutableSchema({
             typeDefs: schemaString,
-            resolvers: buildStandaloneModel(mockServer)
+            resolvers: buildStandaloneModel(mockServer, stream)
         }));
     }
 
@@ -90,14 +93,30 @@ export class MockttpStandalone {
             this.server = destroyable(this.app.listen(DEFAULT_STANDALONE_PORT, resolve));
 
             this.server.on('upgrade', (req: Request, socket: net.Socket, head: Buffer) => {
-                let serverMatch = req.url.match(/\/server\/(\d+)\/?$/)
-                if (serverMatch) {
-                    let port = parseInt(serverMatch[1], 10);
+                let matchesServer = req.url.match(/^\/server\/(\d+)\//);
+
+                if (matchesServer) {
+                    let port = parseInt(matchesServer[1], 10);
                     if (this.subscriptionServers[port]) {
                         let wsServer = (<any> this.subscriptionServers[port]).wsServer;
-                        wsServer.handleUpgrade(req, socket, head, (ws: net.Socket) => {
-                            wsServer.emit('connection', ws);
-                        });
+
+                        let isSubscriptionRequest = req.url.match(/^\/server\/\d+\/subscription$/);
+                        let isStreamRequest = req.url.match(/^\/server\/\d+\/stream$/);
+    
+                        if (isSubscriptionRequest) {
+                            wsServer.handleUpgrade(req, socket, head, (ws: net.Socket) => {
+                                wsServer.emit('connection', ws);
+                            });
+                        } else if (isStreamRequest) {
+                            wsServer.handleUpgrade(req, socket, head, (ws: net.Socket) => {
+                                let newClientStream = connectWebSocketStream(ws, { objectMode: true });
+                                newClientStream.pipe(this.liveClientStreams[port], { end: false });
+                                this.liveClientStreams[port].pipe(newClientStream);
+                            });
+                        } else {
+                            console.warn(`Unrecognized websocket request for unknown server path ${req.url}`);
+                            socket.destroy();
+                        }
                     } else {
                         console.warn(`Unrecognized websocket request for unknown server port ${port}`);
                         socket.destroy();
@@ -112,6 +131,7 @@ export class MockttpStandalone {
 
     private routers: { [port: number]: express.Router } = { };
     private subscriptionServers: { [port: number]: SubscriptionServer } = { };
+    private liveClientStreams: { [port: number]: Duplex } = { };
 
     private async startMockServer(options: MockttpOptions, port?: number): Promise<{
         mockPort: number,
@@ -133,13 +153,25 @@ export class MockttpStandalone {
 
             this.mockServers = _.reject(this.mockServers, mockServer);
             delete this.routers[mockPort];
+            delete this.subscriptionServers[mockPort];
+
+            this.liveClientStreams[mockPort].end();
+            delete this.liveClientStreams[mockPort];
 
             res.status(200).send(JSON.stringify({
                 success: true
             }));
         });
 
-        const schema = await this.loadSchema('schema.gql', mockServer);
+        const serverSideStream = new DuplexPassthrough(null, { objectMode: true });
+        const clientSideStream = new DuplexPassthrough(null, { objectMode: true });
+
+        serverSideStream._writer.pipe(clientSideStream._reader);
+        clientSideStream._writer.pipe(serverSideStream._reader);
+
+        this.liveClientStreams[mockPort] = clientSideStream;
+
+        const schema = await this.loadSchema('schema.gql', mockServer, serverSideStream);
 
         this.subscriptionServers[mockPort] = SubscriptionServer.create({
             schema, execute, subscribe

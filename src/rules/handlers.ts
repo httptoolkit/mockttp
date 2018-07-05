@@ -9,11 +9,12 @@ import net = require('net');
 import http = require('http');
 import https = require('https');
 import express = require("express");
+import uuid = require('uuid/v4');
 
 import { IncomingMessage } from 'http';
 
 import { waitForCompletedRequest } from '../util/request-utils';
-import { Serializable } from "../util/serialization";
+import { Serializable, SerializationOptions } from "../util/serialization";
 
 import { CompletedRequest, OngoingRequest } from "../types";
 import { RequestHandler } from "./mock-rule-types";
@@ -61,13 +62,116 @@ export interface CallbackHandlerResult {
     };
 }
 
+export interface SerializedCallbackHandlerData {
+    type: string;
+    topicId: string
+};
+
+interface StreamMessage {
+    topicId: string;
+    requestId: string;
+}
+
+interface CallbackRequestMessage extends StreamMessage {
+    args: [CompletedRequest];
+}
+
+interface CallbackResponseMessage extends StreamMessage {
+    error?: Error;
+    result?: CallbackHandlerResult;
+}
+
 export class CallbackHandlerData extends Serializable {
     readonly type: 'callback' = 'callback';
 
     constructor(
-        public callback: (request: CompletedRequest) => CallbackHandlerResult
+        public callback: (request: CompletedRequest) => CallbackHandlerResult | Promise<CallbackHandlerResult>
     ) {
         super();
+    }
+
+    serialize(options?: SerializationOptions): SerializedCallbackHandlerData {
+        if (!options || !options.clientStream) {
+            throw new Error('Callback handler transfer requires a streaming client connection.');
+        }
+
+        const { clientStream } = options;
+
+        // The topic id is used to identify the client-side source rule, so when a message comes
+        // across we know which callback needs to be run.
+        const topicId = uuid();
+
+        // When we receive a request from the server: check it's us, call the callback, stream back the result.
+        clientStream.on('data', async (streamMsg) => {
+            let serverRequest: CallbackRequestMessage = JSON.parse(streamMsg.toString());
+            let { requestId, topicId: requestTopicId } = serverRequest;
+
+            // This message isn't meant for us.
+            if (topicId !== requestTopicId) return;
+
+            try {
+                let result: CallbackHandlerResult = await this.callback.apply(null, serverRequest.args);
+
+                clientStream.write(JSON.stringify(<CallbackResponseMessage> {
+                    topicId,
+                    requestId,
+                    result
+                }));
+            } catch (error) {
+                clientStream.write(JSON.stringify(<CallbackResponseMessage> {
+                    topicId,
+                    requestId,
+                    error
+                }));
+            }
+        });
+
+        return { type: this.type, topicId };
+    }
+
+    static deserialize({ topicId }: SerializedCallbackHandlerData, options?: SerializationOptions): CallbackHandlerData {
+        if (!options || !options.clientStream) {
+            throw new Error('Callback handler transfer requires a streaming client connection.');
+        }
+
+        const { clientStream } = options;
+
+        let outstandingRequests: { [id: string]: (error?: Error, result?: CallbackHandlerResult) => void } = {};
+
+        const responseListener = (streamMsg: string | Buffer) => {            
+            let clientResponse: CallbackResponseMessage = JSON.parse(streamMsg.toString());
+            let { requestId } = clientResponse;
+
+            if (outstandingRequests[requestId]) {
+                outstandingRequests[requestId](clientResponse.error, clientResponse.result);
+                clientStream.removeListener('data', responseListener);
+            }
+        };
+
+        // Listen to the client for responses to our callbacks
+        clientStream.on('data', responseListener);
+
+        // Call the client's callback (via stream), and save a handler on our end for
+        // the response that comes back.
+        return new CallbackHandlerData((request) => {
+            return new Promise((resolve, reject) => {
+                let requestId = uuid();
+                outstandingRequests[requestId] = (error?: Error, result?: CallbackHandlerResult) => {
+                    if (error) {
+                        reject(error);
+                    } else {
+                        resolve(result);
+                    }
+                    delete outstandingRequests[requestId];
+                };
+
+                clientStream.write(JSON.stringify(<CallbackRequestMessage> {
+                    topicId,
+                    requestId,
+                    args: [request]
+                }));
+            });
+        });
     }
 
     buildHandler() {

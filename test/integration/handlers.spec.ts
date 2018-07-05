@@ -73,26 +73,24 @@ describe("HTTP mock rule handling", function () {
         expect(result).to.equal('timed out');
     });
 
-    nodeOnly(() => {
-        it("should allow mocking body as json with callback", async () => {
-            await server.get("/mocked-endpoint").thenCallback((req) => {
-                return { status: 200, json: { myVar: "foo" } }
-            });
-
-            let response = await fetch(server.urlFor("/mocked-endpoint"));
-
-            expect(await response.status).to.equal(200);
-            expect(await response.json()).to.deep.equal({myVar: "foo"});
+    it("should allow mocking body as json with callback", async () => {
+        await server.get("/mocked-endpoint").thenCallback((req) => {
+            return { status: 200, json: { myVar: "foo" } }
         });
 
-        it("should return a 500 if a callback handler throws an exception", async () => {
-            await server.get("/mocked-endpoint").thenCallback((req) => {
-                throw new Error('Oh no!');
-            });
+        let response = await fetch(server.urlFor("/mocked-endpoint"));
 
-            let response = await fetch(server.urlFor("/mocked-endpoint"));
+        expect(await response.status).to.equal(200);
+        expect(await response.json()).to.deep.equal({myVar: "foo"});
+    });
 
-            expect(await response.status).to.equal(500);
+    it("should return a 500 if a callback handler throws an exception", async () => {
+        await server.get("/mocked-endpoint").thenCallback((req) => {
+            throw new Error('Oh no!');
         });
+
+        let response = await fetch(server.urlFor("/mocked-endpoint"));
+
+        expect(await response.status).to.equal(500);
     });
 });
