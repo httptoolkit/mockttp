@@ -278,6 +278,9 @@ export default class MockRuleBuilder {
      * Pass matched requests through to their real destination. This works
      * for proxied requests only, direct requests will be rejected with
      * an error.
+     * 
+     * Specifying forwardToLocation will foward requests to that location
+     * instead of the address in the original url.
      *
      * Calling this method registers the rule with the server, so it
      * starts to handle requests.
@@ -287,11 +290,11 @@ export default class MockRuleBuilder {
      * before sending requests to be matched. The mocked endpoint
      * can be used to assert on the requests matched by this rule.
      */
-    thenPassThrough(): Promise<MockedEndpoint> {
+    thenPassThrough(forwardToLocation?: string): Promise<MockedEndpoint> {
         const rule: MockRuleData = {
             matchers: this.matchers,
             completionChecker: this.isComplete,
-            handler: new PassThroughHandlerData()
+            handler: new PassThroughHandlerData(forwardToLocation)
         };
 
         return this.addRule(rule);

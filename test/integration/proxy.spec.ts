@@ -2,6 +2,7 @@ import _ = require("lodash");
 import { getLocal, Mockttp } from "../..";
 import request = require("request-promise-native");
 import { expect, nodeOnly } from "../test-utils";
+import { MockedEndpoint, CompletedRequest } from "../../dist/types";
 
 const INITIAL_ENV = _.cloneDeep(process.env);
 
@@ -52,7 +53,7 @@ nodeOnly(() => {
             });
         });
 
-        describe("with an HTTPS config", () => {
+        describe.skip("with an HTTPS config", () => {
             beforeEach(async () => {
                 server = getLocal({
                     https: {
@@ -129,6 +130,45 @@ nodeOnly(() => {
 
                     expect(response.args.b).to.equal('c');
                 });
+            });
+        });
+
+        describe("when forwardToLocation specified", () => {
+            let remoteServer: Mockttp;
+            let remoteEndpointMock: MockedEndpoint;
+            let seenRequests: CompletedRequest[];
+
+            beforeEach(async () => {
+                server = getLocal();
+                await server.start();
+                process.env = _.merge({}, process.env, server.proxyEnv);
+
+                remoteServer = getLocal();
+                await remoteServer.start();
+                
+                const forwardToLocation = `http://localhost:${remoteServer.port}/foo`;
+                remoteEndpointMock = await remoteServer.anyRequest().thenReply(200, "mocked data");
+                
+                await server.anyRequest().thenPassThrough(forwardToLocation);
+                await request.get(server.urlFor("/get"));
+
+                seenRequests = await remoteEndpointMock.getSeenRequests();
+            });
+
+            afterEach(async () => {
+                await remoteServer.stop();
+            })
+
+            it("server run on different ports", async () => {
+                expect(remoteServer.port).to.not.equal(server.port);
+            });
+            
+            it("request is forwarded to remote location (protocol, hostname and port)", () => {
+                expect(seenRequests).to.have.length(1);
+            });
+
+            it("path from original request is preserved", async () => {
+                expect(seenRequests[0].path).to.equal("/get");
             });
         });
     });
