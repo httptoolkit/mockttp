@@ -53,7 +53,7 @@ nodeOnly(() => {
             });
         });
 
-        describe.skip("with an HTTPS config", () => {
+        describe("with an HTTPS config", () => {
             beforeEach(async () => {
                 server = getLocal({
                     https: {
