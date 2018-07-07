@@ -182,18 +182,21 @@ export default class MockRuleBuilder {
     }
 
     /**
-     * Reply to matched with the given status and a JSON object, with optionally more headers.
+     * Reply to matched requests with the given status & JSON and (optionally)
+     * extra headers.
      *
      * This method is shorthand for:
-     * server.get(...).thenReply(status, JSON.stringify(object), { 'Content-Type': 'application/json' })
+     * server.get(...).thenReply(status, JSON.stringify(data), { 'Content-Type': 'application/json' })
      *
+     * Calling this method registers the rule with the server, so it
+     * starts to handle requests.
+     * 
      * This method returns a promise that resolves with a mocked endpoint.
      * Wait for the promise to confirm that the rule has taken effect
      * before sending requests to be matched. The mocked endpoint
      * can be used to assert on the requests matched by this rule.
      */
     thenJSON(status: number, data: object, headers: OutgoingHttpHeaders = {}): Promise<MockedEndpoint> {
-
         const defaultHeaders = { 'Content-Type': 'application/json' };
         merge(defaultHeaders, headers);
 
@@ -207,7 +210,7 @@ export default class MockRuleBuilder {
     }
 
     /**
-     * Call the given callback for any matched requests that are recieved,
+     * Call the given callback for any matched requests that are received,
      * and build a response from the result.
      * 
      * The callback should return an object, potentially including various
@@ -222,6 +225,14 @@ export default class MockRuleBuilder {
      * 
      * If the callback throws an exception, the server will return a 500
      * with the exception message.
+     * 
+     * Calling this method registers the rule with the server, so it
+     * starts to handle requests.
+     * 
+     * This method returns a promise that resolves with a mocked endpoint.
+     * Wait for the promise to confirm that the rule has taken effect
+     * before sending requests to be matched. The mocked endpoint
+     * can be used to assert on the requests matched by this rule.
      */
     thenCallback(callback: (request: CompletedRequest) => CallbackHandlerResult): Promise<MockedEndpoint> {
         const rule: MockRuleData = {
