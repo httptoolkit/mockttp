@@ -33,11 +33,13 @@ import {
     PassThroughHandlerData,
     CallbackHandlerData,
     CallbackHandlerResult,
+    StreamHandlerData,
     CloseConnectionHandlerData,
     TimeoutHandlerData
 } from "./handlers";
 import { OutgoingHttpHeaders } from "http";
 import { merge } from "lodash";
+import { Readable } from "stream";
 
 /**
  * @class MockRuleBuilder
@@ -239,6 +241,41 @@ export default class MockRuleBuilder {
             matchers: this.matchers,
             completionChecker: this.isComplete,
             handler: new CallbackHandlerData(callback)
+        }
+
+        return this.addRule(rule);
+    }
+
+    /**
+     * Call the given callback for any matched requests that are received,
+     * and build a response from the result.
+     * 
+     * The callback should return an object, potentially including various
+     * fields to define the response. All fields are optional, and default
+     * to being empty/blank, except for the status, which defaults to 200.
+     * 
+     * Valid fields are:
+     * - `status` (number)
+     * - `body` (string)
+     * - `headers` (object with string keys & values)
+     * - `json` (object, which will be sent as a JSON response)
+     * 
+     * If the callback throws an exception, the server will return a 500
+     * with the exception message.
+     * 
+     * Calling this method registers the rule with the server, so it
+     * starts to handle requests.
+     * 
+     * This method returns a promise that resolves with a mocked endpoint.
+     * Wait for the promise to confirm that the rule has taken effect
+     * before sending requests to be matched. The mocked endpoint
+     * can be used to assert on the requests matched by this rule.
+     */
+    thenStream(status: number, stream: Readable, headers?: OutgoingHttpHeaders): Promise<MockedEndpoint> {
+        const rule: MockRuleData = {
+            matchers: this.matchers,
+            completionChecker: this.isComplete,
+            handler: new StreamHandlerData(status, stream, headers)
         }
 
         return this.addRule(rule);

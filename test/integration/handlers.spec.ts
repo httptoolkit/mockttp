@@ -1,4 +1,4 @@
-import HttpProxyAgent = require('http-proxy-agent');
+import { PassThrough } from 'stream';
 import { getLocal } from "../..";
 import { expect, fetch, nodeOnly, isNode, delay } from "../test-utils";
 
@@ -51,6 +51,24 @@ describe("HTTP mock rule handling", function () {
 
         expect(await response.status).to.equal(200);
         expect(await response.json()).to.deep.equal({myVar: 'foo'});
+    });
+
+    nodeOnly(() => {
+        it("should allow streaming a response", async () => {
+            let stream = new PassThrough();
+            await server.get('/stream').thenStream(200, stream);
+
+            stream.write('Hello ');
+
+            let response = await fetch(server.urlFor('/stream'));
+
+            await delay(100);
+            stream.write('world');
+            stream.end();
+
+            expect(await response.status).to.equal(200);
+            expect(await response.text()).to.equal('Hello world');
+        });
     });
 
     it("should allow forcibly closing the connection", async () => {

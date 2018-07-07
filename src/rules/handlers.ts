@@ -18,6 +18,7 @@ import { Serializable, SerializationOptions } from "../util/serialization";
 
 import { CompletedRequest, OngoingRequest } from "../types";
 import { RequestHandler } from "./mock-rule-types";
+import { Readable } from 'stream';
 
 export type SerializedBuffer = { type: 'Buffer', data: number[] };
 
@@ -206,6 +207,27 @@ export class CallbackHandlerData extends Serializable {
     }
 }
 
+export class StreamHandlerData extends Serializable {
+    constructor(
+        public status: number,
+        public stream: Readable,
+        public headers?: http.OutgoingHttpHeaders
+    ) {
+        super();
+    }
+
+    buildHandler() {
+        return _.assign(async (request: OngoingRequest, response: express.Response) => {
+            response.writeHead(this.status, this.headers);
+            this.stream.pipe(response);
+        }, { explain: () =>
+            `respond with status ${this.status}` +
+            (this.headers ? `, headers ${JSON.stringify(this.headers)},` : "") +
+            ' and a stream of response data'
+        });
+    }
+}
+
 export class PassThroughHandlerData extends Serializable {
     readonly type: 'passthrough' = 'passthrough';
 
@@ -317,6 +339,7 @@ export class TimeoutHandlerData extends Serializable {
 export type HandlerData = (
     SimpleHandlerData |
     CallbackHandlerData |
+    StreamHandlerData |
     PassThroughHandlerData |
     CloseConnectionHandlerData |
     TimeoutHandlerData
@@ -325,6 +348,7 @@ export type HandlerData = (
 export const HandlerDataLookup = {
     'simple': SimpleHandlerData,
     'callback': CallbackHandlerData,
+    'stream': StreamHandlerData,
     'passthrough': PassThroughHandlerData,
     'close-connection': CloseConnectionHandlerData,
     'timeout': TimeoutHandlerData
