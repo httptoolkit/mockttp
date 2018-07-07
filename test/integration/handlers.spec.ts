@@ -53,22 +53,21 @@ describe("HTTP mock rule handling", function () {
         expect(await response.json()).to.deep.equal({myVar: 'foo'});
     });
 
-    nodeOnly(() => {
-        it("should allow streaming a response", async () => {
-            let stream = new PassThrough();
-            await server.get('/stream').thenStream(200, stream);
+    it("should allow streaming a response", async () => {
+        let stream = new PassThrough();
+        await server.get('/stream').thenStream(200, stream);
 
-            stream.write('Hello ');
+        stream.write('Hello\n');
 
-            let response = await fetch(server.urlFor('/stream'));
+        let responsePromise = fetch(server.urlFor('/stream'));
 
-            await delay(100);
-            stream.write('world');
-            stream.end();
+        await delay(100);
+        stream.write('world');
+        stream.write('!');
+        stream.end();
 
-            expect(await response.status).to.equal(200);
-            expect(await response.text()).to.equal('Hello world');
-        });
+        await expect(responsePromise).to.have.status(200);
+        await expect(responsePromise).to.have.responseText('Hello\nworld!');
     });
 
     it("should allow forcibly closing the connection", async () => {

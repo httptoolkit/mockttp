@@ -10,6 +10,7 @@ import http = require('http');
 import https = require('https');
 import express = require("express");
 import uuid = require('uuid/v4');
+import { encode as encodeBase64, decode as decodeBase64 } from 'base64-arraybuffer';
 
 import { IncomingMessage } from 'http';
 
@@ -18,12 +19,12 @@ import { Serializable, SerializationOptions } from "../util/serialization";
 
 import { CompletedRequest, OngoingRequest } from "../types";
 import { RequestHandler } from "./mock-rule-types";
-import { Readable } from 'stream';
+import { Readable, PassThrough, Transform } from 'stream';
 
 export type SerializedBuffer = { type: 'Buffer', data: number[] };
 
 function isSerializedBuffer(obj: any): obj is SerializedBuffer {
-    return obj && obj.type === 'Buffer';
+    return obj && obj.type === 'Buffer' && !!obj.data;
 }
 
 export class SimpleHandlerData extends Serializable {
@@ -63,21 +64,22 @@ export interface CallbackHandlerResult {
     };
 }
 
-export interface SerializedCallbackHandlerData {
+export interface SerializedStreamBackedHandlerData {
     type: string;
     topicId: string
 };
 
 interface StreamMessage {
     topicId: string;
-    requestId: string;
 }
 
 interface CallbackRequestMessage extends StreamMessage {
+    requestId: string;
     args: [CompletedRequest];
 }
 
 interface CallbackResponseMessage extends StreamMessage {
+    requestId: string;
     error?: Error;
     result?: CallbackHandlerResult;
 }
@@ -91,9 +93,40 @@ export class CallbackHandlerData extends Serializable {
         super();
     }
 
-    serialize(options?: SerializationOptions): SerializedCallbackHandlerData {
+    buildHandler() {
+        return _.assign(async (request: OngoingRequest, response: express.Response) => {
+            let req = await waitForCompletedRequest(request);
+
+            let outResponse: CallbackHandlerResult;
+            try {
+                outResponse = await this.callback(req);
+            } catch (error) {
+                response.writeHead(500, 'Callback handler threw an exception');
+                response.end(error.toString());
+                return;
+            }
+
+            if (outResponse.json !== undefined) {
+                outResponse.headers = _.assign(outResponse.headers || {}, { 'Content-Type': 'application/json' });
+                outResponse.body = JSON.stringify(outResponse.json);
+                delete outResponse.json;
+            }
+
+            const defaultResponse = {
+                status: 200,
+                ...outResponse
+            };
+            response.writeHead(defaultResponse.status, defaultResponse.headers);
+            response.end(defaultResponse.body || "");
+        }, { explain: () => 
+            'respond using provided callback' +
+            (this.callback.name ? ` (${this.callback.name})` : '')
+        });
+    }
+
+    serialize(options?: SerializationOptions): SerializedStreamBackedHandlerData {
         if (!options || !options.clientStream) {
-            throw new Error('Callback handler transfer requires a streaming client connection.');
+            throw new Error('Client-side callback handlers require a streaming client connection.');
         }
 
         const { clientStream } = options;
@@ -130,9 +163,9 @@ export class CallbackHandlerData extends Serializable {
         return { type: this.type, topicId };
     }
 
-    static deserialize({ topicId }: SerializedCallbackHandlerData, options?: SerializationOptions): CallbackHandlerData {
+    static deserialize({ topicId }: SerializedStreamBackedHandlerData, options?: SerializationOptions): CallbackHandlerData {
         if (!options || !options.clientStream) {
-            throw new Error('Callback handler transfer requires a streaming client connection.');
+            throw new Error('Client-side callback handlers require a streaming client connection.');
         }
 
         const { clientStream } = options;
@@ -174,40 +207,27 @@ export class CallbackHandlerData extends Serializable {
             });
         });
     }
-
-    buildHandler() {
-        return _.assign(async (request: OngoingRequest, response: express.Response) => {
-            let req = await waitForCompletedRequest(request);
-
-            let outResponse: CallbackHandlerResult;
-            try {
-                outResponse = await this.callback(req);
-            } catch (error) {
-                response.writeHead(500, 'Callback handler threw an exception');
-                response.end(error.toString());
-                return;
-            }
-
-            if (outResponse.json !== undefined) {
-                outResponse.headers = _.assign(outResponse.headers || {}, { 'Content-Type': 'application/json' });
-                outResponse.body = JSON.stringify(outResponse.json);
-                delete outResponse.json;
-            }
-
-            const defaultResponse = {
-                status: 200,
-                ...outResponse
-            };
-            response.writeHead(defaultResponse.status, defaultResponse.headers);
-            response.end(defaultResponse.body || "");
-        }, { explain: () => 
-            'respond using provided callback' +
-            (this.callback.name ? ` (${this.callback.name})` : '')
-        });
-    }
 }
 
+export interface SerializedStreamHandlerData extends SerializedStreamBackedHandlerData {
+    status: number;
+    headers?: http.OutgoingHttpHeaders;
+};
+
+interface StreamHandlerMessage extends StreamMessage {
+    event: 'data' | 'end' | 'close' | 'error';
+    content: StreamHandlerEventMessage;
+}
+
+type StreamHandlerEventMessage = 
+    { type: 'string', value: string } |
+    { type: 'buffer', value: string } |
+    { type: 'arraybuffer', value: string } |
+    { type: 'nil' };
+
 export class StreamHandlerData extends Serializable {
+    readonly type: 'stream' = 'stream';
+
     constructor(
         public status: number,
         public stream: Readable,
@@ -225,6 +245,114 @@ export class StreamHandlerData extends Serializable {
             (this.headers ? `, headers ${JSON.stringify(this.headers)},` : "") +
             ' and a stream of response data'
         });
+    }
+
+    serialize(options?: SerializationOptions): SerializedStreamHandlerData {
+        if (!options || !options.clientStream) {
+            throw new Error('Client-side stream handlers require a streaming client connection.');
+        }
+
+        const { clientStream } = options;
+
+        // The topic id is used to identify the client-side source rule, so when a message comes
+        // across we know which handler should handle it.
+        const topicId = uuid();
+
+        const serializationStream = new Transform({
+            transform: function (this: Transform, chunk, encoding, callback) {
+                let serializedEventData: StreamHandlerEventMessage | false =
+                    _.isString(chunk) ? { type: 'string', value: chunk } :
+                    _.isBuffer(chunk) ? { type: 'buffer', value: chunk.toString('base64') } :
+                    (_.isArrayBuffer(chunk) || _.isTypedArray(chunk)) ? { type: 'arraybuffer', value: encodeBase64(chunk) } :
+                    _.isNil(chunk) && { type: 'nil' };
+
+                if (!serializedEventData) {
+                    callback(new Error(`Can't serialize streamed value: ${chunk.toString()}. Streaming must output strings, buffers or array buffers`));
+                }
+
+                callback(null, JSON.stringify(<StreamHandlerMessage> {
+                    topicId,
+                    event: 'data',
+                    content: serializedEventData
+                }));
+            },
+
+            flush: function(this: Transform, callback) {
+                this.push(JSON.stringify(<StreamHandlerMessage> {
+                    topicId,
+                    event: 'end'
+                }));
+                callback();
+            }
+        });
+
+        // We pause the data stream until the client stream requests the data (so we know the handler downstream is connected)
+        // In theory we could split up the clientstream itself by topicId, and use normal backpressure to manage this,
+        // but we haven't, so we can't.
+
+        const startStreamListener = (streamMsg: string) => {
+            let serverRequest: CallbackRequestMessage = JSON.parse(streamMsg.toString());
+            let { topicId: requestTopicId } = serverRequest;
+
+            // This message isn't meant for us.
+            if (topicId !== requestTopicId) return;
+
+            this.stream.pipe(serializationStream).pipe(clientStream);
+
+            clientStream.removeListener('data', startStreamListener);
+        };
+
+        clientStream.on('data', startStreamListener);
+
+        return { type: this.type, topicId, status: this.status, headers: this.headers };
+    }
+
+    static deserialize(handlerData: SerializedStreamHandlerData, options?: SerializationOptions): StreamHandlerData {
+        if (!options || !options.clientStream) {
+            throw new Error('Client-side stream handlers require a streaming client connection.');
+        }
+
+        const { clientStream } = options;
+
+        const handlerStream = new Transform({
+            transform: function (this: Transform, chunk, encoding, callback) {
+                let clientMessage: StreamHandlerMessage = JSON.parse(chunk.toString());            
+                    
+                const { topicId, event, content } = clientMessage;
+
+                if (handlerData.topicId !== topicId) return;
+
+                let deserializedEventData = content && (
+                    content.type === 'string' ? content.value :
+                    content.type === 'buffer' ? Buffer.from(content.value, 'base64') :
+                    content.type === 'arraybuffer' ? Buffer.from(decodeBase64(content.value)) :
+                    content.type === 'nil' && undefined
+                );
+
+                if (event === 'data' && deserializedEventData) {
+                    this.push(deserializedEventData);
+                } else if (event === 'end') {
+                    this.end();
+                    clientStream.unpipe(handlerStream);
+                }
+
+                callback();
+            }
+        });
+
+        // When we get piped (i.e. to a live request), ping upstream to start streaming
+        handlerStream.on('resume', () => {
+            clientStream.pipe(handlerStream);
+            clientStream.write(JSON.stringify(<StreamMessage> {
+                topicId: handlerData.topicId
+            }));
+        });
+        
+        return new StreamHandlerData(
+            handlerData.status,
+            handlerStream,
+            handlerData.headers
+        );
     }
 }
 
