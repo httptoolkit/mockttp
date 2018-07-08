@@ -4,12 +4,13 @@
 
 import * as path from 'path';
 import * as fs from '../util/fs';
-import * as _ from "lodash";
+import * as _ from 'lodash';
 import * as express from 'express';
 import * as cors from 'cors';
 import * as http from 'http';
 import * as net from 'net';
 import * as bodyParser from 'body-parser';
+import * as ws from 'ws';
 
 import { graphqlExpress } from 'apollo-server-express';
 import { GraphQLSchema, GraphQLScalarType, execute, subscribe } from 'graphql';
@@ -97,33 +98,24 @@ export class MockttpStandalone {
         await new Promise<void>((resolve, reject) => {
             this.server = destroyable(this.app.listen(DEFAULT_STANDALONE_PORT, resolve));
 
-            this.server.on('upgrade', (req: Request, socket: net.Socket, head: Buffer) => {
-                let matchesServer = req.url.match(/^\/server\/(\d+)\//);
+            this.server.on('upgrade', (req: http.IncomingMessage, socket: net.Socket, head: Buffer) => {
+                let isSubscriptionRequest = req.url!.match(/^\/server\/(\d+)\/subscription$/);
+                let isStreamRequest = req.url!.match(/^\/server\/(\d+)\/stream$/);
+                let isMatch = isSubscriptionRequest || isStreamRequest;
 
-                if (matchesServer) {
-                    let port = parseInt(matchesServer[1], 10);
-                    if (this.subscriptionServers[port]) {
-                        let wsServer = (<any> this.subscriptionServers[port]).wsServer;
+                if (isMatch) {
+                    let port = parseInt(isMatch[1], 10);
 
-                        let isSubscriptionRequest = req.url.match(/^\/server\/\d+\/subscription$/);
-                        let isStreamRequest = req.url.match(/^\/server\/\d+\/stream$/);
-    
-                        if (isSubscriptionRequest) {
-                            wsServer.handleUpgrade(req, socket, head, (ws: net.Socket) => {
-                                wsServer.emit('connection', ws);
-                            });
-                        } else if (isStreamRequest) {
-                            wsServer.handleUpgrade(req, socket, head, (ws: net.Socket) => {
-                                let newClientStream = connectWebSocketStream(ws, { objectMode: true });
-                                newClientStream.pipe(this.liveClientStreams[port], { end: false });
-                                this.liveClientStreams[port].pipe(newClientStream);
-                            });
-                        } else {
-                            console.warn(`Unrecognized websocket request for unknown server path ${req.url}`);
-                            socket.destroy();
-                        }
+                    let wsServer: ws.Server = isSubscriptionRequest ?
+                        (<any> this.subscriptionServers[port]).wsServer :
+                        this.streamServers[port];
+
+                    if (wsServer) {
+                        wsServer.handleUpgrade(req, socket, head, (ws) => {
+                            wsServer.emit('connection', ws, req);
+                        });
                     } else {
-                        console.warn(`Unrecognized websocket request for unknown server port ${port}`);
+                        console.warn(`Websocket request for unrecognized mock server: ${port}`);
                         socket.destroy();
                     }
                 } else {
@@ -136,7 +128,7 @@ export class MockttpStandalone {
 
     private routers: { [port: number]: express.Router } = { };
     private subscriptionServers: { [port: number]: SubscriptionServer } = { };
-    private liveClientStreams: { [port: number]: Duplex } = { };
+    private streamServers: { [port: number]: ws.Server } = { };
 
     private async startMockServer(options: MockttpOptions, port?: number): Promise<{
         mockPort: number,
@@ -160,8 +152,9 @@ export class MockttpStandalone {
             delete this.routers[mockPort];
             delete this.subscriptionServers[mockPort];
 
-            this.liveClientStreams[mockPort].end();
-            delete this.liveClientStreams[mockPort];
+            this.streamServers[mockPort].close();
+            this.streamServers[mockPort].emit('close');
+            delete this.streamServers[mockPort];
 
             res.status(200).send(JSON.stringify({
                 success: true
@@ -174,7 +167,22 @@ export class MockttpStandalone {
         serverSideStream._writer.pipe(clientSideStream._reader);
         clientSideStream._writer.pipe(serverSideStream._reader);
 
-        this.liveClientStreams[mockPort] = clientSideStream;
+        if (this.debug) {
+            clientSideStream._writer.on('data', (d) => {
+                console.debug('Streaming data to clients:', d.toString());
+            });
+            clientSideStream._reader.on('data', (d) => {
+                console.debug('Streaming data from clients:', d.toString());
+            });
+        }
+
+        this.streamServers[mockPort] = new ws.Server({ noServer: true });
+        this.streamServers[mockPort].on('connection', (ws: WebSocket) => {
+            let newClientStream = connectWebSocketStream(ws, { objectMode: true });
+            newClientStream.pipe(clientSideStream, { end: false });
+            clientSideStream.pipe(newClientStream);
+        });
+        this.streamServers[mockPort].on('close', () => clientSideStream.end());
 
         const schema = await this.loadSchema('schema.gql', mockServer, serverSideStream);
 

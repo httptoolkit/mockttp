@@ -1,6 +1,7 @@
 import { getLocal, getRemote, getStandalone } from "../..";
 import request = require("request-promise-native");
 import { expect, fetch, nodeOnly, browserOnly } from "../test-utils";
+import { PassThrough } from "stream";
 
 browserOnly(() => {
     describe("Remote browser client with a standalone server", function () {
@@ -43,14 +44,34 @@ nodeOnly(() => {
                 expect(response).to.equal("mocked data");
             });
 
-            it("should successfully mock requests with live interactions as normal", async () => {
+            it("should successfully mock requests with live callbacks", async () => {
+                let count = 0;
                 const endpointMock = await client.get("/mocked-endpoint").thenCallback((req) => {
-                    return { status: 200, body: 'mocked data' }
+                    return { status: 200, body: `calls: ${++count}` }
                 });
 
-                const response = await request.get(client.urlFor("/mocked-endpoint"));
+                const response1 = await request.get(client.urlFor("/mocked-endpoint"));
+                expect(response1).to.equal("calls: 1");
+                const response2 = await request.get(client.urlFor("/mocked-endpoint"));
+                expect(response2).to.equal("calls: 2");
+            });
 
-                expect(response).to.equal("mocked data");
+            it("should successfully mock requests with live streams", async () => {
+                let stream1 = new PassThrough();
+                await client.get('/stream').thenStream(200, stream1);
+                let stream2 = new PassThrough();
+                await client.get('/stream').thenStream(200, stream2);
+
+                stream1.end('Hello');
+                stream2.end('World');
+                
+                let response1 = await fetch(client.urlFor('/stream'));
+                let response2 = await fetch(client.urlFor('/stream'));
+
+                await expect(response1).to.have.status(200);
+                await expect(response1).to.have.responseText('Hello');
+                await expect(response2).to.have.status(200);
+                await expect(response2).to.have.responseText('World');
             });
 
             it("should let you verify requests as normal", async () => {

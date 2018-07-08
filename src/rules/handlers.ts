@@ -309,7 +309,7 @@ export class StreamHandlerData extends Serializable {
             // This message isn't meant for us.
             if (topicId !== requestTopicId) return;
 
-            this.stream.pipe(serializationStream).pipe(clientStream);
+            this.stream.pipe(serializationStream).pipe(clientStream, { end: false });
 
             clientStream.removeListener('data', startStreamListener);
         };
@@ -345,7 +345,6 @@ export class StreamHandlerData extends Serializable {
                     this.push(deserializedEventData);
                 } else if (event === 'end') {
                     this.end();
-                    clientStream.unpipe(handlerStream);
                 }
 
                 callback();
