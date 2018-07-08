@@ -1,3 +1,4 @@
+import * as semver from 'semver';
 import { PassThrough } from 'stream';
 import { getLocal } from "../..";
 import { expect, fetch, nodeOnly, isNode, delay } from "../test-utils";
@@ -63,9 +64,15 @@ describe("HTTP mock rule handling", function () {
 
         await delay(100);
         stream.write(Buffer.from('world'));
-        let arrayBuffer = new Uint8Array(1);
-        arrayBuffer[0] = '!'.charCodeAt(0);
-        stream.write(arrayBuffer);
+
+        if (!process.version || semver.major(process.version) >= 8) {
+            let arrayBuffer = new Uint8Array(1);
+            arrayBuffer[0] = '!'.charCodeAt(0);
+            stream.write(arrayBuffer);
+        } else {
+            // Node < 8 doesn't support streaming array buffers
+            stream.write('!');
+        }
         stream.end();
 
         await expect(responsePromise).to.have.status(200);
