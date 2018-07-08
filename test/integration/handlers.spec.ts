@@ -62,8 +62,10 @@ describe("HTTP mock rule handling", function () {
         let responsePromise = fetch(server.urlFor('/stream'));
 
         await delay(100);
-        stream.write('world');
-        stream.write('!');
+        stream.write(Buffer.from('world'));
+        let arrayBuffer = new Uint8Array(1);
+        arrayBuffer[0] = '!'.charCodeAt(0);
+        stream.write(arrayBuffer);
         stream.end();
 
         await expect(responsePromise).to.have.status(200);
