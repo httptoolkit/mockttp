@@ -72,6 +72,37 @@ describe("HTTP mock rule handling", function () {
         await expect(responsePromise).to.have.responseText('Hello\nworld!');
     });
 
+    it("should fail clearly when trying to repeat a single stream response", async () => {
+        let stream = new PassThrough();
+        await server.get('/stream').thenStream(200, stream);
+
+        stream.end('Hello world');
+
+        await fetch(server.urlFor('/stream'));
+        let responsePromise = await fetch(server.urlFor('/stream'));
+
+        await expect(responsePromise).to.have.status(500);
+        expect(await responsePromise.text()).to.include('Stream request handler called more than once');
+    });
+
+    it("should allow multiple streaming responses", async () => {
+        let stream1 = new PassThrough();
+        await server.get('/stream').thenStream(200, stream1);
+        let stream2 = new PassThrough();
+        await server.get('/stream').thenStream(200, stream2);
+
+        stream1.end('Hello');
+        stream2.end('World');
+
+        let response1 = await fetch(server.urlFor('/stream'));
+        let response2 = await fetch(server.urlFor('/stream'));
+
+        await expect(response1).to.have.status(200);
+        await expect(response1).to.have.responseText('Hello');
+        await expect(response2).to.have.status(200);
+        await expect(response2).to.have.responseText('World');
+    });
+
     it("should allow forcibly closing the connection", async () => {
         await server.get('/mocked-endpoint').thenCloseConnection();
 

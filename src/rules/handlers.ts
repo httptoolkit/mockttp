@@ -225,12 +225,19 @@ type StreamHandlerEventMessage =
     { type: 'arraybuffer', value: string } |
     { type: 'nil' };
 
+const repeatedStreamErrorMessage = `Stream request handler called more than once - this is not supported.
+
+Streams can typically only be read once, so all subsequent requests would be empty.
+To mock repeated stream requests, call 'thenStream' repeatedly with multiple streams.
+
+(Have a better way to handle this? Open an issue at ${require('../../package.json').bugs.url})`
+
 export class StreamHandlerData extends Serializable {
     readonly type: 'stream' = 'stream';
 
     constructor(
         public status: number,
-        public stream: Readable,
+        public stream: Readable & { done?: true },
         public headers?: http.OutgoingHttpHeaders
     ) {
         super();
@@ -238,8 +245,13 @@ export class StreamHandlerData extends Serializable {
 
     buildHandler() {
         return _.assign(async (request: OngoingRequest, response: express.Response) => {
-            response.writeHead(this.status, this.headers);
-            this.stream.pipe(response);
+            if (!this.stream.done) {
+                response.writeHead(this.status, this.headers);
+                this.stream.pipe(response);
+                this.stream.done = true;
+            } else {
+                throw new Error(repeatedStreamErrorMessage);
+            }
         }, { explain: () =>
             `respond with status ${this.status}` +
             (this.headers ? `, headers ${JSON.stringify(this.headers)},` : "") +

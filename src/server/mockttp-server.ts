@@ -245,9 +245,9 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
             }
         } catch (e) {
             if (this.debug) {
-                console.error("Failed to handle request", e);
+                console.error("Failed to handle request:", e);
             } else {
-                console.error("Failed to handle request", e.message);
+                console.error("Failed to handle request:", e.message);
             }
             
             // Make sure any errors here don't kill the process
@@ -255,7 +255,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
             // Do whatever we can to tell the client we broke
             try { response.writeHead(e.statusCode || 500, e.statusMessage || 'Server error'); } catch (e) {}
-            try { response.end(`Error: ${e}`); } catch (e) {}
+            try { response.end(e.toString()); } catch (e) {}
         }
     }
 
