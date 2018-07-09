@@ -133,7 +133,7 @@ nodeOnly(() => {
             });
         });
 
-        describe("when forwardToLocation specified", () => {
+        describe("when configured to forward requests to a different location", () => {
             let remoteServer: Mockttp;
             let remoteEndpointMock: MockedEndpoint;
             let seenRequests: CompletedRequest[];
@@ -146,10 +146,12 @@ nodeOnly(() => {
                 remoteServer = getLocal();
                 await remoteServer.start();
                 
-                const forwardToLocation = `http://localhost:${remoteServer.port}/foo`;
+                expect(remoteServer.port).to.not.equal(server.port);
+
+                const forwardToUrl = `http://localhost:${remoteServer.port}`;
                 remoteEndpointMock = await remoteServer.anyRequest().thenReply(200, "mocked data");
                 
-                await server.anyRequest().thenPassThrough(forwardToLocation);
+                await server.anyRequest().thenForwardTo(forwardToUrl);
                 await request.get(server.urlFor("/get"));
 
                 seenRequests = await remoteEndpointMock.getSeenRequests();
@@ -157,18 +159,26 @@ nodeOnly(() => {
 
             afterEach(async () => {
                 await remoteServer.stop();
-            })
-
-            it("server run on different ports", async () => {
-                expect(remoteServer.port).to.not.equal(server.port);
             });
             
-            it("request is forwarded to remote location (protocol, hostname and port)", () => {
+            it("forwards to the location specified in the rule builder", () => {
                 expect(seenRequests).to.have.length(1);
             });
 
-            it("path from original request is preserved", async () => {
+            it("uses the path portion from the original request url", async () => {
                 expect(seenRequests[0].path).to.equal("/get");
+            });
+        });
+
+        describe("thenForwardTo with path in location", () => {
+            it("throws an error with a helpful suggestion", async () => {
+                server = getLocal();
+                await server.start();
+                
+                const locationWithPath = `http://localhost:1234/pathIsNotAllowed`;
+
+                expect(() => server.anyRequest().thenForwardTo(locationWithPath)).to.throw(
+                    Error, /.*Did you mean http:\/\/localhost:1234\?$/g);
             });
         });
     });
