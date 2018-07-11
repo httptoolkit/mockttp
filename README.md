@@ -1,7 +1,8 @@
 # Mockttp [![Travis Build Status](https://img.shields.io/travis/pimterry/mockttp.svg)](https://travis-ci.org/pimterry/mockttp) [![Try Mockttp on RunKit](https://badge.runkitcdn.com/mockttp.svg)](https://npm.runkit.com/mockttp)
 
-Mockttp lets you quickly & reliably fake HTTP responses for testing, and assert
-on the requests made by your code.
+> _Part of [HTTP Toolkit](https://httptoolkit.tech): powerful tools for building, testing & debugging HTTP(S)_
+
+**Mockttp lets you quickly & reliably test HTTP requests & responses in JavaScript, in both Node and browsers.**
 
 There's a lot of tools to do this, but typically by stubbing the HTTP functions in your
 process at the JS level. That ties you to a specific environment, doesn't test the
