@@ -370,16 +370,24 @@ export class StreamHandlerData extends Serializable {
 export class PassThroughHandlerData extends Serializable {
     readonly type: 'passthrough' = 'passthrough';
 
+    constructor(private forwardToLocation?: string) {
+        super();
+    }
+
     buildHandler() {
         return _.assign(async (clientReq: OngoingRequest, clientRes: express.Response) => {
             const { method, originalUrl, headers } = clientReq;
             let { protocol, hostname, port, path } = url.parse(originalUrl);
+            if (this.forwardToLocation) {
+                ({ protocol, hostname, port } = url.parse(this.forwardToLocation));
+            }
 
             const socket: net.Socket = (<any> clientReq).socket;
             // If it's ipv4 masquerading as v6, strip back to ipv4
             const remoteAddress = socket.remoteAddress.replace(/^::ffff:/, '');
+            const remotePort = port ? Number.parseInt(port) : socket.remotePort;
 
-            if (isRequestLoop(remoteAddress, socket.remotePort)) {
+            if (isRequestLoop(remoteAddress, remotePort)) {
                 throw new Error(
 `Passthrough loop detected. This probably means you're sending a request directly to a passthrough endpoint, \
 which is forwarding it to the target URL, which is a passthrough endpoint, which is forwarding it to the target \
@@ -449,7 +457,7 @@ instead of making requests to it directly`);
                     reject(e);
                 });
             });
-        }, { explain: () => 'pass the request through to the real server' });
+        }, { explain: () => this.forwardToLocation ? 'forward the request to the specified url' : 'pass the request through to the real server' });
     }
 }
 

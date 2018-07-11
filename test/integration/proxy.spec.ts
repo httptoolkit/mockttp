@@ -2,6 +2,7 @@ import _ = require("lodash");
 import { getLocal, Mockttp } from "../..";
 import request = require("request-promise-native");
 import { expect, nodeOnly } from "../test-utils";
+import { MockedEndpoint, CompletedRequest } from "../../dist/types";
 
 const INITIAL_ENV = _.cloneDeep(process.env);
 
@@ -129,6 +130,47 @@ nodeOnly(() => {
 
                     expect(response.args.b).to.equal('c');
                 });
+            });
+        });
+
+        describe("when configured to forward requests to a different location", () => {
+            let remoteServer = getLocal();
+
+            beforeEach(async () => {
+                server = getLocal();
+                await server.start();
+                process.env = _.merge({}, process.env, server.proxyEnv);
+
+                await remoteServer.start();
+                expect(remoteServer.port).to.not.equal(server.port);
+            });
+
+            afterEach(() => remoteServer.stop());
+            
+            it("forwards to the location specified in the rule builder", async () => {
+                await remoteServer.anyRequest().thenReply(200, "forwarded response");
+                await server.anyRequest().thenForwardTo(remoteServer.url);
+
+                let response = await request.get(server.urlFor("/"));
+
+                expect(response).to.equal('forwarded response');
+            });
+
+            it("uses the path portion from the original request url", async () => {
+                let remoteEndpointMock = await remoteServer.anyRequest().thenReply(200, "mocked data");
+                await server.anyRequest().thenForwardTo(remoteServer.url);
+
+                await request.get(server.urlFor("/get"));
+
+                let seenRequests = await remoteEndpointMock.getSeenRequests();
+                expect(seenRequests[0].path).to.equal("/get");
+            });
+
+            it("throws an error if the forwarding URL contains a path", async () => {
+                const locationWithPath = 'http://localhost:1234/pathIsNotAllowed';
+
+                await expect(server.anyRequest().thenForwardTo(locationWithPath))
+                .to.be.rejectedWith(/Did you mean http:\/\/localhost:1234\?$/g);
             });
         });
     });

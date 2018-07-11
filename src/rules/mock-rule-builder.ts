@@ -2,6 +2,8 @@
  * @module MockRule
  */
 
+import url = require("url");
+
 import { CompletedRequest, Method, MockedEndpoint } from "../types";
 
 import {
@@ -292,6 +294,36 @@ export default class MockRuleBuilder {
             matchers: this.matchers,
             completionChecker: this.isComplete,
             handler: new PassThroughHandlerData()
+        };
+
+        return this.addRule(rule);
+    }
+
+    /**
+     * Forward matched requests on to the specified forwardToUrl. The url
+     * specified must not include a path. Otherwise, an error is thrown.
+     * The path portion of the original request url is used instead.
+     *
+     * Calling this method registers the rule with the server, so it
+     * starts to handle requests.
+     *
+     * This method returns a promise that resolves with a mocked endpoint.
+     * Wait for the promise to confirm that the rule has taken effect
+     * before sending requests to be matched. The mocked endpoint
+     * can be used to assert on the requests matched by this rule.
+     */
+    async thenForwardTo(forwardToUrl: string): Promise<MockedEndpoint> {
+        const { protocol, hostname, port, path } = url.parse(forwardToUrl);
+        if (path && path.trim() !== "/") {
+            const suggestion = url.format({ protocol, hostname, port });
+            throw new Error(`URLs passed to thenForwardTo cannot include a path, but "${forwardToUrl}" does. \
+Did you mean ${suggestion}?`);
+        }
+
+        const rule: MockRuleData = {
+            matchers: this.matchers,
+            completionChecker: this.isComplete,
+            handler: new PassThroughHandlerData(forwardToUrl)
         };
 
         return this.addRule(rule);
