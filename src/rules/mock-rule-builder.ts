@@ -3,6 +3,10 @@
  */
 
 import url = require("url");
+import { OutgoingHttpHeaders } from "http";
+import { merge } from "lodash";
+import { Readable } from "stream";
+import { stripIndent } from "common-tags";
 
 import { CompletedRequest, Method, MockedEndpoint } from "../types";
 
@@ -39,9 +43,6 @@ import {
     CloseConnectionHandlerData,
     TimeoutHandlerData
 } from "./handlers";
-import { OutgoingHttpHeaders } from "http";
-import { merge } from "lodash";
-import { Readable } from "stream";
 
 /**
  * @class MockRuleBuilder
@@ -316,8 +317,10 @@ export default class MockRuleBuilder {
         const { protocol, hostname, port, path } = url.parse(forwardToUrl);
         if (path && path.trim() !== "/") {
             const suggestion = url.format({ protocol, hostname, port });
-            throw new Error(`URLs passed to thenForwardTo cannot include a path, but "${forwardToUrl}" does. \
-Did you mean ${suggestion}?`);
+            throw new Error(stripIndent`
+                URLs passed to thenForwardTo cannot include a path, but "${forwardToUrl}" does. ${''
+                }Did you mean ${suggestion}?
+            `);
         }
 
         const rule: MockRuleData = {

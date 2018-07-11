@@ -11,6 +11,8 @@ import https = require('https');
 import express = require("express");
 import uuid = require('uuid/v4');
 import { encode as encodeBase64, decode as decodeBase64 } from 'base64-arraybuffer';
+import { Readable, PassThrough, Transform } from 'stream';
+import { stripIndent } from 'common-tags';
 
 import { IncomingMessage } from 'http';
 
@@ -19,7 +21,6 @@ import { Serializable, SerializationOptions } from "../util/serialization";
 
 import { CompletedRequest, OngoingRequest } from "../types";
 import { RequestHandler } from "./mock-rule-types";
-import { Readable, PassThrough, Transform } from 'stream';
 
 export type SerializedBuffer = { type: 'Buffer', data: number[] };
 
@@ -225,13 +226,6 @@ type StreamHandlerEventMessage =
     { type: 'arraybuffer', value: string } |
     { type: 'nil' };
 
-const repeatedStreamErrorMessage = `Stream request handler called more than once - this is not supported.
-
-Streams can typically only be read once, so all subsequent requests would be empty.
-To mock repeated stream requests, call 'thenStream' repeatedly with multiple streams.
-
-(Have a better way to handle this? Open an issue at ${require('../../package.json').bugs.url})`
-
 export class StreamHandlerData extends Serializable {
     readonly type: 'stream' = 'stream';
 
@@ -250,7 +244,14 @@ export class StreamHandlerData extends Serializable {
                 this.stream.pipe(response);
                 this.stream.done = true;
             } else {
-                throw new Error(repeatedStreamErrorMessage);
+                throw new Error(stripIndent`
+                    Stream request handler called more than once - this is not supported.
+
+                    Streams can typically only be read once, so all subsequent requests would be empty.
+                    To mock repeated stream requests, call 'thenStream' repeatedly with multiple streams.
+
+                    (Have a better way to handle this? Open an issue at ${require('../../package.json').bugs.url})
+                `);
             }
         }, { explain: () =>
             `respond with status ${this.status}` +
@@ -388,13 +389,15 @@ export class PassThroughHandlerData extends Serializable {
             const remotePort = port ? Number.parseInt(port) : socket.remotePort;
 
             if (isRequestLoop(remoteAddress, remotePort)) {
-                throw new Error(
-`Passthrough loop detected. This probably means you're sending a request directly to a passthrough endpoint, \
-which is forwarding it to the target URL, which is a passthrough endpoint, which is forwarding it to the target \
-URL, which is a passthrough endpoint...
+                throw new Error(stripIndent`
+                    Passthrough loop detected. This probably means you're sending a request directly ${''
+                    }to a passthrough endpoint, which is forwarding it to the target URL, which is a ${''
+                    }passthrough endpoint, which is forwarding it to the target URL, which is a ${''
+                    }passthrough endpoint...
 
-You should either explicitly mock a response for this URL (${originalUrl}), or use the server as a proxy, \
-instead of making requests to it directly`);
+                    You should either explicitly mock a response for this URL (${originalUrl}), or use ${''
+                    }the server as a proxy, instead of making requests to it directly
+                `);
             }
 
             const hostHeader = headers.host;
