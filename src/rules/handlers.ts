@@ -457,7 +457,7 @@ instead of making requests to it directly`);
                     reject(e);
                 });
             });
-        }, { explain: () => 'pass the request through to the real server' });
+        }, { explain: () => this.forwardToLocation ? 'forward the request to the specified url' : 'pass the request through to the real server' });
     }
 }
 
