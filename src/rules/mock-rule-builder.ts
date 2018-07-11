@@ -247,21 +247,14 @@ export default class MockRuleBuilder {
     }
 
     /**
-     * Call the given callback for any matched requests that are received,
-     * and build a response from the result.
+     * Respond immediately with the given status (and optionally, headers),
+     * and then stream the given stream directly as the response body.
      * 
-     * The callback should return an object, potentially including various
-     * fields to define the response. All fields are optional, and default
-     * to being empty/blank, except for the status, which defaults to 200.
-     * 
-     * Valid fields are:
-     * - `status` (number)
-     * - `body` (string)
-     * - `headers` (object with string keys & values)
-     * - `json` (object, which will be sent as a JSON response)
-     * 
-     * If the callback throws an exception, the server will return a 500
-     * with the exception message.
+     * Note that streams can typically only be read once, and as such
+     * this rule will only successfully trigger once. Subsequent requests
+     * will receive a 500 and an explanatory error message. To mock
+     * repeated requests with streams, create multiple streams and mock
+     * them independently.
      * 
      * Calling this method registers the rule with the server, so it
      * starts to handle requests.
@@ -305,7 +298,7 @@ export default class MockRuleBuilder {
     }
 
     /**
-     * Closes connections that match this rule immediately, without
+     * Close connections that match this rule immediately, without
      * any status code or response.
      *
      * Calling this method registers the rule with the server, so it
