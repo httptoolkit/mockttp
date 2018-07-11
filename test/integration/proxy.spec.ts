@@ -134,51 +134,43 @@ nodeOnly(() => {
         });
 
         describe("when configured to forward requests to a different location", () => {
-            let remoteServer: Mockttp;
-            let remoteEndpointMock: MockedEndpoint;
-            let seenRequests: CompletedRequest[];
+            let remoteServer = getLocal();
 
             beforeEach(async () => {
                 server = getLocal();
                 await server.start();
                 process.env = _.merge({}, process.env, server.proxyEnv);
 
-                remoteServer = getLocal();
                 await remoteServer.start();
-                
                 expect(remoteServer.port).to.not.equal(server.port);
-
-                const forwardToUrl = `http://localhost:${remoteServer.port}`;
-                remoteEndpointMock = await remoteServer.anyRequest().thenReply(200, "mocked data");
-                
-                await server.anyRequest().thenForwardTo(forwardToUrl);
-                await request.get(server.urlFor("/get"));
-
-                seenRequests = await remoteEndpointMock.getSeenRequests();
             });
 
-            afterEach(async () => {
-                await remoteServer.stop();
-            });
+            afterEach(() => remoteServer.stop());
             
-            it("forwards to the location specified in the rule builder", () => {
-                expect(seenRequests).to.have.length(1);
+            it("forwards to the location specified in the rule builder", async () => {
+                await remoteServer.anyRequest().thenReply(200, "forwarded response");
+                await server.anyRequest().thenForwardTo(remoteServer.url);
+
+                let response = await request.get(server.urlFor("/"));
+
+                expect(response).to.equal('forwarded response');
             });
 
             it("uses the path portion from the original request url", async () => {
+                let remoteEndpointMock = await remoteServer.anyRequest().thenReply(200, "mocked data");
+                await server.anyRequest().thenForwardTo(remoteServer.url);
+
+                await request.get(server.urlFor("/get"));
+
+                let seenRequests = await remoteEndpointMock.getSeenRequests();
                 expect(seenRequests[0].path).to.equal("/get");
             });
-        });
 
-        describe("thenForwardTo with path in location", () => {
-            it("throws an error with a helpful suggestion", async () => {
-                server = getLocal();
-                await server.start();
-                
-                const locationWithPath = `http://localhost:1234/pathIsNotAllowed`;
+            it("throws an error if the forwarding URL contains a path", async () => {
+                const locationWithPath = 'http://localhost:1234/pathIsNotAllowed';
 
-                expect(() => server.anyRequest().thenForwardTo(locationWithPath)).to.throw(
-                    Error, /.*Did you mean http:\/\/localhost:1234\?$/g);
+                await expect(server.anyRequest().thenForwardTo(locationWithPath))
+                .to.be.rejectedWith(/Did you mean http:\/\/localhost:1234\?$/g);
             });
         });
     });

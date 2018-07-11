@@ -312,12 +312,12 @@ export default class MockRuleBuilder {
      * before sending requests to be matched. The mocked endpoint
      * can be used to assert on the requests matched by this rule.
      */
-    thenForwardTo(forwardToUrl: string): Promise<MockedEndpoint> {
+    async thenForwardTo(forwardToUrl: string): Promise<MockedEndpoint> {
         const { protocol, hostname, port, path } = url.parse(forwardToUrl);
         if (path && path.trim() !== "/") {
             const suggestion = url.format({ protocol, hostname, port });
-            throw new Error(`thenForwardTo location, "${forwardToUrl}", cannot include a path."
-                + " Did you mean ${suggestion}?`);
+            throw new Error(`URLs passed to thenForwardTo cannot include a path, but "${forwardToUrl}" does. \
+Did you mean ${suggestion}?`);
         }
 
         const rule: MockRuleData = {
