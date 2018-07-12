@@ -42,7 +42,7 @@ export class SimpleHandlerData extends Serializable {
     buildHandler() {
         return _.assign(async (request: OngoingRequest, response: express.Response) => {
             response.writeHead(this.status, this.headers);
-            
+
             if (isSerializedBuffer(this.data)) {
                 this.data = new Buffer(<any> this.data);
             }
@@ -50,7 +50,7 @@ export class SimpleHandlerData extends Serializable {
             response.end(this.data || "");
         }, { explain: () =>
             `respond with status ${this.status}` +
-            (this.headers ? `, headers ${JSON.stringify(this.headers)}` : "") + 
+            (this.headers ? `, headers ${JSON.stringify(this.headers)}` : "") +
             (this.data ? ` and body "${this.data}"` : "")
         });
     }
@@ -173,7 +173,7 @@ export class CallbackHandlerData extends Serializable {
 
         let outstandingRequests: { [id: string]: (error?: Error, result?: CallbackHandlerResult) => void } = {};
 
-        const responseListener = (streamMsg: string | Buffer) => {            
+        const responseListener = (streamMsg: string | Buffer) => {
             let clientResponse: CallbackResponseMessage = JSON.parse(streamMsg.toString());
             let { requestId } = clientResponse;
 
@@ -329,8 +329,8 @@ export class StreamHandlerData extends Serializable {
 
         const handlerStream = new Transform({
             transform: function (this: Transform, chunk, encoding, callback) {
-                let clientMessage: StreamHandlerMessage = JSON.parse(chunk.toString());            
-                    
+                let clientMessage: StreamHandlerMessage = JSON.parse(chunk.toString());
+
                 const { topicId, event, content } = clientMessage;
 
                 if (handlerData.topicId !== topicId) return;
@@ -359,7 +359,7 @@ export class StreamHandlerData extends Serializable {
                 topicId: handlerData.topicId
             }));
         });
-        
+
         return new StreamHandlerData(
             handlerData.status,
             handlerStream,

@@ -11,9 +11,15 @@ nodeOnly(() => {
         this.timeout(5000);
 
         let server: Mockttp;
+        let remoteServer = getLocal();
+
+        beforeEach(async () => {
+            await remoteServer.start();
+        });
 
         afterEach(async () => {
             await server.stop();
+            await remoteServer.stop();
             process.env = INITIAL_ENV;
         });
 
@@ -51,6 +57,53 @@ nodeOnly(() => {
 
                 expect(response.headers['content-type']).to.equal('text/html');
             });
+
+            it("should be able to pass through requests with a body", async () => {
+                await remoteServer.anyRequest().thenCallback((req) => ({ status: 200, body: req.body.text }));
+                await server.post(remoteServer.url).thenPassThrough();
+
+                let response = await request.post({
+                    url: remoteServer.url,
+                    json: { "test": true }
+                });
+
+                expect(response).to.deep.equal({ "test":true });
+            });
+
+            it("should be able to pass through requests with parameters", async () => {
+                await remoteServer.anyRequest().thenCallback((req) => ({ status: 200, body: req.url }));
+                await server.get(remoteServer.urlFor('/get?a=b')).thenPassThrough();
+
+                let response = await request.get(remoteServer.urlFor('/get?a=b'));
+
+                expect(response).to.equal('/get?a=b');
+            });
+
+            it("should be able to verify requests passed through with a body", async () => {
+                await remoteServer.post('/post').thenReply(200);
+                const endpointMock = await server.post(remoteServer.urlFor('/post')).thenPassThrough();
+
+                await request.post({
+                    url: remoteServer.urlFor('/post'),
+                    json: { "test": true }
+                });
+
+                const seenRequests = await endpointMock.getSeenRequests();
+                expect(seenRequests.length).to.equal(1);
+                expect(await seenRequests[0].body.text).to.equal('{"test":true}');
+            });
+
+            it("should successfully pass through non-proxy requests with a host header", async () => {
+                await remoteServer.get('/').thenReply(200, 'remote server');
+                server.anyRequest().thenPassThrough();
+                process.env = INITIAL_ENV;
+
+                let response = await request.get(server.urlFor("/"), {
+                    headers: { host: `localhost:${remoteServer.port}`  }
+                });
+
+                expect(response).to.equal('remote server');
+            });
         });
 
         describe("with an HTTPS config", () => {
@@ -73,7 +126,7 @@ nodeOnly(() => {
                     let response = await request.get("http://example.com/endpoint");
                     expect(response).to.equal("mocked data");
                 });
-                
+
                 it("should mock proxied HTTPS", async () => {
                     await server.get("https://example.com/endpoint").thenReply(200, "mocked data");
 
@@ -87,66 +140,19 @@ nodeOnly(() => {
                     let response = await request.get("https://example.com:1234/endpoint");
                     expect(response).to.equal("mocked data");
                 });
-                
-                it("should be able to pass through requests with a body", async () => {
-                    await server.post("https://httpbin.org/post").thenPassThrough();
-                    
-                    let response = await request.post({
-                        url: "https://httpbin.org/post",
-                        json: { "test": true }
-                    });
-
-                    expect(response.data).to.equal('{"test":true}');
-                });
-
-                it("should be able to pass through requests with parameters", async () => {
-                    await server.get("https://httpbin.org/get?a=b").thenPassThrough();
-
-                    let response = JSON.parse(await request.get("https://httpbin.org/get?a=b"));
-
-                    expect(response.args.a).to.equal('b');
-                });
-                
-                it("should be able to verify requests passed through with a body", async () => {
-                    const endpointMock = await server.post("https://httpbin.org/post").thenPassThrough();
-                    
-                    let response = await request.post({
-                        url: "https://httpbin.org/post",
-                        json: { "test": true }
-                    });
-
-                    const seenRequests = await endpointMock.getSeenRequests();
-                    expect(seenRequests.length).to.equal(1);
-                    expect(await seenRequests[0].body.text).to.equal('{"test":true}');
-                });
-
-                it("should successfully pass through non-proxy requests with a host header", async () => {
-                    server.anyRequest().thenPassThrough();
-                    process.env = INITIAL_ENV;
-
-                    let response = JSON.parse(await request.get(server.urlFor("/get?b=c"), {
-                        headers: { host: 'httpbin.org' }
-                    }));
-
-                    expect(response.args.b).to.equal('c');
-                });
             });
         });
 
         describe("when configured to forward requests to a different location", () => {
-            let remoteServer = getLocal();
 
             beforeEach(async () => {
                 server = getLocal();
                 await server.start();
                 process.env = _.merge({}, process.env, server.proxyEnv);
 
-                await remoteServer.start();
                 expect(remoteServer.port).to.not.equal(server.port);
             });
 
-            afterEach(() => remoteServer.stop());
-            
             it("forwards to the location specified in the rule builder", async () => {
                 await remoteServer.anyRequest().thenReply(200, "forwarded response");
                 await server.anyRequest().thenForwardTo(remoteServer.url);
