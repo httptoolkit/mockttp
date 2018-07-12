@@ -17,10 +17,10 @@ module.exports = (wallaby) => {
     preprocessors: {
       // Package.json points `main` to the built output. We use this a lot in the integration tests, but we
       // want wallaby to run on raw source. This is a simple remap of paths to lets us do that.
-      'test/integration/*.ts': file => {
+      'test/integration/**/*.ts': file => {
         return file.content.replace(
-          /("|')..\/..("|')/g,
-          '"../../src/main"'
+          /("|')..((\/..)+)("|')/g,
+          '"..$2/src/main"'
         );
       }
     },
