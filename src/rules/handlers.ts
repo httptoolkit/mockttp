@@ -276,7 +276,7 @@ export class StreamHandlerData extends Serializable {
                 let serializedEventData: StreamHandlerEventMessage | false =
                     _.isString(chunk) ? { type: 'string', value: chunk } :
                     _.isBuffer(chunk) ? { type: 'buffer', value: chunk.toString('base64') } :
-                    (_.isArrayBuffer(chunk) || _.isTypedArray(chunk)) ? { type: 'arraybuffer', value: encodeBase64(chunk) } :
+                    (_.isArrayBuffer(chunk) || _.isTypedArray(chunk)) ? { type: 'arraybuffer', value: encodeBase64(<any> chunk) } :
                     _.isNil(chunk) && { type: 'nil' };
 
                 if (!serializedEventData) {

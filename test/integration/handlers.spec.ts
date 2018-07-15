@@ -13,16 +13,16 @@ describe("HTTP mock rule handling", function () {
         await server.get("/mocked-endpoint").thenReply(204);
 
         let response = await fetch(server.urlFor("/mocked-endpoint"));
-        
+
         expect(await response.status).to.equal(204);
         expect(await response.text()).to.equal("");
     });
-    
+
     it("should allow mocking the status code & body", async () => {
         await server.get("/mocked-endpoint").thenReply(200, "mocked data");
 
         let response = await fetch(server.urlFor("/mocked-endpoint"));
-        
+
         expect(await response.text()).to.equal("mocked data");
     });
 
@@ -35,12 +35,12 @@ describe("HTTP mock rule handling", function () {
 
         expect(await response.headers.get("Content-Type")).to.equal("text/mocked");
     });
-    
+
     it("should allow mocking a binary body with a buffer", async () => {
         await server.get("/mocked-endpoint").thenReply(200, new Buffer([72, 105]));
 
         let response = await fetch(server.urlFor("/mocked-endpoint"));
-        
+
         expect(await response.text()).to.equal('Hi');
     });
 

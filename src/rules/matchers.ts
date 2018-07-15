@@ -29,7 +29,7 @@ export class MethodMatcherData extends Serializable {
     ) {
         super();
     }
-    
+
     buildMatcher() {
         let methodName = Method[this.method];
 

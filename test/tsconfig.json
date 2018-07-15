@@ -6,10 +6,7 @@
         "strictPropertyInitialization": false, // Fails with typed-error
         "lib": [
             "dom",
-            "es5",
-            "scripthost",
-            // Required for graphql (but it does actually bring its own polyfill)
-            "esnext.asynciterable"
+            "es2015"
         ]
     },
     "compileOnSave": true,

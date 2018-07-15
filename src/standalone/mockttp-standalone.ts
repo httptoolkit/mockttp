@@ -2,6 +2,8 @@
  * @module Mockttp
  */
 
+/// <reference path="../../custom-typings/asynciterator.d.ts" />
+
 import * as path from 'path';
 import * as fs from '../util/fs';
 import * as _ from 'lodash';
@@ -203,7 +205,7 @@ export class MockttpStandalone {
     }
 
     stop(): Promise<void> {
-        if (!this.server) return Promise.resolve<void>();
+        if (!this.server) return Promise.resolve();
 
         return Promise.all([
             this.server.destroy(),

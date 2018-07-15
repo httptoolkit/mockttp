@@ -57,7 +57,6 @@
     "@types/chai-as-promised": "0.0.29",
     "@types/common-tags": "^1.4.0",
     "@types/cors": "^2.8.1",
-    "@types/es6-promise": "0.0.32",
     "@types/graphql": "^0.10.2",
     "@types/lodash": "^4.14.37",
     "@types/mocha": "^2.2.32",

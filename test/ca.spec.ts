@@ -15,7 +15,7 @@ nodeOnly(() => {
             const ca = new CA(await caKey, await caCert);
 
             const { cert, key } = ca.generateCertificate('localhost')
-            
+
             server = https.createServer({ cert, key }, (req: any, res: any) => {
                 res.writeHead(200);
                 res.end('signed response!');

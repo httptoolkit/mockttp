@@ -3,17 +3,14 @@
         "target": "es5",
         "module": "commonjs",
         "outDir": "./dist",
-        "declaration": true, 
+        "declaration": true,
         "sourceMap": true,
         "strict": true,
         "strictPropertyInitialization": false, // Fails with typed-error
         "lib": [
             "dom",
-            "es5",
-            "es2015.core",
-            "scripthost",
-            // Required for graphql (but it does actually bring its own polyfill)
-            "esnext.asynciterable"
+            "es2015",
+            "scripthost"
         ]
     },
     "compileOnSave": true,
