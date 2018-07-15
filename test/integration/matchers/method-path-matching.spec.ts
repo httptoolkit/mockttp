@@ -30,14 +30,19 @@ responses by hand.`);
     });
 
     methods.forEach((methodName: Method) => {
-        it(`should match requests by ${methodName}`, async () => {
+        it(`should match ${methodName.toUpperCase()} requests`, async () => {
             await server[methodName]('/').thenReply(200, methodName);
 
             let result = await fetch(server.url, {
                 method: methodName.toUpperCase(),
             });
-            
-            expect(result).to.have.responseText(methodName);
+
+            await expect(result).to.have.status(200);
+            if (methodName !== 'head') {
+                await expect(result).to.have.responseText(methodName);
+            } else {
+                await expect(result).to.have.responseText('');
+            }
         });
     });
 
@@ -45,8 +50,8 @@ responses by hand.`);
         await server.get(/.*.txt/).thenReply(200, 'Fake file');
 
         let result = await fetch(server.urlFor('/matching-file.txt'));
-        
-        expect(result).to.have.responseText('Fake file');
+
+        await expect(result).to.have.responseText('Fake file');
     });
 
     it("should reject requests for the wrong path", async () => {

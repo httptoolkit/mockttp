@@ -73,7 +73,7 @@
     "catch-uncommitted": "^1.0.0",
     "chai": "^3.5.0",
     "chai-as-promised": "^6.0.0",
-    "chai-fetch": "^0.3.0",
+    "chai-fetch": "^0.3.1",
     "http-proxy-agent": "^2.0.0",
     "karma": "^1.7.1",
     "karma-chai": "^0.1.0",
