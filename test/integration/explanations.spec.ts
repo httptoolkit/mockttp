@@ -1,5 +1,5 @@
 import { getLocal } from "../..";
-import { expect, fetch, URLSearchParams, Headers, nodeOnly } from "../test-utils";
+import { expect, fetch, URLSearchParams, Headers } from "../test-utils";
 import * as _ from "lodash";
 import { Readable } from "stream";
 
@@ -71,19 +71,17 @@ Match requests making PUTs for /endpointC, and then close the connection, always
 `);
     });
 
-    nodeOnly(() => {
-        it("should explain callback handlers", async () => {
-            await server.post("/endpointA").thenCallback(() => ({}));
-            await server.post("/endpointB").thenCallback(function handleRequest() { return {}; });
+    it("should explain callback handlers", async () => {
+        await server.post("/endpointA").thenCallback(() => ({}));
+        await server.post("/endpointB").thenCallback(function handleRequest() { return {}; });
 
-            let response = await fetch(server.urlFor("/non-existent-endpoint"));
-            let text = await response.text();
+        let response = await fetch(server.urlFor("/non-existent-endpoint"));
+        let text = await response.text();
 
-            expect(text).to.include(`The configured rules are:
+        expect(text).to.include(`The configured rules are:
 Match requests making POSTs for /endpointA, and then respond using provided callback.
 Match requests making POSTs for /endpointB, and then respond using provided callback (handleRequest).
 `);
-        });
     });
 
     it("should explain received unmatched requests", async () => {

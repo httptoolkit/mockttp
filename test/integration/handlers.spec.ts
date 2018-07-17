@@ -1,7 +1,7 @@
 import * as semver from 'semver';
 import { PassThrough } from 'stream';
 import { getLocal } from "../..";
-import { expect, fetch, nodeOnly, isNode, delay } from "../test-utils";
+import { expect, fetch, isNode, delay } from "../test-utils";
 
 describe("HTTP mock rule handling", function () {
     let server = getLocal();

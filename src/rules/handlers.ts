@@ -74,6 +74,10 @@ interface StreamMessage {
     topicId: string;
 }
 
+export interface SerializedCallbackHandlerData extends SerializedStreamBackedHandlerData {
+    name?: string;
+}
+
 interface CallbackRequestMessage extends StreamMessage {
     requestId: string;
     args: [CompletedRequest];
@@ -125,7 +129,7 @@ export class CallbackHandlerData extends Serializable {
         });
     }
 
-    serialize(options?: SerializationOptions): SerializedStreamBackedHandlerData {
+    serialize(options?: SerializationOptions): SerializedCallbackHandlerData {
         if (!options || !options.clientStream) {
             throw new Error('Client-side callback handlers require a streaming client connection.');
         }
@@ -161,10 +165,10 @@ export class CallbackHandlerData extends Serializable {
             }
         });
 
-        return { type: this.type, topicId };
+        return { type: this.type, topicId, name: this.callback.name };
     }
 
-    static deserialize({ topicId }: SerializedStreamBackedHandlerData, options?: SerializationOptions): CallbackHandlerData {
+    static deserialize({ topicId, name }: SerializedCallbackHandlerData, options?: SerializationOptions): CallbackHandlerData {
         if (!options || !options.clientStream) {
             throw new Error('Client-side callback handlers require a streaming client connection.');
         }
@@ -186,9 +190,7 @@ export class CallbackHandlerData extends Serializable {
         // Listen to the client for responses to our callbacks
         clientStream.on('data', responseListener);
 
-        // Call the client's callback (via stream), and save a handler on our end for
-        // the response that comes back.
-        return new CallbackHandlerData((request) => {
+        const rpcCallback = (request: CompletedRequest) => {
             return new Promise((resolve, reject) => {
                 let requestId = uuid();
                 outstandingRequests[requestId] = (error?: Error, result?: CallbackHandlerResult) => {
@@ -206,7 +208,13 @@ export class CallbackHandlerData extends Serializable {
                     args: [request]
                 }));
             });
-        });
+        };
+        // Pass across the name from the real callback
+        Object.defineProperty(rpcCallback, "name", { value: name });
+
+        // Call the client's callback (via stream), and save a handler on our end for
+        // the response that comes back.
+        return new CallbackHandlerData(rpcCallback);
     }
 }
 

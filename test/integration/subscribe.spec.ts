@@ -32,7 +32,7 @@ describe("Request subscriptions", () => {
 
             beforeEach(() => client.start());
             afterEach(() => client.stop());
-            
+
             it("should notify with request details after a request is made", async () => {
                 let seenRequestPromise = getDeferred<CompletedRequest>();
                 await client.on('request', (r) => seenRequestPromise.resolve(r));
