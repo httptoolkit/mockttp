@@ -102,6 +102,27 @@ export class HeaderMatcherData extends Serializable {
     }
 }
 
+export class QueryMatcherData extends Serializable {
+    readonly type: 'query' = 'query';
+
+    constructor(
+        public queryObject: { [key: string]: string | number },
+    ) {
+        super();
+    }
+
+    buildMatcher() {
+        const expectedQuery = _.mapValues(this.queryObject, (v) => v.toString());
+
+        return _.assign(
+            (request: OngoingRequest) => {
+                let { query } = url.parse(request.url, true);
+                return _.isMatch(query, expectedQuery);
+            }
+        , { explain: () => `with a query including ${JSON.stringify(this.queryObject)}` });
+    }
+}
+
 export class FormDataMatcherData extends Serializable {
     readonly type: 'form-data' = 'form-data';
 
@@ -142,6 +163,7 @@ export type MatcherData = (
     SimplePathMatcherData |
     RegexPathMatcherData |
     HeaderMatcherData |
+    QueryMatcherData |
     FormDataMatcherData |
     RawBodyMatcherData
 );
@@ -152,6 +174,7 @@ export const MatcherDataLookup = {
     'simple-path': SimplePathMatcherData,
     'regex-path': RegexPathMatcherData,
     'header': HeaderMatcherData,
+    'query': QueryMatcherData,
     'form-data': FormDataMatcherData,
     'raw-body': RawBodyMatcherData
 }

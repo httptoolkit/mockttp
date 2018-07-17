@@ -24,17 +24,18 @@ import {
 } from "./completion-checkers";
 
 import {
-    MatcherData,    
+    MatcherData,
     MethodMatcherData,
     SimplePathMatcherData,
     RegexPathMatcherData,
     HeaderMatcherData,
+    QueryMatcherData,
     FormDataMatcherData,
     RawBodyMatcherData,
     WildcardMatcherData
 } from "./matchers";
 
-import { 
+import {
     SimpleHandlerData,
     PassThroughHandlerData,
     CallbackHandlerData,
@@ -87,7 +88,7 @@ export default class MockRuleBuilder {
         }
 
         this.matchers.push(new MethodMatcherData(methodOrAddRule));
-        
+
         if (path instanceof RegExp) {
             this.matchers.push(new RegexPathMatcherData(path));
             this.addRule = addRule!;
@@ -105,6 +106,14 @@ export default class MockRuleBuilder {
      */
     withHeaders(headers: { [key: string]: string }) {
         this.matchers.push(new HeaderMatcherData(headers));
+        return this;
+    }
+
+    /**
+     * Match only requests that include the given query parameters
+     */
+    withQuery(query: { [key: string]: string | number }): MockRuleBuilder {
+        this.matchers.push(new QueryMatcherData(query));
         return this;
     }
 
