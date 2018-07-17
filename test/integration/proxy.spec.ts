@@ -72,7 +72,7 @@ nodeOnly(() => {
 
             it("should be able to pass through requests with parameters", async () => {
                 await remoteServer.anyRequest().thenCallback((req) => ({ status: 200, body: req.url }));
-                await server.get(remoteServer.urlFor('/get?a=b')).thenPassThrough();
+                await server.get(remoteServer.urlFor('/get')).thenPassThrough();
 
                 let response = await request.get(remoteServer.urlFor('/get?a=b'));
 

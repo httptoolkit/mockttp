@@ -1,5 +1,6 @@
 import { getLocal } from "../../..";
 import { expect, fetch, browserOnly } from "../../test-utils";
+import { stripIndent } from "common-tags";
 
 describe("Method & path request matching", function () {
     let server = getLocal();
@@ -68,6 +69,23 @@ responses by hand.`);
         let result = await fetch(server.urlFor('/non-matching-file.css'));
 
         expect(result.status).to.equal(503);
+    });
+
+    it("should match requests ignoring the query string", async () => {
+        await server.get('/path').thenReply(200, 'Matched path');
+
+        let result = await fetch(server.urlFor('/path?a=b'));
+
+        await expect(result).to.have.responseText('Matched path');
+    });
+
+    it("should fail if you pass a query string in the path", async () => {
+        await expect(
+            () => server.get('/?a=b').thenReply(200, 'Mocked response')
+        ).to.throw(stripIndent`
+            Tried to match a path that contained a query (?a=b). ${''
+            }To match query parameters, add .withQuery({"a":"b"}) instead.
+        `);
     });
 
     it("should allowing matching all requests, with a wildcard", async () => {

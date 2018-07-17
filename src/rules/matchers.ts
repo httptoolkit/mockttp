@@ -2,13 +2,15 @@
  * @module MockRuleData
  */
 
-import * as _ from "lodash";
+import * as _ from 'lodash';
+import * as url from 'url';
 
 import { OngoingRequest, Method } from "../types";
 import { RequestMatcher } from "./mock-rule-types";
 import { MockRule } from "./mock-rule";
 import { Serializable } from "../util/serialization";
 import normalizeUrl from "../util/normalize-url";
+import { stripIndent } from 'common-tags';
 
 export class WildcardMatcherData extends Serializable {
     readonly type: 'wildcard' = 'wildcard';
@@ -46,6 +48,14 @@ export class SimplePathMatcherData extends Serializable {
         public path: string
     ) {
         super();
+
+        let { search, query } = url.parse(this.path, true);
+        if (search) {
+            throw new Error(stripIndent`
+                Tried to match a path that contained a query (${search}). ${''
+                }To match query parameters, add .withQuery(${JSON.stringify(query)}) instead.
+            `);
+        }
     }
 
     buildMatcher() {
