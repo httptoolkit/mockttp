@@ -11,15 +11,13 @@ import https = require('https');
 import express = require("express");
 import uuid = require('uuid/v4');
 import { encode as encodeBase64, decode as decodeBase64 } from 'base64-arraybuffer';
-import { Readable, PassThrough, Transform } from 'stream';
+import { Readable, Transform } from 'stream';
 import { stripIndent } from 'common-tags';
-
-import { IncomingMessage } from 'http';
 
 import { waitForCompletedRequest } from '../util/request-utils';
 import { Serializable, SerializationOptions } from "../util/serialization";
 
-import { CompletedRequest, OngoingRequest } from "../types";
+import { CompletedRequest, OngoingRequest, OngoingResponse } from "../types";
 import { RequestHandler } from "./mock-rule-types";
 
 export type SerializedBuffer = { type: 'Buffer', data: number[] };
@@ -40,7 +38,7 @@ export class SimpleHandlerData extends Serializable {
     }
 
     buildHandler() {
-        return _.assign(async (request: OngoingRequest, response: express.Response) => {
+        return _.assign(async (request: OngoingRequest, response: OngoingResponse) => {
             response.writeHead(this.status, this.headers);
 
             if (isSerializedBuffer(this.data)) {

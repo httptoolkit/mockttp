@@ -237,16 +237,18 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
         return new MockedEndpointClient(ruleId, this.getEndpointData(ruleId));
     }
 
-    public on(event: 'request', callback: (req: CompletedRequest) => void): Promise<void> {
-        if (event !== 'request') return Promise.resolve();
+    public on(event: 'request' | 'response', callback: Function): Promise<void> {
+        if (!_.includes(['request', 'response'], event)) return Promise.resolve();
 
         const url = `ws://localhost:${DEFAULT_STANDALONE_PORT}/server/${this.mockServerConfig!.port}/subscription`;
         const client = new SubscriptionClient(url, { }, WebSocket);
 
-        client.request({
+        const queryResultName = event === 'request' ? 'requestReceived' : 'responseCompleted';
+
+        const query = event === 'request' ? {
             operationName: 'OnRequest',
             query: `subscription OnRequest {
-                requestReceived {
+                ${queryResultName} {
                     protocol,
                     method,
                     url,
@@ -262,16 +264,29 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                     }
                 }
             }`
-        }).subscribe({
+        } : {
+            operationName: 'OnResponse',
+            query: `subscription OnResponse {
+                ${queryResultName} {
+                    statusCode,
+                    statusMessage
+                }
+            }`
+        }
+
+
+        client.request(query).subscribe({
             next: (value) => {
                 if (value.data) {
-                    const request = (<any> value.data).requestReceived;
-                    // TODO: Get a proper graphql client that does this automatically from the schema itself
-                    request.headers = JSON.parse(request.headers);
-                    callback(request);
+                    const data = (<any> value.data)[queryResultName];
+                    if (data.headers) {
+                        // TODO: Get a proper graphql client that does this automatically from the schema itself
+                        data.headers = JSON.parse(data.headers);
+                    }
+                    callback(data);
                 }
             },
-            error: (e) => this.debug && console.warn('Error in request subscription:', e)
+            error: (e) => this.debug && console.warn('Error in remote subscription:', e)
         });
 
         return new Promise((resolve, reject) => {

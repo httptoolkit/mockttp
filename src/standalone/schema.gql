@@ -26,6 +26,11 @@ type RequestBody {
     formData: Json
 }
 
+type Response {
+    statuscode: Int!
+    statusMessage: String!
+}
+
 type Mutation {
     addRule(input: MockRule!): MockedEndpoint!
     reset: Boolean!
@@ -39,6 +44,7 @@ input MockRule {
 
 type Subscription {
     requestReceived: Request!
+    responseCompleted: Response!
 }
 
 scalar Any

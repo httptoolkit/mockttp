@@ -1,5 +1,6 @@
 import { getLocal, getStandalone, getRemote, CompletedRequest } from "../..";
-import { expect, fetch, nodeOnly, delay, getDeferred } from "../test-utils";
+import { expect, fetch, nodeOnly, getDeferred } from "../test-utils";
+import { CompletedResponse } from "../../dist/types";
 
 describe("Request subscriptions", () => {
     describe("with a local server", () => {
@@ -46,5 +47,26 @@ describe("Request subscriptions", () => {
             });
 
         });
+    });
+});
+
+describe("Response subscriptions", () => {
+    let server = getLocal();
+
+    beforeEach(() => server.start());
+    afterEach(() => server.stop());
+
+    it("should notify with response details when a response is completed", async () => {
+        server.get('/mocked-endpoint').thenReply(200, 'Mock response', {
+            'X-Extra-Header': 'present'
+        });
+
+        let seenResponsePromise = getDeferred<CompletedResponse>();
+        await server.on('response', (r) => seenResponsePromise.resolve(r));
+
+        fetch(server.urlFor("/mocked-endpoint"));
+
+        let seenResponse = await seenResponsePromise;
+        expect(seenResponse.statusCode).to.equal(200);
     });
 });

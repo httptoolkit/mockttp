@@ -2,6 +2,7 @@
  * @module MockRule
  */
 
+import * as _ from 'lodash';
 import uuid = require("uuid/v4");
 
 import { deserialize, SerializationOptions } from '../util/serialization';
@@ -10,7 +11,6 @@ import { waitForCompletedRequest } from '../util/request-utils';
 import { OngoingRequest, CompletedRequest, Response } from "../types";
 import {
   MockRule as MockRuleInterface,
-  RuleExplainable,
   RuleCompletionChecker,
   RequestHandler,
   RequestMatcher,
@@ -65,24 +65,27 @@ export class MockRule implements MockRuleInterface {
     private recordRequests(handler: RequestHandler): RequestHandler {
         const thisRule = this;
 
-        const recordRequest = <RequestHandler> function recordRequest(this: any, req: OngoingRequest, res: Response) {
-            const handlerArgs = arguments;
-            let completedAndRecordedPromise = (async (resolve, reject) => {
-                // Start recording before the data starts piping, so we don't miss anything.                
-                let buffer = req.body.asBuffer();
+        const recordRequest = <RequestHandler> _.assign(
+            function recordRequest(this: any, req: OngoingRequest, res: Response) {
+                const handlerArgs = arguments;
+                let completedAndRecordedPromise = (async (resolve, reject) => {
+                    // Start recording before the data starts piping, so we don't miss anything.
+                    let buffer = req.body.asBuffer();
 
-                await handler.apply(this, handlerArgs);
+                    await handler.apply(this, handlerArgs);
 
-                return waitForCompletedRequest(req);
-            })();
-            
-            // Requests are added to rule.requests as soon as they start being handled.
-            thisRule.requests.push(completedAndRecordedPromise);
+                    return waitForCompletedRequest(req);
+                })();
 
-            return completedAndRecordedPromise.then(() => {});
-        };
+                // Requests are added to rule.requests as soon as they start being handled.
+                thisRule.requests.push(completedAndRecordedPromise);
 
-        recordRequest.explain = handler.explain;
+                return completedAndRecordedPromise.then(() => {});
+            }, {
+                explain: handler.explain
+            }
+        );
+
         return recordRequest;
     }
 

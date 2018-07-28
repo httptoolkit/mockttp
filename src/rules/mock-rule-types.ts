@@ -2,7 +2,7 @@
  * @module MockRule
  */
 
-import { Explainable, OngoingRequest, CompletedRequest, Response, Method } from "../types";
+import { Explainable, OngoingRequest, CompletedRequest, OngoingResponse } from "../types";
 import { MatcherData } from "./matchers";
 import { CompletionCheckerData } from "./completion-checkers";
 import { HandlerData } from "./handlers";
@@ -32,7 +32,7 @@ export interface RequestMatcher extends RuleExplainable {
 }
 
 export interface RequestHandler extends RuleExplainable {
-    (request: OngoingRequest, response: Response): Promise<void>
+    (request: OngoingRequest, response: OngoingResponse): Promise<void>
 }
 
 export interface RuleCompletionChecker extends RuleExplainable {

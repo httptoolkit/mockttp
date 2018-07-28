@@ -24,6 +24,7 @@ import { deserializeRuleData } from "../rules/mock-rule";
 import { Duplex } from "stream";
 
 const REQUEST_RECEIVED_TOPIC = 'request-received';
+const RESPONSE_COMPLETED_TOPIC = 'response-completed';
 
 function astToObject<T>(ast: ObjectValueNode): T {
     return <T> _.zipObject(
@@ -127,6 +128,12 @@ export function buildStandaloneModel(mockServer: MockttpServer, stream: Duplex):
         })
     });
 
+    mockServer.on('response', (response) => {
+        pubsub.publish(RESPONSE_COMPLETED_TOPIC, {
+            responseCompleted: response
+        })
+    });
+
     return <any> {
         Query: {
             mockedEndpoints: (): Promise<MockedEndpointData[]> => {
@@ -158,6 +165,9 @@ export function buildStandaloneModel(mockServer: MockttpServer, stream: Duplex):
         Subscription: {
             requestReceived: {
                 subscribe: () => pubsub.asyncIterator(REQUEST_RECEIVED_TOPIC)
+            },
+            responseCompleted: {
+                subscribe: () => pubsub.asyncIterator(RESPONSE_COMPLETED_TOPIC)
             }
         },
 

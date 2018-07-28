@@ -4,7 +4,7 @@
 import { stripIndent } from "common-tags";
 
 import MockRuleBuilder from "./rules/mock-rule-builder";
-import { ProxyConfig, MockedEndpoint, Method, OngoingRequest, CompletedRequest } from "./types";
+import { ProxyConfig, MockedEndpoint, Method, CompletedRequest, CompletedResponse } from "./types";
 import { MockRuleData } from "./rules/mock-rule-types";
 import { CAOptions } from './util/tls';
 
@@ -140,6 +140,18 @@ export interface Mockttp {
      * the promise is resolved.
      */
     on(event: 'request', callback: (req: CompletedRequest) => void): Promise<void>;
+
+    /**
+     * Subscribe to hear about response details as the response is completed.
+     *
+     * This is only useful in some niche use cases, such as logging all requests seen
+     * by the server independently of the rules defined.
+     *
+     * The callback will be called asynchronously from request handling. This function
+     * returns a promise, and the callback is not guaranteed to be registered until
+     * the promise is resolved.
+     */
+    on(event: 'response', callback: (req: CompletedResponse) => void): Promise<void>;
 }
 
 export interface MockttpOptions {

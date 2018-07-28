@@ -13,9 +13,8 @@ import express = require("express");
 import cors = require("cors");
 import _ = require("lodash");
 
-import { Method, OngoingRequest, CompletedRequest, ProxyConfig } from "../types";
+import { OngoingRequest, CompletedRequest, CompletedResponse, OngoingResponse } from "../types";
 import { MockRuleData } from "../rules/mock-rule-types";
-import MockRuleBuilder from "../rules/mock-rule-builder";
 import { CAOptions, getCA } from '../util/tls';
 import destroyable, { DestroyableServer } from "../util/destroyable-server";
 import { Mockttp, AbstractMockttp, MockttpOptions } from "../mockttp";
@@ -23,7 +22,7 @@ import { MockRule } from "../rules/mock-rule";
 import { MockedEndpoint } from "./mocked-endpoint";
 import { parseBody } from "./parse-body";
 import { filter } from "../util/promise";
-import { waitForCompletedRequest } from "../util/request-utils";
+import { waitForCompletedRequest, trackResponse, waitForCompletedResponse } from "../util/request-utils";
 
 
 /**
@@ -86,7 +85,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
                 // TODO: Fix DT's node types for this callback - Error should be Error|null
                 SNICallback: (domain, cb: any) => {
                     if (this.debug) console.log(`Generating server certificate for ${domain}`);
-                    
+
                     const generatedCert = ca.generateCertificate(domain);
                     cb(null, tls.createSecureContext({
                         key: generatedCert.key,
@@ -113,7 +112,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
                         } else {
                             console.warn(`Error in proxy TLS connection: ${e.message}`);
                         }
-                        
+
                         // We can't recover from this - just try to close the underlying socket.
                         try { socket.destroy(); } catch (e) {}
                     });
@@ -165,7 +164,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         if (this.debug) console.log(`Stopping server at ${this.url}`);
 
         if (this.server) await this.server.destroy();
-        
+
         this.reset();
     }
 
@@ -204,7 +203,9 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         return Promise.resolve(new MockedEndpoint(rule));
     }
 
-    public on(event: 'request', callback: (req: CompletedRequest) => void): Promise<void> {
+    public on(event: 'request', callback: (req: CompletedRequest) => void): Promise<void>;
+    public on(event: 'response', callback: (req: CompletedResponse) => void): Promise<void>;
+    public on(event: string, callback: Function): Promise<void> {
         this.eventEmitter.on(event, callback);
         return Promise.resolve();
     }
@@ -214,6 +215,16 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
             waitForCompletedRequest(request)
             .then((req: CompletedRequest) => {
                 this.eventEmitter.emit('request', req);
+            })
+            .catch(console.error);
+        });
+    }
+
+    private announceResponseAsync(response: OngoingResponse) {
+        setImmediate(() => {
+            waitForCompletedResponse(response)
+            .then((res: CompletedResponse) => {
+                this.eventEmitter.emit('response', res);
             })
             .catch(console.error);
         });
@@ -256,7 +267,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
             } else {
                 console.error("Failed to handle request:", e.message);
             }
-            
+
             // Make sure any errors here don't kill the process
             response.on('error', (e) => {});
 
@@ -264,6 +275,8 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
             try { response.writeHead(e.statusCode || 500, e.statusMessage || 'Server error'); } catch (e) {}
             try { response.end(e.toString()); } catch (e) {}
         }
+
+        this.announceResponseAsync(response);
     }
 
     private isComplete = (rule: MockRule, matchingRules: MockRule[]) => {

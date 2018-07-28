@@ -29,7 +29,7 @@ export interface Request {
 
 export interface OngoingRequest extends Request {
     originalUrl: string;
-    
+
     body: {
         rawStream: stream.Readable,
 
@@ -49,7 +49,16 @@ export interface CompletedRequest extends Request {
     }
 }
 
-export interface Response extends express.Response { }
+export interface Response {
+}
+
+export interface OngoingResponse extends express.Response {
+}
+
+export interface CompletedResponse extends Response {
+    statusCode: number;
+    statusMessage: string;
+}
 
 /**
  * A mocked endpoint provides methods to see the current state of
