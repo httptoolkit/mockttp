@@ -101,7 +101,7 @@ const ScalarResolvers = {
             } else return null;
         }
     }),
-    
+
     Json: new GraphQLScalarType({
         name: 'Json',
         description: 'A JSON entity, serialized as a simple JSON string',

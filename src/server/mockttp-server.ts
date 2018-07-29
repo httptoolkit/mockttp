@@ -22,7 +22,7 @@ import { MockRule } from "../rules/mock-rule";
 import { MockedEndpoint } from "./mocked-endpoint";
 import { parseBody } from "./parse-body";
 import { filter } from "../util/promise";
-import { waitForCompletedRequest, trackResponse, waitForCompletedResponse } from "../util/request-utils";
+import { waitForCompletedRequest, trackResponse, waitForCompletedResponse, TrackedOngoingResponse } from "../util/request-utils";
 
 
 /**
@@ -220,7 +220,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         });
     }
 
-    private announceResponseAsync(response: OngoingResponse) {
+    private announceResponseAsync(response: TrackedOngoingResponse) {
         setImmediate(() => {
             waitForCompletedResponse(response)
             .then((res: CompletedResponse) => {
@@ -230,10 +230,11 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         });
     }
 
-    private async handleRequest(request: OngoingRequest, response: express.Response) {
+    private async handleRequest(request: OngoingRequest, rawResponse: express.Response) {
         if (this.debug) console.log(`Handling request for ${request.url}`);
 
         this.announceRequestAsync(request);
+        const response = trackResponse(rawResponse);
 
         try {
             let matchingRules = await filter(this.rules, (r) => r.matches(request));

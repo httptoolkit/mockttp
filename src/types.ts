@@ -58,6 +58,7 @@ export interface OngoingResponse extends express.Response {
 export interface CompletedResponse extends Response {
     statusCode: number;
     statusMessage: string;
+    headers: { [key: string]: string; };
 }
 
 /**

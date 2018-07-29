@@ -58,7 +58,7 @@ describe("Response subscriptions", () => {
 
     it("should notify with response details when a response is completed", async () => {
         server.get('/mocked-endpoint').thenReply(200, 'Mock response', {
-            'X-Extra-Header': 'present'
+            'x-extra-header': 'present'
         });
 
         let seenResponsePromise = getDeferred<CompletedResponse>();
@@ -68,5 +68,6 @@ describe("Response subscriptions", () => {
 
         let seenResponse = await seenResponsePromise;
         expect(seenResponse.statusCode).to.equal(200);
+        expect(seenResponse.headers['x-extra-header']).to.equal('present');
     });
 });

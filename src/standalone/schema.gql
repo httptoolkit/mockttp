@@ -29,6 +29,8 @@ type RequestBody {
 type Response {
     statuscode: Int!
     statusMessage: String!
+
+    headers: Json!
 }
 
 type Mutation {

@@ -269,11 +269,11 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
             query: `subscription OnResponse {
                 ${queryResultName} {
                     statusCode,
-                    statusMessage
+                    statusMessage,
+                    headers
                 }
             }`
         }
-
 
         client.request(query).subscribe({
             next: (value) => {

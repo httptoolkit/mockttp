@@ -23,12 +23,26 @@ export async function waitForCompletedRequest(request: OngoingRequest): Promise<
     }).valueOf();
 }
 
-export async function waitForCompletedResponse(response: OngoingResponse): Promise<CompletedResponse> {
+export interface TrackedOngoingResponse extends OngoingResponse {
+    getHeaders(): { [key: string]: string };
+}
+
+export function trackResponse(response: OngoingResponse): TrackedOngoingResponse {
+    let trackedResponse = <TrackedOngoingResponse> response;
+    if (!trackedResponse.getHeaders) {
+        // getHeaders was added in 7.7. - if it's not available, polyfill it
+        trackedResponse.getHeaders = function (this: any) { return this._headers; }
+    }
+
+    return trackedResponse;
+}
+
+export async function waitForCompletedResponse(response: TrackedOngoingResponse): Promise<CompletedResponse> {
     return _(response).pick([
         'statusCode',
         'statusMessage'
     ]).assign({
-        headers: { },
+        headers: response.getHeaders(),
         body: {
             buffer: new Buffer(0),
             text: undefined,
