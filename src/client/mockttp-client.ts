@@ -290,6 +290,8 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                         data.headers = JSON.parse(data.headers);
                     }
                     callback(data);
+                } else if (value.errors) {
+                    console.error('Error in subscription', value.errors);
                 }
             },
             error: (e) => this.debug && console.warn('Error in remote subscription:', e)
