@@ -14,7 +14,7 @@ import { encode as encodeBase64, decode as decodeBase64 } from 'base64-arraybuff
 import { Readable, Transform } from 'stream';
 import { stripIndent } from 'common-tags';
 
-import { waitForCompletedRequest } from '../util/request-utils';
+import { waitForCompletedRequest } from '../server/request-utils';
 import { Serializable, SerializationOptions } from "../util/serialization";
 
 import { CompletedRequest, OngoingRequest, OngoingResponse } from "../types";

@@ -30,35 +30,39 @@ export interface Request {
 export interface OngoingRequest extends Request {
     originalUrl: string;
 
-    body: {
-        rawStream: stream.Readable,
+    body: ParsedBody;
+}
 
-        asBuffer: () => Promise<Buffer>,
-        asText: () => Promise<string>,
-        asJson: () => Promise<object>,
-        asFormData: () => Promise<{ [key: string]: string }>
-    }
+export interface ParsedBody {
+    rawStream: stream.Readable;
+
+    asBuffer: () => Promise<Buffer>;
+    asText: () => Promise<string>;
+    asJson: () => Promise<object>;
+    asFormData: () => Promise<{ [key: string]: string }>;
+}
+
+export interface CompletedBody {
+    buffer: Buffer;
+    text: string | undefined;
+    json: object | undefined;
+    formData: { [key: string]: string } | undefined;
 }
 
 export interface CompletedRequest extends Request {
-    body: {
-        buffer: Buffer,
-        text: string | undefined,
-        json: object | undefined,
-        formData: { [key: string]: string } | undefined
-    }
-}
-
-export interface Response {
+    body: CompletedBody;
 }
 
 export interface OngoingResponse extends express.Response {
+    getHeaders(): { [key: string]: string };
+    body: ParsedBody;
 }
 
-export interface CompletedResponse extends Response {
+export interface CompletedResponse {
     statusCode: number;
     statusMessage: string;
     headers: { [key: string]: string; };
+    body: CompletedBody;
 }
 
 /**

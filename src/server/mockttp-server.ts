@@ -19,10 +19,15 @@ import { CAOptions, getCA } from '../util/tls';
 import destroyable, { DestroyableServer } from "../util/destroyable-server";
 import { Mockttp, AbstractMockttp, MockttpOptions } from "../mockttp";
 import { MockRule } from "../rules/mock-rule";
-import { MockedEndpoint } from "./mocked-endpoint";
-import { parseBody } from "./parse-body";
 import { filter } from "../util/promise";
-import { waitForCompletedRequest, trackResponse, waitForCompletedResponse, TrackedOngoingResponse } from "../util/request-utils";
+
+import { MockedEndpoint } from "./mocked-endpoint";
+import {
+    parseBody,
+    waitForCompletedRequest,
+    trackResponse,
+    waitForCompletedResponse,
+} from "./request-utils";
 
 
 /**
@@ -220,7 +225,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         });
     }
 
-    private announceResponseAsync(response: TrackedOngoingResponse) {
+    private announceResponseAsync(response: OngoingResponse) {
         setImmediate(() => {
             waitForCompletedResponse(response)
             .then((res: CompletedResponse) => {
@@ -292,31 +297,31 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
     private async explainRequest(request: OngoingRequest): Promise<string> {
         let msg = `${request.method} request to ${request.url}`;
-    
+
         let bodyText = await request.body.asText();
         if (bodyText) msg += ` with body \`${bodyText}\``;
-    
+
         if (!_.isEmpty(request.headers)) {
             msg += ` with headers:\n${JSON.stringify(request.headers, null, 2)}`;
         }
-    
+
         return msg;
     }
 
     private async suggestRule(request: OngoingRequest): Promise<string> {
         let msg = "You can fix this by adding a rule to match this request, for example:\n"
-    
+
         msg += `mockServer.${request.method.toLowerCase()}("${request.path}")`;
-    
+
         let isFormRequest = !!request.headers["content-type"] && request.headers["content-type"].indexOf("application/x-www-form-urlencoded") > -1;
         let formBody = await request.body.asFormData().catch(() => undefined);
-    
+
         if (isFormRequest && !!formBody) {
             msg += `.withForm(${JSON.stringify(formBody)})`;
         }
-    
+
         msg += '.thenReply(200, "your response");';
-    
+
         return msg;
     }
 }

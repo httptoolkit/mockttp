@@ -16,10 +16,10 @@ type Request {
     hostname: String!
 
     headers: Json!
-    body: RequestBody!
+    body: Body!
 }
 
-type RequestBody {
+type Body {
     buffer: Any!
     text: String
     json: Json
@@ -27,10 +27,11 @@ type RequestBody {
 }
 
 type Response {
-    statuscode: Int!
+    statusCode: Int!
     statusMessage: String!
 
     headers: Json!
+    body: Body!
 }
 
 type Mutation {

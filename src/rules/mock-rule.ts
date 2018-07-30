@@ -6,9 +6,9 @@ import * as _ from 'lodash';
 import uuid = require("uuid/v4");
 
 import { deserialize, SerializationOptions } from '../util/serialization';
-import { waitForCompletedRequest } from '../util/request-utils';
+import { waitForCompletedRequest } from '../server/request-utils';
 
-import { OngoingRequest, CompletedRequest, Response } from "../types";
+import { OngoingRequest, CompletedRequest } from "../types";
 import {
   MockRule as MockRuleInterface,
   RuleCompletionChecker,
@@ -66,7 +66,7 @@ export class MockRule implements MockRuleInterface {
         const thisRule = this;
 
         const recordRequest = <RequestHandler> _.assign(
-            function recordRequest(this: any, req: OngoingRequest, res: Response) {
+            function recordRequest(this: any, req: OngoingRequest) {
                 const handlerArgs = arguments;
                 let completedAndRecordedPromise = (async (resolve, reject) => {
                     // Start recording before the data starts piping, so we don't miss anything.
