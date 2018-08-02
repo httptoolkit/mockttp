@@ -122,7 +122,7 @@
     "portfinder": "^1.0.9",
     "subscriptions-transport-ws": "^0.9.4",
     "typed-error": "^2.0.0",
-    "universal-websocket-client": "^1.0.1",
+    "universal-websocket-client": "^1.0.2",
     "uuid": "^3.1.0",
     "websocket-stream": "^5.1.2"
   }
