@@ -63,10 +63,10 @@ describe("Mockttp", () => {
         .then(() => {
             // Make a request
             return superagent.get("http://localhost:8080/mocked-path");
-        }).then(() => {
+        }).then(response => {
             // Assert on the results
             expect(response.text).to.equal("A mocked response");
-        });
+        })
     );
 });
 ```
