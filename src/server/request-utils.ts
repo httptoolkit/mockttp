@@ -93,14 +93,26 @@ export function trackResponse(response: express.Response): OngoingResponse {
     const originalWrite = trackedResponse.write;
     const originalEnd = trackedResponse.end;
 
-    trackedResponse.write = function (...args: any[]) {
+    const trackingWrite = function (this: typeof trackedResponse, ...args: any[]) {
         trackingStream.write.apply(trackingStream, args);
         return originalWrite.apply(this, args);
     };
 
-    trackedResponse.end = function(...args: any[]) {
+    trackedResponse.write = trackingWrite;
+
+    trackedResponse.end = function (...args: any[]) {
+        // We temporarily disable write tracking here, as .end
+        // can call this.write, but that write should not be
+        // tracked, or we'll get duplicate writes when trackingStream
+        // calls it on itself too.
+
+        trackedResponse.write = originalWrite;
+
         trackingStream.end.apply(trackingStream, args);
-        return originalEnd.apply(this, args);
+        let result = originalEnd.apply(this, args);
+
+        trackedResponse.write = trackingWrite;
+        return result;
     };
 
     trackedResponse.body = parseBodyStream(trackingStream);
