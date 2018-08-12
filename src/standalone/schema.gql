@@ -9,6 +9,8 @@ type MockedEndpoint {
 }
 
 type Request {
+    id: ID!
+
     protocol: String!
     method: String!
     url: String!
@@ -27,6 +29,8 @@ type Body {
 }
 
 type Response {
+    id: ID!
+
     statusCode: Int!
     statusMessage: String!
 

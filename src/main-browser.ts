@@ -1,7 +1,7 @@
 import MockttpClient from "./client/mockttp-client";
 
 import { Mockttp, MockttpOptions } from "./mockttp";
-export { OngoingRequest, CompletedRequest } from "./types";
+export { OngoingRequest, CompletedRequest, CompletedResponse } from "./types";
 
 export interface MockedEndpoint {
     getSeenRequests(): Request[]

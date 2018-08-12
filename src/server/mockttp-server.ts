@@ -9,6 +9,7 @@ import EventEmitter = require("events");
 import tls = require('tls');
 import portfinder = require("portfinder");
 import express = require("express");
+import uuid = require('uuid/v4');
 
 import cors = require("cors");
 import _ = require("lodash");
@@ -238,8 +239,14 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
     private async handleRequest(request: OngoingRequest, rawResponse: express.Response) {
         if (this.debug) console.log(`Handling request for ${request.url}`);
 
-        this.announceRequestAsync(request);
         const response = trackResponse(rawResponse);
+
+        const id = uuid();
+
+        request.id = id;
+        response.id = id;
+
+        this.announceRequestAsync(request);
 
         try {
             let matchingRules = await filter(this.rules, (r) => r.matches(request));

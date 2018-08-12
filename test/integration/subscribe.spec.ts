@@ -71,4 +71,24 @@ describe("Response subscriptions", () => {
         expect(seenResponse.headers['x-extra-header']).to.equal('present');
         expect(seenResponse.body.text).to.equal('Mock response');
     });
+
+    it("should include an id that matches the request event", async () => {
+        server.get('/mocked-endpoint').thenReply(200);
+
+        let seenRequestPromise = getDeferred<CompletedRequest>();
+        let seenResponsePromise = getDeferred<CompletedResponse>();
+
+        await Promise.all([
+            server.on('request', (r) => seenRequestPromise.resolve(r)),
+            server.on('response', (r) => seenResponsePromise.resolve(r))
+        ]);
+
+        fetch(server.urlFor("/mocked-endpoint"));
+
+        let seenResponse = await seenResponsePromise;
+        let seenRequest = await seenRequestPromise;
+
+        expect(seenRequest.id).to.be.a('string');
+        expect(seenRequest.id).to.equal(seenResponse.id);
+    });
 });

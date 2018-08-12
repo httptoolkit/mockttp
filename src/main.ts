@@ -7,7 +7,7 @@ import MockttpClient from "./client/mockttp-client";
 import { MockttpStandalone, StandaloneServerOptions } from "./standalone/mockttp-standalone";
 
 import { Mockttp, MockttpOptions } from "./mockttp";
-export { OngoingRequest, CompletedRequest, MockedEndpoint } from "./types";
+export { OngoingRequest, CompletedRequest, CompletedResponse, MockedEndpoint } from "./types";
 
 export { Mockttp };
 

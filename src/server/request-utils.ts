@@ -70,6 +70,7 @@ export const parseBody = (
 
 export async function waitForCompletedRequest(request: OngoingRequest): Promise<CompletedRequest> {
     return _(request).pick([
+        'id',
         'protocol',
         'method',
         'url',
@@ -122,6 +123,7 @@ export function trackResponse(response: express.Response): OngoingResponse {
 
 export async function waitForCompletedResponse(response: OngoingResponse): Promise<CompletedResponse> {
     return _(response).pick([
+        'id',
         'statusCode',
         'statusMessage'
     ]).assign({

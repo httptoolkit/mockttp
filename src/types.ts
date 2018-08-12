@@ -28,6 +28,7 @@ export interface Request {
 }
 
 export interface OngoingRequest extends Request {
+    id: string;
     originalUrl: string;
 
     body: ParsedBody;
@@ -50,15 +51,18 @@ export interface CompletedBody {
 }
 
 export interface CompletedRequest extends Request {
+    id: string;
     body: CompletedBody;
 }
 
 export interface OngoingResponse extends express.Response {
+    id: string;
     getHeaders(): { [key: string]: string };
     body: ParsedBody;
 }
 
 export interface CompletedResponse {
+    id: string;
     statusCode: number;
     statusMessage: string;
     headers: { [key: string]: string; };

@@ -16,12 +16,10 @@ const {
     Headers
 } = getFetch();
 
-import { ProxyConfig, Method, MockedEndpoint, OngoingRequest, CompletedRequest } from "../types";
+import { MockedEndpoint } from "../types";
 import {
-  MockRule,
   MockRuleData
 } from "../rules/mock-rule-types";
-import MockRuleBuilder from "../rules/mock-rule-builder";
 import { Mockttp, AbstractMockttp, MockttpOptions } from "../mockttp";
 import { MockServerConfig } from "../standalone/mockttp-standalone";
 import { serializeRuleData } from "../rules/mock-rule";
@@ -52,18 +50,9 @@ export class GraphQLError extends RequestError {
     }
 }
 
-/** @hidden */
-interface RequestData { }
-
-/** @hidden */
-interface MockedEndpointState {
-    id: string;
-    seenRequests: RequestData[]
-}
-
 /**
  * A Mockttp implementation, controlling a remote Mockttp standalone server.
- * 
+ *
  * This starts servers by making requests to the remote standalone server, and exposes
  * methods to directly manage them.
  */
@@ -249,6 +238,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
             operationName: 'OnRequest',
             query: `subscription OnRequest {
                 ${queryResultName} {
+                    id,
                     protocol,
                     method,
                     url,
@@ -268,6 +258,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
             operationName: 'OnResponse',
             query: `subscription OnResponse {
                 ${queryResultName} {
+                    id,
                     statusCode,
                     statusMessage,
                     headers,
