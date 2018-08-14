@@ -6,8 +6,18 @@ import * as _ from 'lodash';
 import * as stream from 'stream';
 import * as querystring from 'querystring';
 import * as express from 'express';
+import * as http from 'http';
 
 import { OngoingRequest, CompletedRequest, CompletedResponse, OngoingResponse, ParsedBody } from "../types";
+
+export const setHeaders = (response: express.Response, headers: http.OutgoingHttpHeaders) => {
+    Object.keys(headers).forEach((header) => {
+        let value = headers[header];
+        if (!value) return;
+
+        response.setHeader(header, value.toString());
+    });
+};
 
 const streamToBuffer = (input: stream.Readable): Promise<Buffer> => {
     return new Promise((resolve, reject) => {

@@ -14,7 +14,7 @@ import { encode as encodeBase64, decode as decodeBase64 } from 'base64-arraybuff
 import { Readable, Transform } from 'stream';
 import { stripIndent } from 'common-tags';
 
-import { waitForCompletedRequest } from '../server/request-utils';
+import { waitForCompletedRequest, setHeaders } from '../server/request-utils';
 import { Serializable, SerializationOptions } from "../util/serialization";
 
 import { CompletedRequest, OngoingRequest, OngoingResponse } from "../types";
@@ -38,8 +38,11 @@ export class SimpleHandlerData extends Serializable {
     }
 
     buildHandler() {
-        return _.assign(async (request: OngoingRequest, response: OngoingResponse) => {
-            response.writeHead(this.status, this.headers);
+        return _.assign(async (_request: OngoingRequest, response: OngoingResponse) => {
+            if (this.headers) {
+                setHeaders(response, this.headers);
+            }
+            response.writeHead(this.status);
 
             if (isSerializedBuffer(this.data)) {
                 this.data = new Buffer(<any> this.data);
@@ -115,13 +118,13 @@ export class CallbackHandlerData extends Serializable {
                 delete outResponse.json;
             }
 
-            const defaultResponse = {
-                status: 200,
-                ...outResponse
-            };
-            response.writeHead(defaultResponse.status, defaultResponse.headers);
-            response.end(defaultResponse.body || "");
-        }, { explain: () => 
+            if (outResponse.headers) {
+                setHeaders(response, outResponse.headers);
+            }
+
+            response.writeHead(outResponse.status || 200);
+            response.end(outResponse.body || "");
+        }, { explain: () =>
             'respond using provided callback' +
             (this.callback.name ? ` (${this.callback.name})` : '')
         });
@@ -244,9 +247,13 @@ export class StreamHandlerData extends Serializable {
     }
 
     buildHandler() {
-        return _.assign(async (request: OngoingRequest, response: express.Response) => {
+        return _.assign(async (_request: OngoingRequest, response: express.Response) => {
             if (!this.stream.done) {
-                response.writeHead(this.status, this.headers);
+                if (this.headers) {
+                    setHeaders(response, this.headers);
+                }
+
+                response.writeHead(this.status);
                 this.stream.pipe(response);
                 this.stream.done = true;
             } else {

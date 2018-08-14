@@ -54,6 +54,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         this.eventEmitter = new EventEmitter();
 
         this.app = express();
+        this.app.disable('x-powered-by');
 
         if (this.cors) {
             if (this.debug) console.log('Enabling CORS');
