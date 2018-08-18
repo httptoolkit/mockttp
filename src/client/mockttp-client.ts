@@ -16,7 +16,7 @@ const {
     Headers
 } = getFetch();
 
-import { MockedEndpoint } from "../types";
+import { MockedEndpoint, CompletedRequest } from "../types";
 import {
   MockRuleData
 } from "../rules/mock-rule-types";
@@ -26,6 +26,7 @@ import { serializeRuleData } from "../rules/mock-rule";
 import { MockedEndpointData, DEFAULT_STANDALONE_PORT } from "../types";
 import { MockedEndpointClient } from "./mocked-endpoint-client";
 import { Duplex } from 'stream';
+import { buildBodyReader } from '../server/request-utils';
 
 export class ConnectionError extends TypedError { }
 
@@ -246,12 +247,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                     hostname,
 
                     headers,
-                    body {
-                        buffer,
-                        text,
-                        json,
-                        formData
-                    }
+                    body
                 }
             }`
         } : {
@@ -262,12 +258,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                     statusCode,
                     statusMessage,
                     headers,
-                    body {
-                        buffer,
-                        text,
-                        json,
-                        formData
-                    }
+                    body
                 }
             }`
         }
@@ -279,6 +270,9 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                     if (data.headers) {
                         // TODO: Get a proper graphql client that does this automatically from the schema itself
                         data.headers = JSON.parse(data.headers);
+                    }
+                    if (data.body) {
+                        data.body = buildBodyReader(Buffer.from(data.body, 'base64'), data.headers);
                     }
                     callback(data);
                 } else if (value.errors) {
@@ -299,24 +293,30 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
             data: { mockedEndpoint: MockedEndpointData | null }
         }>(
             `query GetEndpointData($id: ID!) {
-                    mockedEndpoint(id: $id) {
-                        seenRequests {
-                            protocol,
-                            method,
-                            url,
-                            path,
-                            hostname,
-                            headers,
-                            body {
-                                text
-                            }
-                        }
+                mockedEndpoint(id: $id) {
+                    seenRequests {
+                        protocol,
+                        method,
+                        url,
+                        path,
+                        hostname,
+                        headers,
+                        body
                     }
+                }
             }`, {
                 id: ruleId
             }
         );
 
-        return result.data.mockedEndpoint;
+        const mockedEndpoint = result.data.mockedEndpoint;
+
+        if (!mockedEndpoint) return null;
+
+        mockedEndpoint.seenRequests.forEach((request: any) => {
+            request.body = buildBodyReader(Buffer.from(request.body, 'base64'), request.headers);
+        });
+
+        return mockedEndpoint;
     }
 }

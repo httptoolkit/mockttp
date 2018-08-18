@@ -8,18 +8,16 @@ import {
   GraphQLScalarType,
   Kind,
   ObjectValueNode,
-  ListValueNode,
   ValueNode
 } from "graphql";
 import { IResolvers } from "graphql-tools/dist/Interfaces";
 import { PubSub } from "graphql-subscriptions";
 
-import { MatcherData, buildMatchers } from "../rules/matchers";
+import { MatcherData } from "../rules/matchers";
 import { HandlerData } from "../rules/handlers";
 import { CompletionCheckerData } from "../rules/completion-checkers";
 import MockttpServer from "../server/mockttp-server";
-import { Method, CompletedRequest, MockedEndpoint, MockedEndpointData } from "../types";
-import { MockRuleData } from "../rules/mock-rule-types";
+import { MockedEndpoint, MockedEndpointData, CompletedBody, CompletedRequest, CompletedResponse } from "../types";
 import { deserializeRuleData } from "../rules/mock-rule";
 import { Duplex } from "stream";
 
@@ -55,7 +53,7 @@ function parseAnyAst(ast: ValueNode): any {
 async function buildMockedEndpointData(endpoint: MockedEndpoint): Promise<MockedEndpointData> {
     return {
         id: endpoint.id,
-        seenRequests: (await endpoint.getSeenRequests())
+        seenRequests: await endpoint.getSeenRequests()
     };
 }
 
@@ -117,6 +115,18 @@ const ScalarResolvers = {
         parseValue: (input: string): any => JSON.parse(input),
         parseLiteral: parseAnyAst
     }),
+
+    Buffer: new GraphQLScalarType({
+        name: 'Buffer',
+        description: 'A buffer',
+        serialize: (value: Buffer) => {
+            return value.toString('base64');
+        },
+        parseValue: (input: string) => {
+            return Buffer.from(input, 'base64');
+        },
+        parseLiteral: parseAnyAst
+    })
 };
 
 export function buildStandaloneModel(mockServer: MockttpServer, stream: Duplex): IResolvers {
@@ -168,6 +178,18 @@ export function buildStandaloneModel(mockServer: MockttpServer, stream: Duplex):
             },
             responseCompleted: {
                 subscribe: () => pubsub.asyncIterator(RESPONSE_COMPLETED_TOPIC)
+            }
+        },
+
+        Request: {
+            body: (request: CompletedRequest) => {
+                return request.body.buffer;
+            }
+        },
+
+        Response: {
+            body: (response: CompletedResponse) => {
+                return response.body.buffer;
             }
         },
 

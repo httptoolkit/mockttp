@@ -8,7 +8,7 @@ import { merge } from "lodash";
 import { Readable } from "stream";
 import { stripIndent } from "common-tags";
 
-import { CompletedRequest, Method, MockedEndpoint } from "../types";
+import { Headers, CompletedRequest, Method, MockedEndpoint } from "../types";
 
 import {
     MockRuleData
@@ -185,7 +185,7 @@ export default class MockRuleBuilder {
      * before sending requests to be matched. The mocked endpoint
      * can be used to assert on the requests matched by this rule.
      */
-    thenReply(status: number, data?: string | Buffer, headers?: OutgoingHttpHeaders): Promise<MockedEndpoint> {
+    thenReply(status: number, data?: string | Buffer, headers?: Headers): Promise<MockedEndpoint> {
         const rule: MockRuleData = {
             matchers: this.matchers,
             completionChecker: this.isComplete,
@@ -276,7 +276,7 @@ export default class MockRuleBuilder {
      * before sending requests to be matched. The mocked endpoint
      * can be used to assert on the requests matched by this rule.
      */
-    thenStream(status: number, stream: Readable, headers?: OutgoingHttpHeaders): Promise<MockedEndpoint> {
+    thenStream(status: number, stream: Readable, headers?: Headers): Promise<MockedEndpoint> {
         const rule: MockRuleData = {
             matchers: this.matchers,
             completionChecker: this.isComplete,

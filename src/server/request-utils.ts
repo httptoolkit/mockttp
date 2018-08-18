@@ -6,11 +6,19 @@ import * as _ from 'lodash';
 import * as stream from 'stream';
 import * as querystring from 'querystring';
 import * as express from 'express';
-import * as http from 'http';
+import * as zlib from 'zlib';
 
-import { OngoingRequest, CompletedRequest, CompletedResponse, OngoingResponse, ParsedBody } from "../types";
+import {
+    Headers,
+    OngoingRequest,
+    CompletedRequest,
+    OngoingResponse,
+    CompletedResponse,
+    ParsedBody,
+    CompletedBody
+} from "../types";
 
-export const setHeaders = (response: express.Response, headers: http.OutgoingHttpHeaders) => {
+export const setHeaders = (response: express.Response, headers: Headers) => {
     Object.keys(headers).forEach((header) => {
         let value = headers[header];
         if (!value) return;
@@ -54,18 +62,49 @@ const parseBodyStream = (bodyStream: stream.Readable): ParsedBody => {
     return body;
 }
 
-const waitForBody = async (body: ParsedBody) => {
-    return {
-        buffer: await body.asBuffer(),
-        text: await body.asText().catch(() => undefined),
-        json: await body.asJson().catch(() => undefined),
-        formData: await body.asFormData().catch(() => undefined)
+function runOrUndefined<R>(func: () => R): R | undefined {
+    try {
+        return func();
+    } catch {
+        return undefined;
     }
 }
 
+const waitForBody = async (body: ParsedBody, headers: Headers): Promise<CompletedBody> => {
+    const bufferBody = await body.asBuffer();
+    return buildBodyReader(bufferBody, headers);
+};
+
+const handleContentEncoding = (body: Buffer, encoding?: string) => {
+    if (encoding === 'gzip' || encoding === 'x-gzip') {
+        return zlib.gunzipSync(body);
+    } else if (encoding === 'deflate' || encoding === 'x-deflate') {
+        return zlib.inflateSync(body);
+    } else {
+        return body;
+    }
+};
+
+export const buildBodyReader = (body: Buffer, headers: Headers): CompletedBody => {
+    const completedBody = {
+        buffer: body,
+        get text() {
+            return handleContentEncoding(body, headers['content-encoding']).toString('utf8');
+        },
+        get json() {
+            return runOrUndefined(() => JSON.parse(completedBody.text))
+        },
+        get formData() {
+            return runOrUndefined(() => querystring.parse(completedBody.text));
+        }
+    };
+
+    return completedBody;
+};
+
 export const parseBody = (
     req: express.Request,
-    res: express.Response,
+    _res: express.Response,
     next: express.NextFunction
 ) => {
     let transformedRequest = <OngoingRequest> <any> req;
@@ -88,7 +127,7 @@ export async function waitForCompletedRequest(request: OngoingRequest): Promise<
         'hostname',
         'headers'
     ]).assign({
-        body: await waitForBody(request.body)
+        body: await waitForBody(request.body, request.headers)
     }).valueOf();
 }
 
@@ -138,6 +177,6 @@ export async function waitForCompletedResponse(response: OngoingResponse): Promi
         'statusMessage'
     ]).assign({
         headers: response.getHeaders(),
-        body: await waitForBody(response.body)
+        body: await waitForBody(response.body, response.getHeaders())
     }).valueOf();
 }

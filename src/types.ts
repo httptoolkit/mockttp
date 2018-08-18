@@ -17,6 +17,10 @@ export enum Method {
     OPTIONS
 }
 
+export interface Headers {
+    [key: string]: string;
+}
+
 export interface Request {
     protocol: string;
     method: string;
@@ -24,7 +28,7 @@ export interface Request {
     path: string;
     hostname: string;
 
-    headers: { [key: string]: string; };
+    headers: Headers;
 }
 
 export interface OngoingRequest extends Request {
@@ -57,7 +61,7 @@ export interface CompletedRequest extends Request {
 
 export interface OngoingResponse extends express.Response {
     id: string;
-    getHeaders(): { [key: string]: string };
+    getHeaders(): Headers;
     body: ParsedBody;
 }
 
@@ -65,7 +69,7 @@ export interface CompletedResponse {
     id: string;
     statusCode: number;
     statusMessage: string;
-    headers: { [key: string]: string; };
+    headers: Headers;
     body: CompletedBody;
 }
 
@@ -77,7 +81,7 @@ export interface MockedEndpoint {
     id: string;
     /**
      * Get the requests that this endpoint has seen so far.
-     * 
+     *
      * This method returns a promise, which resolves with the requests seen
      * up until now. The returned lists are immutable, so won't change if more
      * requests rrive in future. Call `getSeenRequests` again later to get

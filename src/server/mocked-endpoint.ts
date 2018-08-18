@@ -4,7 +4,6 @@
 
 import { CompletedRequest, MockedEndpoint as MockedEndpointInterface } from '../types';
 import { MockRule } from '../rules/mock-rule';
-import * as _ from "lodash";
 
 export class MockedEndpoint implements MockedEndpointInterface {
 

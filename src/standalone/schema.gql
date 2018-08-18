@@ -18,14 +18,7 @@ type Request {
     hostname: String!
 
     headers: Json!
-    body: Body!
-}
-
-type Body {
-    buffer: Any!
-    text: String
-    json: Json
-    formData: Json
+    body: Buffer!
 }
 
 type Response {
@@ -35,7 +28,7 @@ type Response {
     statusMessage: String!
 
     headers: Json!
-    body: Body!
+    body: Buffer!
 }
 
 type Mutation {
@@ -56,6 +49,7 @@ type Subscription {
 
 scalar Any
 scalar Json
+scalar Buffer
 scalar RequestMatcher
 scalar RequestHandler
 scalar RuleCompletionChecker

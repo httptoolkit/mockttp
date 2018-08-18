@@ -17,7 +17,7 @@ import { stripIndent } from 'common-tags';
 import { waitForCompletedRequest, setHeaders } from '../server/request-utils';
 import { Serializable, SerializationOptions } from "../util/serialization";
 
-import { CompletedRequest, OngoingRequest, OngoingResponse } from "../types";
+import { Headers, CompletedRequest, OngoingRequest, OngoingResponse } from "../types";
 import { RequestHandler } from "./mock-rule-types";
 
 export type SerializedBuffer = { type: 'Buffer', data: number[] };
@@ -32,7 +32,7 @@ export class SimpleHandlerData extends Serializable {
     constructor(
         public status: number,
         public data?: string | Buffer | SerializedBuffer,
-        public headers?: http.OutgoingHttpHeaders
+        public headers?: Headers
     ) {
         super();
     }
@@ -221,7 +221,7 @@ export class CallbackHandlerData extends Serializable {
 
 export interface SerializedStreamHandlerData extends SerializedStreamBackedHandlerData {
     status: number;
-    headers?: http.OutgoingHttpHeaders;
+    headers?: Headers;
 };
 
 interface StreamHandlerMessage extends StreamMessage {
@@ -241,7 +241,7 @@ export class StreamHandlerData extends Serializable {
     constructor(
         public status: number,
         public stream: Readable & { done?: true },
-        public headers?: http.OutgoingHttpHeaders
+        public headers?: Headers
     ) {
         super();
     }

@@ -1,3 +1,5 @@
+import * as zlib from 'zlib';
+
 import { getLocal, getStandalone, getRemote, CompletedRequest } from "../..";
 import { expect, fetch, nodeOnly, getDeferred } from "../test-utils";
 import { CompletedResponse } from "../../dist/types";
@@ -45,7 +47,6 @@ describe("Request subscriptions", () => {
                 expect(seenRequest.url).to.equal('/mocked-endpoint');
                 expect(seenRequest.body.text).to.equal('body-text');
             });
-
         });
     });
 });
@@ -69,6 +70,23 @@ describe("Response subscriptions", () => {
         let seenResponse = await seenResponsePromise;
         expect(seenResponse.statusCode).to.equal(200);
         expect(seenResponse.headers['x-extra-header']).to.equal('present');
+        expect(seenResponse.body.text).to.equal('Mock response');
+    });
+
+    it("should expose ungzipped bodies as .text", async () => {
+        const body = zlib.gzipSync('Mock response');
+
+        server.get('/mocked-endpoint').thenReply(200, body, {
+            'content-encoding': 'gzip'
+        });
+
+        let seenResponsePromise = getDeferred<CompletedResponse>();
+        await server.on('response', (r) => seenResponsePromise.resolve(r));
+
+        fetch(server.urlFor("/mocked-endpoint"));
+
+        let seenResponse = await seenResponsePromise;
+        expect(seenResponse.statusCode).to.equal(200);
         expect(seenResponse.body.text).to.equal('Mock response');
     });
 
