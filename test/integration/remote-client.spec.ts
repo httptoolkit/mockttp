@@ -13,7 +13,7 @@ browserOnly(() => {
             afterEach(() => client.stop());
 
             it("should find the standalone server and successfully mock a request", async () => {
-                const endpointMock = await client.get("/mocked-endpoint").thenReply(200, "mocked data");
+                await client.get("/mocked-endpoint").thenReply(200, "mocked data");
 
                 const response = fetch(client.urlFor("/mocked-endpoint"));
 
@@ -37,7 +37,7 @@ nodeOnly(() => {
             afterEach(() => client.stop());
 
             it("should successfully mock a request as normal", async () => {
-                const endpointMock = await client.get("/mocked-endpoint").thenReply(200, "mocked data");
+                await client.get("/mocked-endpoint").thenReply(200, "mocked data");
 
                 const response = await request.get(client.urlFor("/mocked-endpoint"));
 
@@ -46,7 +46,7 @@ nodeOnly(() => {
 
             it("should successfully mock requests with live callbacks", async () => {
                 let count = 0;
-                const endpointMock = await client.get("/mocked-endpoint").thenCallback((req) => {
+                await client.get("/mocked-endpoint").thenCallback((req) => {
                     return { status: 200, body: `calls: ${++count}` }
                 });
 
@@ -64,7 +64,7 @@ nodeOnly(() => {
 
                 stream1.end('Hello');
                 stream2.end('World');
-                
+
                 let response1 = await fetch(client.urlFor('/stream'));
                 let response2 = await fetch(client.urlFor('/stream'));
 
@@ -80,14 +80,14 @@ nodeOnly(() => {
 
                 const seenRequests = await endpointMock.getSeenRequests();
                 expect(seenRequests.length).to.equal(1);
-                
+
                 expect(seenRequests[0].protocol).to.equal('http');
                 expect(seenRequests[0].method).to.equal('GET');
                 expect(seenRequests[0].url).to.equal('/mocked-endpoint');
             });
 
             it("should allow resetting the mock server configured responses", async () => {
-                const endpointMock = await client.get("/mocked-endpoint").thenReply(200, "mocked data");
+                await client.get("/mocked-endpoint").thenReply(200, "mocked data");
 
                 await client.reset();
                 const result = await request.get(client.urlFor("/mocked-endpoint")).catch((e) => e);
@@ -96,7 +96,7 @@ nodeOnly(() => {
                 expect(result.statusCode).to.equal(503);
                 expect(result.message).to.include("No rules were found matching this request");
             });
-            
+
             it("should allow resetting the mock server recorded requests", async () => {
                 const endpointMock = await client.get("/mocked-endpoint").thenReply(200, "mocked data");
                 await request.get(client.urlFor("/mocked-endpoint"));
@@ -109,7 +109,7 @@ nodeOnly(() => {
             });
 
             it("should reset the server if a client leaves and rejoins", async () => {
-                const endpointMock = await client.get("/mocked-endpoint").thenReply(200, "mocked data");
+                await client.get("/mocked-endpoint").thenReply(200, "mocked data");
 
                 const port = client.port!;
                 await client.stop();
