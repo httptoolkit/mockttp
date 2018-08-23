@@ -55,7 +55,7 @@ nodeOnly(() => {
                     resolveWithFullResponse: true
                 });
 
-                expect(response.headers['content-type']).to.equal('text/html');
+                expect(response.headers['content-type']).to.equal('text/html; charset=UTF-8');
             });
 
             it("should be able to pass through requests with a body", async () => {
