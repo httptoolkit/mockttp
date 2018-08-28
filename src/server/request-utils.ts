@@ -79,9 +79,19 @@ const handleContentEncoding = (body: Buffer, encoding?: string) => {
     if (encoding === 'gzip' || encoding === 'x-gzip') {
         return zlib.gunzipSync(body);
     } else if (encoding === 'deflate' || encoding === 'x-deflate') {
-        return zlib.inflateSync(body);
-    } else {
+        // Deflate is ambiguous, and may or may not have a zlib wrapper.
+        // This checks the buffer header directly, based on
+        // https://stackoverflow.com/a/37528114/68051
+        const lowNibble = body[0] & 0xF;
+        if (lowNibble === 8) {
+            return zlib.inflateSync(body);
+        } else {
+            return zlib.inflateRawSync(body);
+        }
+    } else if (!encoding || encoding === 'identity') {
         return body;
+    } else {
+        throw new Error(`Unknown encoding: ${encoding}`);
     }
 };
 
@@ -89,13 +99,20 @@ export const buildBodyReader = (body: Buffer, headers: Headers): CompletedBody =
     const completedBody = {
         buffer: body,
         get text() {
-            return handleContentEncoding(body, headers['content-encoding']).toString('utf8');
+            return runOrUndefined(() =>
+                handleContentEncoding(body, headers['content-encoding'])
+                .toString('utf8')
+            );
         },
         get json() {
-            return runOrUndefined(() => JSON.parse(completedBody.text))
+            return runOrUndefined(() =>
+                JSON.parse(completedBody.text!)
+            )
         },
         get formData() {
-            return runOrUndefined(() => querystring.parse(completedBody.text));
+            return runOrUndefined(() =>
+                completedBody.text && querystring.parse(completedBody.text)
+            );
         }
     };
 

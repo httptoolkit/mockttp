@@ -90,6 +90,40 @@ describe("Response subscriptions", () => {
         expect(seenResponse.body.text).to.equal('Mock response');
     });
 
+    it("should expose un-deflated bodies as .text", async () => {
+        const body = zlib.deflateSync('Mock response');
+
+        server.get('/mocked-endpoint').thenReply(200, body, {
+            'content-encoding': 'deflate'
+        });
+
+        let seenResponsePromise = getDeferred<CompletedResponse>();
+        await server.on('response', (r) => seenResponsePromise.resolve(r));
+
+        fetch(server.urlFor("/mocked-endpoint"));
+
+        let seenResponse = await seenResponsePromise;
+        expect(seenResponse.statusCode).to.equal(200);
+        expect(seenResponse.body.text).to.equal('Mock response');
+    });
+
+    it("should expose un-raw-deflated bodies as .text", async () => {
+        const body = zlib.deflateRawSync('Mock response');
+
+        server.get('/mocked-endpoint').thenReply(200, body, {
+            'content-encoding': 'deflate'
+        });
+
+        let seenResponsePromise = getDeferred<CompletedResponse>();
+        await server.on('response', (r) => seenResponsePromise.resolve(r));
+
+        fetch(server.urlFor("/mocked-endpoint"));
+
+        let seenResponse = await seenResponsePromise;
+        expect(seenResponse.statusCode).to.equal(200);
+        expect(seenResponse.body.text).to.equal('Mock response');
+    });
+
     it("should include an id that matches the request event", async () => {
         server.get('/mocked-endpoint').thenReply(200);
 
