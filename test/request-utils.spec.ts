@@ -47,5 +47,14 @@ describe("buildBodyReader", () => {
             });
             expect(body.text).to.equal('Raw deflate response');
         });
+
+        it('can decode brotli bodies', () => {
+            // We use a pre-compressed input, because the compressor won't run in a browser.
+            const brotliCompressedMessage = Buffer.from('GxoAABypU587dC0k9ianQOgqjS32iUTcCA==', 'base64');
+            const body = buildBodyReader(brotliCompressedMessage, {
+                'content-encoding': 'br'
+            });
+            expect(body.text).to.equal('Brotli brotli brotli brotli');
+        });
     });
 });

@@ -7,6 +7,7 @@ import * as stream from 'stream';
 import * as querystring from 'querystring';
 import * as express from 'express';
 import * as zlib from 'zlib';
+import * as brotliDecompress from 'brotli/decompress';
 
 import {
     Headers,
@@ -88,6 +89,8 @@ const handleContentEncoding = (body: Buffer, encoding?: string) => {
         } else {
             return zlib.inflateRawSync(body);
         }
+    } else if (encoding === 'br') {
+        return new Buffer(brotliDecompress(body));
     } else if (!encoding || encoding === 'identity') {
         return body;
     } else {
