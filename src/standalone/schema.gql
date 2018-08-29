@@ -3,9 +3,25 @@ type Query {
     mockedEndpoint(id: ID!): MockedEndpoint
 }
 
+type Mutation {
+    addRule(input: MockRule!): MockedEndpoint!
+    reset: Boolean!
+}
+
+type Subscription {
+    requestReceived: Request!
+    responseCompleted: Response!
+}
+
 type MockedEndpoint {
     id: ID!
     seenRequests: [Request!]!
+}
+
+input MockRule {
+    matchers: [RequestMatcher!]!
+    handler: RequestHandler!
+    completionChecker: RuleCompletionChecker
 }
 
 type Request {
@@ -29,22 +45,6 @@ type Response {
 
     headers: Json!
     body: Buffer!
-}
-
-type Mutation {
-    addRule(input: MockRule!): MockedEndpoint!
-    reset: Boolean!
-}
-
-input MockRule {
-    matchers: [RequestMatcher!]!
-    handler: RequestHandler!
-    completionChecker: RuleCompletionChecker
-}
-
-type Subscription {
-    requestReceived: Request!
-    responseCompleted: Response!
 }
 
 scalar Any
