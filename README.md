@@ -1,4 +1,4 @@
-# Mockttp [![Travis Build Status](https://img.shields.io/travis/pimterry/mockttp.svg)](https://travis-ci.org/pimterry/mockttp) [![Try Mockttp on RunKit](https://badge.runkitcdn.com/mockttp.svg)](https://npm.runkit.com/mockttp)
+# Mockttp [![Travis Build Status](https://img.shields.io/travis/httptoolkit/mockttp.svg)](https://travis-ci.org/httptoolkit/mockttp) [![Try Mockttp on RunKit](https://badge.runkitcdn.com/mockttp.svg)](https://npm.runkit.com/mockttp)
 
 > _Part of [HTTP Toolkit](https://httptoolkit.tech): powerful tools for building, testing & debugging HTTP(S)_
 
