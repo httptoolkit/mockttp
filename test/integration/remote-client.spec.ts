@@ -26,7 +26,7 @@ browserOnly(() => {
 nodeOnly(() => {
     describe("Remote node client with a standalone server", function () {
 
-        describe("with a default configuration", () => {
+        describe("with no configuration", () => {
             let server = getStandalone();
             let client = getRemote();
 
@@ -126,6 +126,29 @@ nodeOnly(() => {
 
                 await expect(getRemote().start(port))
                     .to.eventually.be.rejectedWith(`Cannot start: mock server is already running on port ${port}`);
+            });
+        });
+
+
+        describe("with a provided default configuration", () => {
+            let server = getStandalone({
+                serverDefaults: {
+                    https: {
+                        keyPath: './test/fixtures/test-ca.key',
+                        certPath: './test/fixtures/test-ca.pem'
+                    }
+                }
+            });
+            let client = getRemote();
+
+            before(() => server.start());
+            after(() => server.stop());
+
+            beforeEach(() => client.start());
+            afterEach(() => client.stop());
+
+            it("should use the provided configuration by default", async () => {
+                expect(client.url.split('://')[0]).to.equal('https');
             });
         });
 

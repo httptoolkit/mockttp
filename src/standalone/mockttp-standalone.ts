@@ -30,11 +30,12 @@ import { Duplex, PassThrough } from 'stream';
 
 export interface StandaloneServerOptions {
     debug?: boolean;
+    serverDefaults?: MockttpOptions;
 }
 
 export class MockttpStandalone {
     private debug: boolean;
-    private app: express.Application = express();
+    private app = express();
     private server: DestroyableServer | null = null;
 
     private mockServers: MockttpServer[] = [];
@@ -52,7 +53,11 @@ export class MockttpStandalone {
             try {
                 const port: number | undefined = req.query.port ?
                     parseInt(req.query.port, 10) : undefined;
-                const options: MockttpOptions = req.body || {};
+                const mockServerOptions: MockttpOptions = _.defaults(
+                    {},
+                    req.body,
+                    options.serverDefaults
+                );
 
                 if (port != null && this.routers[port] != null) {
                     res.status(409).json({
@@ -61,7 +66,7 @@ export class MockttpStandalone {
                     return;
                 }
 
-                const { mockPort, mockServer } = await this.startMockServer(options, port);
+                const { mockPort, mockServer } = await this.startMockServer(mockServerOptions, port);
 
                 const config: MockServerConfig = {
                     port: mockPort,
