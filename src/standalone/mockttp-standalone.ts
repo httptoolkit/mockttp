@@ -99,11 +99,11 @@ export class MockttpStandalone {
         }));
     }
 
-    async start() {
+    async start(standalonePort: number = DEFAULT_STANDALONE_PORT) {
         if (this.server) throw new Error('Standalone server already running');
 
         await new Promise<void>((resolve, reject) => {
-            this.server = destroyable(this.app.listen(DEFAULT_STANDALONE_PORT, resolve));
+            this.server = destroyable(this.app.listen(standalonePort, resolve));
 
             this.server.on('upgrade', (req: http.IncomingMessage, socket: net.Socket, head: Buffer) => {
                 let isSubscriptionRequest = req.url!.match(/^\/server\/(\d+)\/subscription$/);
