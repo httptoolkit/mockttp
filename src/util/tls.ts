@@ -101,11 +101,14 @@ export async function getCA(options: CAOptions): Promise<CA> {
     return new CA(httpsOptions.key, httpsOptions.cert);
 }
 
-export class CA {
-    // This is slightly slow (~100ms), so do it once upfront, not for
-    // every separate CA or even cert.
-    private static readonly KEYS = pki.rsa.generateKeyPair(1024);
+// We share a single keypair across all certificates in this process, and
+// instantiate it once when the first CA is created, because it's
+// expensive (~100ms).
+// This would be a terrible idea for a real server, but for a mock server
+// it's ok - if anybody can steal this, they can steal the CA cert anyway.
+let KEY_PAIR: { publicKey: string, privateKey: string } | undefined;
 
+export class CA {
     private caCert: { subject: any };
     private caKey: {};
 
@@ -118,6 +121,10 @@ export class CA {
         this.caKey = pki.privateKeyFromPem(caKey);
         this.caCert = pki.certificateFromPem(caCert);
         this.certCache = {};
+
+        if (!KEY_PAIR) {
+            KEY_PAIR = pki.rsa.generateKeyPair(2048);
+        }
     }
 
     generateCertificate(domain: string): GeneratedCertificate {
@@ -125,21 +132,21 @@ export class CA {
         if (this.certCache[domain]) return this.certCache[domain];
 
         let cert = pki.createCertificate();
-        
-        cert.publicKey = CA.KEYS.publicKey;
+
+        cert.publicKey = KEY_PAIR!.publicKey;
         cert.serialNumber = uuid().replace(/-/g, '');
-    
+
         cert.validity.notBefore = new Date();
         cert.validity.notAfter = new Date();
         // TODO: shorten this expiry
         cert.validity.notAfter.setFullYear(cert.validity.notBefore.getFullYear() + 1);
-    
+
         cert.setSubject([
             { name: 'commonName', value: domain },
             { name: 'organizationName', value: 'Mockttp Cert - DO NOT TRUST' }
         ]);
         cert.setIssuer(this.caCert.subject.attributes);
-    
+
         cert.setExtensions([{
             name: 'basicConstraints',
             cA: true
@@ -157,15 +164,15 @@ export class CA {
                 value: domain
             }]
         }]);
-    
+
         cert.sign(this.caKey, md.sha256.create());
 
         const generatedCertificate = {
-            key: pki.privateKeyToPem(CA.KEYS.privateKey),
+            key: pki.privateKeyToPem(KEY_PAIR!.privateKey),
             cert: pki.certificateToPem(cert),
             ca: pki.certificateToPem(this.caCert)
         };
-        
+
         this.certCache[domain] = generatedCertificate;
         return generatedCertificate;
     }
