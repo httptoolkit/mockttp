@@ -12,7 +12,7 @@ nodeOnly(() => {
         let server: https.Server;
 
         it("can generate a certificate for a domain", async () => {
-            const ca = new CA(await caKey, await caCert);
+            const ca = new CA(await caKey, await caCert, 1024);
 
             const { cert, key } = ca.generateCertificate('localhost')
 

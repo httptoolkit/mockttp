@@ -2,6 +2,7 @@
  * @module TLS
  */
 
+import * as _ from 'lodash';
 import * as uuid from 'uuid/v4';
 import * as forge from 'node-forge';
 
@@ -9,16 +10,18 @@ const { pki, md, asn1, util: { encode64 } } = forge;
 
 import * as fs from './fs';
 
-export type CAOptions = HttpsOptions | HttpsPathOptions;
+export type CAOptions = (HttpsOptions | HttpsPathOptions);
 
 export type HttpsOptions = {
-    key: string
-    cert: string
+    key: string;
+    cert: string;
+    keyLength?: number;
 };
 
 export type HttpsPathOptions = {
     keyPath: string;
     certPath: string;
+    keyLength?: number;
 }
 
 export type PEM = string | string[] | Buffer | Buffer[];
@@ -91,22 +94,23 @@ export async function getCA(options: CAOptions): Promise<CA> {
             fs.readFile(pathOptions.certPath, 'utf8')
         ]).then(([ keyContents, certContents ]) => ({
             key: keyContents,
-            cert: certContents
+            cert: certContents,
+            keyLength: pathOptions.keyLength
         }));
     }
     else {
         throw new Error('Unrecognized https options: you need to provide either a keyPath & certPath, or a key & cert.')
     }
 
-    return new CA(httpsOptions.key, httpsOptions.cert);
+    return new CA(httpsOptions.key, httpsOptions.cert, httpsOptions.keyLength || 1024);
 }
 
 // We share a single keypair across all certificates in this process, and
-// instantiate it once when the first CA is created, because it's
-// expensive (~100ms).
+// instantiate it once when the first CA is created, because it can be
+// expensive (depending on the key length).
 // This would be a terrible idea for a real server, but for a mock server
 // it's ok - if anybody can steal this, they can steal the CA cert anyway.
-let KEY_PAIR: { publicKey: string, privateKey: string } | undefined;
+let KEY_PAIR: { publicKey: string, privateKey: string, length: number } | undefined;
 
 export class CA {
     private caCert: { subject: any };
@@ -116,14 +120,17 @@ export class CA {
 
     constructor(
         caKey: PEM,
-        caCert: PEM
+        caCert: PEM,
+        keyLength: number
     ) {
         this.caKey = pki.privateKeyFromPem(caKey);
         this.caCert = pki.certificateFromPem(caCert);
         this.certCache = {};
 
-        if (!KEY_PAIR) {
-            KEY_PAIR = pki.rsa.generateKeyPair(2048);
+        if (!KEY_PAIR || KEY_PAIR.length < keyLength) {
+            // If we have no key, or not a long enough one, generate one.
+            KEY_PAIR = pki.rsa.generateKeyPair(keyLength);
+            KEY_PAIR!.length = keyLength;
         }
     }
 
