@@ -1,9 +1,11 @@
 /**
- * @module Internal
+ * @module TLS
  */
 
 import * as uuid from 'uuid/v4';
-import { pki, md } from 'node-forge';
+import * as forge from 'node-forge';
+
+const { pki, md, asn1, util: { encode64 } } = forge;
 
 import * as fs from './fs';
 
@@ -26,6 +28,56 @@ export type GeneratedCertificate = {
     cert: string,
     ca: string
 };
+
+/**
+ * Generate a CA certificate for mocking HTTPS.
+ * 
+ * Returns an object with key and cert properties, containing
+ * the generated private key and certificate in PEM format.
+ * 
+ * These can be saved to disk, and their paths passed
+ * as HTTPS options to a Mockttp server.
+ */
+export function generateCACertificate(options: { commonName: string } = {
+    commonName: 'Mockttp Testing CA - DO NOT TRUST - TESTING ONLY',
+}) {
+    const keyPair = pki.rsa.generateKeyPair(2048);
+    const cert = pki.createCertificate();
+    cert.publicKey = keyPair.publicKey;
+    cert.serialNumber = uuid().replace(/-/g, '');
+
+    cert.validity.notBefore = new Date();
+    cert.validity.notAfter = new Date();
+    cert.validity.notAfter.setFullYear(cert.validity.notBefore.getFullYear() + 1);
+
+    cert.setSubject([{ name: 'commonName', value: options.commonName }]);
+
+    cert.setExtensions([{
+        name: 'basicConstraints',
+        cA: true
+    }]);
+
+    // Self-issued too
+    cert.setIssuer(cert.subject.attributes);
+
+    // Self-sign the certificate - we're the root
+    cert.sign(keyPair.privateKey, md.sha256.create());
+
+    return {
+        key: pki.privateKeyToPem(keyPair.privateKey),
+        cert: pki.certificateToPem(cert)
+    };
+}
+
+export function generateSPKIFingerprint(certPem: PEM) {
+    let cert = pki.certificateFromPem(certPem);
+    return encode64(
+        pki.getPublicKeyFingerprint(cert.publicKey, {
+            type: 'SubjectPublicKeyInfo',
+            md: md.sha256.create()
+        }).getBytes()
+    );
+}
 
 export async function getCA(options: CAOptions): Promise<CA> {
     let httpsOptions: HttpsOptions;

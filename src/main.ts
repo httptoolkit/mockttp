@@ -7,9 +7,11 @@ import MockttpClient from "./client/mockttp-client";
 import { MockttpStandalone, StandaloneServerOptions } from "./standalone/mockttp-standalone";
 
 import { Mockttp, MockttpOptions } from "./mockttp";
-export { OngoingRequest, CompletedRequest, CompletedResponse, MockedEndpoint } from "./types";
 
+export { OngoingRequest, CompletedRequest, CompletedResponse, MockedEndpoint } from "./types";
 export { Mockttp };
+
+export { generateCACertificate, generateSPKIFingerprint } from './util/tls';
 
 /**
  * Get a Mockttp instance on the local machine.

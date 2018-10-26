@@ -129,7 +129,6 @@ nodeOnly(() => {
             });
         });
 
-
         describe("with a provided default configuration", () => {
             let server = getStandalone({
                 serverDefaults: {
