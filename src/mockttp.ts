@@ -157,7 +157,7 @@ export interface Mockttp {
 export interface MockttpOptions {
     cors?: boolean;
     debug?: boolean;
-    https?: CAOptions
+    https?: CAOptions;
 }
 
 /**
@@ -202,7 +202,7 @@ export abstract class AbstractMockttp {
     put(url: string | RegExp): MockRuleBuilder {
         return new MockRuleBuilder(Method.PUT, url, this.addRule);
     }
-    
+
     delete(url: string | RegExp): MockRuleBuilder {
         return new MockRuleBuilder(Method.DELETE, url, this.addRule);
     }
