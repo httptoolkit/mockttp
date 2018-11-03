@@ -46,8 +46,12 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
     private eventEmitter: EventEmitter;
 
+    private readonly initialDebugSetting: boolean;
+
     constructor(options: MockttpOptions = {}) {
         super(options);
+
+        this.initialDebugSetting = this.debug;
 
         this.httpsOptions = options.https;
         this.eventEmitter = new EventEmitter();
@@ -119,7 +123,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
     reset() {
         this.rules = [];
-        this.debug = false;
+        this.debug = this.initialDebugSetting;
     }
 
     get mockedEndpoints(): MockedEndpoint[] {
