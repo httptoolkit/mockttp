@@ -366,7 +366,7 @@ export class StreamHandlerData extends Serializable {
         });
 
         // When we get piped (i.e. to a live request), ping upstream to start streaming
-        handlerStream.on('resume', () => {
+        handlerStream.once('resume', () => {
             clientStream.pipe(handlerStream);
             clientStream.write(JSON.stringify(<StreamMessage> {
                 topicId: handlerData.topicId
@@ -445,18 +445,21 @@ export class PassThroughHandlerData extends Serializable {
                     clientRes.status(serverRes.statusCode!);
 
                     serverRes.pipe(clientRes);
-                    serverRes.on('end', resolve);
-                    serverRes.on('error', reject);
+                    serverRes.once('end', resolve);
+                    serverRes.once('error', reject);
                 });
 
-                serverReq.on('socket', (socket: net.Socket) => {
+                clientRes.on('close', () => serverReq.abort());
+                socket.once('error', (e) => serverReq.abort());
+
+                serverReq.once('socket', (socket: net.Socket) => {
                     // We want the local port - it's not available until we actually connect
-                    socket.on('connect', () => {
+                    socket.once('connect', () => {
                         // Add this port to our list of active ports
                         outgoingPort = socket.localPort;
                         currentlyForwardingPorts.push(outgoingPort);
                     });
-                    socket.on('close', () => {
+                    socket.once('close', () => {
                         // Remove this port from our list of active ports
                         currentlyForwardingPorts = currentlyForwardingPorts.filter(
                             (port) => port !== outgoingPort
@@ -467,7 +470,7 @@ export class PassThroughHandlerData extends Serializable {
 
                 clientReq.body.rawStream.pipe(serverReq);
 
-                serverReq.on('error', (e: any) => {
+                serverReq.once('error', (e: any) => {
                     e.statusCode = 502;
                     e.statusMessage = 'Error communicating with upstream server';
                     reject(e);

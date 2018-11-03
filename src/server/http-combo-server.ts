@@ -54,6 +54,7 @@ export async function createComboServer(
 
             let tlsSocket = new tls.TLSSocket(socket, {
                 isServer: true,
+                server: server,
                 secureContext: tls.createSecureContext({
                     key: generatedCert.key,
                     cert: generatedCert.cert,
