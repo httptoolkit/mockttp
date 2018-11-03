@@ -155,9 +155,6 @@ export class CA {
         cert.setIssuer(this.caCert.subject.attributes);
 
         cert.setExtensions([{
-            name: 'basicConstraints',
-            cA: true
-        }, {
             name: 'keyUsage',
             keyCertSign: true,
             digitalSignature: true,
