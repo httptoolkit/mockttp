@@ -38,4 +38,12 @@ describe("Request query matching", function () {
 
         await expect(result).to.have.status(503);
     });
+
+    it("should match with mixed-case query parameters", async () => {
+        await server.get('/').withQuery({ c: "hello" }).thenReply(200);
+
+        let result = await fetch(server.urlFor('/?aB=&c=hello'));
+
+        await expect(result).to.have.status(200);
+    });
 });
