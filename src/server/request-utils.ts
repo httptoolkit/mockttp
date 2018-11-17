@@ -101,10 +101,14 @@ const handleContentEncoding = (body: Buffer, encoding?: string) => {
 export const buildBodyReader = (body: Buffer, headers: Headers): CompletedBody => {
     const completedBody = {
         buffer: body,
-        get text() {
+        get decodedBuffer() {
             return runOrUndefined(() =>
                 handleContentEncoding(body, headers['content-encoding'])
-                .toString('utf8')
+            );
+        },
+        get text() {
+            return runOrUndefined(() =>
+                this.decodedBuffer!.toString('utf8')
             );
         },
         get json() {
