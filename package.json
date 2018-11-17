@@ -100,7 +100,7 @@
     "webpack": "^3.7.1"
   },
   "engines": {
-    "node": ">=4.0.0"
+    "node": ">=6.0.0"
   },
   "dependencies": {
     "@types/express": "^4.0.33",
