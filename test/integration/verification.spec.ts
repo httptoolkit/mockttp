@@ -39,7 +39,7 @@ describe("HTTP request spying", function () {
             }),
             body: form
         });
-        
+
         const seenRequests = await endpointMock.getSeenRequests();
         expect(seenRequests.length).to.equal(1);
         expect(await seenRequests[0].body.text).to.equal("a=1&b=2");

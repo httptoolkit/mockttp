@@ -1,8 +1,22 @@
+import * as http from 'http';
 import * as zlib from 'zlib';
 
-import { getLocal, getStandalone, getRemote, CompletedRequest } from "../..";
-import { expect, fetch, nodeOnly, getDeferred } from "../test-utils";
+import { getLocal, getStandalone, getRemote, CompletedRequest, Mockttp } from "../..";
+import { expect, fetch, nodeOnly, getDeferred, delay, isNode } from "../test-utils";
 import { CompletedResponse } from "../../dist/types";
+
+function makeAbortableRequest(server: Mockttp, path: string) {
+    if (isNode()) {
+        let req = http.get({ hostname: 'localhost', port: server.port, path });
+        req.on('error', () => {});
+        req.end();
+        return req;
+    } else {
+        let abortController = new AbortController();
+        fetch(server.urlFor(path), { signal: abortController.signal }).catch(() => {});
+        return abortController;
+    }
+}
 
 describe("Request subscriptions", () => {
     describe("with a local server", () => {
@@ -142,5 +156,63 @@ describe("Response subscriptions", () => {
 
         expect(seenRequest.id).to.be.a('string');
         expect(seenRequest.id).to.equal(seenResponse.id);
+    });
+});
+
+
+describe("Abort subscriptions", () => {
+    let server = getLocal();
+
+    beforeEach(() => server.start());
+    afterEach(() => server.stop());
+
+    it("should not be sent for successful requests", async () => {
+        let seenAbortPromise = getDeferred<{ id: string }>();
+        await server.on('abort', (r) => seenAbortPromise.resolve(r));
+        await server.get('/mocked-endpoint').thenReply(200);
+
+        await fetch(server.urlFor("/mocked-endpoint"));
+
+        await expect(Promise.race([
+            seenAbortPromise,
+            delay(100).then(() => { throw new Error('timeout') })
+        ])).to.be.rejectedWith('timeout');
+    });
+
+    it("should be sent when a request is aborted whilst handling", async () => {
+        let seenRequestPromise = getDeferred<CompletedRequest>();
+        await server.on('request', (r) => seenRequestPromise.resolve(r));
+
+        let seenAbortPromise = getDeferred<{ id: string }>();
+        await server.on('abort', (r) => seenAbortPromise.resolve(r));
+
+        await server.get('/mocked-endpoint').thenCallback(() => delay(500).then(() => ({})));
+
+        let abortable = makeAbortableRequest(server, '/mocked-endpoint');
+        let seenRequest = await seenRequestPromise;
+        abortable.abort();
+
+        let seenAbort = await seenAbortPromise;
+        expect(seenRequest.id).to.equal(seenAbort.id);
+    });
+
+
+    it("should be sent in place of response notifications, not in addition", async () => {
+        let seenRequestPromise = getDeferred<CompletedRequest>();
+        await server.on('request', (r) => seenRequestPromise.resolve(r));
+
+        let seenResponsePromise = getDeferred<CompletedResponse>();
+        await server.on('response', (r) => Promise.resolve(r));
+
+        await server.get('/mocked-endpoint').thenCallback((req) => delay(500).then(() => ({})));
+
+        let abortable = makeAbortableRequest(server, '/mocked-endpoint');
+        await seenRequestPromise;
+        abortable.abort();
+
+        await expect(Promise.race([
+            seenResponsePromise,
+            delay(100).then(() => { throw new Error('timeout') })
+        ])).to.be.rejectedWith('timeout');
     });
 });

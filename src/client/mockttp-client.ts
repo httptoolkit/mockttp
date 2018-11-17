@@ -16,7 +16,7 @@ const {
     Headers
 } = getFetchPonyfill();
 
-import { MockedEndpoint, CompletedRequest } from "../types";
+import { MockedEndpoint } from "../types";
 import {
   MockRuleData
 } from "../rules/mock-rule-types";
@@ -50,6 +50,14 @@ export class GraphQLError extends RequestError {
         );
     }
 }
+
+type SubscribableEvent = 'request' | 'response' | 'abort';
+
+const SUBSCRIBABLE_EVENTS: SubscribableEvent[] = [
+    'request',
+    'response',
+    'abort'
+];
 
 /**
  * A Mockttp implementation, controlling a remote Mockttp standalone server.
@@ -227,41 +235,64 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
         return new MockedEndpointClient(ruleId, this.getEndpointData(ruleId));
     }
 
-    public on(event: 'request' | 'response', callback: Function): Promise<void> {
-        if (!_.includes(['request', 'response'], event)) return Promise.resolve();
+    public on(event: SubscribableEvent, callback: (data: any) => void): Promise<void> {
+        if (!_.includes(SUBSCRIBABLE_EVENTS, event)) return Promise.resolve();
 
         const url = `ws://localhost:${DEFAULT_STANDALONE_PORT}/server/${this.mockServerConfig!.port}/subscription`;
         const client = new SubscriptionClient(url, { }, WebSocket);
 
-        const queryResultName = event === 'request' ? 'requestReceived' : 'responseCompleted';
+        const queryResultName = {
+            request: 'requestReceived',
+            response: 'responseCompleted',
+            abort: 'requestAborted'
+        }[event];
 
-        const query = event === 'request' ? {
-            operationName: 'OnRequest',
-            query: `subscription OnRequest {
-                ${queryResultName} {
-                    id,
-                    protocol,
-                    method,
-                    url,
-                    path,
-                    hostname,
+        const query = {
+            request: {
+                operationName: 'OnRequest',
+                query: `subscription OnRequest {
+                    ${queryResultName} {
+                        id,
+                        protocol,
+                        method,
+                        url,
+                        path,
+                        hostname,
 
-                    headers,
-                    body
-                }
-            }`
-        } : {
-            operationName: 'OnResponse',
-            query: `subscription OnResponse {
-                ${queryResultName} {
-                    id,
-                    statusCode,
-                    statusMessage,
-                    headers,
-                    body
-                }
-            }`
-        }
+                        headers,
+                        body
+                    }
+                }`
+            },
+            response: {
+                operationName: 'OnResponse',
+                query: `subscription OnResponse {
+                    ${queryResultName} {
+                        id,
+                        statusCode,
+                        statusMessage,
+                        headers,
+                        body
+                    }
+                }`
+            },
+            abort: {
+                operationName: 'OnAbort',
+                query: `subscription OnAbort {
+                    ${queryResultName} {
+                        id,
+                        protocol,
+                        method,
+                        url,
+                        path,
+                        hostname,
+
+                        headers,
+                        body
+                    }
+                }`
+            },
+        }[event];
 
         client.request(query).subscribe({
             next: (value) => {

@@ -23,6 +23,7 @@ import { Duplex } from "stream";
 
 const REQUEST_RECEIVED_TOPIC = 'request-received';
 const RESPONSE_COMPLETED_TOPIC = 'response-completed';
+const REQUEST_ABORTED_TOPIC = 'request-aborted';
 
 function astToObject<T>(ast: ObjectValueNode): T {
     return <T> _.zipObject(
@@ -144,6 +145,12 @@ export function buildStandaloneModel(mockServer: MockttpServer, stream: Duplex):
         })
     });
 
+    mockServer.on('abort', (request) => {
+        pubsub.publish(REQUEST_ABORTED_TOPIC, {
+            requestAborted: request
+        })
+    });
+
     return <any> {
         Query: {
             mockedEndpoints: (): Promise<MockedEndpointData[]> => {
@@ -178,7 +185,10 @@ export function buildStandaloneModel(mockServer: MockttpServer, stream: Duplex):
             },
             responseCompleted: {
                 subscribe: () => pubsub.asyncIterator(RESPONSE_COMPLETED_TOPIC)
-            }
+            },
+            requestAborted: {
+                subscribe: () => pubsub.asyncIterator(REQUEST_ABORTED_TOPIC)
+            },
         },
 
         Request: {

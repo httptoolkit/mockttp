@@ -11,6 +11,7 @@ type Mutation {
 type Subscription {
     requestReceived: Request!
     responseCompleted: Response!
+    requestAborted: Request!
 }
 
 type MockedEndpoint {

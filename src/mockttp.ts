@@ -142,7 +142,7 @@ export interface Mockttp {
     on(event: 'request', callback: (req: CompletedRequest) => void): Promise<void>;
 
     /**
-     * Subscribe to hear about response details as the response is completed.
+     * Subscribe to hear about response details when the response is completed.
      *
      * This is only useful in some niche use cases, such as logging all requests seen
      * by the server independently of the rules defined.
@@ -152,6 +152,18 @@ export interface Mockttp {
      * the promise is resolved.
      */
     on(event: 'response', callback: (req: CompletedResponse) => void): Promise<void>;
+
+    /**
+     * Subscribe to hear about requests that are aborted before the response is completed.
+     *
+     * This is only useful in some niche use cases, such as logging all requests seen
+     * by the server independently of the rules defined.
+     *
+     * The callback will be called asynchronously from request handling. This function
+     * returns a promise, and the callback is not guaranteed to be registered until
+     * the promise is resolved.
+     */
+    on(event: 'abort', callback: (req: CompletedRequest) => void): Promise<void>;
 }
 
 export interface MockttpOptions {

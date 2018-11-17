@@ -154,6 +154,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
     public on(event: 'request', callback: (req: CompletedRequest) => void): Promise<void>;
     public on(event: 'response', callback: (req: CompletedResponse) => void): Promise<void>;
+    public on(event: 'abort', callback: (req: CompletedRequest) => void): Promise<void>;
     public on(event: string, callback: Function): Promise<void> {
         this.eventEmitter.on(event, callback);
         return Promise.resolve();
@@ -179,6 +180,11 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         });
     }
 
+    private async announceAbortAsync(request: OngoingRequest) {
+        const req = await waitForCompletedRequest(request);
+        this.eventEmitter.emit('abort', req);
+    }
+
     private async handleRequest(request: OngoingRequest, rawResponse: express.Response) {
         if (this.debug) console.log(`Handling request for ${request.url}`);
 
@@ -190,6 +196,14 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         response.id = id;
 
         this.announceRequestAsync(request);
+
+        let result: 'responded' | 'aborted' | null = null;
+        response.once('close', () => {
+            if (result === null) {
+                this.announceAbortAsync(request);
+                result = 'aborted';
+            }
+        });
 
         try {
             let matchingRules = await filter(this.rules, (r) => r.matches(request));
@@ -217,6 +231,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
                 response.end(await this.suggestRule(request));
             }
+            result = result || 'responded';
         } catch (e) {
             if (this.debug) {
                 console.error("Failed to handle request:", e);
@@ -229,10 +244,17 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
             // Do whatever we can to tell the client we broke
             try { response.writeHead(e.statusCode || 500, e.statusMessage || 'Server error'); } catch (e) {}
-            try { response.end(e.toString()); } catch (e) {}
+            try {
+                response.end(e.toString());
+                result = result || 'responded';
+            } catch (e) {
+                this.announceAbortAsync(request);
+            }
         }
 
-        this.announceResponseAsync(response);
+        if (result === 'responded') {
+            this.announceResponseAsync(response);
+        }
     }
 
     private isComplete = (rule: MockRule, matchingRules: MockRule[]) => {
