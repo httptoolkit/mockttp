@@ -95,7 +95,7 @@ export class HeaderMatcherData extends Serializable {
     }
 
     buildMatcher() {
-        let lowerCasedHeaders = _.mapKeys(this.headers, (value: string, key: string) => key.toLowerCase());
+        let lowerCasedHeaders = _.mapKeys(this.headers, (_value: string, key: string) => key.toLowerCase());
         return _.assign(
             (request: OngoingRequest) => _.isMatch(request.headers, lowerCasedHeaders)
         , { explain: () => `with headers including ${JSON.stringify(this.headers)}` });
@@ -197,12 +197,3 @@ export function buildMatchers(matcherPartData: MatcherData[]): RequestMatcher {
         .join(', ') + ', and ' + matchers.slice(-1)[0].explain.apply(this);
     } });
 }
-
-function combineMatchers(matcherA: RequestMatcher, matcherB: RequestMatcher): RequestMatcher {
-    return _.assign(
-        (request: OngoingRequest) => matcherA(request) && matcherB(request),
-        { explain: function (this: MockRule) {
-            return `${matcherA.explain.apply(this)} and ${matcherB.explain.apply(this)}`;
-        } }
-    );
-};

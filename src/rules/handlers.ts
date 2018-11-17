@@ -296,7 +296,7 @@ export class StreamHandlerData extends Serializable {
                     callback(new Error(`Can't serialize streamed value: ${chunk.toString()}. Streaming must output strings, buffers or array buffers`));
                 }
 
-                callback(null, JSON.stringify(<StreamHandlerMessage> {
+                callback(undefined, JSON.stringify(<StreamHandlerMessage> {
                     topicId,
                     event: 'data',
                     content: serializedEventData
@@ -398,10 +398,10 @@ export class PassThroughHandlerData extends Serializable {
 
             const socket: net.Socket = (<any> clientReq).socket;
             // If it's ipv4 masquerading as v6, strip back to ipv4
-            const remoteAddress = socket.remoteAddress.replace(/^::ffff:/, '');
+            const remoteAddress = socket.remoteAddress!.replace(/^::ffff:/, '');
             const remotePort = port ? Number.parseInt(port) : socket.remotePort;
 
-            if (isRequestLoop(remoteAddress, remotePort)) {
+            if (isRequestLoop(remoteAddress, remotePort!)) {
                 throw new Error(stripIndent`
                     Passthrough loop detected. This probably means you're sending a request directly ${''
                     }to a passthrough endpoint, which is forwarding it to the target URL, which is a ${''

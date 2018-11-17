@@ -118,7 +118,7 @@ export const buildBodyReader = (body: Buffer, headers: Headers): CompletedBody =
         },
         get formData() {
             return runOrUndefined(() =>
-                completedBody.text && querystring.parse(completedBody.text)
+                completedBody.text ? querystring.parse(completedBody.text) : undefined
             );
         }
     };

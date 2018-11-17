@@ -130,20 +130,26 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         return this.rules.map((rule) => new MockedEndpoint(rule));
     }
 
+    private get address() {
+        if (!this.server) throw new Error('Cannot get address before server is started');
+
+        return (this.server.address() as net.AddressInfo)
+    }
+
     get url(): string {
         if (!this.server) throw new Error('Cannot get url before server is started');
 
         if (this.httpsOptions) {
-            return "https://localhost:" + this.server.address().port;
+            return "https://localhost:" + this.address.port;
         } else {
-            return "http://localhost:" + this.server.address().port;
+            return "http://localhost:" + this.address.port;
         }
     }
 
     get port(): number {
         if (!this.server) throw new Error('Cannot get port before server is started');
 
-        return this.server.address().port;
+        return this.address.port;
     }
 
     public addRule = (ruleData: MockRuleData): Promise<MockedEndpoint> => {
@@ -155,7 +161,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
     public on(event: 'request', callback: (req: CompletedRequest) => void): Promise<void>;
     public on(event: 'response', callback: (req: CompletedResponse) => void): Promise<void>;
     public on(event: 'abort', callback: (req: CompletedRequest) => void): Promise<void>;
-    public on(event: string, callback: Function): Promise<void> {
+    public on(event: string, callback: (...args: any[]) => void): Promise<void> {
         this.eventEmitter.on(event, callback);
         return Promise.resolve();
     }
@@ -199,7 +205,8 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
         let result: 'responded' | 'aborted' | null = null;
         response.once('close', () => {
-            if (result === null) {
+            // Aborted is only defined in new node. We use it where it's explicitly false though.
+            if (result === null && ((request as any).aborted !== false)) {
                 this.announceAbortAsync(request);
                 result = 'aborted';
             }

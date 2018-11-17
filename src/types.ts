@@ -44,14 +44,14 @@ export interface ParsedBody {
     asBuffer: () => Promise<Buffer>;
     asText: () => Promise<string>;
     asJson: () => Promise<object>;
-    asFormData: () => Promise<{ [key: string]: string }>;
+    asFormData: () => Promise<{ [key: string]: string | string[] }>;
 }
 
 export interface CompletedBody {
     buffer: Buffer;
     text: string | undefined;
     json: object | undefined;
-    formData: { [key: string]: string } | undefined;
+    formData: { [key: string]: string | string[] } | undefined;
 }
 
 export interface CompletedRequest extends Request {
