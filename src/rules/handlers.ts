@@ -449,9 +449,6 @@ export class PassThroughHandlerData extends Serializable {
                     serverRes.once('error', reject);
                 });
 
-                clientRes.on('close', () => serverReq.abort());
-                socket.once('error', (e) => serverReq.abort());
-
                 serverReq.once('socket', (socket: net.Socket) => {
                     // We want the local port - it's not available until we actually connect
                     socket.once('connect', () => {
@@ -469,8 +466,12 @@ export class PassThroughHandlerData extends Serializable {
                 });
 
                 clientReq.body.rawStream.pipe(serverReq);
+                clientReq.body.rawStream.once('error', () => serverReq.abort());
+                clientRes.once('close', () => serverReq.abort());
 
                 serverReq.once('error', (e: any) => {
+                    if ((<any>serverReq).aborted) return;
+
                     e.statusCode = 502;
                     e.statusMessage = 'Error communicating with upstream server';
                     reject(e);
