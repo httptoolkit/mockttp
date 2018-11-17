@@ -3,7 +3,7 @@
  */
 
 import TypedError = require('typed-error');
-import getFetch = require('fetch-ponyfill');
+import getFetchPonyfill = require('fetch-ponyfill');
 import _ = require('lodash');
 import * as WebSocket from 'universal-websocket-client';
 import connectWebSocketStream = require('websocket-stream');
@@ -14,7 +14,7 @@ const {
     fetch,
     /** @hidden */
     Headers
-} = getFetch();
+} = getFetchPonyfill();
 
 import { MockedEndpoint, CompletedRequest } from "../types";
 import {

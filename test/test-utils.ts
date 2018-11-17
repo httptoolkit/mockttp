@@ -1,7 +1,7 @@
 import * as sourceMapSupport from 'source-map-support'
 sourceMapSupport.install({ handleUncaughtExceptions: false });
 
-import getFetch = require("fetch-ponyfill");
+import getFetchPonyfill = require("fetch-ponyfill");
 import URLSearchParamsPolyfill = require('url-search-params');
 
 import chai = require("chai");
@@ -17,14 +17,30 @@ export function isNode() {
     return typeof window === 'undefined';
 }
 
-let fetchPonyfill = getFetch();
-export const fetch = fetchPonyfill.fetch;
-export const Headers = fetchPonyfill.Headers;
-export const Request = fetchPonyfill.Request;
-export const Response = fetchPonyfill.Response;
+function getGlobalFetch() {
+    return {
+        fetch: <typeof window.fetch> (<any> window.fetch).bind(window),
+        Headers: Headers,
+        Request: Request,
+        Response: Response
+    };
+}
 
-export const URLSearchParams: typeof window.URLSearchParams = ((isNode() || !window.URLSearchParams) ?
-    require('url').URLSearchParams : window.URLSearchParams) || URLSearchParamsPolyfill;
+let fetchImplementation = isNode() ? getFetchPonyfill() : getGlobalFetch();
+
+export const fetch = fetchImplementation.fetch;
+
+// All a bit convoluted, so we don't shadow the global vars,
+// and we can still use those to define these in the browser
+const headersImplementation = fetchImplementation.Headers;
+const requestImplementation = fetchImplementation.Request;
+const responseImplementation = fetchImplementation.Response;
+export { headersImplementation as Headers };
+export { requestImplementation as Request };
+export { responseImplementation as Response };
+
+export const URLSearchParams: typeof window.URLSearchParams = (isNode() || !window.URLSearchParams) ?
+    require('url').URLSearchParams : window.URLSearchParams;
 
 export const expect = chai.expect;
 

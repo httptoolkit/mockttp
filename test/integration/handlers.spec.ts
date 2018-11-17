@@ -116,7 +116,7 @@ describe("HTTP mock rule handling", function () {
         let result = await fetch(server.urlFor('/mocked-endpoint')).catch(e => e);
 
         expect(result).to.be.instanceof(Error);
-        expect(result.message).to.contain(isNode() ? 'socket hang up' : 'Network request failed');
+        expect(result.message).to.contain(isNode() ? 'socket hang up' : 'Failed to fetch');
     });
 
     it("should allow leaving connections to time out", async () => {
