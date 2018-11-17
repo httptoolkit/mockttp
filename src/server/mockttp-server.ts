@@ -220,23 +220,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
                 if (this.debug) console.log(`Request matched rule: ${nextRule.explain()}`);
                 await nextRule.handleRequest(request, response);
             } else {
-                let requestExplanation = await this.explainRequest(request);
-                if (this.debug) console.warn(`Unmatched request received: ${requestExplanation}`);
-
-                response.setHeader('Content-Type', 'text/plain');
-                response.writeHead(503, "Request for unmocked endpoint");
-
-                response.write("No rules were found matching this request.\n");
-                response.write(`This request was: ${requestExplanation}\n\n`);
-
-                if (this.rules.length > 0) {
-                    response.write("The configured rules are:\n");
-                    this.rules.forEach((rule) => response.write(rule.explain() + "\n"));
-                } else {
-                    response.write("There are no rules configured.\n");
-                }
-
-                response.end(await this.suggestRule(request));
+                await this.sendUnmatchedRequestError(request, response);
             }
             result = result || 'responded';
         } catch (e) {
@@ -272,6 +256,26 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         } else {
             return rule.requests.length !== 0;
         }
+    }
+
+    private async sendUnmatchedRequestError(request: OngoingRequest, response: express.Response) {
+        let requestExplanation = await this.explainRequest(request);
+        if (this.debug) console.warn(`Unmatched request received: ${requestExplanation}`);
+
+        response.setHeader('Content-Type', 'text/plain');
+        response.writeHead(503, "Request for unmocked endpoint");
+
+        response.write("No rules were found matching this request.\n");
+        response.write(`This request was: ${requestExplanation}\n\n`);
+
+        if (this.rules.length > 0) {
+            response.write("The configured rules are:\n");
+            this.rules.forEach((rule) => response.write(rule.explain() + "\n"));
+        } else {
+            response.write("There are no rules configured.\n");
+        }
+
+        response.end(await this.suggestRule(request));
     }
 
     private async explainRequest(request: OngoingRequest): Promise<string> {
