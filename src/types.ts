@@ -49,6 +49,7 @@ export interface ParsedBody {
 
 export interface CompletedBody {
     buffer: Buffer;
+    decodedBuffer: Buffer | undefined;
     text: string | undefined;
     json: object | undefined;
     formData: { [key: string]: string | string[] } | undefined;
