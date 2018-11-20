@@ -76,7 +76,7 @@ const waitForBody = async (body: ParsedBody, headers: Headers): Promise<Complete
     return buildBodyReader(bufferBody, headers);
 };
 
-const handleContentEncoding = (body: Buffer, encoding?: string) => {
+export const handleContentEncoding = (body: Buffer, encoding?: string) => {
     if (encoding === 'gzip' || encoding === 'x-gzip') {
         return zlib.gunzipSync(body);
     } else if (encoding === 'deflate' || encoding === 'x-deflate') {
