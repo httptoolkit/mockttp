@@ -75,6 +75,7 @@
     "chai-as-promised": "^6.0.0",
     "chai-fetch": "^0.3.1",
     "http-proxy-agent": "^2.0.0",
+    "https-proxy-agent": "^2.2.1",
     "karma": "^1.7.1",
     "karma-chai": "^0.1.0",
     "karma-chrome-launcher": "^2.2.0",
@@ -97,7 +98,8 @@
     "typedoc-plugin-external-module-name": "^1.1.1",
     "typescript": "^3.1.6",
     "url-search-params": "^0.10.0",
-    "webpack": "^3.7.1"
+    "webpack": "^3.7.1",
+    "ws": "^6.1.2"
   },
   "engines": {
     "node": ">=6.0.0"

@@ -413,9 +413,8 @@ export class PassThroughHandlerData extends Serializable {
                 `);
             }
 
-            const hostHeader = headers.host;
-
             if (!hostname) {
+                const hostHeader = headers.host;
                 [ hostname, port ] = hostHeader.split(':');
                 protocol = clientReq.protocol + ':';
             }

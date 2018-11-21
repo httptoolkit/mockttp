@@ -3,10 +3,7 @@
  */
 
 import net = require("net");
-import http = require("http");
-import https = require("https");
 import { EventEmitter } from "events";
-import tls = require('tls');
 import portfinder = require("portfinder");
 import express = require("express");
 import uuid = require('uuid/v4');
@@ -15,7 +12,7 @@ import _ = require("lodash");
 
 import { OngoingRequest, CompletedRequest, CompletedResponse, OngoingResponse } from "../types";
 import { MockRuleData } from "../rules/mock-rule-types";
-import { CAOptions, getCA } from '../util/tls';
+import { CAOptions } from '../util/tls';
 import { DestroyableServer } from "../util/destroyable-server";
 import { Mockttp, AbstractMockttp, MockttpOptions } from "../mockttp";
 import { MockRule } from "../rules/mock-rule";
@@ -29,6 +26,7 @@ import {
     trackResponse,
     waitForCompletedResponse,
 } from "./request-utils";
+import { WebSocketHandler } from "./websocket-handler";
 
 /**
  * A in-process Mockttp implementation. This starts servers on the local machine in the
@@ -91,7 +89,11 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
         this.server!.listen(port);
 
-        return new Promise<void>((resolve, reject) => {
+        // Handle websocket connections too (ignore for now, just forward on)
+        const webSocketHander = new WebSocketHandler();
+        this.server!.on('upgrade', webSocketHander.handleUpgrade.bind(webSocketHander));
+
+        return new Promise<void>((resolve) => {
             this.server!.on('listening', resolve);
             this.server!.on('error', (e: any) => {
                 // Although we try to pick a free port, we may have race conditions, if something else

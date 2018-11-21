@@ -2,10 +2,9 @@ import _ = require('lodash');
 import net = require('net');
 import tls = require('tls');
 import http = require('http');
-import https = require('https');
 import httpolyglot = require('httpolyglot');
 import destroyable, { DestroyableServer } from '../util/destroyable-server';
-import { getCA, HttpsOptions, CAOptions } from '../util/tls';
+import { getCA, CAOptions } from '../util/tls';
 
 export type ComboServerOptions = { debug: boolean, https?: CAOptions };
 
@@ -50,28 +49,53 @@ export async function createComboServer(
         if (options.debug) console.log(`Proxying CONNECT to ${targetHost}`);
 
         socket.write('HTTP/' + req.httpVersion + ' 200 OK\r\n\r\n', 'UTF-8', () => {
-            const generatedCert = ca.generateCertificate(targetHost);
+            socket.once('data', (data) => {
+                // Stop reading & put the data back - we just want to peek the first byte
+                socket.pause();
+                socket.unshift(data);
 
-            let tlsSocket = new tls.TLSSocket(socket, {
-                isServer: true,
-                server: server,
-                secureContext: tls.createSecureContext({
-                    key: generatedCert.key,
-                    cert: generatedCert.cert,
-                    ca: generatedCert.ca
-                })
+                const firstByte = data[0];
+
+                if (firstByte < 32 || firstByte >= 127) {
+                    unwrapTLS(targetHost, port, socket);
+                } else {
+                    // Non-TLS CONNECT, probably a websocket. Pass it through untouched.
+                    server.emit('connection', socket);
+                    socket.resume();
+                }
             });
-
-            // This is a little crazy, but only a little. We create a one-off server to handle HTTP parsing, but
-            // never listen on any ports or anything, we just hand it a live socket. Setup is pretty cheap here
-            // (instantiate, sets up as event emitter, registers some events & properties, that's it), and
-            // this is the easiest way I can see to put targetHost into the URL, without reimplementing HTTP.
-            http.createServer((req: http.IncomingMessage, res: http.ServerResponse) => {
-                req.url = `https://${targetHost}:${port}${req.url}`;
-                return requestListener(req, res);
-            }).emit('connection', tlsSocket);
         });
     });
+
+    function unwrapTLS(targetHost: string, port: string, socket: net.Socket) {
+        const generatedCert = ca.generateCertificate(targetHost);
+
+        let tlsSocket = new tls.TLSSocket(socket, {
+            isServer: true,
+            server: server,
+            secureContext: tls.createSecureContext({
+                key: generatedCert.key,
+                cert: generatedCert.cert,
+                ca: generatedCert.ca
+            })
+        });
+
+        // This is a little crazy, but only a little. We create a one-off server to handle HTTP parsing, but
+        // never listen on any ports or anything, we just hand it a live socket. Setup is pretty cheap here
+        // (instantiate, sets up as event emitter, registers some events & properties, that's it), and
+        // this is the easiest way I can see to put targetHost into the URL, without reimplementing HTTP.
+        const innerServer = http.createServer((req: http.IncomingMessage, res: http.ServerResponse) => {
+            req.url = `https://${targetHost}:${port}${req.url}`;
+            return requestListener(req, res);
+        });
+        innerServer.addListener('upgrade', (req, socket, head) => {
+            req.url = `https://${targetHost}:${port}${req.url}`;
+            server.emit('upgrade', req, socket, head);
+        });
+        innerServer.addListener('connect', (req, res) => server.emit('connect', req, res));
+
+        innerServer.emit('connection', tlsSocket);
+    }
 
     return destroyable(server);
 }

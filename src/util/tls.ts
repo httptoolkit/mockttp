@@ -6,7 +6,7 @@ import * as _ from 'lodash';
 import * as uuid from 'uuid/v4';
 import * as forge from 'node-forge';
 
-const { pki, md, asn1, util: { encode64 } } = forge;
+const { pki, md, util: { encode64 } } = forge;
 
 import * as fs from './fs';
 

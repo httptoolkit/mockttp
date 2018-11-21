@@ -2,13 +2,11 @@ import _ = require("lodash");
 import { getLocal, Mockttp } from "../..";
 import request = require("request-promise-native");
 import { expect, nodeOnly } from "../test-utils";
-import { MockedEndpoint, CompletedRequest } from "../../dist/types";
 
 const INITIAL_ENV = _.cloneDeep(process.env);
 
 nodeOnly(() => {
     describe("Mockttp when used as a proxy with `request`", function () {
-        this.timeout(5000);
 
         let server: Mockttp;
         let remoteServer = getLocal();
