@@ -69,6 +69,7 @@
     "@types/url-search-params": "^0.10.0",
     "@types/uuid": "^3.4.0",
     "@types/ws": "^5.1.2",
+    "agent-base": "^4.2.1",
     "apollo-link": "^1.0.5",
     "catch-uncommitted": "^1.0.0",
     "chai": "^3.5.0",

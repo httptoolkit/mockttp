@@ -90,7 +90,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         this.server!.listen(port);
 
         // Handle websocket connections too (ignore for now, just forward on)
-        const webSocketHander = new WebSocketHandler();
+        const webSocketHander = new WebSocketHandler(this.debug);
         this.server!.on('upgrade', webSocketHander.handleUpgrade.bind(webSocketHander));
 
         return new Promise<void>((resolve) => {

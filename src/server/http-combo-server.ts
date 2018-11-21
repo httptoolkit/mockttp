@@ -5,6 +5,20 @@ import http = require('http');
 import httpolyglot = require('httpolyglot');
 import destroyable, { DestroyableServer } from '../util/destroyable-server';
 import { getCA, CAOptions } from '../util/tls';
+import { peekFirstByte, mightBeTLSHandshake } from '../util/socket-util';
+
+declare module "net" {
+    interface Socket {
+        // Have we CONNECT'd this socket to an upstream server? Defined if so.
+        // Value tells you whether it started talking TLS or not afterwards.
+        // If we somehow CONNECT repeatedly, this shows the state for the last time.
+        upstreamEncryption?: boolean;
+
+        // Normally only defined on TLSSocket, but useful to explicitly include here
+        // Undefined on plain HTTP, 'true' on TLSSocket.
+        encrypted?: boolean;
+    }
+}
 
 export type ComboServerOptions = { debug: boolean, https?: CAOptions };
 
@@ -48,22 +62,21 @@ export async function createComboServer(
         const [ targetHost, port ] = req.url!.split(':');
         if (options.debug) console.log(`Proxying CONNECT to ${targetHost}`);
 
-        socket.write('HTTP/' + req.httpVersion + ' 200 OK\r\n\r\n', 'UTF-8', () => {
-            socket.once('data', (data) => {
-                // Stop reading & put the data back - we just want to peek the first byte
-                socket.pause();
-                socket.unshift(data);
+        socket.write('HTTP/' + req.httpVersion + ' 200 OK\r\n\r\n', 'utf-8', async () => {
+            const firstByte = await peekFirstByte(socket);
 
-                const firstByte = data[0];
+            // Tell later handlers whether the socket wants an insecure upstream
+            socket.upstreamEncryption = mightBeTLSHandshake(firstByte);
 
-                if (firstByte < 32 || firstByte >= 127) {
-                    unwrapTLS(targetHost, port, socket);
-                } else {
-                    // Non-TLS CONNECT, probably a websocket. Pass it through untouched.
-                    server.emit('connection', socket);
-                    socket.resume();
-                }
-            });
+            if (socket.upstreamEncryption) {
+                if (options.debug) console.log(`Unwrapping TLS connection to ${targetHost}`);
+                unwrapTLS(targetHost, port, socket);
+            } else {
+                // Non-TLS CONNECT, probably a plain HTTP websocket. Pass it through untouched.
+                if (options.debug) console.log(`Passing through connection to ${targetHost}`);
+                server.emit('connection', socket);
+                socket.resume();
+            }
         });
     });
 

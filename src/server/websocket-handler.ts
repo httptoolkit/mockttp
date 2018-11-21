@@ -1,5 +1,4 @@
 import * as net from 'net';
-import * as tls from 'tls';
 import * as http from 'http';
 import * as WebSocket from 'ws';
 
@@ -9,52 +8,73 @@ interface InterceptedWebSocket extends WebSocket {
     upstreamSocket: WebSocket;
 }
 
+function pipeWebSocket(inSocket: WebSocket, outSocket: WebSocket) {
+    inSocket.on('message', (msg) => outSocket.send(msg));
+    inSocket.on('close', (num, reason) => {
+        if (num >= 1000 && num <= 1004) {
+            outSocket.close(num, reason)
+        } else {
+            // Unspecified or invalid error
+            outSocket.close();
+        }
+    });
+    inSocket.on('ping', (data) => outSocket.ping(data));
+    inSocket.on('pong', (data) => outSocket.pong(data));
+}
+
 // Pile of hacks to blindly forward all WS connections upstream untouched
 export class WebSocketHandler {
     private wsServer = new WebSocket.Server({ noServer: true });
 
-    constructor() {
+    constructor(private debug: boolean) {
         this.wsServer.on('connection', (ws: InterceptedWebSocket) => {
-            ws.on('message', (msg) => (<any> ws).upstreamSocket.send(msg));
-            ws.on('close', (num, reason) => ws.upstreamSocket.close(num, reason));
+            if (this.debug) console.log('Successfully proxying websocket streams');
 
-            ws.upstreamSocket.on('message', (msg) => ws.send(msg));
-            ws.upstreamSocket.on('close', (num, reason) => ws.close(num, reason));
+            pipeWebSocket(ws, ws.upstreamSocket);
+            pipeWebSocket(ws.upstreamSocket, ws);
         });
     }
 
-    handleUpgrade(req: http.IncomingMessage, socket: net.Socket, head: Buffer) {
-        // Protocol detection is hard. There's probably better solutions, but for now
-        // we do the hackiest: try wss, if that fails, try ws.
-        // This means we might upgrade/downgrade accidentally. For now, that's
-        // just about acceptable, but this definitely needs improving.
-        this.connectUpstream('wss', req, socket, head);
-    }
+    async handleUpgrade(req: http.IncomingMessage, socket: net.Socket, head: Buffer) {
+        let { protocol: requestedProtocol, hostname, port, path } = url.parse(req.url!);
 
-    private connectUpstream(protocol: string, req: http.IncomingMessage, socket: net.Socket, head: Buffer) {
-        let { hostname, port, path } = url.parse(req.url!);
-        if (!hostname) {
-            // Transparent proxying:
+        if (this.debug) console.log(`Handling upgrade for ${req.url}`);
+
+        const transparentProxy = !hostname;
+
+        if (transparentProxy) {
             const hostHeader = req.headers.host;
             [ hostname, port ] = hostHeader!.split(':');
+
+            // upstreamEncryption is set in http-combo-server, for requests that have explicitly
+            // CONNECTed upstream (which may then up/downgrade from the current encryption).
+            let protocol: string;
+            if (socket.upstreamEncryption !== undefined) {
+                protocol = socket.upstreamEncryption ? 'wss' : 'ws';
+            } else {
+                protocol = req.connection.encrypted ? 'wss' : 'ws';
+            }
+
+            this.connectUpstream(`${protocol}://${hostname}${port ? ':' + port : ''}${path}`, req, socket, head);
+        } else {
+            // Connect directly according to the specified URL
+            const protocol = requestedProtocol!.replace('http', 'ws');
+            this.connectUpstream(`${protocol}//${hostname}${port ? ':' + port : ''}${path}`, req, socket, head);
         }
+    }
 
-        const upstreamSocket = new WebSocket(`${protocol}://${hostname}:${port}/${path}`);
+    private connectUpstream(url: string, req: http.IncomingMessage, socket: net.Socket, head: Buffer) {
+        if (this.debug) console.log(`Connecting to upstream websocket at ${url}`);
 
-        let success = false;
+        const upstreamSocket = new WebSocket(url);
+
         upstreamSocket.once('open', () => {
-            success = true;
             this.wsServer.handleUpgrade(req, socket, head, (ws) => {
                 (<InterceptedWebSocket> ws).upstreamSocket = upstreamSocket;
                 this.wsServer.emit('connection', ws);
             });
         });
 
-        upstreamSocket.on('error', (e: any) => {
-            if (e.code === 'ECONNRESET' && !success && protocol === 'wss') {
-                // Our optimistic WSS failed - try downgrading.
-                this.connectUpstream('ws', req, socket, head);
-            }
-        });
+        upstreamSocket.once('error', (e) => console.warn(e));
     }
 }

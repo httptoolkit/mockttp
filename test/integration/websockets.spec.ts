@@ -6,6 +6,7 @@ import { getLocal } from '../..';
 
 import { expect, nodeOnly } from '../test-utils';
 import { getCA } from '../../src/util/tls';
+import { HackyHttpsProxyAgent } from '../test-agents';
 
 // TODO: Create browsers tests as well (need a way to set up a websocket
 // server from inside a browser though...)
@@ -60,7 +61,20 @@ nodeOnly(() => {
 
             it('can be passed through successfully over HTTPS', async () => {
                 const ws = new WebSocket('ws://localhost:9090', {
-                    agent: new HttpsProxyAgent(`https://localhost:${mockServer.port}`)
+                    /*
+                    Unclear why, but npm's HttpsProxyAgent fails here (never
+                    gives WS a live socket). Manually doing the same correct
+                    requests works fine... This needs further investigation,
+                    but probably only once WebSockets themselves get proper
+                    in-depth support.
+
+                    For now, use this hacky but effective reimplementation
+                    of what I think the proxy agent _should_ do.
+                    */
+                    agent: HackyHttpsProxyAgent({
+                        proxyHost: 'localhost',
+                        proxyPort: mockServer.port
+                    })
                 });
 
                 ws.on('open', () => ws.send('test echo'));
@@ -106,7 +120,7 @@ nodeOnly(() => {
 
             it('can be passed through successfully over HTTP', async () => {
                 const ws = new WebSocket('wss://localhost:9090', {
-                    agent: new HttpProxyAgent(`http://localhost:${mockServer.port}`)
+                    agent: new HttpsProxyAgent(`http://localhost:${mockServer.port}`)
                 });
 
                 ws.on('open', () => ws.send('test echo'));
