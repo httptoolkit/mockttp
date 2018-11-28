@@ -166,7 +166,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
     }
 
     async start(port?: number): Promise<void> {
-        if (this.mockServerConfig) throw new Error('Server is already started');
+        if (this.mockServerConfig && !this.mockServerOptions.allowMultiClientsOnPort) throw new Error('Server is already started');
 
         const path = port ? `/start?port=${port}` : '/start';
         let mockServerConfig = await this.requestFromStandalone<MockServerConfig>(path, {

@@ -29,6 +29,7 @@ import { MockttpOptions } from '../mockttp';
 import { Duplex, PassThrough } from 'stream';
 
 export interface StandaloneServerOptions {
+    allowMultiClientsOnPort?: boolean;
     debug?: boolean;
     serverDefaults?: MockttpOptions;
 }
@@ -60,9 +61,14 @@ export class MockttpStandalone {
                 );
 
                 if (port != null && this.routers[port] != null) {
-                    res.status(409).json({
-                        error: `Cannot start: mock server is already running on port ${port}`
-                    });
+                    if(options.allowMultiClientsOnPort) {
+                        res.status(200).json(this.getMockServerConfigForPort(port));
+                    } else {
+                        res.status(409).json({
+                            error: `Cannot start: mock server is already running on port ${port}`
+                        });
+                    }
+
                     return;
                 }
 
@@ -131,6 +137,21 @@ export class MockttpStandalone {
                 }
             });
         });
+    }
+
+    private getMockServerConfigForPort(port: number) {
+        const mockServerOnPort = this.mockServers.find(server => server.port === port);
+
+        if(mockServerOnPort) {
+            return {
+                mockRoot: mockServerOnPort.url,
+                port,
+            }
+        }
+
+        return {
+            port,
+        }
     }
 
     private routers: { [port: number]: express.Router } = { };

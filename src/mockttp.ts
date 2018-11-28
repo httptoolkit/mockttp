@@ -167,6 +167,7 @@ export interface Mockttp {
 }
 
 export interface MockttpOptions {
+    allowMultiClientsOnPort?: boolean;
     cors?: boolean;
     debug?: boolean;
     https?: CAOptions;
