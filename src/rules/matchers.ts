@@ -157,6 +157,35 @@ export class RawBodyMatcherData extends Serializable {
     }
 }
 
+export class CookieMatcherData extends Serializable {
+    readonly type: 'cookie' = 'cookie';
+
+    constructor(
+        public cookie: { [key: string]: string },
+    ) {
+        super();
+    }
+
+    buildMatcher() {
+        return _.assign(
+            async (request: OngoingRequest) => {
+                if(!request.headers || !request.headers.cookie) {
+                    return;
+                }
+
+                const cookies = request.headers.cookie.split(';').map(cookie => {
+                    const [key, value] = cookie.split('=');
+
+                    return {[key.trim()]: value.trim()}
+                });
+
+                return cookies.some(element => _.isEqual(element, this.cookie))
+            },
+            { explain: () => `with cookies including ${JSON.stringify(this.cookie)}` }
+        );
+    }
+}
+
 export type MatcherData = (
     WildcardMatcherData |
     MethodMatcherData |
@@ -165,7 +194,8 @@ export type MatcherData = (
     HeaderMatcherData |
     QueryMatcherData |
     FormDataMatcherData |
-    RawBodyMatcherData
+    RawBodyMatcherData |
+    CookieMatcherData
 );
 
 export const MatcherDataLookup = {
@@ -176,8 +206,9 @@ export const MatcherDataLookup = {
     'header': HeaderMatcherData,
     'query': QueryMatcherData,
     'form-data': FormDataMatcherData,
-    'raw-body': RawBodyMatcherData
-}
+    'raw-body': RawBodyMatcherData,
+    'cookie': CookieMatcherData
+};
 
 export function buildMatchers(matcherPartData: MatcherData[]): RequestMatcher {
     const matchers = matcherPartData.map(m => m.buildMatcher());
