@@ -32,7 +32,8 @@ import {
     QueryMatcherData,
     FormDataMatcherData,
     RawBodyMatcherData,
-    WildcardMatcherData
+    WildcardMatcherData,
+    CookieMatcherData
 } from "./matchers";
 
 import {
@@ -130,6 +131,14 @@ export default class MockRuleBuilder {
      */
     withBody(content: string): MockRuleBuilder {
         this.matchers.push(new RawBodyMatcherData(content));
+        return this;
+    }
+
+    /**
+     * Match only requests that include the given cookies
+     */
+    withCookie(cookie: { [key: string]: string }) {
+        this.matchers.push(new CookieMatcherData(cookie));
         return this;
     }
 
