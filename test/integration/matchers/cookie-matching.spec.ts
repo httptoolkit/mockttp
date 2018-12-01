@@ -1,74 +1,78 @@
+import * as _ from 'lodash';
 import { getLocal } from "../../..";
-import {expect, fetch, Headers, nodeOnly} from "../../test-utils";
+import { expect, fetch, isNode } from "../../test-utils";
 import * as request from 'request-promise-native';
 
-nodeOnly(() => {
-    describe("Cookie matching", function () {
-        let server = getLocal();
+const requestWithCookies = async (url: string, ...cookies: string[]) => {
+    if (isNode()) {
+        const cookieJar = request.jar();
 
-        beforeEach(() => server.start());
-        afterEach(() => server.stop());
+        _.forEach(cookies, (cookieString) => {
+            const cookie = request.cookie(cookieString);
+            cookieJar.setCookie(cookie, url);
+        });
 
-        beforeEach(() => {
+        return request({ uri: url, jar: cookieJar });
+    } else {
+        const existingCookies = document.cookie.split('; ');
+        _.forEach(existingCookies, (cookie) => {
+            const [key] = cookie.split('=');
+            document.cookie = `${key}=`; // Blank the value of all existing cookies
+        });
+        _.forEach(cookies, (cookie) => document.cookie = cookie);
+
+        const response = await fetch(url, { credentials: 'include' });
+        return await response.text();
+    }
+};
+
+describe("Cookie matching", function () {
+    let server = getLocal({ cors: false });
+
+    beforeEach(() => server.start());
+    afterEach(() => server.stop());
+
+    beforeEach(() => {
+        const headers: _.Dictionary<string> = isNode() ? {} : {
+            // Can't just use 'A-C-A-O: *', because fetch will refuse to expose
+            // the response unless the server specificly confirms the origin.
+            'Access-Control-Allow-Origin': window.origin,
+            'Access-Control-Allow-Credentials': 'true'
+        };
+
+        return Promise.all([
             server.get("/")
                 .withCookie({"supercookie": "yummi"})
-                .thenReply(200, "matched cookie");
-        });
+                .always()
+                .thenReply(200, "matched cookie", headers),
+            server.get("/")
+                .always()
+                .thenReply(200, "did not match cookie", headers)
+        ]);
+    });
 
-        it("should match requests with the matching cookie", async () => {
-            const requestCookie = request.cookie('supercookie=yummi');
-            const cookiejar = request.jar();
+    it("should match requests with the matching cookie", async () => {
+        const body = await requestWithCookies(server.url, 'supercookie=yummi');
+        expect(body).to.equal("matched cookie");
+    });
 
-            cookiejar.setCookie(requestCookie, server.url);
+    it("should match requests with the matching cookie when multiple cookies are present", async () => {
+        const body = await requestWithCookies(server.url,
+            'supercookie=yummi',
+            'megacookie=delicious'
+        );
+        expect(body).to.equal("matched cookie");
+    });
 
-            const response = await request({
-                uri: server.url,
-                jar: cookiejar
-            });
+    it("should not match requests when cookie has a different value", async () => {
+        const body= await requestWithCookies(server.url,
+            'megacookie=delicious; supercookie=delicious',
+        );
+        expect(body).to.equal('did not match cookie');
+    });
 
-            expect(response).to.equal("matched cookie");
-        });
-
-        it("should match requests with the matching cookie when multiple cookies are present", async () => {
-            const matchingCookie = request.cookie('supercookie=yummi');
-            const notMatchingCookie = request.cookie('megacookie=delicious');
-            const cookiejar = request.jar();
-
-            cookiejar.setCookie(matchingCookie, server.url);
-            cookiejar.setCookie(notMatchingCookie, server.url);
-
-            const response = await request({
-                uri: server.url,
-                jar: cookiejar
-            });
-
-            expect(response).to.equal("matched cookie");
-        });
-
-        it("should not match requests when cookie has a different value", async () => {
-            const requestCookie = request.cookie('megacookie=delicious; supercookie=delicious');
-            const cookiejar = request.jar();
-
-            cookiejar.setCookie(requestCookie, server.url);
-
-            const { statusCode } = await request({
-                uri: server.url,
-                jar: cookiejar,
-                resolveWithFullResponse: true,
-                simple: false
-            })
-
-            expect(statusCode).to.equal(503);
-        });
-
-        it("should not match requests when no cookies are present", async () => {
-            const { statusCode } = await request({
-                uri: server.url,
-                resolveWithFullResponse: true,
-                simple: false
-            })
-
-            expect(statusCode).to.equal(503);
-        });
+    it("should not match requests when no cookies are present", async () => {
+        const body = await requestWithCookies(server.url);
+        expect(body).to.equal('did not match cookie');
     });
 });
