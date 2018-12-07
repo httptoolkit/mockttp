@@ -77,6 +77,7 @@ That is pretty easy, but we can make this simpler & more powerful. Let's take a 
 
 ```typescript
 const superagent = require("superagent");
+require('superagent-proxy')(superagent);
 const mockServer = require("mockttp").getLocal();
 
 describe("Mockttp", () => {
@@ -111,9 +112,9 @@ describe("Mockttp", () => {
 
         // One of the many ways to use a proxy - this assumes Node & superagent-proxy.
         // In a browser, you can simply use the browser settings instead.
-        let response = await superagent.get("http://google.com").proxy(server.url);
+        let response = await superagent.get("http://google.com").proxy(mockServer.url);
 
-        expect(response).to.equal("I can't believe it's not google!");
+        expect(response.text).to.equal("I can't believe it's not google!");
     });
 });
 ```
