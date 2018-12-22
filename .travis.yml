@@ -25,6 +25,5 @@ jobs:
             skip-cleanup: true
             local-dir: typedoc
             github-token: $GITHUB_TOKEN
-            keep-history: true
             on:
                 branch: master
