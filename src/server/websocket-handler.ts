@@ -8,20 +8,6 @@ interface InterceptedWebSocket extends WebSocket {
     upstreamSocket: WebSocket;
 }
 
-function pipeWebSocket(inSocket: WebSocket, outSocket: WebSocket) {
-    inSocket.on('message', (msg) => outSocket.send(msg));
-    inSocket.on('close', (num, reason) => {
-        if (num >= 1000 && num <= 1004) {
-            outSocket.close(num, reason)
-        } else {
-            // Unspecified or invalid error
-            outSocket.close();
-        }
-    });
-    inSocket.on('ping', (data) => outSocket.ping(data));
-    inSocket.on('pong', (data) => outSocket.pong(data));
-}
-
 // Pile of hacks to blindly forward all WS connections upstream untouched
 export class WebSocketHandler {
     private wsServer = new WebSocket.Server({ noServer: true });
@@ -30,8 +16,8 @@ export class WebSocketHandler {
         this.wsServer.on('connection', (ws: InterceptedWebSocket) => {
             if (this.debug) console.log('Successfully proxying websocket streams');
 
-            pipeWebSocket(ws, ws.upstreamSocket);
-            pipeWebSocket(ws.upstreamSocket, ws);
+            this.pipeWebSocket(ws, ws.upstreamSocket);
+            this.pipeWebSocket(ws.upstreamSocket, ws);
         });
     }
 
@@ -76,5 +62,28 @@ export class WebSocketHandler {
         });
 
         upstreamSocket.once('error', (e) => console.warn(e));
+    }
+
+    private pipeWebSocket(inSocket: WebSocket, outSocket: WebSocket) {
+        const onPipeFailed = (op: string) => (err?: Error) => {
+            if (!err) return;
+
+            inSocket.close();
+            console.error(`Websocket ${op} failed`, err);
+        };
+
+        inSocket.on('message', (msg) => outSocket.send(msg, onPipeFailed('message')));
+        inSocket.on('close', (num, reason) => {
+            if (num >= 1000 && num <= 1004) {
+                if (this.debug) console.log('Successfully proxying websocket streams');
+                outSocket.close(num, reason);
+            } else {
+                // Unspecified or invalid error
+                outSocket.close();
+            }
+        });
+
+        inSocket.on('ping', (data) => outSocket.ping(data, undefined, onPipeFailed('ping')));
+        inSocket.on('pong', (data) => outSocket.pong(data, undefined, onPipeFailed('pong')));
     }
 }
