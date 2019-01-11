@@ -2,6 +2,7 @@ import _ = require("lodash");
 import { getLocal, Mockttp } from "../..";
 import request = require("request-promise-native");
 import { expect, nodeOnly } from "../test-utils";
+import { getCA } from "../../src/util/tls";
 
 const INITIAL_ENV = _.cloneDeep(process.env);
 
@@ -137,6 +138,37 @@ nodeOnly(() => {
 
                     let response = await request.get("https://example.com:1234/endpoint");
                     expect(response).to.equal("mocked data");
+                });
+
+                describe("given an untrusted upstream certificate", () => {
+
+                    let badServer: Mockttp;
+
+                    beforeEach(async () => {
+                        const ca = await getCA({
+                            keyPath: './test/fixtures/test-ca.key',
+                            certPath: './test/fixtures/test-ca.pem'
+                        });
+                        const certificate = ca.generateCertificate('wrong-domain');
+
+                        badServer = getLocal({ https: certificate });
+                        await badServer.start();
+                    });
+
+                    afterEach(() => badServer.stop());
+
+                    it("should refuse to pass through requests", async () => {
+                        await badServer.anyRequest().thenReply(200);
+
+                        await server.get(badServer.urlFor('/')).thenPassThrough();
+
+                        let response = await request.get(badServer.urlFor('/'), {
+                            resolveWithFullResponse: true,
+                            simple: false
+                        });
+
+                        expect(response.statusCode).to.equal(502);
+                    });
                 });
             });
         });
