@@ -27,6 +27,7 @@ import { MockedEndpointData, DEFAULT_STANDALONE_PORT } from "../types";
 import { MockedEndpointClient } from "./mocked-endpoint-client";
 import { Duplex } from 'stream';
 import { buildBodyReader } from '../server/request-utils';
+import { RequireProps } from '../util/type-utils';
 
 export class ConnectionError extends TypedError { }
 
@@ -66,9 +67,8 @@ const SUBSCRIBABLE_EVENTS: SubscribableEvent[] = [
  * methods to directly manage them.
  */
 export default class MockttpClient extends AbstractMockttp implements Mockttp {
-    private readonly standaloneServerUrl = `http://localhost:${DEFAULT_STANDALONE_PORT}`;
 
-    private mockServerOptions: MockttpOptions;
+    private mockServerOptions: RequireProps<MockttpOptions, 'cors' | 'standaloneServerUrl'>;
     private mockServerConfig: MockServerConfig | undefined;
     private mockServerStream: Duplex | undefined;
 
@@ -76,20 +76,26 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
         super(_.defaults(mockServerOptions, {
             // Browser clients generally want cors enabled. For other clients, it doesn't hurt.
             // TODO: Maybe detect whether we're in a browser in future
-            cors: true
+            cors: true,
+            standaloneServerUrl: `http://localhost:${DEFAULT_STANDALONE_PORT}`
         }));
-        this.mockServerOptions = mockServerOptions;
+
+        // Note that 'defaults' above mutates this, so this includes
+        // the default parameter values too (and thus the type assertion)
+        this.mockServerOptions = mockServerOptions as RequireProps<
+            MockttpOptions, 'cors' | 'standaloneServerUrl'
+        >
     }
 
     private async requestFromStandalone<T>(path: string, options?: RequestInit): Promise<T> {
-        const url = `${this.standaloneServerUrl}${path}`;
+        const url = `${this.mockServerOptions.standaloneServerUrl}${path}`;
 
         let response;
         try {
             response = await fetch(url, options);
         } catch (e) {
             if (e.code === 'ECONNREFUSED') {
-                throw new ConnectionError(`Failed to connect to standalone server at ${this.standaloneServerUrl}`);
+                throw new ConnectionError(`Failed to connect to standalone server at ${this.mockServerOptions.standaloneServerUrl}`);
             } else throw e;
         }
 
@@ -118,7 +124,8 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
     }
 
     private openStreamToMockServer(config: MockServerConfig): Promise<Duplex> {
-        const stream = connectWebSocketStream(`ws://localhost:${DEFAULT_STANDALONE_PORT}/server/${config.port}/stream`, {
+        const standaloneStreamServer = this.mockServerOptions.standaloneServerUrl.replace(/^http/, 'ws');
+        const stream = connectWebSocketStream(`${standaloneStreamServer}/server/${config.port}/stream`, {
             objectMode: true
         });
 
@@ -131,7 +138,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
     private async requestFromMockServer<T>(path: string, options?: RequestInit): Promise<T> {
         if (!this.mockServerConfig) throw new Error('Not connected to mock server');
 
-        let url = `${this.standaloneServerUrl}/server/${this.mockServerConfig.port}${path}`;
+        let url = `${this.mockServerOptions.standaloneServerUrl}/server/${this.mockServerConfig.port}${path}`;
         let response = await fetch(url, options);
 
         if (response.status >= 400) {
@@ -238,7 +245,8 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
     public on(event: SubscribableEvent, callback: (data: any) => void): Promise<void> {
         if (!_.includes(SUBSCRIBABLE_EVENTS, event)) return Promise.resolve();
 
-        const url = `ws://localhost:${DEFAULT_STANDALONE_PORT}/server/${this.mockServerConfig!.port}/subscription`;
+        const standaloneStreamServer = this.mockServerOptions.standaloneServerUrl.replace(/^http/, 'ws');
+        const url = `${standaloneStreamServer}/server/${this.port}/subscription`;
         const client = new SubscriptionClient(url, { }, WebSocket);
 
         const queryResultName = {

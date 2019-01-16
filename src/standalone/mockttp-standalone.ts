@@ -15,7 +15,7 @@ import * as bodyParser from 'body-parser';
 import * as ws from 'ws';
 
 import { graphqlExpress } from 'apollo-server-express';
-import { GraphQLSchema, GraphQLScalarType, execute, subscribe } from 'graphql';
+import { GraphQLSchema, execute, subscribe } from 'graphql';
 import { makeExecutableSchema } from 'graphql-tools';
 import { SubscriptionServer } from 'subscriptions-transport-ws';
 import connectWebSocketStream = require('websocket-stream');

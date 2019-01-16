@@ -189,6 +189,12 @@ export interface MockttpOptions {
      * certPath } object containing the path to files containing that content.
      */
     https?: CAOptions;
+
+    /**
+     * The full URL to use for a standalone server with remote (or local but browser) client.
+     * When using a local server, this parameter is ignored.
+     */
+    standaloneServerUrl?: string;
 }
 
 /**
