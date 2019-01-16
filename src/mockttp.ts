@@ -167,8 +167,27 @@ export interface Mockttp {
 }
 
 export interface MockttpOptions {
+    /**
+     * Should the server automatically respond to OPTIONS requests with a permissive
+     * response?
+     *
+     * Defaults to true for remote clients (e.g. in the browser), and false otherwise.
+     * If this is set to false, browser requests will typically fail unless you 
+     * stub OPTIONS responses by hand.
+     */
     cors?: boolean;
+
+    /**
+     * Should the server print extra debug information?
+     */
     debug?: boolean;
+
+    /**
+     * The HTTPS settings to be used. Optional, only HTTP interception will be
+     * enabled if omitted. This should be set to either a { key, cert } object
+     * containing the private key and certificate in PEM format, or a { keyPath,
+     * certPath } object containing the path to files containing that content.
+     */
     https?: CAOptions;
 }
 
