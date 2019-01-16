@@ -381,11 +381,22 @@ export class StreamHandlerData extends Serializable {
     }
 }
 
+export interface PassThroughHandlerOptions {
+    forwardToLocation?: string;
+    ignoreHostCertificateErrors?: string[];
+}
+
 export class PassThroughHandlerData extends Serializable {
     readonly type: 'passthrough' = 'passthrough';
 
-    constructor(private forwardToLocation?: string) {
+    private forwardToLocation?: string;
+    private ignoreHostCertificateErrors: string[] = [];
+
+    constructor(options: PassThroughHandlerOptions = {}) {
         super();
+
+        this.forwardToLocation = options.forwardToLocation;
+        this.ignoreHostCertificateErrors = options.ignoreHostCertificateErrors || [];
     }
 
     buildHandler() {
@@ -419,6 +430,8 @@ export class PassThroughHandlerData extends Serializable {
                 protocol = clientReq.protocol + ':';
             }
 
+            const checkServerCertificate = !_.includes(this.ignoreHostCertificateErrors, hostname);
+
             let makeRequest = protocol === 'https:' ? https.request : http.request;
 
             let outgoingPort: null | number = null;
@@ -429,7 +442,8 @@ export class PassThroughHandlerData extends Serializable {
                     hostname,
                     port,
                     path,
-                    headers
+                    headers,
+                    rejectUnauthorized: checkServerCertificate
                 }, (serverRes) => {
                     Object.keys(serverRes.headers).forEach((header) => {
                         try {

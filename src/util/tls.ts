@@ -41,10 +41,13 @@ export type GeneratedCertificate = {
  * These can be saved to disk, and their paths passed
  * as HTTPS options to a Mockttp server.
  */
-export function generateCACertificate(options: { commonName: string } = {
-    commonName: 'Mockttp Testing CA - DO NOT TRUST - TESTING ONLY',
-}) {
-    const keyPair = pki.rsa.generateKeyPair(2048);
+export function generateCACertificate(options: { commonName?: string, bytes?: number } = {}) {
+    options = _.defaults({}, options, {
+        commonName: 'Mockttp Testing CA - DO NOT TRUST - TESTING ONLY',
+        bytes: 2048
+    });
+
+    const keyPair = pki.rsa.generateKeyPair(options.bytes);
     const cert = pki.createCertificate();
     cert.publicKey = keyPair.publicKey;
     cert.serialNumber = uuid().replace(/-/g, '');

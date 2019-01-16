@@ -4,7 +4,7 @@
 
 import url = require("url");
 import { OutgoingHttpHeaders } from "http";
-import { merge } from "lodash";
+import { merge, defaults } from "lodash";
 import { Readable } from "stream";
 import { stripIndent } from "common-tags";
 
@@ -43,7 +43,8 @@ import {
     CallbackHandlerResult,
     StreamHandlerData,
     CloseConnectionHandlerData,
-    TimeoutHandlerData
+    TimeoutHandlerData,
+    PassThroughHandlerOptions
 } from "./handlers";
 
 /**
@@ -303,6 +304,11 @@ export default class MockRuleBuilder {
      * for proxied requests only, direct requests will be rejected with
      * an error.
      *
+     * This method takes options to configure how the request is passed
+     * through. The only option currently supported is ignoreHostCertificateErrors,
+     * a list of hostnames for which server certificate errors should
+     * be ignored (none, by default).
+     *
      * Calling this method registers the rule with the server, so it
      * starts to handle requests.
      *
@@ -311,11 +317,11 @@ export default class MockRuleBuilder {
      * before sending requests to be matched. The mocked endpoint
      * can be used to assert on the requests matched by this rule.
      */
-    thenPassThrough(): Promise<MockedEndpoint> {
+    thenPassThrough(options?: PassThroughHandlerOptions): Promise<MockedEndpoint> {
         const rule: MockRuleData = {
             matchers: this.matchers,
             completionChecker: this.isComplete,
-            handler: new PassThroughHandlerData()
+            handler: new PassThroughHandlerData(options)
         };
 
         return this.addRule(rule);
@@ -326,6 +332,11 @@ export default class MockRuleBuilder {
      * specified must not include a path. Otherwise, an error is thrown.
      * The path portion of the original request url is used instead.
      *
+     * This method also takes options to configure how the request is passed
+     * through. The only option currently supported is ignoreHostCertificateErrors,
+     * a list of hostnames for which server certificate errors should
+     * be ignored (none, by default).
+     *
      * Calling this method registers the rule with the server, so it
      * starts to handle requests.
      *
@@ -334,12 +345,12 @@ export default class MockRuleBuilder {
      * before sending requests to be matched. The mocked endpoint
      * can be used to assert on the requests matched by this rule.
      */
-    async thenForwardTo(forwardToUrl: string): Promise<MockedEndpoint> {
-        const { protocol, hostname, port, path } = url.parse(forwardToUrl);
+    async thenForwardTo(forwardToLocation: string, options?: PassThroughHandlerOptions): Promise<MockedEndpoint> {
+        const { protocol, hostname, port, path } = url.parse(forwardToLocation);
         if (path && path.trim() !== "/") {
             const suggestion = url.format({ protocol, hostname, port });
             throw new Error(stripIndent`
-                URLs passed to thenForwardTo cannot include a path, but "${forwardToUrl}" does. ${''
+                URLs passed to thenForwardTo cannot include a path, but "${forwardToLocation}" does. ${''
                 }Did you mean ${suggestion}?
             `);
         }
@@ -347,7 +358,7 @@ export default class MockRuleBuilder {
         const rule: MockRuleData = {
             matchers: this.matchers,
             completionChecker: this.isComplete,
-            handler: new PassThroughHandlerData(forwardToUrl)
+            handler: new PassThroughHandlerData(defaults({ forwardToLocation }, options))
         };
 
         return this.addRule(rule);

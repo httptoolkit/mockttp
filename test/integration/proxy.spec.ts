@@ -2,7 +2,7 @@ import _ = require("lodash");
 import { getLocal, Mockttp } from "../..";
 import request = require("request-promise-native");
 import { expect, nodeOnly } from "../test-utils";
-import { getCA } from "../../src/util/tls";
+import { getCA, generateCACertificate } from "../../src/util/tls";
 
 const INITIAL_ENV = _.cloneDeep(process.env);
 
@@ -143,15 +143,10 @@ nodeOnly(() => {
                 describe("given an untrusted upstream certificate", () => {
 
                     let badServer: Mockttp;
+                    const untrustedCACert = generateCACertificate({ bytes: 1024 });
 
                     beforeEach(async () => {
-                        const ca = await getCA({
-                            keyPath: './test/fixtures/test-ca.key',
-                            certPath: './test/fixtures/test-ca.pem'
-                        });
-                        const certificate = ca.generateCertificate('wrong-domain');
-
-                        badServer = getLocal({ https: certificate });
+                        badServer = getLocal({ https: untrustedCACert });
                         await badServer.start();
                     });
 
@@ -160,9 +155,39 @@ nodeOnly(() => {
                     it("should refuse to pass through requests", async () => {
                         await badServer.anyRequest().thenReply(200);
 
-                        await server.get(badServer.urlFor('/')).thenPassThrough();
+                        await server.anyRequest().thenPassThrough();
 
-                        let response = await request.get(badServer.urlFor('/'), {
+                        let response = await request.get(badServer.url, {
+                            resolveWithFullResponse: true,
+                            simple: false
+                        });
+
+                        expect(response.statusCode).to.equal(502);
+                    });
+
+                    it("should allow passing through requests if the host is specifically listed", async () => {
+                        await badServer.anyRequest().thenReply(200);
+
+                        await server.anyRequest().thenPassThrough({
+                            ignoreHostCertificateErrors: ['localhost']
+                        });
+
+                        let response = await request.get(badServer.url, {
+                            resolveWithFullResponse: true,
+                            simple: false
+                        });
+
+                        expect(response.statusCode).to.equal(200);
+                    });
+
+                    it("should allow passing through requests if a non-matching host is specifically listed", async () => {
+                        await badServer.anyRequest().thenReply(200);
+
+                        await server.get(badServer.urlFor('/')).thenPassThrough({
+                            ignoreHostCertificateErrors: ['differenthost']
+                        });
+
+                        let response = await request.get(badServer.url, {
                             resolveWithFullResponse: true,
                             simple: false
                         });
