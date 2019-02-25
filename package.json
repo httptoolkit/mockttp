@@ -124,7 +124,7 @@
     "lodash": "^4.16.4",
     "node-forge": "^0.7.1",
     "normalize-url": "^1.9.1",
-    "portfinder": "^1.0.9",
+    "portfinder": "^1.0.13",
     "subscriptions-transport-ws": "^0.9.4",
     "typed-error": "^3.0.2",
     "universal-websocket-client": "^1.0.2",

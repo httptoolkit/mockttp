@@ -73,12 +73,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
             throw new Error(`Cannot start server with port ${portParam}. If passed, the port must be an integer`);
         }
 
-        const port = (portParam || await new Promise<number>((resolve, reject) => {
-            portfinder.getPort((err, port) => {
-                if (err) reject(err);
-                else resolve(port);
-            });
-        }));
+        const port = (portParam || await portfinder.getPortPromise());
 
         if (this.debug) console.log(`Starting mock server on port ${port}`);
 
