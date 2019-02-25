@@ -1,9 +1,8 @@
 {
     "compilerOptions": {
-        "target": "es5",
+        "target": "es6",
         "module": "commonjs",
         "strict": true,
-        "strictPropertyInitialization": false, // Fails with typed-error
         "lib": [
             "dom",
             "es2015"

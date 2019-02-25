@@ -2,7 +2,7 @@
  * @module Mockttp
  */
 
-import TypedError = require('typed-error');
+import { TypedError } from 'typed-error';
 import getFetchPonyfill = require('fetch-ponyfill');
 import _ = require('lodash');
 import * as WebSocket from 'universal-websocket-client';

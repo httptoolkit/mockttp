@@ -70,9 +70,9 @@ export class MockRule implements MockRuleInterface {
                 const handlerArgs = arguments;
                 let completedAndRecordedPromise = (async (resolve, reject) => {
                     // Start recording before the data starts piping, so we don't miss anything.
-                    let buffer = req.body.asBuffer();
+                    req.body.asBuffer();
 
-                    await handler.apply(this, handlerArgs);
+                    await handler.apply(this, <any> handlerArgs);
 
                     return waitForCompletedRequest(req);
                 })();

@@ -193,14 +193,14 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         this.eventEmitter.emit('abort', req);
     }
 
-    private async handleRequest(request: OngoingRequest, rawResponse: express.Response) {
-        if (this.debug) console.log(`Handling request for ${request.url}`);
+    private async handleRequest(rawRequest: express.Request, rawResponse: express.Response) {
+        if (this.debug) console.log(`Handling request for ${rawRequest.url}`);
 
         const response = trackResponse(rawResponse);
 
         const id = uuid();
 
-        request.id = id;
+        const request = <OngoingRequest>Object.assign(rawRequest, { id: id });
         response.id = id;
 
         this.announceRequestAsync(request);
