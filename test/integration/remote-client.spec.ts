@@ -1,7 +1,10 @@
-import { getLocal, getRemote, getStandalone } from "../..";
-import request = require("request-promise-native");
-import { expect, fetch, nodeOnly, browserOnly } from "../test-utils";
 import { PassThrough } from "stream";
+import * as net from 'net';
+import * as portfinder from 'portfinder';
+import request = require("request-promise-native");
+
+import { getLocal, getRemote, getStandalone } from "../..";
+import { expect, fetch, nodeOnly, browserOnly } from "../test-utils";
 
 browserOnly(() => {
     describe("Remote browser client with a standalone server", function () {
@@ -126,6 +129,26 @@ nodeOnly(() => {
 
                 await expect(getRemote().start(port))
                     .to.eventually.be.rejectedWith(`Cannot start: mock server is already running on port ${port}`);
+            });
+
+            describe("given another service using a port", () => {
+                let port: number;
+                let server: net.Server;
+
+                beforeEach(async () => {
+                    server = net.createServer(() => {});
+                    port = await portfinder.getPortPromise();
+                    return new Promise(resolve => server.listen(port, resolve));
+                });
+
+                afterEach(() => {
+                    return new Promise(resolve => server.close(resolve));
+                });
+
+                it("should reject Mockttp clients trying to use that port", async () => {
+                    await expect(getRemote().start(port))
+                        .to.eventually.be.rejectedWith(`Failed to start server: listen EADDRINUSE :::${port}`);
+                });
             });
         });
 

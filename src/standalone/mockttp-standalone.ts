@@ -148,8 +148,8 @@ export class MockttpStandalone {
         const mockServer = new MockttpServer(_.defaults({
             debug: this.debug // Use debug mode if the client requests it, or if the standalone has it set
         }, options));
-        this.mockServers.push(mockServer);
         await mockServer.start(port);
+        this.mockServers.push(mockServer);
 
         const mockPort = mockServer.port!;
 

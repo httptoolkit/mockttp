@@ -88,7 +88,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         const webSocketHander = new WebSocketHandler(this.debug);
         this.server!.on('upgrade', webSocketHander.handleUpgrade.bind(webSocketHander));
 
-        return new Promise<void>((resolve) => {
+        return new Promise<void>((resolve, reject) => {
             this.server!.on('listening', resolve);
             this.server!.on('error', (e: any) => {
                 // Although we try to pick a free port, we may have race conditions, if something else
@@ -100,7 +100,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
                     this.server!.destroy(); // Don't bother waiting for this, it can stop on its own time
                     resolve(this.start());
                 } else {
-                    throw e;
+                    reject(e);
                 }
             });
         });
