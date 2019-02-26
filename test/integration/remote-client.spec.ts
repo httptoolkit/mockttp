@@ -147,7 +147,7 @@ nodeOnly(() => {
 
                 it("should reject Mockttp clients trying to use that port", async () => {
                     await expect(getRemote().start(port))
-                        .to.eventually.be.rejectedWith(`Failed to start server: listen EADDRINUSE :::${port}`);
+                        .to.eventually.be.rejectedWith(/Failed to start server: listen EADDRINUSE/);
                 });
             });
         });
