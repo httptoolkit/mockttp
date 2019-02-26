@@ -16,7 +16,6 @@
     "buildOnSave": true,
     "include": [
         "custom-typings/*.d.ts",
-        "src/**/*.ts",
-        "node_modules/@types/**/*.d.ts"
+        "src/**/*.ts"
     ]
 }
