@@ -133,11 +133,13 @@ export class FormDataMatcherData extends Serializable {
     }
 
     buildMatcher() {
-        return _.assign(async (request: OngoingRequest) =>
-            !!request.headers["content-type"] &&
-            request.headers["content-type"].indexOf("application/x-www-form-urlencoded") !== -1 &&
-            _.isMatch(await request.body.asFormData(), this.formData)
-        , { explain: () => `with form data including ${JSON.stringify(this.formData)}` });
+        return _.assign(async (request: OngoingRequest) => {
+            const contentType = request.headers['content-type'];
+
+            return !!contentType &&
+                contentType.indexOf("application/x-www-form-urlencoded") !== -1 &&
+                _.isMatch(await request.body.asFormData(), this.formData)
+        }, { explain: () => `with form data including ${JSON.stringify(this.formData)}` });
     }
 }
 

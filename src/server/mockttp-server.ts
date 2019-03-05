@@ -293,7 +293,8 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
         msg += `mockServer.${request.method.toLowerCase()}("${request.path}")`;
 
-        let isFormRequest = !!request.headers["content-type"] && request.headers["content-type"].indexOf("application/x-www-form-urlencoded") > -1;
+        const contentType = request.headers['content-type'];
+        let isFormRequest = !!contentType && contentType.indexOf("application/x-www-form-urlencoded") > -1;
         let formBody = await request.body.asFormData().catch(() => undefined);
 
         if (isFormRequest && !!formBody) {

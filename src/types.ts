@@ -18,7 +18,19 @@ export enum Method {
 }
 
 export interface Headers {
-    [key: string]: string;
+    // An arbitrary set of headers that are known to
+    // only ever appear once (for legal requests).
+    'content-encoding'?: string;
+
+    // In general there may be 0+ of any header
+    [key: string]: undefined | string | string[];
+}
+
+interface RequestHeaders extends Headers {
+    // An arbitrary set of headers that are known to
+    // only ever appear once (for legal requests).
+    host: string;
+    cookie?: string;
 }
 
 export interface Request {
@@ -28,7 +40,7 @@ export interface Request {
     path: string;
     hostname: string;
 
-    headers: Headers;
+    headers: RequestHeaders;
 }
 
 export interface OngoingRequest extends Request {

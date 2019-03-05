@@ -61,9 +61,7 @@ export interface CallbackHandlerResult {
     status?: number;
     json?: any;
     body?: string;
-    headers?: {
-        [key: string]: string;
-    };
+    headers?: Headers;
 }
 
 export interface SerializedStreamBackedHandlerData {
