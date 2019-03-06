@@ -53,7 +53,11 @@ export function generateCACertificate(options: { commonName?: string, bytes?: nu
     cert.serialNumber = uuid().replace(/-/g, '');
 
     cert.validity.notBefore = new Date();
+    // Make it valid for the last 24h - helps in cases where clocks slightly disagree
+    cert.validity.notBefore.setDate(cert.validity.notBefore.getDate() - 1);
+
     cert.validity.notAfter = new Date();
+    // Valid for the next year by default.
     cert.validity.notAfter.setFullYear(cert.validity.notBefore.getFullYear() + 1);
 
     cert.setSubject([{ name: 'commonName', value: options.commonName }]);
@@ -147,8 +151,11 @@ export class CA {
         cert.serialNumber = uuid().replace(/-/g, '');
 
         cert.validity.notBefore = new Date();
+        // Make it valid for the last 24h - helps in cases where clocks slightly disagree.
+        cert.validity.notBefore.setDate(cert.validity.notBefore.getDate() - 1);
+
         cert.validity.notAfter = new Date();
-        // TODO: shorten this expiry
+        // Valid for the next year by default. TODO: Shorten (and expire the cache) automatically.
         cert.validity.notAfter.setFullYear(cert.validity.notBefore.getFullYear() + 1);
 
         cert.setSubject([
