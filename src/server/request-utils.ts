@@ -76,7 +76,14 @@ const waitForBody = async (body: ParsedBody, headers: Headers): Promise<Complete
     return buildBodyReader(bufferBody, headers);
 };
 
-export const handleContentEncoding = (body: Buffer, encoding?: string) => {
+export const handleContentEncoding = (body: Buffer, encoding?: string): Buffer => {
+    if (encoding && encoding.indexOf(', ') >= 0) {
+        const encodings = encoding.split(', ').reverse();
+        return encodings.reduce((content, nextEncoding) => {
+            return handleContentEncoding(content, nextEncoding);
+        }, body);
+    }
+
     if (encoding === 'gzip' || encoding === 'x-gzip') {
         return zlib.gunzipSync(body);
     } else if (encoding === 'deflate' || encoding === 'x-deflate') {

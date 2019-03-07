@@ -48,6 +48,9 @@ describe("buildBodyReader", () => {
             expect(body.text).to.equal('Raw deflate response');
         });
 
+        // Brotli strings generated with:
+        // echo -n '$CONTENT' | brotli --stdout - | base64
+
         it('can decode brotli bodies', () => {
             // We use a pre-compressed input, because the compressor won't run in a browser.
             const brotliCompressedMessage = Buffer.from('GxoAABypU587dC0k9ianQOgqjS32iUTcCA==', 'base64');
@@ -55,6 +58,17 @@ describe("buildBodyReader", () => {
                 'content-encoding': 'br'
             });
             expect(body.text).to.equal('Brotli brotli brotli brotli');
+        });
+
+        it('can decode bodies with multiple encodings', () => {
+            // We use a pre-compressed input, because the compressor won't run in a browser.
+            const brotliCompressedMessage = Buffer.from('HyAA+EV3eL3z9149GWlJRDmILALlIfBcpHp8tMkhTTzbUDoA', 'base64');
+            const content = Buffer.from(zlib.gzipSync(brotliCompressedMessage));
+            const body = buildBodyReader(content, {
+                'content-encoding': 'br, identity, gzip, identity'
+            });
+
+            expect(body.text).to.equal('First brotli, then gzip, now this');
         });
     });
 });
