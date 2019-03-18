@@ -78,9 +78,9 @@ const waitForBody = async (body: ParsedBody, headers: Headers): Promise<Complete
     return buildBodyReader(bufferBody, headers);
 };
 
-export const handleContentEncoding = (body: Buffer, encoding?: string): Buffer => {
-    if (encoding && encoding.indexOf(', ') >= 0) {
-        const encodings = encoding.split(', ').reverse();
+export const handleContentEncoding = (body: Buffer, encoding?: string | string[]): Buffer => {
+    if (_.isArray(encoding) || (typeof encoding === 'string' && encoding.indexOf(', ') >= 0)) {
+        const encodings = typeof encoding === 'string' ? encoding.split(', ').reverse() : encoding;
         return encodings.reduce((content, nextEncoding) => {
             return handleContentEncoding(content, nextEncoding);
         }, body);

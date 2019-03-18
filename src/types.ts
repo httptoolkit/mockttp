@@ -19,8 +19,9 @@ export enum Method {
 
 export interface Headers {
     // An arbitrary set of headers that are known to
-    // only ever appear once (for legal requests).
-    'content-encoding'?: string;
+    // only ever appear once (for valid requests).
+    'content-type'?: string;
+    'user-agent'?: string;
 
     // In general there may be 0+ of any header
     [key: string]: undefined | string | string[];
