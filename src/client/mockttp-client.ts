@@ -268,7 +268,8 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                         hostname,
 
                         headers,
-                        body
+                        body,
+                        timingEvents
                     }
                 }`
             },
@@ -280,7 +281,8 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                         statusCode,
                         statusMessage,
                         headers,
-                        body
+                        body,
+                        timingEvents
                     }
                 }`
             },
@@ -296,7 +298,8 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                         hostname,
 
                         headers,
-                        body
+                        body,
+                        timingEvents
                     }
                 }`
             },
@@ -306,9 +309,12 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
             next: (value) => {
                 if (value.data) {
                     const data = (<any> value.data)[queryResultName];
+                    // TODO: Get a proper graphql client that does all this automatically from the schema itself
                     if (data.headers) {
-                        // TODO: Get a proper graphql client that does this automatically from the schema itself
                         data.headers = JSON.parse(data.headers);
+                    }
+                    if (data.timingEvents) {
+                        data.timingEvents = JSON.parse(data.timingEvents);
                     }
                     if (data.body) {
                         data.body = buildBodyReader(Buffer.from(data.body, 'base64'), data.headers);

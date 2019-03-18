@@ -48,6 +48,7 @@ export interface OngoingRequest extends Request {
     originalUrl: string;
 
     body: ParsedBody;
+    timingEvents: TimingEvents;
 }
 
 export interface ParsedBody {
@@ -70,12 +71,27 @@ export interface CompletedBody {
 export interface CompletedRequest extends Request {
     id: string;
     body: CompletedBody;
+    timingEvents: TimingEvents;
+}
+
+export interface TimingEvents {
+    // Milliseconds since unix epoch
+    startTime: number;
+
+    // High-precision floating-point monotonically increasing timestamps.
+    // Comparable and precise, but not related to specific current time.
+    startTimestamp: number; // When the request was initially received
+    bodyReceivedTimestamp?: number; // When the request body was fully received
+    headersSentTimestamp?: number; // When the response headers were sent
+    responseSentTimestamp?: number; // When the response was fully completed
+    abortedTimestamp?: number; // When the request was aborted
 }
 
 export interface OngoingResponse extends express.Response {
     id: string;
     getHeaders(): Headers;
     body: ParsedBody;
+    timingEvents: TimingEvents;
 }
 
 export interface CompletedResponse {
@@ -84,6 +100,7 @@ export interface CompletedResponse {
     statusMessage: string;
     headers: Headers;
     body: CompletedBody;
+    timingEvents: TimingEvents;
 }
 
 /**

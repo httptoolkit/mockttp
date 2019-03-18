@@ -8,6 +8,7 @@ import portfinder = require("portfinder");
 import express = require("express");
 import uuid = require('uuid/v4');
 import cors = require("cors");
+import now = require("performance-now");
 import _ = require("lodash");
 
 import { OngoingRequest, CompletedRequest, CompletedResponse, OngoingResponse } from "../types";
@@ -167,7 +168,9 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         setImmediate(() => {
             waitForCompletedRequest(request)
             .then((req: CompletedRequest) => {
-                this.eventEmitter.emit('request', req);
+                this.eventEmitter.emit('request', Object.assign(req, {
+                    timingEvents: _.clone(req.timingEvents)
+                }));
             })
             .catch(console.error);
         });
@@ -177,7 +180,9 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         setImmediate(() => {
             waitForCompletedResponse(response)
             .then((res: CompletedResponse) => {
-                this.eventEmitter.emit('response', res);
+                this.eventEmitter.emit('response', Object.assign(res, {
+                    timingEvents: _.clone(res.timingEvents)
+                }));
             })
             .catch(console.error);
         });
@@ -185,17 +190,21 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
     private async announceAbortAsync(request: OngoingRequest) {
         const req = await waitForCompletedRequest(request);
-        this.eventEmitter.emit('abort', req);
+        this.eventEmitter.emit('abort', Object.assign(req, {
+            timingEvents: _.clone(req.timingEvents)
+        }));
     }
 
     private async handleRequest(rawRequest: express.Request, rawResponse: express.Response) {
         if (this.debug) console.log(`Handling request for ${rawRequest.url}`);
 
-        const response = trackResponse(rawResponse);
+        const timingEvents = { startTime: Date.now(), startTimestamp: now() };
+
+        const response = trackResponse(rawResponse, timingEvents);
 
         const id = uuid();
 
-        const request = <OngoingRequest>Object.assign(rawRequest, { id: id });
+        const request = <OngoingRequest>Object.assign(rawRequest, { id: id, timingEvents });
         response.id = id;
 
         this.announceRequestAsync(request);
@@ -204,6 +213,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         response.once('close', () => {
             // Aborted is only defined in new node. We use it where it's explicitly false though.
             if (result === null && ((request as any).aborted !== false)) {
+                request.timingEvents.abortedTimestamp = now();
                 this.announceAbortAsync(request);
                 result = 'aborted';
             }

@@ -2,7 +2,7 @@ import _ = require("lodash");
 import { getLocal, Mockttp } from "../..";
 import request = require("request-promise-native");
 import { expect, nodeOnly } from "../test-utils";
-import { getCA, generateCACertificate } from "../../src/util/tls";
+import { generateCACertificate } from "../../src/util/tls";
 
 const INITIAL_ENV = _.cloneDeep(process.env);
 

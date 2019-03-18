@@ -8,6 +8,7 @@ import * as querystring from 'querystring';
 import * as express from 'express';
 import * as zlib from 'zlib';
 import * as brotliDecompress from 'brotli/decompress';
+import now = require("performance-now");
 
 import {
     Headers,
@@ -16,7 +17,8 @@ import {
     OngoingResponse,
     CompletedResponse,
     ParsedBody,
-    CompletedBody
+    CompletedBody,
+    TimingEvents
 } from "../types";
 
 export const setHeaders = (response: express.Response, headers: Headers) => {
@@ -149,6 +151,9 @@ export const parseBody = (
 };
 
 export async function waitForCompletedRequest(request: OngoingRequest): Promise<CompletedRequest> {
+    const body = await waitForBody(request.body, request.headers);
+    const bodyReceivedTimestamp = request.timingEvents.bodyReceivedTimestamp || now();
+
     return _(request).pick([
         'id',
         'protocol',
@@ -158,21 +163,34 @@ export async function waitForCompletedRequest(request: OngoingRequest): Promise<
         'hostname',
         'headers'
     ]).assign({
-        body: await waitForBody(request.body, request.headers)
+        body: body,
+        timingEvents: Object.assign(request.timingEvents, { bodyReceivedTimestamp })
     }).valueOf();
 }
 
-export function trackResponse(response: express.Response): OngoingResponse {
+export function trackResponse(response: express.Response, timingEvents: TimingEvents): OngoingResponse {
     let trackedResponse = <OngoingResponse> response;
     if (!trackedResponse.getHeaders) {
         // getHeaders was added in 7.7. - if it's not available, polyfill it
         trackedResponse.getHeaders = function (this: any) { return this._headers; }
     }
 
+    trackedResponse.timingEvents = timingEvents;
+
+    // Headers are sent when .writeHead or .write() are first called
+
     const trackingStream = new stream.PassThrough();
 
+    const originalWriteHeader = trackedResponse.writeHead;
     const originalWrite = trackedResponse.write;
     const originalEnd = trackedResponse.end;
+
+    trackedResponse.writeHead = function (this: typeof trackedResponse, ...args: any) {
+        if (!timingEvents.headersSentTimestamp) {
+            timingEvents.headersSentTimestamp = now();
+        }
+        return originalWriteHeader.apply(this, args);
+    }
 
     const trackingWrite = function (this: typeof trackedResponse, ...args: any) {
         trackingStream.write.apply(trackingStream, args);
@@ -202,12 +220,16 @@ export function trackResponse(response: express.Response): OngoingResponse {
 }
 
 export async function waitForCompletedResponse(response: OngoingResponse): Promise<CompletedResponse> {
+    const body = await waitForBody(response.body, response.getHeaders());
+    response.timingEvents.responseSentTimestamp = response.timingEvents.responseSentTimestamp || now();
+
     return _(response).pick([
         'id',
         'statusCode',
-        'statusMessage'
+        'statusMessage',
+        'timingEvents'
     ]).assign({
         headers: response.getHeaders(),
-        body: await waitForBody(response.body, response.getHeaders())
+        body: body
     }).valueOf();
 }

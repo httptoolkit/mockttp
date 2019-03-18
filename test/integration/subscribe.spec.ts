@@ -37,6 +37,21 @@ describe("Request subscriptions", () => {
             expect(seenRequest.url).to.equal('/mocked-endpoint');
             expect(seenRequest.body.text).to.equal('body-text');
         });
+
+        it("should include timing information", async () => {
+            let seenRequestPromise = getDeferred<CompletedRequest>();
+            await server.on('request', (r) => seenRequestPromise.resolve(r));
+
+            fetch(server.urlFor("/mocked-endpoint"), { method: 'POST', body: 'body-text' });
+
+            let { timingEvents } = await seenRequestPromise;
+            expect(timingEvents.startTime).to.be.a('number');
+            expect(timingEvents.startTimestamp).to.be.a('number');
+            expect(timingEvents.bodyReceivedTimestamp).to.be.a('number');
+            expect(timingEvents.startTime).not.to.equal(timingEvents.startTimestamp);
+
+            expect(timingEvents.abortedTimestamp).to.equal(undefined);
+        });
     });
 
     nodeOnly(() => {
@@ -157,6 +172,25 @@ describe("Response subscriptions", () => {
         expect(seenRequest.id).to.be.a('string');
         expect(seenRequest.id).to.equal(seenResponse.id);
     });
+
+    it("should include timing information", async () => {
+        let seenResponsePromise = getDeferred<CompletedResponse>();
+        await server.on('response', (r) => seenResponsePromise.resolve(r));
+
+        fetch(server.urlFor("/mocked-endpoint"), { method: 'POST', body: 'body-text' });
+
+        let { timingEvents } = await seenResponsePromise;
+        expect(timingEvents.startTimestamp).to.be.a('number');
+        expect(timingEvents.bodyReceivedTimestamp).to.be.a('number');
+        expect(timingEvents.headersSentTimestamp).to.be.a('number');
+        expect(timingEvents.responseSentTimestamp).to.be.a('number');
+
+        expect(timingEvents.bodyReceivedTimestamp).to.be.greaterThan(timingEvents.startTimestamp);
+        expect(timingEvents.headersSentTimestamp).to.be.greaterThan(timingEvents.startTimestamp);
+        expect(timingEvents.responseSentTimestamp).to.be.greaterThan(timingEvents.headersSentTimestamp!);
+
+        expect(timingEvents.abortedTimestamp).to.equal(undefined);
+    });
 });
 
 
@@ -214,5 +248,29 @@ describe("Abort subscriptions", () => {
             seenResponsePromise,
             delay(100).then(() => { throw new Error('timeout') })
         ])).to.be.rejectedWith('timeout');
+    });
+
+    it("should include timing information", async () => {
+        let seenRequestPromise = getDeferred<CompletedRequest>();
+        await server.on('request', (r) => seenRequestPromise.resolve(r));
+
+        let seenAbortPromise = getDeferred<CompletedRequest>();
+        await server.on('abort', (r) => seenAbortPromise.resolve(r));
+
+        await server.get('/mocked-endpoint').thenCallback(() => delay(500).then(() => ({})));
+
+        let abortable = makeAbortableRequest(server, '/mocked-endpoint');
+        await seenRequestPromise;
+        abortable.abort();
+
+        let { timingEvents } = await seenAbortPromise;
+        expect(timingEvents.startTimestamp).to.be.a('number');
+        expect(timingEvents.bodyReceivedTimestamp).to.be.a('number');
+        expect(timingEvents.abortedTimestamp).to.be.a('number');
+
+        expect(timingEvents.abortedTimestamp).to.be.greaterThan(timingEvents.startTimestamp);
+
+        expect(timingEvents.headersSentTimestamp).to.equal(undefined);
+        expect(timingEvents.responseSentTimestamp).to.equal(undefined);
     });
 });

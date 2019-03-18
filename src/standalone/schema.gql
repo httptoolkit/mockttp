@@ -36,6 +36,7 @@ type Request {
 
     headers: Json!
     body: Buffer!
+    timingEvents: Json!
 }
 
 type Response {
@@ -46,6 +47,7 @@ type Response {
 
     headers: Json!
     body: Buffer!
+    timingEvents: Json!
 }
 
 scalar Any
