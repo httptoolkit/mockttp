@@ -20,6 +20,8 @@ export enum Method {
 export interface Headers {
     // An arbitrary set of headers that are known to
     // only ever appear once (for valid requests).
+    host?: string;
+    'content-length'?: string;
     'content-type'?: string;
     'user-agent'?: string;
 
