@@ -34,20 +34,26 @@ export type GeneratedCertificate = {
 
 /**
  * Generate a CA certificate for mocking HTTPS.
- * 
- * Returns an object with key and cert properties, containing
- * the generated private key and certificate in PEM format.
- * 
+ *
+ * Returns a promise, for an object with key and cert properties,
+ * containing the generated private key and certificate in PEM format.
+ *
  * These can be saved to disk, and their paths passed
  * as HTTPS options to a Mockttp server.
  */
-export function generateCACertificate(options: { commonName?: string, bytes?: number } = {}) {
+export async function generateCACertificate(options: { commonName?: string, bits?: number } = {}) {
     options = _.defaults({}, options, {
         commonName: 'Mockttp Testing CA - DO NOT TRUST - TESTING ONLY',
-        bytes: 2048
+        bits: 2048
     });
 
-    const keyPair = pki.rsa.generateKeyPair(options.bytes);
+    const keyPair = await new Promise<forge.pki.rsa.KeyPair>((resolve, reject) => {
+        pki.rsa.generateKeyPair({ bits: options.bits }, (error, keyPair) => {
+            if (error) reject(error);
+            else resolve(keyPair);
+        });
+    });
+
     const cert = pki.createCertificate();
     cert.publicKey = keyPair.publicKey;
     cert.serialNumber = uuid().replace(/-/g, '');
@@ -80,9 +86,10 @@ export function generateCACertificate(options: { commonName?: string, bytes?: nu
 }
 
 export function generateSPKIFingerprint(certPem: PEM) {
-    let cert = pki.certificateFromPem(certPem);
+    let cert = pki.certificateFromPem(certPem.toString('utf8'));
     return encode64(
-        pki.getPublicKeyFingerprint(cert.publicKey, {
+        // TODO: Include this method in the real types
+        (pki as any).getPublicKeyFingerprint(cert.publicKey, {
             type: 'SubjectPublicKeyInfo',
             md: md.sha256.create()
         }).getBytes()
@@ -117,11 +124,15 @@ export async function getCA(options: CAOptions): Promise<CA> {
 // expensive (depending on the key length).
 // This would be a terrible idea for a real server, but for a mock server
 // it's ok - if anybody can steal this, they can steal the CA cert anyway.
-let KEY_PAIR: { publicKey: string, privateKey: string, length: number } | undefined;
+let KEY_PAIR: {
+    publicKey: forge.pki.rsa.PublicKey,
+    privateKey: forge.pki.rsa.PrivateKey,
+    length: number
+} | undefined;
 
 export class CA {
-    private caCert: { subject: any };
-    private caKey: {};
+    private caCert: forge.pki.Certificate;
+    private caKey: forge.pki.PrivateKey;
 
     private certCache: { [domain: string]: GeneratedCertificate };
 
@@ -130,14 +141,16 @@ export class CA {
         caCert: PEM,
         keyLength: number
     ) {
-        this.caKey = pki.privateKeyFromPem(caKey);
-        this.caCert = pki.certificateFromPem(caCert);
+        this.caKey = pki.privateKeyFromPem(caKey.toString('utf8'));
+        this.caCert = pki.certificateFromPem(caCert.toString('utf8'));
         this.certCache = {};
 
         if (!KEY_PAIR || KEY_PAIR.length < keyLength) {
             // If we have no key, or not a long enough one, generate one.
-            KEY_PAIR = pki.rsa.generateKeyPair(keyLength);
-            KEY_PAIR!.length = keyLength;
+            KEY_PAIR = Object.assign(
+                pki.rsa.generateKeyPair(keyLength),
+                { length: keyLength }
+            );
         }
     }
 

@@ -143,10 +143,10 @@ nodeOnly(() => {
                 describe("given an untrusted upstream certificate", () => {
 
                     let badServer: Mockttp;
-                    const untrustedCACert = generateCACertificate({ bytes: 1024 });
+                    const untrustedCACert = generateCACertificate({ bits: 1024 });
 
                     beforeEach(async () => {
-                        badServer = getLocal({ https: untrustedCACert });
+                        badServer = getLocal({ https: await untrustedCACert });
                         await badServer.start();
                     });
 
