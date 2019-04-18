@@ -28,6 +28,7 @@ import { MockedEndpointClient } from "./mocked-endpoint-client";
 import { Duplex } from 'stream';
 import { buildBodyReader } from '../server/request-utils';
 import { RequireProps } from '../util/type-utils';
+import { introspectionQuery } from './introspection-query';
 
 export class ConnectionError extends TypedError { }
 
@@ -71,6 +72,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
     private mockServerOptions: RequireProps<MockttpOptions, 'cors' | 'standaloneServerUrl'>;
     private mockServerConfig: MockServerConfig | undefined;
     private mockServerStream: Duplex | undefined;
+    private mockServerSchema: any;
 
     constructor(mockServerOptions: MockttpOptions = {}) {
         super(_.defaults(mockServerOptions, {
@@ -153,13 +155,13 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
 
     private async queryMockServer<T>(query: string, variables?: {}): Promise<T> {
         try {
-            return await this.requestFromMockServer<T>('/', {
+            return (await this.requestFromMockServer<{ data: T }>('/', {
                 method: 'POST',
                 headers: new Headers({
                     'Content-Type': 'application/json'
                 }),
                 body: JSON.stringify({ query, variables })
-            });
+            })).data;
         } catch (e) {
             try {
                 let graphQLErrors = (await e.response.json()).errors;
@@ -189,6 +191,9 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
 
         // We don't persist the config or resolve this promise until everything is set up
         this.mockServerConfig = mockServerConfig;
+
+        // Load the schema on server start, so we can check for feature support
+        this.mockServerSchema = (await this.queryMockServer<any>(introspectionQuery)).__schema;
     }
 
     async stop(): Promise<void> {
@@ -202,16 +207,22 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
         this.mockServerConfig = this.mockServerStream = undefined;
     }
 
+    private typeHasField(typeName: string, fieldName: string): boolean {
+        const type: any = _.find(this.mockServerSchema.types, { name: typeName });
+        if (!type) return false;
+        return !!_.find(type.fields, { name: fieldName });
+    }
+
     enableDebug(): void {
         throw new Error("Client-side debug info not implemented.");
     }
 
     reset = async (): Promise<boolean> => {
-        return (await this.queryMockServer<{ data: boolean }>(
+        return (await this.queryMockServer<boolean>(
             `mutation Reset {
                     reset
             }`
-        )).data;
+        ));
     }
 
     get url(): string {
@@ -227,9 +238,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
     }
 
     public addRule = async (rule: MockRuleData): Promise<MockedEndpoint> => {
-        let ruleId = (await this.queryMockServer<{
-            data: { addRule: { id: string } }
-        }>(
+        let ruleId = (await this.queryMockServer<{ addRule: { id: string } }>(
             `mutation AddRule($newRule: MockRule!) {
                     addRule(input: $newRule) {
                         id
@@ -237,7 +246,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
             }`, {
                 newRule: serializeRuleData(rule, { clientStream: this.mockServerStream })
             }
-        )).data.addRule.id;
+        )).addRule.id;
 
         return new MockedEndpointClient(ruleId, this.getEndpointData(ruleId));
     }
@@ -255,6 +264,9 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
             abort: 'requestAborted'
         }[event];
 
+        // Note the typeHasField checks - these are a quick hack for backward compatibility,
+        // introspecting the server schema to avoid requesting fields that don't exist on old servers.
+
         const query = {
             request: {
                 operationName: 'OnRequest',
@@ -269,7 +281,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
 
                         headers,
                         body,
-                        timingEvents
+                        ${this.typeHasField('Request', 'timingEvents') ? 'timingEvents' : ''}
                     }
                 }`
             },
@@ -282,7 +294,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                         statusMessage,
                         headers,
                         body,
-                        timingEvents
+                        ${this.typeHasField('Response', 'timingEvents') ? 'timingEvents' : ''}
                     }
                 }`
             },
@@ -335,7 +347,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
 
     private getEndpointData = (ruleId: string) => async (): Promise<MockedEndpointData | null> => {
         let result = await this.queryMockServer<{
-            data: { mockedEndpoint: MockedEndpointData | null }
+            mockedEndpoint: MockedEndpointData | null
         }>(
             `query GetEndpointData($id: ID!) {
                 mockedEndpoint(id: $id) {
@@ -354,7 +366,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
             }
         );
 
-        const mockedEndpoint = result.data.mockedEndpoint;
+        const mockedEndpoint = result.mockedEndpoint;
 
         if (!mockedEndpoint) return null;
 
