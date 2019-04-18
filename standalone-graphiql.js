@@ -4,17 +4,23 @@
  * the API directly.
  */
 
-var graphiqlExpress = require('apollo-server-express').graphiqlExpress;
-var opn = require('opn');
-var Mockttp = require('.');
+const graphiqlExpress = require('apollo-server-express').graphiqlExpress;
+const opn = require('opn');
+const Mockttp = require('.');
 
-var standalone = Mockttp.getStandalone();
-// Add a debug UI to the server
+const standalone = Mockttp.getStandalone();
+const server = Mockttp.getRemote();
+const serverPort = 8000;
+
+// Add a debug UI to the standalone server
 standalone.app.use('/graphiql', graphiqlExpress({
-    endpointURL: '/graphql',
+    endpointURL: `/server/${serverPort}/`,
 }));
 
 standalone.start().then(() => {
-    console.log('Server started');
+    console.log('Standalone started');
+    return server.start(serverPort);
+}).then(() => {
+    console.log('Mock server started');
     opn('http://localhost:45456/graphiql')
 });
