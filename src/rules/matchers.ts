@@ -159,6 +159,26 @@ export class RawBodyMatcherData extends Serializable {
     }
 }
 
+export class RegexBodyMatcherData extends Serializable {
+    readonly type: 'raw-body-regexp' = 'raw-body-regexp';
+    readonly regexString: string;
+
+    constructor(
+        public regex: RegExp
+    ) {
+        super();
+        this.regexString = regex.source;
+    }
+
+    buildMatcher() {
+        let bodyToMatch = new RegExp(this.regexString);
+
+        return _.assign(async (request: OngoingRequest) =>
+            bodyToMatch.test(await request.body.asText())
+        , { explain: () => `for body matching /${this.regexString}/` });
+    
+}
+
 export class CookieMatcherData extends Serializable {
     readonly type: 'cookie' = 'cookie';
 
@@ -197,6 +217,7 @@ export type MatcherData = (
     QueryMatcherData |
     FormDataMatcherData |
     RawBodyMatcherData |
+    RegexBodyMatcherData |
     CookieMatcherData
 );
 
@@ -209,7 +230,8 @@ export const MatcherDataLookup = {
     'query': QueryMatcherData,
     'form-data': FormDataMatcherData,
     'raw-body': RawBodyMatcherData,
-    'cookie': CookieMatcherData
+    'regex-body': RegexBodyMatcherData,
+    'cookie': CookieMatcherData,
 };
 
 export function buildMatchers(matcherPartData: MatcherData[]): RequestMatcher {

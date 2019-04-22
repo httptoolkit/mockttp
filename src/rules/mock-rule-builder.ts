@@ -33,7 +33,8 @@ import {
     FormDataMatcherData,
     RawBodyMatcherData,
     WildcardMatcherData,
-    CookieMatcherData
+    CookieMatcherData,
+    RegexBodyMatcherData
 } from "./matchers";
 
 import {
@@ -135,6 +136,11 @@ export default class MockRuleBuilder {
         return this;
     }
 
+    withMatchedBody(content: string): MockRuleBuilder {
+        this.matchers.push(new RegexBodyMatcherData(content));
+        return this;
+    }
+
     /**
      * Match only requests that include the given cookies
      */
@@ -214,7 +220,7 @@ export default class MockRuleBuilder {
      *
      * Calling this method registers the rule with the server, so it
      * starts to handle requests.
-     * 
+     *
      * This method returns a promise that resolves with a mocked endpoint.
      * Wait for the promise to confirm that the rule has taken effect
      * before sending requests to be matched. The mocked endpoint
@@ -274,16 +280,16 @@ export default class MockRuleBuilder {
     /**
      * Respond immediately with the given status (and optionally, headers),
      * and then stream the given stream directly as the response body.
-     * 
+     *
      * Note that streams can typically only be read once, and as such
      * this rule will only successfully trigger once. Subsequent requests
      * will receive a 500 and an explanatory error message. To mock
      * repeated requests with streams, create multiple streams and mock
      * them independently.
-     * 
+     *
      * Calling this method registers the rule with the server, so it
      * starts to handle requests.
-     * 
+     *
      * This method returns a promise that resolves with a mocked endpoint.
      * Wait for the promise to confirm that the rule has taken effect
      * before sending requests to be matched. The mocked endpoint
