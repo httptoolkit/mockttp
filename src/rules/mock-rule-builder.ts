@@ -136,7 +136,7 @@ export default class MockRuleBuilder {
         return this;
     }
 
-    withMatchedBody(content: string): MockRuleBuilder {
+    withMatchedBody(content: RegExp): MockRuleBuilder {
         this.matchers.push(new RegexBodyMatcherData(content));
         return this;
     }
