@@ -3,7 +3,7 @@ import * as zlib from 'zlib';
 
 import { getLocal, getStandalone, getRemote, CompletedRequest, Mockttp } from "../..";
 import { expect, fetch, nodeOnly, getDeferred, delay, isNode } from "../test-utils";
-import { CompletedResponse } from "../../dist/types";
+import { CompletedResponse, TimingEvents } from "../../dist/types";
 
 function makeAbortableRequest(server: Mockttp, path: string) {
     if (isNode()) {
@@ -44,7 +44,7 @@ describe("Request subscriptions", () => {
 
             fetch(server.urlFor("/mocked-endpoint"), { method: 'POST', body: 'body-text' });
 
-            let { timingEvents } = await seenRequestPromise;
+            let { timingEvents } = <{ timingEvents: TimingEvents }> await seenRequestPromise;
             expect(timingEvents.startTime).to.be.a('number');
             expect(timingEvents.startTimestamp).to.be.a('number');
             expect(timingEvents.bodyReceivedTimestamp).to.be.a('number');
@@ -179,7 +179,7 @@ describe("Response subscriptions", () => {
 
         fetch(server.urlFor("/mocked-endpoint"), { method: 'POST', body: 'body-text' });
 
-        let { timingEvents } = await seenResponsePromise;
+        let { timingEvents } = <{ timingEvents: TimingEvents }> await seenResponsePromise;
         expect(timingEvents.startTimestamp).to.be.a('number');
         expect(timingEvents.bodyReceivedTimestamp).to.be.a('number');
         expect(timingEvents.headersSentTimestamp).to.be.a('number');
@@ -263,7 +263,7 @@ describe("Abort subscriptions", () => {
         await seenRequestPromise;
         abortable.abort();
 
-        let { timingEvents } = await seenAbortPromise;
+        let { timingEvents } = <{ timingEvents: TimingEvents }> await seenAbortPromise;
         expect(timingEvents.startTimestamp).to.be.a('number');
         expect(timingEvents.bodyReceivedTimestamp).to.be.a('number');
         expect(timingEvents.abortedTimestamp).to.be.a('number');

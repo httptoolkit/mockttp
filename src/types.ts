@@ -74,7 +74,7 @@ export interface CompletedBody {
 export interface CompletedRequest extends Request {
     id: string;
     body: CompletedBody;
-    timingEvents: TimingEvents;
+    timingEvents: TimingEvents | {};
 }
 
 export interface TimingEvents {
@@ -103,7 +103,7 @@ export interface CompletedResponse {
     statusMessage: string;
     headers: Headers;
     body: CompletedBody;
-    timingEvents: TimingEvents;
+    timingEvents: TimingEvents | {};
 }
 
 /**

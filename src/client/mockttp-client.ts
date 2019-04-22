@@ -327,6 +327,8 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                     }
                     if (data.timingEvents) {
                         data.timingEvents = JSON.parse(data.timingEvents);
+                    } else {
+                        data.timingEvents = {}; // For backward compat
                     }
                     if (data.body) {
                         data.body = buildBodyReader(Buffer.from(data.body, 'base64'), data.headers);
