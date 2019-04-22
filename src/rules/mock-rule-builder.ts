@@ -93,6 +93,7 @@ export default class MockRuleBuilder {
         this.matchers.push(new MethodMatcherData(methodOrAddRule));
 
         if (path instanceof RegExp) {
+            console.log('>>>>>>>>>>>>>>>>>>>>>>>>>>>> entering regexp branch');
             this.matchers.push(new RegexPathMatcherData(path));
             this.addRule = addRule!;
         } else {
