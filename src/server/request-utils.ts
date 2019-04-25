@@ -26,7 +26,7 @@ export const setHeaders = (response: express.Response, headers: Headers) => {
         let value = headers[header];
         if (!value) return;
 
-        response.setHeader(header, value.toString());
+        response.setHeader(header, value);
     });
 };
 
