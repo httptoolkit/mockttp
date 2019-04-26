@@ -231,7 +231,7 @@ export const MatcherDataLookup = {
     'query': QueryMatcherData,
     'form-data': FormDataMatcherData,
     'raw-body': RawBodyMatcherData,
-    'regex-body': RegexBodyMatcherData,
+    'raw-body-regexp': RegexBodyMatcherData,
     'cookie': CookieMatcherData,
 };
 
