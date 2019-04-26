@@ -1,6 +1,6 @@
 {
   "name": "mockttp",
-  "version": "0.14.1",
+  "version": "0.14.2",
   "description": "Mock HTTP server for testing HTTP clients and stubbing webservices",
   "main": "dist/main.js",
   "browser": "dist/main-browser.js",
