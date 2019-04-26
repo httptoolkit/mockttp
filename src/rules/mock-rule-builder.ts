@@ -4,7 +4,7 @@
 
 import url = require("url");
 import { OutgoingHttpHeaders } from "http";
-import { merge, defaults } from "lodash";
+import { merge, defaults, isString } from "lodash";
 import { Readable } from "stream";
 import { stripIndent } from "common-tags";
 
@@ -129,15 +129,16 @@ export default class MockRuleBuilder {
     }
 
     /**
-     * Match only requests whose bodies exactly match the given string
+     * Match only requests whose bodies either exactly match the given string
+     * (if a string is passed) or whose bodies match a regular expression
+     * (if a regex is passed).
      */
-    withBody(content: string): MockRuleBuilder {
-        this.matchers.push(new RawBodyMatcherData(content));
-        return this;
-    }
-
-    withRegexBody(content: RegExp): MockRuleBuilder {
-        this.matchers.push(new RegexBodyMatcherData(content));
+    withBody(content: string | RegExp): MockRuleBuilder {
+        this.matchers.push(
+            isString(content)
+                ? new RawBodyMatcherData(content)
+                : new RegexBodyMatcherData(content)
+        );
         return this;
     }
 

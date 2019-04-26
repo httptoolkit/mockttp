@@ -50,7 +50,7 @@ describe("Body matching", function () {
 
         beforeEach(async () => {
             await server.post("/")
-                .withRegexBody(/"username": "test"/gi)
+                .withBody(/"username": "test"/gi)
                 .thenReply(200, 'matched');
         });
 

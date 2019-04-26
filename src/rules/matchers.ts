@@ -177,7 +177,7 @@ export class RegexBodyMatcherData extends Serializable {
             bodyToMatch.test(await request.body.asText())
         , { explain: () => `for body matching /${this.regexString}/` });
     }
-    
+
 }
 
 export class CookieMatcherData extends Serializable {
