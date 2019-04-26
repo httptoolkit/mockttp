@@ -4,7 +4,7 @@
 
 import url = require("url");
 import { OutgoingHttpHeaders } from "http";
-import { merge, defaults } from "lodash";
+import { merge, defaults, isString } from "lodash";
 import { Readable } from "stream";
 import { stripIndent } from "common-tags";
 
@@ -33,7 +33,8 @@ import {
     FormDataMatcherData,
     RawBodyMatcherData,
     WildcardMatcherData,
-    CookieMatcherData
+    CookieMatcherData,
+    RegexBodyMatcherData
 } from "./matchers";
 
 import {
@@ -128,10 +129,16 @@ export default class MockRuleBuilder {
     }
 
     /**
-     * Match only requests whose bodies exactly match the given string
+     * Match only requests whose bodies either exactly match the given string
+     * (if a string is passed) or whose bodies match a regular expression
+     * (if a regex is passed).
      */
-    withBody(content: string): MockRuleBuilder {
-        this.matchers.push(new RawBodyMatcherData(content));
+    withBody(content: string | RegExp): MockRuleBuilder {
+        this.matchers.push(
+            isString(content)
+                ? new RawBodyMatcherData(content)
+                : new RegexBodyMatcherData(content)
+        );
         return this;
     }
 
@@ -214,7 +221,7 @@ export default class MockRuleBuilder {
      *
      * Calling this method registers the rule with the server, so it
      * starts to handle requests.
-     * 
+     *
      * This method returns a promise that resolves with a mocked endpoint.
      * Wait for the promise to confirm that the rule has taken effect
      * before sending requests to be matched. The mocked endpoint
@@ -274,16 +281,16 @@ export default class MockRuleBuilder {
     /**
      * Respond immediately with the given status (and optionally, headers),
      * and then stream the given stream directly as the response body.
-     * 
+     *
      * Note that streams can typically only be read once, and as such
      * this rule will only successfully trigger once. Subsequent requests
      * will receive a 500 and an explanatory error message. To mock
      * repeated requests with streams, create multiple streams and mock
      * them independently.
-     * 
+     *
      * Calling this method registers the rule with the server, so it
      * starts to handle requests.
-     * 
+     *
      * This method returns a promise that resolves with a mocked endpoint.
      * Wait for the promise to confirm that the rule has taken effect
      * before sending requests to be matched. The mocked endpoint
