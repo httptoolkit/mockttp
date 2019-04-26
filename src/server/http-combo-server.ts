@@ -62,6 +62,8 @@ export async function createComboServer(
         const [ targetHost, port ] = req.url!.split(':');
         if (options.debug) console.log(`Proxying CONNECT to ${targetHost}`);
 
+        socket.once('error', (e) => console.log('Error on client socket', e));
+
         socket.write('HTTP/' + req.httpVersion + ' 200 OK\r\n\r\n', 'utf-8', async () => {
             const firstByte = await peekFirstByte(socket);
 
