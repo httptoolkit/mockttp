@@ -282,6 +282,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                         headers,
                         body,
                         ${this.typeHasField('Request', 'timingEvents') ? 'timingEvents' : ''}
+                        ${this.typeHasField('Request', 'httpVersion') ? 'httpVersion' : ''}
                     }
                 }`
             },
@@ -360,7 +361,9 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                         path,
                         hostname,
                         headers,
-                        body
+                        body,
+                        ${this.typeHasField('Request', 'timingEvents') ? 'timingEvents' : ''}
+                        ${this.typeHasField('Request', 'httpVersion') ? 'httpVersion' : ''}
                     }
                 }
             }`, {

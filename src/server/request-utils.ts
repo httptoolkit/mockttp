@@ -157,6 +157,7 @@ export async function waitForCompletedRequest(request: OngoingRequest): Promise<
     return _(request).pick([
         'id',
         'protocol',
+        'httpVersion',
         'method',
         'url',
         'path',

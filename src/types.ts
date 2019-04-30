@@ -38,6 +38,7 @@ interface RequestHeaders extends Headers {
 
 export interface Request {
     protocol: string;
+    httpVersion?: string; // Like timingEvents - not set remotely with older servers
     method: string;
     url: string;
     path: string;

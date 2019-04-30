@@ -29,6 +29,7 @@ type Request {
     id: ID!
 
     protocol: String!
+    httpVersion: String!
     method: String!
     url: String!
     path: String!
