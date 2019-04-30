@@ -22,5 +22,6 @@ standalone.start().then(() => {
     return server.start(serverPort);
 }).then(() => {
     console.log('Mock server started');
+    server.get('/').thenReply(200, 'hi!');
     opn('http://localhost:45456/graphiql')
 });
