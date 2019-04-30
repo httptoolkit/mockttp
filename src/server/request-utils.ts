@@ -112,7 +112,7 @@ export const buildBodyReader = (body: Buffer, headers: Headers): CompletedBody =
         buffer: body,
         get decodedBuffer() {
             return runOrUndefined(() =>
-                handleContentEncoding(body, headers['content-encoding'])
+                handleContentEncoding(this.buffer, headers['content-encoding'])
             );
         },
         get text() {
