@@ -26,11 +26,12 @@ import MockttpServer from "../server/mockttp-server";
 import { buildStandaloneModel } from "./standalone-model";
 import { DEFAULT_STANDALONE_PORT } from '../types';
 import { MockttpOptions } from '../mockttp';
-import { Duplex, PassThrough } from 'stream';
+import { Duplex } from 'stream';
 
 export interface StandaloneServerOptions {
     debug?: boolean;
     serverDefaults?: MockttpOptions;
+    corsOptions?: cors.CorsOptions;
 }
 
 export class MockttpStandalone {
@@ -44,7 +45,7 @@ export class MockttpStandalone {
         this.debug = options.debug || false;
         if (this.debug) console.log('Standalone server started in debug mode');
 
-        this.app.use(cors());
+        this.app.use(cors(options.corsOptions));
         this.app.use(bodyParser.json());
 
         this.app.post('/start', async (req, res) => {
