@@ -85,7 +85,8 @@ export class MockttpStandalone {
         this.app.use('/server/:port/', (req, res, next) => {
             if (!this.routers[req.params.port]) {
                 res.status(404).send('Unknown mock server');
-                throw new Error(`Request for unknown mock server port: ${req.params.port}`);
+                console.error(`Request for unknown mock server port: ${req.params.port}`);
+                return;
             }
 
             this.routers[req.params.port](req, res, next);
