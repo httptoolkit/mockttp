@@ -46,6 +46,20 @@ export class MockttpStandalone {
         if (this.debug) console.log('Standalone server started in debug mode');
 
         this.app.use(cors(options.corsOptions));
+        this.app.use((req, res, next) => {
+            const origin = req.headers['origin'];
+            // This will have been set (or intentionally not set), by the CORS middleware
+            const allowedOrigin = res.getHeader('Access-Control-Allow-Origin');
+
+            // If origin is set (null or an origin) but was not accepted by the CORS options
+            // Note that if no options.cors is provided, allowedOrigin is always *.
+            if (origin !== undefined && allowedOrigin !== '*' && allowedOrigin !== origin) {
+                // Don't process the request: error out & skip the lot (to avoid CSRF)
+                res.status(403).send('CORS request sent by unacceptable origin');
+            } else {
+                next();
+            }
+        });
         this.app.use(bodyParser.json());
 
         this.app.post('/start', async (req, res) => {
