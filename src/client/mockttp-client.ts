@@ -312,7 +312,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
 
                         headers,
                         body,
-                        timingEvents
+                        ${this.typeHasField('Response', 'timingEvents') ? 'timingEvents' : ''}
                     }
                 }`
             },
