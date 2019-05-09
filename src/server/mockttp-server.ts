@@ -210,12 +210,11 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         this.announceRequestAsync(request);
 
         let result: 'responded' | 'aborted' | null = null;
-        response.once('close', () => {
-            // Aborted is only defined in new node. We use it where it's explicitly false though.
-            if (result === null && ((request as any).aborted !== false)) {
+        request.once('aborted', () => {
+            if (result === null) {
+                result = 'aborted';
                 request.timingEvents.abortedTimestamp = now();
                 this.announceAbortAsync(request);
-                result = 'aborted';
             }
         });
 

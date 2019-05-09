@@ -4,6 +4,7 @@
 
 import stream = require('stream');
 import express = require("express");
+import { EventEmitter } from 'events';
 
 export const DEFAULT_STANDALONE_PORT = 45456;
 
@@ -47,7 +48,7 @@ export interface Request {
     headers: RequestHeaders;
 }
 
-export interface OngoingRequest extends Request {
+export interface OngoingRequest extends Request, EventEmitter {
     id: string;
     originalUrl: string;
 
