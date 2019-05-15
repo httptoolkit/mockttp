@@ -342,7 +342,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                     }
                     if (data.timingEvents) {
                         data.timingEvents = JSON.parse(data.timingEvents);
-                    } else {
+                    } else if (event !== 'tlsClientError') {
                         data.timingEvents = {}; // For backward compat
                     }
                     if (data.body) {
