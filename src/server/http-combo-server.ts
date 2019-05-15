@@ -44,6 +44,9 @@ const originalSocketInit = (<any>tls.TLSSocket.prototype)._init;
     const tlsSocket = this;
     const loadSNI = tlsSocket._handle.oncertcb;
     tlsSocket._handle.oncertcb = function (info: any) {
+        // Workaround for https://github.com/mscdex/httpolyglot/pull/11
+        if (tlsSocket.server.disableTlsHalfOpen) tlsSocket.allowHalfOpen = false;
+
         tlsSocket.initialRemoteAddress = tlsSocket._parent.remoteAddress;
         tlsSocket.servername = info.servername;
         return loadSNI.apply(this, arguments);
@@ -101,6 +104,10 @@ export async function createComboServer(
             }
         }
     }, requestListener);
+
+    // Used in our oncertcb monkeypatch above, as a workaround for https://github.com/mscdex/httpolyglot/pull/11
+    (<any>server).disableTlsHalfOpen = true;
+
     server.on('tlsClientError', (_error: Error, socket: tls.TLSSocket) => {
         // These only work because of oncertcb monkeypatch above
         tlsClientErrorListener({
