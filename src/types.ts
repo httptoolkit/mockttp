@@ -48,6 +48,11 @@ export interface Request {
     headers: RequestHeaders;
 }
 
+export type TlsRequest = {
+    hostname?: string;
+    remoteAddress: string;
+};
+
 export interface OngoingRequest extends Request, EventEmitter {
     id: string;
     originalUrl: string;

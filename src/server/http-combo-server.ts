@@ -3,6 +3,8 @@ import net = require('net');
 import tls = require('tls');
 import http = require('http');
 import httpolyglot = require('httpolyglot');
+
+import { TlsRequest } from '../types';
 import destroyable, { DestroyableServer } from '../util/destroyable-server';
 import { getCA, CAOptions } from '../util/tls';
 import { peekFirstByte, mightBeTLSHandshake } from '../util/socket-util';
@@ -20,14 +22,57 @@ declare module "net" {
     }
 }
 
+declare module "tls" {
+    interface TLSSocket {
+        // This is a real field that actually exists - unclear why it's not
+        // in the type definitions.
+        servername?: string;
+
+        // We cache the initially set remote address on sockets, because it's cleared
+        // before the TLS error callback is called, exactly when we want to read it.
+        initialRemoteAddress?: string;
+    }
+}
+
+// Hardcore monkey-patching: force TLSSocket to link servername & remoteAddress to
+// sockets as soon as they're available, without waiting for the handshake to fully
+// complete, so we can easily access them if the handshake fails.
+const originalSocketInit = (<any>tls.TLSSocket.prototype)._init;
+(<any>tls.TLSSocket.prototype)._init = function () {
+    originalSocketInit.apply(this, arguments);
+
+    const tlsSocket = this;
+    const loadSNI = tlsSocket._handle.oncertcb;
+    tlsSocket._handle.oncertcb = function (info: any) {
+        tlsSocket.initialRemoteAddress = tlsSocket._parent.remoteAddress;
+        tlsSocket.servername = info.servername;
+        return loadSNI.apply(this, arguments);
+    };
+};
+
 export type ComboServerOptions = { debug: boolean, https?: CAOptions };
+
+// Takes an established TLS socket, calls the error listener if it's silently closed
+function ifTlsDropped(socket: tls.TLSSocket, errorCallback: () => void) {
+    new Promise((resolve, reject) => {
+        socket.once('data', resolve);
+        socket.once('close', reject);
+        socket.once('end', reject);
+    }).catch(() => {
+        // To get here, the socket must have connected & done the TLS handshake, but then
+        // closed/ended without ever sending any data. We can fairly confidently assume
+        // in that case that it's rejected our certificate.
+        errorCallback();
+    });
+}
 
 // The low-level server that handles all the sockets & TLS. The server will correctly call the
 // given handler for both HTTP & HTTPS direct connections, or connections when used as an
 // either HTTP or HTTPS proxy, all on the same port.
 export async function createComboServer(
     options: ComboServerOptions,
-    requestListener: (req: http.IncomingMessage, res: http.ServerResponse) => void
+    requestListener: (req: http.IncomingMessage, res: http.ServerResponse) => void,
+    tlsClientErrorListener: (req: TlsRequest) => void
 ): Promise<DestroyableServer> {
     if (!options.https) {
         return destroyable(http.createServer(requestListener));
@@ -56,6 +101,19 @@ export async function createComboServer(
             }
         }
     }, requestListener);
+    server.on('tlsClientError', (_error: Error, socket: tls.TLSSocket) => {
+        // These only work because of oncertcb monkeypatch above
+        tlsClientErrorListener({
+            hostname: socket.servername,
+            remoteAddress: socket.initialRemoteAddress!
+        });
+    });
+    server.on('secureConnection', (tlsSocket: tls.TLSSocket) => ifTlsDropped(tlsSocket, () => {
+        tlsClientErrorListener({
+            hostname: tlsSocket.servername,
+            remoteAddress: tlsSocket.remoteAddress!
+        });
+    }));
 
     // If the server receives a HTTP/HTTPS CONNECT request, do some magic to proxy & intercept it
     server.addListener('connect', (req: http.IncomingMessage, socket: net.Socket) => {
@@ -94,6 +152,27 @@ export async function createComboServer(
                 ca: generatedCert.ca
             })
         });
+
+        // Wait for:
+        // * connect, not dropped -> all good
+        // * _tlsError before connect -> cert rejected
+        // * sudden end before connect -> cert rejected
+        new Promise((resolve, reject) => {
+            tlsSocket.on('secureConnect', () => {
+                resolve();
+                ifTlsDropped(tlsSocket, () => {
+                    tlsClientErrorListener({
+                        hostname: targetHost,
+                        remoteAddress: socket.remoteAddress!
+                    });
+                });
+            });
+            tlsSocket.on('_tlsError', reject);
+            tlsSocket.on('end', reject);
+        }).catch(() => tlsClientErrorListener({
+            hostname: targetHost,
+            remoteAddress: socket.remoteAddress!
+        }));
 
         // This is a little crazy, but only a little. We create a one-off server to handle HTTP parsing, but
         // never listen on any ports or anything, we just hand it a live socket. Setup is pretty cheap here

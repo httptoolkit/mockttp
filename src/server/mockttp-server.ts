@@ -11,7 +11,7 @@ import cors = require("cors");
 import now = require("performance-now");
 import _ = require("lodash");
 
-import { OngoingRequest, CompletedRequest, CompletedResponse, OngoingResponse } from "../types";
+import { OngoingRequest, CompletedRequest, CompletedResponse, OngoingResponse, TlsRequest } from "../types";
 import { MockRuleData } from "../rules/mock-rule-types";
 import { CAOptions } from '../util/tls';
 import { DestroyableServer } from "../util/destroyable-server";
@@ -81,7 +81,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         this.server = await createComboServer({
             debug: this.debug,
             https: this.httpsOptions
-        }, this.app);
+        }, this.app, this.announceTlsErrorAsync.bind(this));
 
         this.server!.listen(port);
 
@@ -159,6 +159,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
     public on(event: 'request', callback: (req: CompletedRequest) => void): Promise<void>;
     public on(event: 'response', callback: (req: CompletedResponse) => void): Promise<void>;
     public on(event: 'abort', callback: (req: CompletedRequest) => void): Promise<void>;
+    public on(event: 'tlsClientError', callback: (req: TlsRequest) => void): Promise<void>;
     public on(event: string, callback: (...args: any[]) => void): Promise<void> {
         this.eventEmitter.on(event, callback);
         return Promise.resolve();
@@ -193,6 +194,10 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         this.eventEmitter.emit('abort', Object.assign(req, {
             timingEvents: _.clone(req.timingEvents)
         }));
+    }
+
+    private async announceTlsErrorAsync(request: TlsRequest) {
+        this.eventEmitter.emit('tlsClientError', request);
     }
 
     private async handleRequest(rawRequest: express.Request, rawResponse: express.Response) {

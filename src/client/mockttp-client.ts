@@ -53,12 +53,13 @@ export class GraphQLError extends RequestError {
     }
 }
 
-type SubscribableEvent = 'request' | 'response' | 'abort';
+type SubscribableEvent = 'request' | 'response' | 'abort' | 'tlsClientError';
 
 const SUBSCRIBABLE_EVENTS: SubscribableEvent[] = [
     'request',
     'response',
-    'abort'
+    'abort',
+    'tlsClientError'
 ];
 
 /**
@@ -261,7 +262,8 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
         const queryResultName = {
             request: 'requestReceived',
             response: 'responseCompleted',
-            abort: 'requestAborted'
+            abort: 'requestAborted',
+            tlsClientError: 'failedTlsRequest'
         }[event];
 
         // Note the typeHasField checks - these are a quick hack for backward compatibility,
@@ -316,6 +318,15 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                     }
                 }`
             },
+            tlsClientError: {
+                operationName: 'OnTlsClientError',
+                query: `subscription OnTlsClientError {
+                    ${queryResultName} {
+                        hostname
+                        remoteAddress
+                    }
+                }`
+            }
         }[event];
 
         client.request(query).subscribe({

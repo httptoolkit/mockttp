@@ -4,7 +4,7 @@
 import { stripIndent } from "common-tags";
 
 import MockRuleBuilder from "./rules/mock-rule-builder";
-import { ProxyConfig, MockedEndpoint, Method, CompletedRequest, CompletedResponse } from "./types";
+import { ProxyConfig, MockedEndpoint, Method, CompletedRequest, CompletedResponse, TlsRequest } from "./types";
 import { MockRuleData } from "./rules/mock-rule-types";
 import { CAOptions } from './util/tls';
 
@@ -164,6 +164,25 @@ export interface Mockttp {
      * the promise is resolved.
      */
     on(event: 'abort', callback: (req: CompletedRequest) => void): Promise<void>;
+
+    /**
+     * Subscribe to hear about requests that start a TLS handshake, but fail to complete it.
+     * Not all clients report TLS errors explicitly, so this event fires for explicitly
+     * reported TLS errors, and for TLS connections that are immediately closed with no
+     * data sent.
+     *
+     * This is typically useful to detect clients who aren't correctly configured to trust
+     * the configured HTTPS certificate. The callback is given the host name provided
+     * by the client via SNI, if SNI was used (it almost always is).
+     *
+     * This is only useful in some niche use cases, such as logging all requests seen
+     * by the server, independently of the rules defined.
+     *
+     * The callback will be called asynchronously from request handling. This function
+     * returns a promise, and the callback is not guaranteed to be registered until
+     * the promise is resolved.
+     */
+    on(event: 'tlsClientError', callback: (req: TlsRequest) => void): Promise<void>;
 }
 
 export interface MockttpOptions {

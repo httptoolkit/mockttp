@@ -1,9 +1,10 @@
 import * as http from 'http';
+import HttpProxyAgent = require('https-proxy-agent');
 import * as zlib from 'zlib';
 
 import { getLocal, getStandalone, getRemote, CompletedRequest, Mockttp } from "../..";
 import { expect, fetch, nodeOnly, getDeferred, delay, isNode } from "../test-utils";
-import { CompletedResponse, TimingEvents } from "../../dist/types";
+import { CompletedResponse, TimingEvents, TlsRequest } from "../../dist/types";
 
 function makeAbortableRequest(server: Mockttp, path: string) {
     if (isNode()) {
@@ -273,5 +274,82 @@ describe("Abort subscriptions", () => {
 
         expect(timingEvents.headersSentTimestamp).to.equal(undefined);
         expect(timingEvents.responseSentTimestamp).to.equal(undefined);
+    });
+});
+
+describe("TLS error subscriptions", () => {
+    let goodServer = getLocal({
+        https: {
+            keyPath: './test/fixtures/test-ca.key',
+            certPath: './test/fixtures/test-ca.pem'
+        }
+    });
+
+    let badServer = getLocal({
+        https: {
+            keyPath: './test/fixtures/untrusted-ca.key',
+            certPath: './test/fixtures/untrusted-ca.pem'
+        }
+    });
+
+    beforeEach(async () => {
+        await badServer.start();
+        await goodServer.start();
+    });
+
+    afterEach(() => Promise.all([
+        badServer.stop(),
+        goodServer.stop()
+    ]));
+
+    it("should not be sent for successful requests", async () => {
+        let seenTlsErrorPromise = getDeferred<TlsRequest>();
+        await goodServer.on('tlsClientError', (r) => seenTlsErrorPromise.resolve(r));
+
+        await fetch(goodServer.urlFor("/").replace('http:', 'https:'));
+
+        await expect(Promise.race([
+            seenTlsErrorPromise,
+            delay(100).then(() => { throw new Error('timeout') })
+        ])).to.be.rejectedWith('timeout');
+    });
+
+    it("should be sent for requests from clients that reject the certificate initially", async () => {
+        let seenTlsErrorPromise = getDeferred<TlsRequest>();
+        await badServer.on('tlsClientError', (r) => seenTlsErrorPromise.resolve(r));
+
+        await expect(
+            fetch(badServer.urlFor("/"))
+        ).to.be.rejectedWith(isNode() ? /certificate/ : 'Failed to fetch');
+
+        const tlsError = await seenTlsErrorPromise;
+        await expect(tlsError.hostname).to.equal('localhost');
+
+        await expect(tlsError.remoteAddress).to.be.oneOf([
+            '::ffff:127.0.0.1', // IPv4 localhost
+            '::1' // IPv6 localhost
+        ]);
+    });
+
+    nodeOnly(() => {
+        it("should be sent for requests from clients that reject the certificate for the upstream server", async () => {
+            let seenTlsErrorPromise = getDeferred<TlsRequest>();
+            await badServer.on('tlsClientError', (r) => seenTlsErrorPromise.resolve(r));
+            await badServer.anyRequest().thenPassThrough();
+
+            await expect(
+                fetch(goodServer.urlFor("/"), <any> {
+                    // Ignores proxy cert issues by using the proxy via plain HTTP
+                    agent: new HttpProxyAgent({
+                        host: 'localhost',
+                        port: badServer.port
+                    })
+                })
+            ).to.be.rejectedWith(/certificate/);
+
+            const tlsError = await seenTlsErrorPromise;
+            await expect(tlsError.hostname).to.equal('localhost');
+            await expect(tlsError.remoteAddress).to.equal('::ffff:127.0.0.1');
+        });
     });
 });

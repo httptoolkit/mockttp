@@ -12,6 +12,7 @@ type Subscription {
     requestReceived: Request!
     responseCompleted: Response!
     requestAborted: Request!
+    failedTlsRequest: TlsRequest!
 }
 
 type MockedEndpoint {
@@ -23,6 +24,11 @@ input MockRule {
     matchers: [RequestMatcher!]!
     handler: RequestHandler!
     completionChecker: RuleCompletionChecker
+}
+
+type TlsRequest {
+    hostname: String
+    remoteAddress: String!
 }
 
 type Request {

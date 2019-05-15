@@ -24,6 +24,7 @@ import { Duplex } from "stream";
 const REQUEST_RECEIVED_TOPIC = 'request-received';
 const RESPONSE_COMPLETED_TOPIC = 'response-completed';
 const REQUEST_ABORTED_TOPIC = 'request-aborted';
+const TLS_CLIENT_ERROR_TOPIC = 'tls-client-error';
 
 function astToObject<T>(ast: ObjectValueNode): T {
     return <T> _.zipObject(
@@ -151,6 +152,12 @@ export function buildStandaloneModel(mockServer: MockttpServer, stream: Duplex):
         })
     });
 
+    mockServer.on('tlsClientError', (request) => {
+        pubsub.publish(TLS_CLIENT_ERROR_TOPIC, {
+            failedTlsRequest: request
+        })
+    });
+
     return <any> {
         Query: {
             mockedEndpoints: (): Promise<MockedEndpointData[]> => {
@@ -189,6 +196,9 @@ export function buildStandaloneModel(mockServer: MockttpServer, stream: Duplex):
             requestAborted: {
                 subscribe: () => pubsub.asyncIterator(REQUEST_ABORTED_TOPIC)
             },
+            failedTlsRequest: {
+                subscribe: () => pubsub.asyncIterator(TLS_CLIENT_ERROR_TOPIC)
+            }
         },
 
         Request: {
