@@ -27,6 +27,7 @@ input MockRule {
 }
 
 type TlsRequest {
+    failureCause: String!
     hostname: String
     remoteAddress: String!
 }

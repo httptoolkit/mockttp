@@ -323,9 +323,15 @@ describe("TLS error subscriptions", () => {
         ).to.be.rejectedWith(isNode() ? /certificate/ : 'Failed to fetch');
 
         const tlsError = await seenTlsErrorPromise;
-        await expect(tlsError.hostname).to.equal('localhost');
 
-        await expect(tlsError.remoteAddress).to.be.oneOf([
+        expect(tlsError.failureCause).to.be.oneOf([
+            // Depends on specific client behaviour:
+            'reset', // Node 12
+            'closed', // Node 10
+            'cert-rejected' // Chrome
+        ]);
+        expect(tlsError.hostname).to.equal('localhost');
+        expect(tlsError.remoteAddress).to.be.oneOf([
             '::ffff:127.0.0.1', // IPv4 localhost
             '::1' // IPv6 localhost
         ]);
@@ -348,8 +354,9 @@ describe("TLS error subscriptions", () => {
             ).to.be.rejectedWith(/certificate/);
 
             const tlsError = await seenTlsErrorPromise;
-            await expect(tlsError.hostname).to.equal('localhost');
-            await expect(tlsError.remoteAddress).to.equal('::ffff:127.0.0.1');
+            expect(tlsError.failureCause).to.equal('closed');
+            expect(tlsError.hostname).to.equal('localhost');
+            expect(tlsError.remoteAddress).to.equal('::ffff:127.0.0.1');
         });
     });
 });

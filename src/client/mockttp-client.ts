@@ -325,6 +325,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                 operationName: 'OnTlsClientError',
                 query: `subscription OnTlsClientError {
                     ${queryResultName} {
+                        failureCause
                         hostname
                         remoteAddress
                     }

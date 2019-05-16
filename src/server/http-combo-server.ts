@@ -69,6 +69,14 @@ function ifTlsDropped(socket: tls.TLSSocket, errorCallback: () => void) {
     });
 }
 
+function getCauseFromError(error: Error & { code?: string }) {
+    return (/alert certificate/.test(error.message) || /alert unknown ca/.test(error.message))
+        ? 'cert-rejected'
+    : (/ECONNRESET/.test(error.message) || error.code === 'ECONNRESET')
+        ? 'reset'
+    : 'unknown';
+}
+
 // The low-level server that handles all the sockets & TLS. The server will correctly call the
 // given handler for both HTTP & HTTPS direct connections, or connections when used as an
 // either HTTP or HTTPS proxy, all on the same port.
@@ -108,9 +116,10 @@ export async function createComboServer(
     // Used in our oncertcb monkeypatch above, as a workaround for https://github.com/mscdex/httpolyglot/pull/11
     (<any>server).disableTlsHalfOpen = true;
 
-    server.on('tlsClientError', (_error: Error, socket: tls.TLSSocket) => {
+    server.on('tlsClientError', (error: Error, socket: tls.TLSSocket) => {
         // These only work because of oncertcb monkeypatch above
         tlsClientErrorListener({
+            failureCause: getCauseFromError(error),
             hostname: socket.servername,
             remoteAddress: socket.initialRemoteAddress!
         });
@@ -118,6 +127,7 @@ export async function createComboServer(
     server.on('secureConnection', (tlsSocket: tls.TLSSocket) =>
         ifTlsDropped(tlsSocket, () => {
             tlsClientErrorListener({
+                failureCause: 'closed',
                 hostname: tlsSocket.servername,
                 remoteAddress: tlsSocket.remoteAddress!
             });
@@ -168,17 +178,24 @@ export async function createComboServer(
         // * sudden end before connect -> cert rejected
         new Promise((resolve, reject) => {
             tlsSocket.on('secure', () => {
-                resolve('secure');
+                resolve();
                 ifTlsDropped(tlsSocket, () => {
                     tlsClientErrorListener({
+                        failureCause: 'closed',
                         hostname: targetHost,
                         remoteAddress: socket.remoteAddress!
                     });
                 });
             });
-            tlsSocket.on('_tlsError', reject);
-            tlsSocket.on('end', reject);
-        }).catch(() => tlsClientErrorListener({
+            tlsSocket.on('_tlsError', (error) => {
+                reject(getCauseFromError(error));
+            });
+            tlsSocket.on('end', () => {
+                // Delay, so that simultaneous specific errors reject first
+                setTimeout(() => reject('closed'), 1);
+            });
+        }).catch((cause) => tlsClientErrorListener({
+            failureCause: cause,
             hostname: targetHost,
             remoteAddress: socket.remoteAddress!
         }));
