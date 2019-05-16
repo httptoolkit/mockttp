@@ -115,12 +115,14 @@ export async function createComboServer(
             remoteAddress: socket.initialRemoteAddress!
         });
     });
-    server.on('secureConnection', (tlsSocket: tls.TLSSocket) => ifTlsDropped(tlsSocket, () => {
-        tlsClientErrorListener({
-            hostname: tlsSocket.servername,
-            remoteAddress: tlsSocket.remoteAddress!
-        });
-    }));
+    server.on('secureConnection', (tlsSocket: tls.TLSSocket) =>
+        ifTlsDropped(tlsSocket, () => {
+            tlsClientErrorListener({
+                hostname: tlsSocket.servername,
+                remoteAddress: tlsSocket.remoteAddress!
+            });
+        })
+    );
 
     // If the server receives a HTTP/HTTPS CONNECT request, do some magic to proxy & intercept it
     server.addListener('connect', (req: http.IncomingMessage, socket: net.Socket) => {
@@ -165,8 +167,8 @@ export async function createComboServer(
         // * _tlsError before connect -> cert rejected
         // * sudden end before connect -> cert rejected
         new Promise((resolve, reject) => {
-            tlsSocket.on('secureConnect', () => {
-                resolve();
+            tlsSocket.on('secure', () => {
+                resolve('secure');
                 ifTlsDropped(tlsSocket, () => {
                     tlsClientErrorListener({
                         hostname: targetHost,
