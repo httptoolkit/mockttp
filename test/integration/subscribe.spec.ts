@@ -331,7 +331,7 @@ describe("TLS error subscriptions", () => {
             'cert-rejected' // Chrome
         ]);
         expect(tlsError.hostname).to.equal('localhost');
-        expect(tlsError.remoteAddress).to.be.oneOf([
+        expect(tlsError.remoteIpAddress).to.be.oneOf([
             '::ffff:127.0.0.1', // IPv4 localhost
             '::1' // IPv6 localhost
         ]);
@@ -356,7 +356,7 @@ describe("TLS error subscriptions", () => {
             const tlsError = await seenTlsErrorPromise;
             expect(tlsError.failureCause).to.equal('closed');
             expect(tlsError.hostname).to.equal('localhost');
-            expect(tlsError.remoteAddress).to.equal('::ffff:127.0.0.1');
+            expect(tlsError.remoteIpAddress).to.equal('::ffff:127.0.0.1');
         });
     });
 });

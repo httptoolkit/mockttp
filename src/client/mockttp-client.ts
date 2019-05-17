@@ -327,7 +327,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                     ${queryResultName} {
                         failureCause
                         hostname
-                        remoteAddress
+                        remoteIpAddress
                     }
                 }`
             }

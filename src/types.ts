@@ -50,7 +50,7 @@ export interface Request {
 
 export type TlsRequest = {
     hostname?: string;
-    remoteAddress: string;
+    remoteIpAddress: string;
     failureCause: 'closed' | 'reset' | 'cert-rejected' | 'unknown'
 };
 
