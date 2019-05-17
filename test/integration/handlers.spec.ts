@@ -44,7 +44,18 @@ describe("HTTP mock rule handling", function () {
         expect(await response.text()).to.equal('Hi');
     });
 
+
     it("should reply with JSON when using the JSON helper", async () => {
+        await server.get('/mocked-endpoint').thenJson(200, {myVar: 'foo'},
+            { 'other-header': 'header-data' });
+
+        let response = await fetch(server.urlFor('/mocked-endpoint'));
+
+        expect(await response.status).to.equal(200);
+        expect(await response.json()).to.deep.equal({myVar: 'foo'});
+    });
+
+    it("should reply with JSON when using the deprecated JSON helper alias", async () => {
         await server.get('/mocked-endpoint').thenJSON(200, {myVar: 'foo'},
             { 'other-header': 'header-data' });
 

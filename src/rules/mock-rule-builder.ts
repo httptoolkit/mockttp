@@ -259,7 +259,7 @@ export default class MockRuleBuilder {
      * before sending requests to be matched. The mocked endpoint
      * can be used to assert on the requests matched by this rule.
      */
-    thenJSON(status: number, data: object, headers: OutgoingHttpHeaders = {}): Promise<MockedEndpoint> {
+    thenJson(status: number, data: object, headers: OutgoingHttpHeaders = {}): Promise<MockedEndpoint> {
         const defaultHeaders = { 'Content-Type': 'application/json' };
         merge(defaultHeaders, headers);
 
@@ -271,6 +271,12 @@ export default class MockRuleBuilder {
 
         return this.addRule(rule);
     }
+
+    /**
+     * Deprecated alias for thenJson
+     * @deprecated
+     */
+    thenJSON = this.thenJson;
 
     /**
      * Call the given callback for any matched requests that are received,
