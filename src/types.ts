@@ -51,7 +51,7 @@ export interface Request {
 export type TlsRequest = {
     hostname?: string;
     remoteIpAddress: string;
-    failureCause: 'closed' | 'reset' | 'cert-rejected' | 'unknown'
+    failureCause: 'closed' | 'reset' | 'cert-rejected' | 'no-shared-cipher' | 'unknown'
 };
 
 export interface OngoingRequest extends Request, EventEmitter {
