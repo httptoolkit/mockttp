@@ -70,7 +70,7 @@ function ifTlsDropped(socket: tls.TLSSocket, errorCallback: () => void) {
 }
 
 function getCauseFromError(error: Error & { code?: string }) {
-    return (/alert certificate/.test(error.message) || /alert unknown ca/.test(error.message))
+    const cause = (/alert certificate/.test(error.message) || /alert unknown ca/.test(error.message))
         // The client explicitly told us it doesn't like the certificate
         ? 'cert-rejected'
     : /no shared cipher/.test(error.message)
@@ -81,6 +81,10 @@ function getCauseFromError(error: Error & { code?: string }) {
         // The client sent no TLS alert, it just hard RST'd the connection
         ? 'reset'
     : 'unknown'; // Something else.
+
+    if (cause === 'unknown') console.log('Unknown TLS error:', error);
+
+    return cause;
 }
 
 // The low-level server that handles all the sockets & TLS. The server will correctly call the
