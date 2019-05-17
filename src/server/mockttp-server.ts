@@ -199,6 +199,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
     private async announceTlsErrorAsync(request: TlsRequest) {
         // We can get falsey but set hostname values - drop them
         if (!request.hostname) delete request.hostname;
+        if (this.debug) console.warn(`TLS client error: ${JSON.stringify(request)}`);
         this.eventEmitter.emit('tlsClientError', request);
     }
 
