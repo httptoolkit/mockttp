@@ -175,7 +175,7 @@ export class RegexBodyMatcherData extends Serializable {
 
         return _.assign(async (request: OngoingRequest) =>
             bodyToMatch.test(await request.body.asText())
-        , { explain: () => `for body matching /${this.regexString}/` });
+        , { explain: () => `with body matching /${this.regexString}/` });
     }
 
 }
