@@ -255,8 +255,11 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
     public on(event: SubscribableEvent, callback: (data: any) => void): Promise<void> {
         // Ignore unknown events
         if (!_.includes(SUBSCRIBABLE_EVENTS, event)) return Promise.resolve();
-        // Ignore subscription events, if not supported by the server
-        if (!this.typeHasField('Subscription', 'failedTlsRequest')) return Promise.resolve();
+        // Ignore TLS error events, if not supported by the server
+        if (
+            event === 'tlsClientError' &&
+            !this.typeHasField('Subscription', 'failedTlsRequest')
+        ) return Promise.resolve();
 
         const standaloneStreamServer = this.mockServerOptions.standaloneServerUrl.replace(/^http/, 'ws');
         const url = `${standaloneStreamServer}/server/${this.port}/subscription`;
