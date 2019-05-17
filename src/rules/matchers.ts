@@ -180,6 +180,46 @@ export class RegexBodyMatcherData extends Serializable {
 
 }
 
+export class JsonBodyMatcherData extends Serializable {
+    readonly type: 'json-body' = 'json-body';
+
+    constructor(
+        public body: {}
+    ) {
+        super();
+    }
+
+    buildMatcher() {
+        return _.assign(async (request: OngoingRequest) => {
+            const receivedBody = await (request.body.asJson().catch(() => undefined));
+
+            if (receivedBody === undefined) return false;
+            else return _.isEqual(receivedBody, this.body)
+        }, { explain: () => `with ${JSON.stringify(this.body)} as a JSON body` });
+    }
+
+}
+
+export class JsonBodyFlexibleMatcherData extends Serializable {
+    readonly type: 'json-body-matching' = 'json-body-matching';
+
+    constructor(
+        public body: {}
+    ) {
+        super();
+    }
+
+    buildMatcher() {
+        return _.assign(async (request: OngoingRequest) => {
+            const receivedBody = await (request.body.asJson().catch(() => undefined));
+
+            if (receivedBody === undefined) return false;
+            else return _.isMatch(receivedBody, this.body)
+        }, { explain: () => `with JSON body including ${JSON.stringify(this.body)}` });
+    }
+
+}
+
 export class CookieMatcherData extends Serializable {
     readonly type: 'cookie' = 'cookie';
 
@@ -219,6 +259,8 @@ export type MatcherData = (
     FormDataMatcherData |
     RawBodyMatcherData |
     RegexBodyMatcherData |
+    JsonBodyMatcherData |
+    JsonBodyFlexibleMatcherData |
     CookieMatcherData
 );
 
@@ -232,6 +274,8 @@ export const MatcherDataLookup = {
     'form-data': FormDataMatcherData,
     'raw-body': RawBodyMatcherData,
     'raw-body-regexp': RegexBodyMatcherData,
+    'json-body': JsonBodyMatcherData,
+    'json-body-matching': JsonBodyFlexibleMatcherData,
     'cookie': CookieMatcherData,
 };
 

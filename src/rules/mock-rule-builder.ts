@@ -34,7 +34,9 @@ import {
     RawBodyMatcherData,
     WildcardMatcherData,
     CookieMatcherData,
-    RegexBodyMatcherData
+    RegexBodyMatcherData,
+    JsonBodyMatcherData,
+    JsonBodyFlexibleMatcherData
 } from "./matchers";
 
 import {
@@ -138,6 +140,36 @@ export default class MockRuleBuilder {
             isString(content)
                 ? new RawBodyMatcherData(content)
                 : new RegexBodyMatcherData(content)
+        );
+        return this;
+    }
+
+    /**
+     * Match only requests whose bodies exactly match the given
+     * object, when parsed as JSON.
+     *
+     * Note that this only tests that the body can be parsed
+     * as JSON - it doesn't require a content-type header.
+     */
+    withJsonBody(json: {}): MockRuleBuilder {
+        this.matchers.push(
+            new JsonBodyMatcherData(json)
+        );
+        return this;
+    }
+
+    /**
+     * Match only requests whose bodies match (contain equivalent
+     * values, ignoring extra values) the given object, when
+     * parsed as JSON. Matching behaviour is the same as Lodash's
+     * _.isMatch method.
+     *
+     * Note that this only tests that the body can be parsed
+     * as JSON - it doesn't require a content-type header.
+     */
+    withJsonBodyIncluding(json: {}): MockRuleBuilder {
+        this.matchers.push(
+            new JsonBodyFlexibleMatcherData(json)
         );
         return this;
     }

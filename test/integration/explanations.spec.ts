@@ -5,7 +5,7 @@ import { Readable } from "stream";
 
 describe("Mockttp explanation messages", function () {
     let server = getLocal();
-    
+
     beforeEach(() => server.start());
     afterEach(() => server.stop());
 
@@ -55,7 +55,8 @@ Match requests making GETs for /endpoint, and then respond with status 200 and b
         await server.anyRequest().withHeaders({ 'h': 'v' }).thenStream(200, new Readable());
         await server.get("/endpointA").once().thenReply(200, "nice request!");
         await server.post("/endpointB").withForm({ key: 'value' }).thenReply(500);
-        await server.put("/endpointC").withQuery({ a: 1 }).always().thenCloseConnection();
+        await server.post("/endpointC").withJsonBody({ key: 'value' }).thenReply(500);
+        await server.put("/endpointD").withQuery({ a: 1 }).always().thenCloseConnection();
 
         await fetch(server.urlFor("/endpointA"));
         let response = await fetch(server.urlFor("/non-existent-endpoint"));
@@ -67,7 +68,8 @@ Match requests making GETs for /endpoint, and then respond with status 200 and b
 Match requests for anything with headers including {"h":"v"}, and then respond with status 200 and a stream of response data.
 Match requests making GETs for /endpointA, and then respond with status 200 and body "nice request!", once (done).
 Match requests making POSTs, for /endpointB, and with form data including {"key":"value"}, and then respond with status 500.
-Match requests making PUTs, for /endpointC, and with a query including {"a":1}, and then close the connection, always (seen 0).
+Match requests making POSTs, for /endpointC, and with {"key":"value"} as a JSON body, and then respond with status 500.
+Match requests making PUTs, for /endpointD, and with a query including {"a":1}, and then close the connection, always (seen 0).
 `);
     });
 
