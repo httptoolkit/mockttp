@@ -215,7 +215,10 @@ export async function createComboServer(
         // (instantiate, sets up as event emitter, registers some events & properties, that's it), and
         // this is the easiest way I can see to put targetHost into the URL, without reimplementing HTTP.
         const innerServer = http.createServer((req: http.IncomingMessage, res: http.ServerResponse) => {
-            req.url = `https://${targetHost}:${port}${req.url}`;
+            // Request URIs are usually relative here, but can be * (OPTIONS) or absolute (odd people) in theory
+            if (req.url !== '*' && req.url![0] === '/') {
+                req.url = `https://${targetHost}:${port}${req.url}`;
+            }
             return requestListener(req, res);
         });
         innerServer.addListener('upgrade', (req, socket, head) => {
