@@ -15,7 +15,7 @@ import { OngoingRequest, CompletedRequest, CompletedResponse, OngoingResponse, T
 import { MockRuleData } from "../rules/mock-rule-types";
 import { CAOptions } from '../util/tls';
 import { DestroyableServer } from "../util/destroyable-server";
-import { Mockttp, AbstractMockttp, MockttpOptions } from "../mockttp";
+import { Mockttp, AbstractMockttp, MockttpOptions, PortRange } from "../mockttp";
 import { MockRule } from "../rules/mock-rule";
 import { MockedEndpoint } from "./mocked-endpoint";
 import { createComboServer } from "./http-combo-server";
@@ -69,12 +69,13 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         this.app.use(this.handleRequest.bind(this));
     }
 
-    async start(portParam?: number): Promise<void> {
-        if (!_.isInteger(portParam) && !_.isUndefined(portParam)) {
-            throw new Error(`Cannot start server with port ${portParam}. If passed, the port must be an integer`);
-        }
-
-        const port = (portParam || await portfinder.getPortPromise());
+    async start(portParam: number | PortRange = { startPort: 8000, endPort: 65535 }): Promise<void> {
+        const port = _.isNumber(portParam)
+            ? portParam
+            : await portfinder.getPortPromise({
+                port: portParam.startPort,
+                stopPort: portParam.endPort
+            });
 
         if (this.debug) console.log(`Starting mock server on port ${port}`);
 

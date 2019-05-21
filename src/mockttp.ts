@@ -8,9 +8,11 @@ import { ProxyConfig, MockedEndpoint, Method, CompletedRequest, CompletedRespons
 import { MockRuleData } from "./rules/mock-rule-types";
 import { CAOptions } from './util/tls';
 
+export type PortRange = { startPort: number, endPort: number };
+
 /**
  * A mockttp instance allow you to start and stop mock servers and control their behaviour.
- * 
+ *
  * Call `.start()` to set up a server on a random port, use methods like `.get(url)`,
  * `.post(url)` and `.anyRequest()` to get a {@link MockRuleBuilder} and start defining
  * mock rules. Call `.stop()` when your test is complete.
@@ -18,12 +20,16 @@ import { CAOptions } from './util/tls';
 export interface Mockttp {
     /**
      * Start a mock server.
-     * 
-     * Specify a fixed port if you need one. If you don't, a random port will be chosen, which
-     * you can get later with `.port`, or by using `.url` and `.urlFor(path)` to generate
-     * your URLs automatically.
+     *
+     * Specify a fixed port if you need one.
+     *
+     * If you don't, a random port will be chosen, which you can get later with `.port`,
+     * or by using `.url` and `.urlFor(path)` to generate your URLs automatically.
+     *
+     * If you need to allow port selection, but in a specific range, pass a
+     * { startPort, endPort } pair to define the allowed (inclusive) range.
      */
-    start(port?: number): Promise<void>;
+    start(port?: number | PortRange): Promise<void>;
 
     /**
      * Stop the mock server and reset the rules.

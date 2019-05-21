@@ -20,7 +20,7 @@ import { MockedEndpoint } from "../types";
 import {
   MockRuleData
 } from "../rules/mock-rule-types";
-import { Mockttp, AbstractMockttp, MockttpOptions } from "../mockttp";
+import { Mockttp, AbstractMockttp, MockttpOptions, PortRange } from "../mockttp";
 import { MockServerConfig } from "../standalone/mockttp-standalone";
 import { serializeRuleData } from "../rules/mock-rule";
 import { MockedEndpointData, DEFAULT_STANDALONE_PORT } from "../types";
@@ -175,10 +175,10 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
         }
     }
 
-    async start(port?: number): Promise<void> {
+    async start(portConfig?: number | PortRange): Promise<void> {
         if (this.mockServerConfig) throw new Error('Server is already started');
 
-        const path = port ? `/start?port=${port}` : '/start';
+        const path = portConfig ? `/start?port=${JSON.stringify(portConfig)}` : '/start';
         let mockServerConfig = await this.requestFromStandalone<MockServerConfig>(path, {
             method: 'POST',
             headers: new Headers({

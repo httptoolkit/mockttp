@@ -25,7 +25,7 @@ import destroyable, { DestroyableServer } from "../util/destroyable-server";
 import MockttpServer from "../server/mockttp-server";
 import { buildStandaloneModel } from "./standalone-model";
 import { DEFAULT_STANDALONE_PORT } from '../types';
-import { MockttpOptions } from '../mockttp';
+import { MockttpOptions, PortRange } from '../mockttp';
 import { Duplex } from 'stream';
 
 export interface StandaloneServerOptions {
@@ -66,15 +66,16 @@ export class MockttpStandalone {
             if (this.debug) console.log('Standalone starting mock server on port', req.query.port);
 
             try {
-                const port: number | undefined = req.query.port ?
-                    parseInt(req.query.port, 10) : undefined;
+                const port: number | PortRange | undefined = req.query.port
+                    ? JSON.parse(req.query.port)
+                    : undefined;
                 const mockServerOptions: MockttpOptions = _.defaults(
                     {},
                     req.body,
                     options.serverDefaults
                 );
 
-                if (port != null && this.routers[port] != null) {
+                if (_.isNumber(port) && this.routers[port] != null) {
                     res.status(409).json({
                         error: `Cannot start: mock server is already running on port ${port}`
                     });
@@ -157,14 +158,14 @@ export class MockttpStandalone {
     private subscriptionServers: { [port: number]: SubscriptionServer } = { };
     private streamServers: { [port: number]: ws.Server } = { };
 
-    private async startMockServer(options: MockttpOptions, port?: number): Promise<{
+    private async startMockServer(options: MockttpOptions, portConfig?: number | PortRange): Promise<{
         mockPort: number,
         mockServer: MockttpServer
     }> {
         const mockServer = new MockttpServer(_.defaults({
             debug: this.debug // Use debug mode if the client requests it, or if the standalone has it set
         }, options));
-        await mockServer.start(port);
+        await mockServer.start(portConfig);
         this.mockServers.push(mockServer);
 
         const mockPort = mockServer.port!;
