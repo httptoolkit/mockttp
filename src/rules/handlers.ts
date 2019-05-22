@@ -15,6 +15,7 @@ import { Readable, Transform } from 'stream';
 import { stripIndent } from 'common-tags';
 
 import { waitForCompletedRequest, setHeaders } from '../server/request-utils';
+import { isLocalPortActive } from '../util/socket-util';
 import { Serializable, SerializationOptions } from "../util/serialization";
 
 import { Headers, CompletedRequest, OngoingRequest, OngoingResponse } from "../types";
@@ -432,6 +433,19 @@ export class PassThroughHandlerData extends Serializable {
 
             let makeRequest = protocol === 'https:' ? https.request : http.request;
 
+            let family: undefined | 4 | 6;
+            if (hostname === 'localhost') {
+                // Annoying special case: some localhost servers listen only on either ipv4 or ipv6.
+                // Very specific situation, but a very common one for development use.
+                // We need to work out which one family is, as Node sometimes makes bad choices.
+                const portToTest = !!port
+                    ? parseInt(port, 10)
+                    : (protocol === 'https:' ? 443 : 80);
+
+                if (await isLocalPortActive('::1', portToTest)) family = 6;
+                else family = 4;
+            }
+
             let outgoingPort: null | number = null;
             return new Promise<void>((resolve, reject) => {
                 let serverReq = makeRequest({
@@ -439,6 +453,7 @@ export class PassThroughHandlerData extends Serializable {
                     method,
                     hostname,
                     port,
+                    family,
                     path,
                     headers,
                     rejectUnauthorized: checkServerCertificate

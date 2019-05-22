@@ -55,7 +55,7 @@ export function delay(t: number): Promise<void> {
     return new Promise((r) => setTimeout(r, t));
 }
 
-type Deferred<T> = Promise<T> & {
+export type Deferred<T> = Promise<T> & {
     resolve(value: T): void,
     reject(e: Error): void
 }

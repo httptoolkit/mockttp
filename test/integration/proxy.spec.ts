@@ -1,7 +1,9 @@
 import _ = require("lodash");
+import http = require('http');
+import portfinder = require('portfinder');
 import { getLocal, Mockttp } from "../..";
 import request = require("request-promise-native");
-import { expect, nodeOnly } from "../test-utils";
+import { expect, nodeOnly, getDeferred, Deferred } from "../test-utils";
 import { generateCACertificate } from "../../src/util/tls";
 
 const INITIAL_ENV = _.cloneDeep(process.env);
@@ -102,6 +104,46 @@ nodeOnly(() => {
                 });
 
                 expect(response).to.equal('remote server');
+            });
+
+            describe("with an IPv6-only server", () => {
+
+                let ipV6Port: number;
+                let ipV6Server: http.Server;
+                let requestReceived: Deferred<void>;
+
+                beforeEach(async () => {
+                    requestReceived = getDeferred<void>()
+                    ipV6Port = await portfinder.getPortPromise();
+                    ipV6Server = http.createServer((_req, res) => {
+                        requestReceived.resolve();
+                        res.writeHead(200);
+                        res.end("OK");
+                    });
+
+                    return new Promise((resolve, reject) => {
+                        ipV6Server.listen({ host: '::1', family: 6, port: ipV6Port }, resolve);
+                        ipV6Server.on('error', reject);
+                    });
+                });
+
+                afterEach(() => new Promise((resolve, reject) => {
+                    ipV6Server.close((error) => {
+                        if (error) reject();
+                        else resolve();
+                    });
+                }));
+
+                it("correctly forwards requests to the IPv6 port", async () => {
+                    server.anyRequest().thenPassThrough();
+
+                    // Localhost here will be ambiguous - we're expecting Mockttp to work it out
+                    let response = await request.get(`http://localhost:${ipV6Port}`);
+                    await requestReceived;
+
+                    expect(response).to.equal("OK");
+                });
+
             });
         });
 
