@@ -5,6 +5,7 @@ import { getLocal, Mockttp } from "../..";
 import request = require("request-promise-native");
 import { expect, nodeOnly, getDeferred, Deferred } from "../test-utils";
 import { generateCACertificate } from "../../src/util/tls";
+import { isLocalIPv6Available } from "../../src/util/socket-util";
 
 const INITIAL_ENV = _.cloneDeep(process.env);
 
@@ -107,6 +108,7 @@ nodeOnly(() => {
             });
 
             describe("with an IPv6-only server", () => {
+                if (!isLocalIPv6Available) return;
 
                 let ipV6Port: number;
                 let ipV6Server: http.Server;

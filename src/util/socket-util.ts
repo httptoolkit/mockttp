@@ -19,13 +19,13 @@ export function mightBeTLSHandshake(byte: number) {
     return byte === 22;
 }
 
-const localIPv6Available = _.some(os.networkInterfaces(),
+export const isLocalIPv6Available = _.some(os.networkInterfaces(),
     (addresses) => _.some(addresses, a => a.address === '::1')
 );
 
 // Test if a local port for a given interface (IPv4/6) is currently in use
 export async function isLocalPortActive(interfaceIp: '::1' | '127.0.0.1', port: number) {
-    if (interfaceIp === '::1' && !localIPv6Available) return false;
+    if (interfaceIp === '::1' && !isLocalIPv6Available) return false;
 
     return new Promise((resolve) => {
         const server = net.createServer();
