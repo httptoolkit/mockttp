@@ -63,8 +63,7 @@ export interface OngoingRequest extends Request, EventEmitter {
 }
 
 export interface ParsedBody {
-    rawStream: stream.Readable;
-
+    asStream: () => stream.Readable;
     asBuffer: () => Promise<Buffer>;
     asText: () => Promise<string>;
     asJson: () => Promise<object>;

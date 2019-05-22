@@ -68,19 +68,15 @@ export class MockRule implements MockRuleInterface {
         const recordRequest = <RequestHandler> _.assign(
             function recordRequest(this: any, req: OngoingRequest) {
                 const handlerArgs = arguments;
-                let completedAndRecordedPromise = (async (resolve, reject) => {
-                    // Start recording before the data starts piping, so we don't miss anything.
-                    req.body.asBuffer();
-
+                let completedAndRecordedPromise = (async () => {
                     await handler.apply(this, <any> handlerArgs);
-
                     return waitForCompletedRequest(req);
                 })();
 
                 // Requests are added to rule.requests as soon as they start being handled.
                 thisRule.requests.push(completedAndRecordedPromise);
 
-                return completedAndRecordedPromise.then(() => {});
+                return completedAndRecordedPromise as Promise<any>;
             }, {
                 explain: handler.explain
             }

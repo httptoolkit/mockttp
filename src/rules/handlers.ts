@@ -476,8 +476,10 @@ export class PassThroughHandlerData extends Serializable {
                     });
                 });
 
-                clientReq.body.rawStream.pipe(serverReq);
-                clientReq.body.rawStream.once('error', () => serverReq.abort());
+                // asStream includes all content, including the body before this call
+                const reqBodyStream = clientReq.body.asStream();
+                reqBodyStream.pipe(serverReq);
+                reqBodyStream.once('error', () => serverReq.abort());
                 clientReq.once('abort', () => serverReq.abort());
                 clientRes.once('close', () => serverReq.abort());
 

@@ -30,26 +30,72 @@ export const setHeaders = (response: express.Response, headers: Headers) => {
     });
 };
 
-const streamToBuffer = (input: stream.Readable): Promise<Buffer> => {
-    return new Promise((resolve, reject) => {
-        let chunks: Buffer[] = [];
-        input.on('data', (d: Buffer) => chunks.push(d));
-        input.on('end', () => resolve(Buffer.concat(chunks)));
-        input.on('error', reject);
-    });
-}
+// Takes a buffer and a stream, returns a simple stream that outputs the buffer then the stream.
+const bufferThenStream = (buffer: BufferInProgress, inputStream: stream.Readable): stream.Readable => {
+    const outputStream = new stream.PassThrough();
+
+    // Forward the buffered data so far
+    outputStream.write(Buffer.concat(buffer.currentChunks));
+    // After the data, forward errors from the buffer
+    if (buffer.failedWith) {
+        // Announce async, to ensure listeners have time to get set up
+        setTimeout(() => outputStream.emit('error', buffer.failedWith));
+    } else {
+        // Forward future data as it arrives
+        inputStream.pipe(outputStream);
+        // Forward any future errors from the input stream
+        inputStream.once('error', (e) => outputStream.emit('error', e));
+    }
+
+    return outputStream;
+};
+
+const bufferToStream = (buffer: Buffer): stream.Readable => {
+    const outputStream = new stream.PassThrough();
+    outputStream.end(buffer);
+    return outputStream;
+};
+
+type BufferInProgress = Promise<Buffer> & {
+    currentChunks: Buffer[] // Stores the body chunks as they arrive
+    failedWith?: Error // Stores the error that killed the stream, if one did
+};
+const streamToBuffer = (input: stream.Readable) => {
+    const chunks: Buffer[] = [];
+    const bufferPromise = <BufferInProgress> new Promise(
+        (resolve, reject) => {
+            input.on('data', (d: Buffer) => chunks.push(d));
+            input.once('end', () => resolve(Buffer.concat(chunks)));
+            input.once('error', (e) => {
+                bufferPromise.failedWith = e;
+                reject(e);
+            });
+        }
+    );
+    bufferPromise.currentChunks = chunks;
+    return bufferPromise;
+};
 
 const parseBodyStream = (bodyStream: stream.Readable): ParsedBody => {
-    let buffer: Promise<Buffer> | null = null;
+    let bufferPromise: BufferInProgress | null = null;
+    let completedBuffer: Buffer | null = null;
 
     let body = {
-        rawStream: bodyStream,
-
+        // Returns a stream for the full body, not the live streaming body.
+        // Each call creates a new stream, which starts with the already seen
+        // and buffered data, and then continues with the live stream, if active.
+        // Listeners to this stream *must* be attached synchronously after this call.
+        asStream() {
+            return completedBuffer
+                ? bufferToStream(completedBuffer)
+                : bufferThenStream(body.asBuffer(), bodyStream);
+        },
         asBuffer() {
-            if (!buffer) {
-                buffer = streamToBuffer(bodyStream);
+            if (!bufferPromise) {
+                bufferPromise = streamToBuffer(bodyStream);
+                bufferPromise.then((buffer) => completedBuffer = buffer);
             }
-            return buffer;
+            return bufferPromise;
         },
         asText(encoding = 'utf8') {
             return body.asBuffer().then((b) => b.toString(encoding));
