@@ -46,4 +46,12 @@ describe("Request query matching", function () {
 
         await expect(result).to.have.status(200);
     });
+
+    it("should match array query parameters", async () => {
+        await server.get('/').withQuery({ c: ["hello", "world"] }).thenReply(200);
+
+        let result = await fetch(server.urlFor('/?aB=&c=hello&c=world'));
+
+        await expect(result).to.have.status(200);
+    });
 });

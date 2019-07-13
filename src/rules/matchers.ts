@@ -106,13 +106,13 @@ export class QueryMatcherData extends Serializable {
     readonly type: 'query' = 'query';
 
     constructor(
-        public queryObject: { [key: string]: string | number },
+        public queryObject: { [key: string]: string | number | (string | number)[] },
     ) {
         super();
     }
 
     buildMatcher() {
-        const expectedQuery = _.mapValues(this.queryObject, (v) => v.toString());
+        const expectedQuery = _.mapValues(this.queryObject, (v) => Array.isArray(v) ? v.map(av => av.toString()) : v.toString());
 
         return _.assign(
             (request: OngoingRequest) => {
