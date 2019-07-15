@@ -50,7 +50,23 @@ describe("Request query matching", function () {
     it("should match array query parameters", async () => {
         await server.get('/').withQuery({ c: ["hello", "world"] }).thenReply(200);
 
-        let result = await fetch(server.urlFor('/?aB=&c=hello&c=world'));
+        let result = await fetch(server.urlFor('/?c=hello&c=world'));
+
+        await expect(result).to.have.status(200);
+    });
+
+    it("should not match array query parameters if an array element is missing", async () => {
+        await server.get('/').withQuery({ c: ["hello", "world"] }).thenReply(200);
+
+        let result = await fetch(server.urlFor('/?c=hello'));
+
+        await expect(result).to.have.status(503);
+    });
+
+    it("should match array query parameters for a subset of the values", async () => {
+        await server.get('/').withQuery({ c: ["hello", "world"] }).thenReply(200);
+
+        let result = await fetch(server.urlFor('/?c=hello&c=world&c=again'));
 
         await expect(result).to.have.status(200);
     });
