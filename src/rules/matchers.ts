@@ -112,7 +112,9 @@ export class QueryMatcherData extends Serializable {
     }
 
     buildMatcher() {
-        const expectedQuery = _.mapValues(this.queryObject, (v) => Array.isArray(v) ? v.map(av => av.toString()) : v.toString());
+        const expectedQuery = _.mapValues(this.queryObject, (v) =>
+            Array.isArray(v) ? v.map(av => av.toString()) : v.toString()
+        );
 
         return _.assign(
             (request: OngoingRequest) => {
