@@ -1,3 +1,4 @@
+dist: xenial
 sudo: required
 language: node_js
 node_js:
@@ -8,11 +9,11 @@ node_js:
 install:
     - npm install --global npm@4
     - npm install
+services:
+    - xvfb
 before_script:
     - sudo chown root /opt/google/chrome/chrome-sandbox
     - sudo chmod 4755 /opt/google/chrome/chrome-sandbox
-    - export DISPLAY=:99.0
-    - sh -e /etc/init.d/xvfb start
 script:
     - npm run ci
 addons:
