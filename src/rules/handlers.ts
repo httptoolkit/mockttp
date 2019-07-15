@@ -85,6 +85,7 @@ interface CallbackRequestMessage extends StreamMessage {
 
 interface CallbackResponseMessage extends StreamMessage {
     requestId: string;
+    // Exactly one of these is always set:
     error?: Error;
     result?: CallbackHandlerResult;
 }
@@ -191,13 +192,14 @@ export class CallbackHandlerData extends Serializable {
         clientStream.on('data', responseListener);
 
         const rpcCallback = (request: CompletedRequest) => {
-            return new Promise((resolve, reject) => {
+            return new Promise<CallbackHandlerResult>((resolve, reject) => {
                 let requestId = uuid();
                 outstandingRequests[requestId] = (error?: Error, result?: CallbackHandlerResult) => {
                     if (error) {
                         reject(error);
                     } else {
-                        resolve(result);
+                        // If error is not set, result must be
+                        resolve(result as CallbackHandlerResult);
                     }
                     delete outstandingRequests[requestId];
                 };
