@@ -117,7 +117,7 @@ export default class MockRuleBuilder {
     /**
      * Match only requests that include the given query parameters
      */
-    withQuery(query: { [key: string]: string | number }): MockRuleBuilder {
+    withQuery(query: { [key: string]: string | number | (string | number)[] }): MockRuleBuilder {
         this.matchers.push(new QueryMatcherData(query));
         return this;
     }
