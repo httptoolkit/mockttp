@@ -189,6 +189,27 @@ export interface Mockttp {
      * the promise is resolved.
      */
     on(event: 'tlsClientError', callback: (req: TlsRequest) => void): Promise<void>;
+
+    /**
+     * Adds the given rules to the server.
+     *
+     * This API is only useful if you're manually building rules, rather than
+     * using MockRuleBuilder, and is only for special cases. This approach may
+     * be necessary if you need to configure all your rules in one place to
+     * enable them elsewhere/later.
+     */
+    addRules(...ruleData: MockRuleData[]): Promise<MockedEndpoint[]>;
+
+    /**
+     * Set the given rules as the only rules on the server, replacing any
+     * existing rules.
+     *
+     * This API is only useful if you're manually building rules, rather than
+     * using MockRuleBuilder, and is only for special cases. This approach may
+     * be necessary if you need to configure all your rules in one place to
+     * enable them elsewhere/later.
+     */
+    setRules(...ruleData: MockRuleData[]): Promise<MockedEndpoint[]>;
 }
 
 export interface MockttpOptions {
@@ -230,7 +251,6 @@ export abstract class AbstractMockttp {
     protected debug: boolean;
 
     abstract get url(): string;
-    abstract addRule: (ruleData: MockRuleData) => Promise<MockedEndpoint>;
     abstract on(event: 'request', callback: (req: CompletedRequest) => void): Promise<void>;
 
     constructor(options: MockttpOptions) {
@@ -248,6 +268,12 @@ export abstract class AbstractMockttp {
     urlFor(path: string): string {
         return this.url + path;
     }
+
+    abstract addRules: (...ruleData: MockRuleData[]) => Promise<MockedEndpoint[]>;
+    addRule = (rule: MockRuleData) =>
+        this.addRules(rule).then((rules) => rules[0]);
+
+    abstract setRules(...ruleData: MockRuleData[]): Promise<MockedEndpoint[]>;
 
     anyRequest(): MockRuleBuilder {
         return new MockRuleBuilder(this.addRule);

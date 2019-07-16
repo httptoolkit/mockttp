@@ -151,10 +151,17 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         return this.address.port;
     }
 
-    public addRule = (ruleData: MockRuleData): Promise<MockedEndpoint> => {
-        const rule = new MockRule(ruleData);
-        this.rules.push(rule);
-        return Promise.resolve(new MockedEndpoint(rule));
+    public setRules = (...ruleData: MockRuleData[]): Promise<MockedEndpoint[]> => {
+        this.rules = ruleData.map((ruleDatum) => new MockRule(ruleDatum));
+        return Promise.resolve(this.rules.map(r => new MockedEndpoint(r)));
+    }
+
+    public addRules = (...ruleData: MockRuleData[]): Promise<MockedEndpoint[]> => {
+        return Promise.resolve(ruleData.map((ruleDatum) => {
+            const rule = new MockRule(ruleDatum);
+            this.rules.push(rule);
+            return new MockedEndpoint(rule);
+        }));
     }
 
     public on(event: 'request', callback: (req: CompletedRequest) => void): Promise<void>;

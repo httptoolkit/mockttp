@@ -29,9 +29,9 @@ export function serializeRuleData(data: MockRuleData, options?: SerializationOpt
     }
 };
 
-export function deserializeRuleData(data: any, options?: SerializationOptions): MockRuleData {
-    return { 
-        matchers: data.matchers.map((m: any) =>
+export function deserializeRuleData(data: MockRuleData, options?: SerializationOptions): MockRuleData {
+    return {
+        matchers: data.matchers.map((m) =>
             deserialize(m, matching.MatcherDataLookup, options)
         ),
         handler: deserialize(data.handler, handling.HandlerDataLookup, options),

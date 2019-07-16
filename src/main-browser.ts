@@ -2,6 +2,13 @@ import MockttpClient from "./client/mockttp-client";
 
 import { Mockttp, MockttpOptions } from "./mockttp";
 
+// Export rule data builders:
+import * as matchers from './rules/matchers';
+import * as handlers from './rules/handlers';
+import * as completionCheckers from './rules/completion-checkers';
+export { matchers, handlers, completionCheckers };
+
+// Export the core API:
 export function getLocal(options: MockttpOptions = {}): Mockttp {
     return new MockttpClient(options);
 }

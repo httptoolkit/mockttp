@@ -5,6 +5,8 @@ type Query {
 
 type Mutation {
     addRule(input: MockRule!): MockedEndpoint!
+    addRules(input: [MockRule!]!): [MockedEndpoint!]!
+    setRules(input: [MockRule!]!): [MockedEndpoint!]!
     reset: Boolean!
 }
 

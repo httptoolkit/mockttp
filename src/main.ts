@@ -12,7 +12,7 @@ import { Mockttp, MockttpOptions } from "./mockttp";
 export { OngoingRequest, CompletedRequest, CompletedResponse, MockedEndpoint } from "./types";
 export { Mockttp };
 
-// Export rule data type definitions:
+// Export rule data builders & type definitions:
 import * as matchers from './rules/matchers';
 import * as handlers from './rules/handlers';
 import * as completionCheckers from './rules/completion-checkers';

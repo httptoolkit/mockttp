@@ -20,6 +20,7 @@ import MockttpServer from "../server/mockttp-server";
 import { MockedEndpoint, MockedEndpointData, CompletedBody, CompletedRequest, CompletedResponse } from "../types";
 import { deserializeRuleData } from "../rules/mock-rule";
 import { Duplex } from "stream";
+import { MockRuleData } from "../rules/mock-rule-types";
 
 const REQUEST_RECEIVED_TOPIC = 'request-received';
 const RESPONSE_COMPLETED_TOPIC = 'response-completed';
@@ -176,8 +177,18 @@ export function buildStandaloneModel(mockServer: MockttpServer, stream: Duplex):
         },
 
         Mutation: {
-            addRule: async (__: any, { input }: { input: any }) => {
+            addRule: async (__: any, { input }: { input: MockRuleData }) => {
                 return mockServer.addRule(deserializeRuleData(input, { clientStream: stream }));
+            },
+            addRules: async (__: any, { input }: { input: MockRuleData[] }) => {
+                return mockServer.addRules(...input.map((rule) =>
+                    deserializeRuleData(rule, { clientStream: stream })
+                ));
+            },
+            setRules: async (__: any, { input }: { input: MockRuleData[] }) => {
+                return mockServer.setRules(...input.map((rule) =>
+                    deserializeRuleData(rule, { clientStream: stream })
+                ));
             },
 
             reset: () => {

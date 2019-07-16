@@ -238,18 +238,33 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
         return this.mockServerConfig!.port;
     }
 
-    public addRule = async (rule: MockRuleData): Promise<MockedEndpoint> => {
-        let ruleId = (await this.queryMockServer<{ addRule: { id: string } }>(
-            `mutation AddRule($newRule: MockRule!) {
-                    addRule(input: $newRule) {
-                        id
-                    }
-            }`, {
-                newRule: serializeRuleData(rule, { clientStream: this.mockServerStream })
-            }
-        )).addRule.id;
+    public addRules = async (...rules: MockRuleData[]): Promise<MockedEndpoint[]> => {
+        return this._addRules(rules, false);
+    }
 
-        return new MockedEndpointClient(ruleId, this.getEndpointData(ruleId));
+    public setRules = async (...rules: MockRuleData[]): Promise<MockedEndpoint[]> => {
+        return this._addRules(rules, true);
+    }
+
+    private _addRules = async (rules: MockRuleData[], reset: boolean = false): Promise<MockedEndpoint[]> => {
+        const requestName = reset ? 'SetRules' : 'AddRules';
+        const mutationName = reset ? 'setRules' : 'addRules';
+
+        let ruleIds = (await this.queryMockServer<{ rules: Array<{ id: string }> }>(
+            `mutation ${requestName}($newRules: [MockRule!]!) {
+                rules: ${mutationName}(input: $newRules) {
+                    id
+                }
+            }`, {
+                newRules: rules.map((rule) =>
+                    serializeRuleData(rule, { clientStream: this.mockServerStream })
+                )
+            }
+        )).rules.map(r => r.id);
+
+        return ruleIds.map(ruleId =>
+            new MockedEndpointClient(ruleId, this.getEndpointData(ruleId))
+        );
     }
 
     public on(event: SubscribableEvent, callback: (data: any) => void): Promise<void> {
