@@ -20,6 +20,7 @@ import { MockRule } from "../rules/mock-rule";
 import { MockedEndpoint } from "./mocked-endpoint";
 import { createComboServer } from "./http-combo-server";
 import { filter } from "../util/promise";
+import normalizeUrl from "../util/normalize-url";
 
 import {
     parseBody,
@@ -220,7 +221,11 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
         const id = uuid();
 
-        const request = <OngoingRequest>Object.assign(rawRequest, { id: id, timingEvents });
+        const request = <OngoingRequest>Object.assign(rawRequest, {
+            id: id,
+            timingEvents,
+            normalizedUrl: normalizeUrl(rawRequest.url)
+        });
         response.id = id;
 
         this.announceRequestAsync(request);
@@ -240,7 +245,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
             if (nextRule) {
                 if (this.debug) console.log(`Request matched rule: ${nextRule.explain()}`);
-                await nextRule.handleRequest(request, response);
+                await nextRule.handle(request, response);
             } else {
                 await this.sendUnmatchedRequestError(request, response);
             }
@@ -271,8 +276,9 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
     }
 
     private isComplete = (rule: MockRule, matchingRules: MockRule[]) => {
-        if (rule.isComplete) {
-            return rule.isComplete();
+        const isDefinitelyComplete = rule.isComplete();
+        if (isDefinitelyComplete !== null) {
+            return isDefinitelyComplete;
         } else if (matchingRules[matchingRules.length - 1] === rule) {
             return false;
         } else {

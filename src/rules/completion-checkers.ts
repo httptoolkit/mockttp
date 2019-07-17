@@ -1,120 +1,91 @@
 /**
- * @module MockRuleData
+ * @module MockRule
  */
 
-import { RuleCompletionChecker, MockRule, RuleExplainable } from './mock-rule-types';
+import { CompletedRequest } from '../types';
+import { RuleCompletionChecker } from './mock-rule-types';
 import { Serializable } from '../util/serialization';
 
-export class AlwaysData extends Serializable {
+abstract class SerializableCompletionChecker extends Serializable implements RuleCompletionChecker {
+    abstract isComplete(seenRequests: Promise<CompletedRequest>[]): boolean;
+    abstract explain(seenRequests: Promise<CompletedRequest>[]): string;
+}
+
+export class Always extends SerializableCompletionChecker {
     readonly type: 'always' = 'always';
 
-    buildCompletionChecker() {
-        return withExplanation(
-            () => false,
-            function (this: MockRule) {
-                return explainUntil(this.requests, Infinity, 'always');
-            }
-        );
+    isComplete() {
+        return false;
+    }
+
+    explain(seenRequests: Promise<CompletedRequest>[]) {
+        return explainUntil(seenRequests, Infinity, 'always');
     }
 }
 
-export class OnceData extends Serializable {
+export class Once extends SerializableCompletionChecker {
     readonly type: 'once' = 'once';
 
-    buildCompletionChecker() {
-        return withExplanation(
-            checkTimes(1),
-            function (this: MockRule) {
-                return explainUntil(this.requests, 1, 'once');
-            }
-        );
+    isComplete(seenRequests: Promise<CompletedRequest>[]) {
+        return seenRequests.length >= 1;
+    }
+
+    explain(seenRequests: Promise<CompletedRequest>[]) {
+        return explainUntil(seenRequests, 1, 'once');
     }
 }
 
-export class TwiceData extends Serializable {
+export class Twice extends SerializableCompletionChecker {
     readonly type: 'twice' = 'twice';
 
-    buildCompletionChecker() {
-        return withExplanation(
-            checkTimes(2),
-            function (this: MockRule) {
-                return explainUntil(this.requests, 2, 'twice');
-            }
-        )
+    isComplete(seenRequests: Promise<CompletedRequest>[]) {
+        return seenRequests.length >= 2;
+    }
+
+    explain(seenRequests: Promise<CompletedRequest>[]) {
+        return explainUntil(seenRequests, 2, 'twice');
     }
 }
 
-export class ThriceData extends Serializable {
+export class Thrice extends SerializableCompletionChecker {
     readonly type: 'thrice' = 'thrice';
 
-    buildCompletionChecker() {
-        return withExplanation(
-            checkTimes(3),
-            function (this: MockRule) {
-                return explainUntil(this.requests, 3, 'thrice');
-            }
-        )
+    isComplete(seenRequests: Promise<CompletedRequest>[]) {
+        return seenRequests.length >= 3;
+    }
+
+    explain(seenRequests: Promise<CompletedRequest>[]) {
+        return explainUntil(seenRequests, 3, 'thrice');
     }
 }
 
-export class TimesData extends Serializable {
+export class NTimes extends SerializableCompletionChecker {
     readonly type: 'times' = 'times';
-    
-    constructor(public count: number) {
+
+    constructor(
+        public count: number
+    ) {
         super();
     }
 
-    buildCompletionChecker() {
-        let count = this.count;
+    isComplete(seenRequests: Promise<CompletedRequest>[]) {
+        return seenRequests.length >= this.count;
+    }
 
-        return withExplanation(
-            checkTimes(count),
-            function (this: MockRule) {
-                return explainUntil(this.requests, count, `${count} times`);
-            }
-        )
+    explain(seenRequests: Promise<CompletedRequest>[]) {
+        return explainUntil(seenRequests, this.count, `${this.count} times`);
     }
 }
 
-export type CompletionCheckerData = (
-    AlwaysData |
-    OnceData |
-    TwiceData |
-    ThriceData |
-    TimesData
-)
-
-export const CompletionCheckerDataLookup = {
-    'always': AlwaysData,
-    'once': OnceData,
-    'twice': TwiceData,
-    'thrice': ThriceData,
-    'times': TimesData
-}
-
-export function buildCompletionChecker(data?: CompletionCheckerData): RuleCompletionChecker | undefined {
-    if (data) {
-        return data.buildCompletionChecker();
-    } else {
-        return undefined;
-    }
-}
-
-function checkTimes(n: number): () => boolean {
-    return function (this: MockRule) {
-        return this.requests.length >= n;
-    }
+export const CompletionCheckerLookup = {
+    'always': Always,
+    'once': Once,
+    'twice': Twice,
+    'thrice': Thrice,
+    'times': NTimes
 }
 
 function explainUntil(requests: {}[], n: number, name: string): string {
     const seen = requests.length;
     return name + " " + (seen < n ? `(seen ${seen})` : "(done)");
-}
-
-function withExplanation<T extends Function>(
-    functionToExplain: T,
-    explainer: (this: MockRule) => string
-): T & RuleExplainable {
-    (<T & RuleExplainable> functionToExplain).explain = explainer;
-    return <T & RuleExplainable> functionToExplain;
 }

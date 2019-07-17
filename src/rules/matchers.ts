@@ -1,5 +1,5 @@
 /**
- * @module MockRuleData
+ * @module MockRule
  */
 
 import * as _ from 'lodash';
@@ -7,23 +7,28 @@ import * as url from 'url';
 
 import { OngoingRequest, Method } from "../types";
 import { RequestMatcher } from "./mock-rule-types";
-import { MockRule } from "./mock-rule";
 import { Serializable } from "../util/serialization";
 import normalizeUrl from "../util/normalize-url";
 import { stripIndent } from 'common-tags';
 
-export class WildcardMatcherData extends Serializable {
+abstract class SerializableMatcher extends Serializable implements RequestMatcher {
+    abstract matches(request: OngoingRequest): boolean | Promise<boolean>;
+    abstract explain(): string;
+}
+
+export class WildcardMatcher extends SerializableMatcher {
     readonly type: 'wildcard' = 'wildcard';
 
-    buildMatcher() {
-        return _.assign(
-            () => true,
-            { explain: () => 'for anything' }
-        );
+    matches() {
+        return true;
+    }
+
+    explain() {
+        return 'for anything';
     }
 }
 
-export class MethodMatcherData extends Serializable {
+export class MethodMatcher extends SerializableMatcher {
     readonly type: 'method' = 'method';
 
     constructor(
@@ -32,17 +37,19 @@ export class MethodMatcherData extends Serializable {
         super();
     }
 
-    buildMatcher() {
-        let methodName = Method[this.method];
+    matches(request: OngoingRequest) {
+        return request.method === Method[this.method];
+    }
 
-        return _.assign((request: OngoingRequest) =>
-            request.method === methodName
-        , { explain: () => `making ${methodName}s` });
+    explain() {
+        return `making ${Method[this.method]}s`;
     }
 }
 
-export class SimplePathMatcherData extends Serializable {
+export class SimplePathMatcher extends SerializableMatcher {
     readonly type: 'simple-path' = 'simple-path';
+
+    private normalizedUrl: string;
 
     constructor(
         public path: string
@@ -56,18 +63,20 @@ export class SimplePathMatcherData extends Serializable {
                 }To match query parameters, add .withQuery(${JSON.stringify(query)}) instead.
             `);
         }
+
+        this.normalizedUrl = normalizeUrl(this.path);
     }
 
-    buildMatcher() {
-        let url = normalizeUrl(this.path);
+    matches(request: OngoingRequest) {
+        return request.normalizedUrl === this.normalizedUrl;
+    }
 
-        return _.assign((request: OngoingRequest) =>
-            normalizeUrl(request.url) === url
-        , { explain: () => `for ${this.path}` });
+    explain() {
+        return `for ${this.path}`;
     }
 }
 
-export class RegexPathMatcherData extends Serializable {
+export class RegexPathMatcher extends SerializableMatcher {
     readonly type: 'regex-path' = 'regex-path';
     readonly regexString: string;
 
@@ -76,56 +85,60 @@ export class RegexPathMatcherData extends Serializable {
         this.regexString = regex.source;
     }
 
-    buildMatcher() {
-        let url = new RegExp(this.regexString);
+    matches(request: OngoingRequest) {
+        let urlMatcher = new RegExp(this.regexString);
+        return urlMatcher.test(request.normalizedUrl);
+    }
 
-        return _.assign((request: OngoingRequest) =>
-            url.test(normalizeUrl(request.url))
-        , { explain: () => `for paths matching /${this.regexString}/` });
+    explain() {
+        return `for paths matching /${this.regexString}/`;
     }
 }
 
-export class HeaderMatcherData extends Serializable {
+export class HeaderMatcher extends SerializableMatcher {
     readonly type: 'header' = 'header';
 
-    constructor(
-        public headers: { [key: string]: string },
-    ) {
+    public headers: { [key: string]: string };
+
+    constructor(headersInput: { [key: string]: string }) {
         super();
+        this.headers = _.mapKeys(headersInput, (_value: string, key: string) => key.toLowerCase());
     }
 
-    buildMatcher() {
-        let lowerCasedHeaders = _.mapKeys(this.headers, (_value: string, key: string) => key.toLowerCase());
-        return _.assign(
-            (request: OngoingRequest) => _.isMatch(request.headers, lowerCasedHeaders)
-        , { explain: () => `with headers including ${JSON.stringify(this.headers)}` });
+    matches(request: OngoingRequest) {
+        return _.isMatch(request.headers, this.headers);
+    }
+
+    explain() {
+        return `with headers including ${JSON.stringify(this.headers)}`;
     }
 }
 
-export class QueryMatcherData extends Serializable {
+export class QueryMatcher extends SerializableMatcher {
     readonly type: 'query' = 'query';
 
+    public queryObject: { [key: string]: string | string[] };
+
     constructor(
-        public queryObject: { [key: string]: string | number | (string | number)[] },
+        queryObjectInput: { [key: string]: string | number | (string | number)[] },
     ) {
         super();
-    }
-
-    buildMatcher() {
-        const expectedQuery = _.mapValues(this.queryObject, (v) =>
+        this.queryObject = _.mapValues(queryObjectInput, (v) =>
             Array.isArray(v) ? v.map(av => av.toString()) : v.toString()
         );
+    }
 
-        return _.assign(
-            (request: OngoingRequest) => {
-                let { query } = url.parse(request.url, true);
-                return _.isMatch(query, expectedQuery);
-            }
-        , { explain: () => `with a query including ${JSON.stringify(this.queryObject)}` });
+    matches(request: OngoingRequest) {
+        let { query } = url.parse(request.url, true);
+        return _.isMatch(query, this.queryObject);
+    }
+
+    explain() {
+        return `with a query including ${JSON.stringify(this.queryObject)}`;
     }
 }
 
-export class FormDataMatcherData extends Serializable {
+export class FormDataMatcher extends SerializableMatcher {
     readonly type: 'form-data' = 'form-data';
 
     constructor(
@@ -134,18 +147,20 @@ export class FormDataMatcherData extends Serializable {
         super();
     }
 
-    buildMatcher() {
-        return _.assign(async (request: OngoingRequest) => {
-            const contentType = request.headers['content-type'];
+    async matches(request: OngoingRequest) {
+        const contentType = request.headers['content-type'];
 
-            return !!contentType &&
-                contentType.indexOf("application/x-www-form-urlencoded") !== -1 &&
-                _.isMatch(await request.body.asFormData(), this.formData)
-        }, { explain: () => `with form data including ${JSON.stringify(this.formData)}` });
+        return !!contentType &&
+            contentType.indexOf("application/x-www-form-urlencoded") !== -1 &&
+            _.isMatch(await request.body.asFormData(), this.formData);
+    }
+
+    explain() {
+        return `with form data including ${JSON.stringify(this.formData)}`;
     }
 }
 
-export class RawBodyMatcherData extends Serializable {
+export class RawBodyMatcher extends SerializableMatcher {
     readonly type: 'raw-body' = 'raw-body';
 
     constructor(
@@ -154,35 +169,36 @@ export class RawBodyMatcherData extends Serializable {
         super();
     }
 
-    buildMatcher() {
-        return _.assign(async (request: OngoingRequest) =>
-            (await request.body.asText()) === this.content
-        , { explain: () => `with body '${this.content}'` });
+    async matches(request: OngoingRequest) {
+        return (await request.body.asText()) === this.content;
+    }
+
+    explain() {
+        return `with body '${this.content}'`;
     }
 }
 
-export class RegexBodyMatcherData extends Serializable {
+export class RegexBodyMatcher extends SerializableMatcher {
     readonly type: 'raw-body-regexp' = 'raw-body-regexp';
     readonly regexString: string;
 
-    constructor(
-        public regex: RegExp
-    ) {
+    constructor(regex: RegExp) {
         super();
         this.regexString = regex.source;
     }
 
-    buildMatcher() {
-        let bodyToMatch = new RegExp(this.regexString);
+    async matches(request: OngoingRequest) {
+        let bodyMatcher = new RegExp(this.regexString);
+        return bodyMatcher.test(await request.body.asText());
+    }
 
-        return _.assign(async (request: OngoingRequest) =>
-            bodyToMatch.test(await request.body.asText())
-        , { explain: () => `with body matching /${this.regexString}/` });
+    explain() {
+        return `with body matching /${this.regexString}/`;
     }
 
 }
 
-export class JsonBodyMatcherData extends Serializable {
+export class JsonBodyMatcher extends SerializableMatcher {
     readonly type: 'json-body' = 'json-body';
 
     constructor(
@@ -191,18 +207,20 @@ export class JsonBodyMatcherData extends Serializable {
         super();
     }
 
-    buildMatcher() {
-        return _.assign(async (request: OngoingRequest) => {
-            const receivedBody = await (request.body.asJson().catch(() => undefined));
+    async matches(request: OngoingRequest) {
+        const receivedBody = await (request.body.asJson().catch(() => undefined));
 
-            if (receivedBody === undefined) return false;
-            else return _.isEqual(receivedBody, this.body)
-        }, { explain: () => `with ${JSON.stringify(this.body)} as a JSON body` });
+        if (receivedBody === undefined) return false;
+        else return _.isEqual(receivedBody, this.body)
+    }
+
+    explain() {
+        return `with ${JSON.stringify(this.body)} as a JSON body`;
     }
 
 }
 
-export class JsonBodyFlexibleMatcherData extends Serializable {
+export class JsonBodyFlexibleMatcher extends SerializableMatcher {
     readonly type: 'json-body-matching' = 'json-body-matching';
 
     constructor(
@@ -211,18 +229,20 @@ export class JsonBodyFlexibleMatcherData extends Serializable {
         super();
     }
 
-    buildMatcher() {
-        return _.assign(async (request: OngoingRequest) => {
-            const receivedBody = await (request.body.asJson().catch(() => undefined));
+    async matches(request: OngoingRequest) {
+        const receivedBody = await (request.body.asJson().catch(() => undefined));
 
-            if (receivedBody === undefined) return false;
-            else return _.isMatch(receivedBody, this.body)
-        }, { explain: () => `with JSON body including ${JSON.stringify(this.body)}` });
+        if (receivedBody === undefined) return false;
+        else return _.isMatch(receivedBody, this.body)
+    }
+
+    explain() {
+        return `with JSON body including ${JSON.stringify(this.body)}`;
     }
 
 }
 
-export class CookieMatcherData extends Serializable {
+export class CookieMatcher extends SerializableMatcher {
     readonly type: 'cookie' = 'cookie';
 
     constructor(
@@ -231,71 +251,57 @@ export class CookieMatcherData extends Serializable {
         super();
     }
 
-    buildMatcher() {
-        return _.assign(
-            async (request: OngoingRequest) => {
-                if(!request.headers || !request.headers.cookie) {
-                    return;
-                }
+    async matches(request: OngoingRequest) {
+        if(!request.headers || !request.headers.cookie) {
+            return false;
+        }
 
-                const cookies = request.headers.cookie.split(';').map(cookie => {
-                    const [key, value] = cookie.split('=');
+        const cookies = request.headers.cookie.split(';').map(cookie => {
+            const [key, value] = cookie.split('=');
 
-                    return { [key.trim()]: (value || '').trim()}
-                });
+            return { [key.trim()]: (value || '').trim()}
+        });
 
-                return cookies.some(element => _.isEqual(element, this.cookie))
-            },
-            { explain: () => `with cookies including ${JSON.stringify(this.cookie)}` }
-        );
+        return cookies.some(element => _.isEqual(element, this.cookie));
+    }
+
+    explain() {
+        return `with cookies including ${JSON.stringify(this.cookie)}`;
     }
 }
 
-export type MatcherData = (
-    WildcardMatcherData |
-    MethodMatcherData |
-    SimplePathMatcherData |
-    RegexPathMatcherData |
-    HeaderMatcherData |
-    QueryMatcherData |
-    FormDataMatcherData |
-    RawBodyMatcherData |
-    RegexBodyMatcherData |
-    JsonBodyMatcherData |
-    JsonBodyFlexibleMatcherData |
-    CookieMatcherData
-);
-
-export const MatcherDataLookup = {
-    'wildcard': WildcardMatcherData,
-    'method': MethodMatcherData,
-    'simple-path': SimplePathMatcherData,
-    'regex-path': RegexPathMatcherData,
-    'header': HeaderMatcherData,
-    'query': QueryMatcherData,
-    'form-data': FormDataMatcherData,
-    'raw-body': RawBodyMatcherData,
-    'raw-body-regexp': RegexBodyMatcherData,
-    'json-body': JsonBodyMatcherData,
-    'json-body-matching': JsonBodyFlexibleMatcherData,
-    'cookie': CookieMatcherData,
+export const MatcherLookup = {
+    'wildcard': WildcardMatcher,
+    'method': MethodMatcher,
+    'simple-path': SimplePathMatcher,
+    'regex-path': RegexPathMatcher,
+    'header': HeaderMatcher,
+    'query': QueryMatcher,
+    'form-data': FormDataMatcher,
+    'raw-body': RawBodyMatcher,
+    'raw-body-regexp': RegexBodyMatcher,
+    'json-body': JsonBodyMatcher,
+    'json-body-matching': JsonBodyFlexibleMatcher,
+    'cookie': CookieMatcher,
 };
 
-export function buildMatchers(matcherPartData: MatcherData[]): RequestMatcher {
-    const matchers = matcherPartData.map(m => m.buildMatcher());
+export async function matchesAll(req: OngoingRequest, matchers: RequestMatcher[]) {
+    return _.every(
+        await Promise.all(
+            matchers.map((matcher) => matcher.matches(req))
+        )
+    );
+}
 
-    return _.assign(async function matchRequest(req: OngoingRequest) {
-        return _.every(await Promise.all(matchers.map((m) => m(req))));
-    }, { explain: function (this: MockRule) {
-        if (matchers.length === 1) return matchers[0].explain.apply(this);
-        if (matchers.length === 2) {
-            // With just two explanations, you can just combine them
-            return `${matchers[0].explain.apply(this)} ${matchers[1].explain.apply(this)}`;
-        }
+export function explainMatchers(matchers: RequestMatcher[]) {
+    if (matchers.length === 1) return matchers[0].explain();
+    if (matchers.length === 2) {
+        // With just two explanations, you can just combine them
+        return `${matchers[0].explain()} ${matchers[1].explain()}`;
+    }
 
-        // With 3+, we need to oxford comma separate explanations to make them readable
-        return matchers.slice(0, -1)
-        .map((m) => <string> m.explain.apply(this))
-        .join(', ') + ', and ' + matchers.slice(-1)[0].explain.apply(this);
-    } });
+    // With 3+, we need to oxford comma separate explanations to make them readable
+    return matchers.slice(0, -1)
+    .map((m) => m.explain())
+    .join(', ') + ', and ' + matchers.slice(-1)[0].explain();
 }

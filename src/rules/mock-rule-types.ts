@@ -3,38 +3,34 @@
  */
 
 import { Explainable, OngoingRequest, CompletedRequest, OngoingResponse } from "../types";
-import { MatcherData } from "./matchers";
-import { CompletionCheckerData } from "./completion-checkers";
-import { HandlerData } from "./handlers";
+import { Serializable } from "../util/serialization";
 
-// The internal representation of the mocked endpoint
+// The internal representation of a mocked endpoint
 export interface MockRule extends Explainable {
     id: string;
-    matches: RequestMatcher;
-    handleRequest: RequestHandler;
-    isComplete?: RuleCompletionChecker;
-
     requests: Promise<CompletedRequest>[];
+
+    // We don't extend the main interfaces for these because MockRule is not serializable
+    matches(request: OngoingRequest): boolean | Promise<boolean>;
+    handle(request: OngoingRequest, response: OngoingResponse): Promise<void>;
+    isComplete(): boolean | null;
 }
 
 export interface MockRuleData {
-    matchers: MatcherData[];
-    handler: HandlerData
-    completionChecker?: CompletionCheckerData;
+    matchers: RequestMatcher[];
+    handler: RequestHandler
+    completionChecker?: RuleCompletionChecker;
 }
 
-export interface RuleExplainable extends Explainable {
-    explain(this: MockRule): string;
+export interface RequestMatcher extends Explainable, Serializable {
+    matches(request: OngoingRequest): boolean | Promise<boolean>;
 }
 
-export interface RequestMatcher extends RuleExplainable {
-    (request: OngoingRequest): boolean | Promise<boolean>;
+export interface RequestHandler extends Explainable, Serializable {
+    handle(request: OngoingRequest, response: OngoingResponse): Promise<void>;
 }
 
-export interface RequestHandler extends RuleExplainable {
-    (request: OngoingRequest, response: OngoingResponse): Promise<void>
-}
-
-export interface RuleCompletionChecker extends RuleExplainable {
-    (this: MockRule): boolean;
+export interface RuleCompletionChecker extends Serializable {
+    isComplete(seenRequests: Promise<CompletedRequest>[]): boolean;
+    explain(seenRequests: Promise<CompletedRequest>[]): string;
 }

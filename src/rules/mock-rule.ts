@@ -8,7 +8,7 @@ import uuid = require("uuid/v4");
 import { deserialize, SerializationOptions } from '../util/serialization';
 import { waitForCompletedRequest } from '../server/request-utils';
 
-import { OngoingRequest, CompletedRequest } from "../types";
+import { OngoingRequest, CompletedRequest, OngoingResponse } from "../types";
 import {
   MockRule as MockRuleInterface,
   RuleCompletionChecker,
@@ -32,21 +32,21 @@ export function serializeRuleData(data: MockRuleData, options?: SerializationOpt
 export function deserializeRuleData(data: MockRuleData, options?: SerializationOptions): MockRuleData {
     return {
         matchers: data.matchers.map((m) =>
-            deserialize(m, matching.MatcherDataLookup, options)
+            deserialize(m, matching.MatcherLookup, options)
         ),
-        handler: deserialize(data.handler, handling.HandlerDataLookup, options),
+        handler: deserialize(data.handler, handling.HandlerLookup, options),
         completionChecker: data.completionChecker && deserialize(
             data.completionChecker,
-            completion.CompletionCheckerDataLookup,
+            completion.CompletionCheckerLookup,
             options
         )
     };
 }
 
 export class MockRule implements MockRuleInterface {
-    public matches: RequestMatcher;
-    public isComplete?: RuleCompletionChecker;
-    public handleRequest: RequestHandler;
+    private matchers: RequestMatcher[];
+    private completionChecker?: RuleCompletionChecker;
+    private handler: RequestHandler;
 
     public id: string = uuid();
     public requests: Promise<CompletedRequest>[] = [];
@@ -56,41 +56,41 @@ export class MockRule implements MockRuleInterface {
         handler,
         completionChecker
     }: MockRuleData) {
-        this.matches = matching.buildMatchers(matchers);
-        this.handleRequest = this.recordRequests(handling.buildHandler(handler));
-        this.isComplete = completion.buildCompletionChecker(completionChecker);
+        this.matchers = matchers;
+        this.handler = handler;
+        this.completionChecker = completionChecker;
     }
 
-    // Wrap the handler, to add the request to this.requests when it's done
-    private recordRequests(handler: RequestHandler): RequestHandler {
-        const thisRule = this;
+    matches(request: OngoingRequest) {
+        return matching.matchesAll(request, this.matchers);
+    }
 
-        const recordRequest = <RequestHandler> _.assign(
-            function recordRequest(this: any, req: OngoingRequest) {
-                const handlerArgs = arguments;
-                let completedAndRecordedPromise = (async () => {
-                    await handler.apply(this, <any> handlerArgs);
-                    return waitForCompletedRequest(req);
-                })();
+    handle(request: OngoingRequest, response: OngoingResponse): Promise<void> {
+        let completedAndRecordedPromise = (async () => {
+            await this.handler.handle(request, response);
+            return waitForCompletedRequest(request);
+        })();
 
-                // Requests are added to rule.requests as soon as they start being handled.
-                thisRule.requests.push(completedAndRecordedPromise);
+        // Requests are added to rule.requests as soon as they start being handled.
+        this.requests.push(completedAndRecordedPromise);
 
-                return completedAndRecordedPromise as Promise<any>;
-            }, {
-                explain: handler.explain
-            }
-        );
+        return completedAndRecordedPromise as Promise<any>;
+    }
 
-        return recordRequest;
+    isComplete(): boolean | null {
+        if (this.completionChecker) {
+            return this.completionChecker.isComplete(this.requests);
+        } else {
+            return null;
+        }
     }
 
     explain(): string {
-        let explanation = `Match requests ${this.matches.explain.apply(this)}, ` +
-        `and then ${this.handleRequest.explain.apply(this)}`;
+        let explanation = `Match requests ${matching.explainMatchers(this.matchers)}, ` +
+        `and then ${this.handler.explain()}`;
 
-        if (this.isComplete) {
-            explanation += `, ${this.isComplete.explain.apply(this)}.`;
+        if (this.completionChecker) {
+            explanation += `, ${this.completionChecker.explain(this.requests)}.`;
         } else {
             explanation += '.';
         }

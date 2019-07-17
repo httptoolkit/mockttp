@@ -69,7 +69,7 @@ Match requests for anything with headers including {"h":"v"}, and then respond w
 Match requests making GETs for /endpointA, and then respond with status 200 and body "nice request!", once (done).
 Match requests making POSTs, for /endpointB, and with form data including {"key":"value"}, and then respond with status 500.
 Match requests making POSTs, for /endpointC, and with {"key":"value"} as a JSON body, and then respond with status 500.
-Match requests making PUTs, for /endpointD, and with a query including {"a":1}, and then close the connection, always (seen 0).
+Match requests making PUTs, for /endpointD, and with a query including {"a":"1"}, and then close the connection, always (seen 0).
 `);
     });
 

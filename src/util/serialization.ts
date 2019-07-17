@@ -7,6 +7,8 @@ export type SerializationOptions = {
 }
 
 export abstract class Serializable {
+    abstract type: string;
+
     serialize(options?: SerializationOptions): any;
     serialize(): any {
         // By default, we assume data is transferrable as-is

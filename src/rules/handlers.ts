@@ -1,5 +1,5 @@
 /**
- * @module MockRuleData
+ * @module MockRule
  */
 
 import _ = require('lodash');
@@ -27,7 +27,12 @@ function isSerializedBuffer(obj: any): obj is SerializedBuffer {
     return obj && obj.type === 'Buffer' && !!obj.data;
 }
 
-export class SimpleHandlerData extends Serializable {
+abstract class SerializableRequestHandler extends Serializable implements RequestHandler {
+    abstract handle(request: OngoingRequest, response: OngoingResponse): Promise<void>;
+    abstract explain(): string;
+}
+
+export class SimpleHandler extends SerializableRequestHandler {
     readonly type: 'simple' = 'simple';
 
     constructor(
@@ -38,23 +43,23 @@ export class SimpleHandlerData extends Serializable {
         super();
     }
 
-    buildHandler() {
-        return _.assign(async (_request: OngoingRequest, response: OngoingResponse) => {
-            if (this.headers) {
-                setHeaders(response, this.headers);
-            }
-            response.writeHead(this.status);
-
-            if (isSerializedBuffer(this.data)) {
-                this.data = new Buffer(<any> this.data);
-            }
-
-            response.end(this.data || "");
-        }, { explain: () =>
-            `respond with status ${this.status}` +
+    explain() {
+        return `respond with status ${this.status}` +
             (this.headers ? `, headers ${JSON.stringify(this.headers)}` : "") +
-            (this.data ? ` and body "${this.data}"` : "")
-        });
+            (this.data ? ` and body "${this.data}"` : "");
+    }
+
+    async handle(_request: OngoingRequest, response: OngoingResponse) {
+        if (this.headers) {
+            setHeaders(response, this.headers);
+        }
+        response.writeHead(this.status);
+
+        if (isSerializedBuffer(this.data)) {
+            this.data = new Buffer(<any> this.data);
+        }
+
+        response.end(this.data || "");
     }
 }
 
@@ -90,7 +95,7 @@ interface CallbackResponseMessage extends StreamMessage {
     result?: CallbackHandlerResult;
 }
 
-export class CallbackHandlerData extends Serializable {
+export class CallbackHandler extends SerializableRequestHandler {
     readonly type: 'callback' = 'callback';
 
     constructor(
@@ -99,35 +104,34 @@ export class CallbackHandlerData extends Serializable {
         super();
     }
 
-    buildHandler() {
-        return _.assign(async (request: OngoingRequest, response: express.Response) => {
-            let req = await waitForCompletedRequest(request);
+    explain() {
+        return 'respond using provided callback' + (this.callback.name ? ` (${this.callback.name})` : '');
+    }
 
-            let outResponse: CallbackHandlerResult;
-            try {
-                outResponse = await this.callback(req);
-            } catch (error) {
-                response.writeHead(500, 'Callback handler threw an exception');
-                response.end(error.toString());
-                return;
-            }
+    async handle(request: OngoingRequest, response: express.Response) {
+        let req = await waitForCompletedRequest(request);
 
-            if (outResponse.json !== undefined) {
-                outResponse.headers = _.assign(outResponse.headers || {}, { 'Content-Type': 'application/json' });
-                outResponse.body = JSON.stringify(outResponse.json);
-                delete outResponse.json;
-            }
+        let outResponse: CallbackHandlerResult;
+        try {
+            outResponse = await this.callback(req);
+        } catch (error) {
+            response.writeHead(500, 'Callback handler threw an exception');
+            response.end(error.toString());
+            return;
+        }
 
-            if (outResponse.headers) {
-                setHeaders(response, outResponse.headers);
-            }
+        if (outResponse.json !== undefined) {
+            outResponse.headers = _.assign(outResponse.headers || {}, { 'Content-Type': 'application/json' });
+            outResponse.body = JSON.stringify(outResponse.json);
+            delete outResponse.json;
+        }
 
-            response.writeHead(outResponse.status || 200);
-            response.end(outResponse.body || "");
-        }, { explain: () =>
-            'respond using provided callback' +
-            (this.callback.name ? ` (${this.callback.name})` : '')
-        });
+        if (outResponse.headers) {
+            setHeaders(response, outResponse.headers);
+        }
+
+        response.writeHead(outResponse.status || 200);
+        response.end(outResponse.body || "");
     }
 
     serialize(options?: SerializationOptions): SerializedCallbackHandlerData {
@@ -169,7 +173,7 @@ export class CallbackHandlerData extends Serializable {
         return { type: this.type, topicId, name: this.callback.name };
     }
 
-    static deserialize({ topicId, name }: SerializedCallbackHandlerData, options?: SerializationOptions): CallbackHandlerData {
+    static deserialize({ topicId, name }: SerializedCallbackHandlerData, options?: SerializationOptions): CallbackHandler {
         if (!options || !options.clientStream) {
             throw new Error('Client-side callback handlers require a streaming client connection.');
         }
@@ -216,7 +220,7 @@ export class CallbackHandlerData extends Serializable {
 
         // Call the client's callback (via stream), and save a handler on our end for
         // the response that comes back.
-        return new CallbackHandlerData(rpcCallback);
+        return new CallbackHandler(rpcCallback);
     }
 }
 
@@ -236,7 +240,7 @@ type StreamHandlerEventMessage =
     { type: 'arraybuffer', value: string } |
     { type: 'nil' };
 
-export class StreamHandlerData extends Serializable {
+export class StreamHandler extends SerializableRequestHandler {
     readonly type: 'stream' = 'stream';
 
     constructor(
@@ -247,31 +251,31 @@ export class StreamHandlerData extends Serializable {
         super();
     }
 
-    buildHandler() {
-        return _.assign(async (_request: OngoingRequest, response: express.Response) => {
-            if (!this.stream.done) {
-                if (this.headers) {
-                    setHeaders(response, this.headers);
-                }
-
-                response.writeHead(this.status);
-                this.stream.pipe(response);
-                this.stream.done = true;
-            } else {
-                throw new Error(stripIndent`
-                    Stream request handler called more than once - this is not supported.
-
-                    Streams can typically only be read once, so all subsequent requests would be empty.
-                    To mock repeated stream requests, call 'thenStream' repeatedly with multiple streams.
-
-                    (Have a better way to handle this? Open an issue at ${require('../../package.json').bugs.url})
-                `);
-            }
-        }, { explain: () =>
-            `respond with status ${this.status}` +
+    explain() {
+        return `respond with status ${this.status}` +
             (this.headers ? `, headers ${JSON.stringify(this.headers)},` : "") +
-            ' and a stream of response data'
-        });
+            ' and a stream of response data';
+    }
+
+    async handle(_request: OngoingRequest, response: express.Response) {
+        if (!this.stream.done) {
+            if (this.headers) {
+                setHeaders(response, this.headers);
+            }
+
+            response.writeHead(this.status);
+            this.stream.pipe(response);
+            this.stream.done = true;
+        } else {
+            throw new Error(stripIndent`
+                Stream request handler called more than once - this is not supported.
+
+                Streams can typically only be read once, so all subsequent requests would be empty.
+                To mock repeated stream requests, call 'thenStream' repeatedly with multiple streams.
+
+                (Have a better way to handle this? Open an issue at ${require('../../package.json').bugs.url})
+            `);
+        }
     }
 
     serialize(options?: SerializationOptions): SerializedStreamHandlerData {
@@ -334,7 +338,7 @@ export class StreamHandlerData extends Serializable {
         return { type: this.type, topicId, status: this.status, headers: this.headers };
     }
 
-    static deserialize(handlerData: SerializedStreamHandlerData, options?: SerializationOptions): StreamHandlerData {
+    static deserialize(handlerData: SerializedStreamHandlerData, options?: SerializationOptions): StreamHandler {
         if (!options || !options.clientStream) {
             throw new Error('Client-side stream handlers require a streaming client connection.');
         }
@@ -374,7 +378,7 @@ export class StreamHandlerData extends Serializable {
             }));
         });
 
-        return new StreamHandlerData(
+        return new StreamHandler(
             handlerData.status,
             handlerStream,
             handlerData.headers
@@ -386,7 +390,7 @@ export interface PassThroughHandlerOptions {
     ignoreHostCertificateErrors?: string[];
 }
 
-export class PassThroughHandlerData extends Serializable {
+export class PassThroughHandler extends SerializableRequestHandler {
     readonly type: 'passthrough' = 'passthrough';
 
     private forwardToLocation?: string;
@@ -399,156 +403,155 @@ export class PassThroughHandlerData extends Serializable {
         this.ignoreHostCertificateErrors = options.ignoreHostCertificateErrors || [];
     }
 
-    buildHandler() {
-        return _.assign(async (clientReq: OngoingRequest, clientRes: express.Response) => {
-            const { method, originalUrl, headers } = clientReq;
-            let { protocol, hostname, port, path } = url.parse(originalUrl);
-            if (this.forwardToLocation) {
-                ({ protocol, hostname, port } = url.parse(this.forwardToLocation));
-            }
+    explain() {
+        return this.forwardToLocation
+            ? `forward the request to ${this.forwardToLocation}`
+            : 'pass the request through to the target host';
+    }
 
-            const socket: net.Socket = (<any> clientReq).socket;
-            // If it's ipv4 masquerading as v6, strip back to ipv4
-            const remoteAddress = socket.remoteAddress!.replace(/^::ffff:/, '');
-            const remotePort = port ? Number.parseInt(port) : socket.remotePort;
+    async handle(clientReq: OngoingRequest, clientRes: express.Response) {
+        const { method, originalUrl, headers } = clientReq;
+        let { protocol, hostname, port, path } = url.parse(originalUrl);
+        if (this.forwardToLocation) {
+            ({ protocol, hostname, port } = url.parse(this.forwardToLocation));
+        }
 
-            if (isRequestLoop(remoteAddress, remotePort!)) {
-                throw new Error(stripIndent`
-                    Passthrough loop detected. This probably means you're sending a request directly ${''
-                    }to a passthrough endpoint, which is forwarding it to the target URL, which is a ${''
-                    }passthrough endpoint, which is forwarding it to the target URL, which is a ${''
-                    }passthrough endpoint...
+        const socket: net.Socket = (<any> clientReq).socket;
+        // If it's ipv4 masquerading as v6, strip back to ipv4
+        const remoteAddress = socket.remoteAddress!.replace(/^::ffff:/, '');
+        const remotePort = port ? Number.parseInt(port) : socket.remotePort;
 
-                    You should either explicitly mock a response for this URL (${originalUrl}), or use ${''
-                    }the server as a proxy, instead of making requests to it directly
-                `);
-            }
+        if (isRequestLoop(remoteAddress, remotePort!)) {
+            throw new Error(stripIndent`
+                Passthrough loop detected. This probably means you're sending a request directly ${''
+                }to a passthrough endpoint, which is forwarding it to the target URL, which is a ${''
+                }passthrough endpoint, which is forwarding it to the target URL, which is a ${''
+                }passthrough endpoint...
 
-            if (!hostname) {
-                const hostHeader = headers.host;
-                [ hostname, port ] = hostHeader.split(':');
-                protocol = clientReq.protocol + ':';
-            }
+                You should either explicitly mock a response for this URL (${originalUrl}), or use ${''
+                }the server as a proxy, instead of making requests to it directly
+            `);
+        }
 
-            const checkServerCertificate = !_.includes(this.ignoreHostCertificateErrors, hostname);
+        if (!hostname) {
+            const hostHeader = headers.host;
+            [ hostname, port ] = hostHeader.split(':');
+            protocol = clientReq.protocol + ':';
+        }
 
-            let makeRequest = protocol === 'https:' ? https.request : http.request;
+        const checkServerCertificate = !_.includes(this.ignoreHostCertificateErrors, hostname);
 
-            let family: undefined | 4 | 6;
-            if (hostname === 'localhost') {
-                // Annoying special case: some localhost servers listen only on either ipv4 or ipv6.
-                // Very specific situation, but a very common one for development use.
-                // We need to work out which one family is, as Node sometimes makes bad choices.
-                const portToTest = !!port
-                    ? parseInt(port, 10)
-                    : (protocol === 'https:' ? 443 : 80);
+        let makeRequest = protocol === 'https:' ? https.request : http.request;
 
-                if (await isLocalPortActive('::1', portToTest)) family = 6;
-                else family = 4;
-            }
+        let family: undefined | 4 | 6;
+        if (hostname === 'localhost') {
+            // Annoying special case: some localhost servers listen only on either ipv4 or ipv6.
+            // Very specific situation, but a very common one for development use.
+            // We need to work out which one family is, as Node sometimes makes bad choices.
+            const portToTest = !!port
+                ? parseInt(port, 10)
+                : (protocol === 'https:' ? 443 : 80);
 
-            let outgoingPort: null | number = null;
-            return new Promise<void>((resolve, reject) => {
-                let serverReq = makeRequest({
-                    protocol,
-                    method,
-                    hostname,
-                    port,
-                    family,
-                    path,
-                    headers,
-                    rejectUnauthorized: checkServerCertificate
-                }, (serverRes) => {
-                    Object.keys(serverRes.headers).forEach((header) => {
-                        try {
-                            clientRes.setHeader(header, serverRes.headers[header]!);
-                        } catch (e) {
-                            // A surprising number of real sites have slightly invalid headers (e.g. extra spaces)
-                            // If we hit any, just drop that header and print a message.
-                            console.log(`Error setting header on passthrough response: ${e.message}`);
-                        }
-                    });
+            if (await isLocalPortActive('::1', portToTest)) family = 6;
+            else family = 4;
+        }
 
-                    clientRes.status(serverRes.statusCode!);
-
-                    serverRes.pipe(clientRes);
-                    serverRes.once('end', resolve);
-                    serverRes.once('error', reject);
+        let outgoingPort: null | number = null;
+        return new Promise<void>((resolve, reject) => {
+            let serverReq = makeRequest({
+                protocol,
+                method,
+                hostname,
+                port,
+                family,
+                path,
+                headers,
+                rejectUnauthorized: checkServerCertificate
+            }, (serverRes) => {
+                Object.keys(serverRes.headers).forEach((header) => {
+                    try {
+                        clientRes.setHeader(header, serverRes.headers[header]!);
+                    } catch (e) {
+                        // A surprising number of real sites have slightly invalid headers (e.g. extra spaces)
+                        // If we hit any, just drop that header and print a message.
+                        console.log(`Error setting header on passthrough response: ${e.message}`);
+                    }
                 });
 
-                serverReq.once('socket', (socket: net.Socket) => {
-                    // We want the local port - it's not available until we actually connect
-                    socket.once('connect', () => {
-                        // Add this port to our list of active ports
-                        outgoingPort = socket.localPort;
-                        currentlyForwardingPorts.push(outgoingPort);
-                    });
-                    socket.once('close', () => {
-                        // Remove this port from our list of active ports
-                        currentlyForwardingPorts = currentlyForwardingPorts.filter(
-                            (port) => port !== outgoingPort
-                        );
-                        outgoingPort = null;
-                    });
+                clientRes.status(serverRes.statusCode!);
+
+                serverRes.pipe(clientRes);
+                serverRes.once('end', resolve);
+                serverRes.once('error', reject);
+            });
+
+            serverReq.once('socket', (socket: net.Socket) => {
+                // We want the local port - it's not available until we actually connect
+                socket.once('connect', () => {
+                    // Add this port to our list of active ports
+                    outgoingPort = socket.localPort;
+                    currentlyForwardingPorts.push(outgoingPort);
                 });
-
-                // asStream includes all content, including the body before this call
-                const reqBodyStream = clientReq.body.asStream();
-                reqBodyStream.pipe(serverReq);
-                reqBodyStream.once('error', () => serverReq.abort());
-                clientReq.once('abort', () => serverReq.abort());
-                clientRes.once('close', () => serverReq.abort());
-
-                serverReq.once('error', (e: any) => {
-                    if ((<any>serverReq).aborted) return;
-
-                    e.statusCode = 502;
-                    e.statusMessage = 'Error communicating with upstream server';
-                    reject(e);
+                socket.once('close', () => {
+                    // Remove this port from our list of active ports
+                    currentlyForwardingPorts = currentlyForwardingPorts.filter(
+                        (port) => port !== outgoingPort
+                    );
+                    outgoingPort = null;
                 });
             });
-        }, { explain: () => this.forwardToLocation ? 'forward the request to the specified url' : 'pass the request through to the real server' });
+
+            // asStream includes all content, including the body before this call
+            const reqBodyStream = clientReq.body.asStream();
+            reqBodyStream.pipe(serverReq);
+            reqBodyStream.once('error', () => serverReq.abort());
+            clientReq.once('abort', () => serverReq.abort());
+            clientRes.once('close', () => serverReq.abort());
+
+            serverReq.once('error', (e: any) => {
+                if ((<any>serverReq).aborted) return;
+
+                e.statusCode = 502;
+                e.statusMessage = 'Error communicating with upstream server';
+                reject(e);
+            });
+        });
     }
 }
 
-export class CloseConnectionHandlerData extends Serializable {
+export class CloseConnectionHandler extends SerializableRequestHandler {
     readonly type: 'close-connection' = 'close-connection';
 
-    buildHandler() {
-        return _.assign(async function(request: OngoingRequest, response: express.Response) {
-            const socket: net.Socket = (<any> request).socket;
-            socket.end();
-        }, { explain: () => 'close the connection' });
+    explain() {
+        return 'close the connection';
+    }
+
+    async handle(request: OngoingRequest) {
+        const socket: net.Socket = (<any> request).socket;
+        socket.end();
     }
 }
 
-export class TimeoutHandlerData extends Serializable {
+export class TimeoutHandler extends SerializableRequestHandler {
     readonly type: 'timeout' = 'timeout';
 
-    buildHandler() {
-        return _.assign(async function(request: OngoingRequest, response: express.Response) {
-            // Do nothing, leaving the socket open, but never sending a response.
-            return;
-        }, { explain: () => 'timeout (never respond)' });
+    explain() {
+        return 'timeout (never respond)';
+    }
+
+    async handle() {
+        // Do nothing, leaving the socket open, but never sending a response.
+        return;
     }
 }
 
-export type HandlerData = (
-    SimpleHandlerData |
-    CallbackHandlerData |
-    StreamHandlerData |
-    PassThroughHandlerData |
-    CloseConnectionHandlerData |
-    TimeoutHandlerData
-);
-
-export const HandlerDataLookup = {
-    'simple': SimpleHandlerData,
-    'callback': CallbackHandlerData,
-    'stream': StreamHandlerData,
-    'passthrough': PassThroughHandlerData,
-    'close-connection': CloseConnectionHandlerData,
-    'timeout': TimeoutHandlerData
+export const HandlerLookup = {
+    'simple': SimpleHandler,
+    'callback': CallbackHandler,
+    'stream': StreamHandler,
+    'passthrough': PassThroughHandler,
+    'close-connection': CloseConnectionHandler,
+    'timeout': TimeoutHandler
 }
 
 // Passthrough handlers need to spot loops - tracking ongoing request ports and the local machine's
@@ -567,7 +570,3 @@ let currentlyForwardingPorts: Array<number> = [];
 const isRequestLoop = (remoteAddress: string, remotePort: number) =>
     // If the request is local, and from a port we're sending a request on right now, we have a loop
     _.includes(localAddresses, remoteAddress) && _.includes(currentlyForwardingPorts, remotePort)
-
-export function buildHandler(handlerData: HandlerData): RequestHandler {
-    return handlerData.buildHandler();
-}

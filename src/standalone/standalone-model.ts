@@ -13,14 +13,11 @@ import {
 import { IResolvers } from "graphql-tools/dist/Interfaces";
 import { PubSub } from "graphql-subscriptions";
 
-import { MatcherData } from "../rules/matchers";
-import { HandlerData } from "../rules/handlers";
-import { CompletionCheckerData } from "../rules/completion-checkers";
 import MockttpServer from "../server/mockttp-server";
-import { MockedEndpoint, MockedEndpointData, CompletedBody, CompletedRequest, CompletedResponse } from "../types";
+import { MockedEndpoint, MockedEndpointData, CompletedRequest, CompletedResponse } from "../types";
+import { MockRuleData, RequestMatcher, RequestHandler, RuleCompletionChecker } from "../rules/mock-rule-types";
 import { deserializeRuleData } from "../rules/mock-rule";
 import { Duplex } from "stream";
-import { MockRuleData } from "../rules/mock-rule-types";
 
 const REQUEST_RECEIVED_TOPIC = 'request-received';
 const RESPONSE_COMPLETED_TOPIC = 'response-completed';
@@ -37,7 +34,7 @@ function astToObject<T>(ast: ObjectValueNode): T {
 function parseAnyAst(ast: ValueNode): any {
     switch (ast.kind) {
         case Kind.OBJECT:
-            return astToObject<HandlerData>(ast);
+            return astToObject<any>(ast);
         case Kind.LIST:
             return ast.values.map(parseAnyAst);
         case Kind.BOOLEAN:
@@ -70,7 +67,7 @@ const ScalarResolvers = {
         parseValue: (v) => v,
         parseLiteral(ast) {
             if (ast.kind === Kind.OBJECT) {
-                return astToObject<MatcherData>(ast);
+                return astToObject<RequestMatcher>(ast);
             } else return null;
         }
     }),
@@ -84,7 +81,7 @@ const ScalarResolvers = {
         parseValue: (v) => v,
         parseLiteral(ast) {
             if (ast.kind === Kind.OBJECT) {
-                return astToObject<HandlerData>(ast);
+                return astToObject<RequestHandler>(ast);
             } else return null;
         }
     }),
@@ -98,7 +95,7 @@ const ScalarResolvers = {
         parseValue: (v) => v,
         parseLiteral(ast) {
             if (ast.kind === Kind.OBJECT) {
-                return astToObject<CompletionCheckerData>(ast);
+                return astToObject<RuleCompletionChecker>(ast);
             } else return null;
         }
     }),

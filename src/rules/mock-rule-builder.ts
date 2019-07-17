@@ -11,43 +11,44 @@ import { stripIndent } from "common-tags";
 import { Headers, CompletedRequest, Method, MockedEndpoint } from "../types";
 
 import {
-    MockRuleData
+    MockRuleData,
+    RequestMatcher,
+    RequestHandler,
+    RuleCompletionChecker
 } from "./mock-rule-types";
 
 import {
-    CompletionCheckerData,
-    AlwaysData,
-    TimesData,
-    ThriceData,
-    TwiceData,
-    OnceData
+    Always,
+    NTimes,
+    Thrice,
+    Twice,
+    Once
 } from "./completion-checkers";
 
 import {
-    MatcherData,
-    MethodMatcherData,
-    SimplePathMatcherData,
-    RegexPathMatcherData,
-    HeaderMatcherData,
-    QueryMatcherData,
-    FormDataMatcherData,
-    RawBodyMatcherData,
-    WildcardMatcherData,
-    CookieMatcherData,
-    RegexBodyMatcherData,
-    JsonBodyMatcherData,
-    JsonBodyFlexibleMatcherData
+    MethodMatcher,
+    SimplePathMatcher,
+    RegexPathMatcher,
+    HeaderMatcher,
+    QueryMatcher,
+    FormDataMatcher,
+    RawBodyMatcher,
+    WildcardMatcher,
+    CookieMatcher,
+    RegexBodyMatcher,
+    JsonBodyMatcher,
+    JsonBodyFlexibleMatcher
 } from "./matchers";
 
 import {
-    SimpleHandlerData,
-    PassThroughHandlerData,
-    CallbackHandlerData,
+    SimpleHandler,
+    PassThroughHandler,
+    CallbackHandler,
     CallbackHandlerResult,
-    StreamHandlerData,
-    CloseConnectionHandlerData,
-    TimeoutHandlerData,
-    PassThroughHandlerOptions
+    StreamHandler,
+    CloseConnectionHandler,
+    TimeoutHandler,
+    PassThroughHandlerOptions,
 } from "./handlers";
 
 /**
@@ -87,30 +88,30 @@ export default class MockRuleBuilder {
         addRule?: (rule: MockRuleData) => Promise<MockedEndpoint>
     ) {
         if (methodOrAddRule instanceof Function) {
-            this.matchers.push(new WildcardMatcherData());
+            this.matchers.push(new WildcardMatcher());
             this.addRule = methodOrAddRule;
             return;
         }
 
-        this.matchers.push(new MethodMatcherData(methodOrAddRule));
+        this.matchers.push(new MethodMatcher(methodOrAddRule));
 
         if (path instanceof RegExp) {
-            this.matchers.push(new RegexPathMatcherData(path));
+            this.matchers.push(new RegexPathMatcher(path));
             this.addRule = addRule!;
         } else {
-            this.matchers.push(new SimplePathMatcherData(path!));
+            this.matchers.push(new SimplePathMatcher(path!));
             this.addRule = addRule!;
         }
     }
 
-    private matchers: MatcherData[] = [];
-    private isComplete?: CompletionCheckerData;
+    private matchers: RequestMatcher[] = [];
+    private completionChecker?: RuleCompletionChecker;
 
     /**
      * Match only requests that include the given headers
      */
     withHeaders(headers: { [key: string]: string }) {
-        this.matchers.push(new HeaderMatcherData(headers));
+        this.matchers.push(new HeaderMatcher(headers));
         return this;
     }
 
@@ -118,7 +119,7 @@ export default class MockRuleBuilder {
      * Match only requests that include the given query parameters
      */
     withQuery(query: { [key: string]: string | number | (string | number)[] }): MockRuleBuilder {
-        this.matchers.push(new QueryMatcherData(query));
+        this.matchers.push(new QueryMatcher(query));
         return this;
     }
 
@@ -126,7 +127,7 @@ export default class MockRuleBuilder {
      * Match only requests whose bodies include the given form data
      */
     withForm(formData: { [key: string]: string }): MockRuleBuilder {
-        this.matchers.push(new FormDataMatcherData(formData));
+        this.matchers.push(new FormDataMatcher(formData));
         return this;
     }
 
@@ -138,8 +139,8 @@ export default class MockRuleBuilder {
     withBody(content: string | RegExp): MockRuleBuilder {
         this.matchers.push(
             isString(content)
-                ? new RawBodyMatcherData(content)
-                : new RegexBodyMatcherData(content)
+                ? new RawBodyMatcher(content)
+                : new RegexBodyMatcher(content)
         );
         return this;
     }
@@ -153,7 +154,7 @@ export default class MockRuleBuilder {
      */
     withJsonBody(json: {}): MockRuleBuilder {
         this.matchers.push(
-            new JsonBodyMatcherData(json)
+            new JsonBodyMatcher(json)
         );
         return this;
     }
@@ -169,7 +170,7 @@ export default class MockRuleBuilder {
      */
     withJsonBodyIncluding(json: {}): MockRuleBuilder {
         this.matchers.push(
-            new JsonBodyFlexibleMatcherData(json)
+            new JsonBodyFlexibleMatcher(json)
         );
         return this;
     }
@@ -178,7 +179,7 @@ export default class MockRuleBuilder {
      * Match only requests that include the given cookies
      */
     withCookie(cookie: { [key: string]: string }) {
-        this.matchers.push(new CookieMatcherData(cookie));
+        this.matchers.push(new CookieMatcher(cookie));
         return this;
     }
 
@@ -186,7 +187,7 @@ export default class MockRuleBuilder {
      * Run this rule forever, for all matching requests
      */
     always(): MockRuleBuilder {
-        this.isComplete = new AlwaysData();
+        this.completionChecker = new Always();
         return this;
     }
 
@@ -194,7 +195,7 @@ export default class MockRuleBuilder {
      * Run this rule only once, for the first matching request
      */
     once(): MockRuleBuilder {
-        this.isComplete = new OnceData();
+        this.completionChecker = new Once();
         return this;
     }
 
@@ -202,7 +203,7 @@ export default class MockRuleBuilder {
      * Run this rule twice, for the first two matching requests
      */
     twice(): MockRuleBuilder {
-        this.isComplete = new TwiceData();
+        this.completionChecker = new Twice();
         return this;
     }
 
@@ -210,7 +211,7 @@ export default class MockRuleBuilder {
      * Run this rule three times, for the first three matching requests
      */
     thrice(): MockRuleBuilder {
-        this.isComplete = new ThriceData();
+        this.completionChecker = new Thrice();
         return this;
     }
 
@@ -218,7 +219,7 @@ export default class MockRuleBuilder {
      * Run this rule the given number of times, for the first matching requests
      */
     times(n: number): MockRuleBuilder {
-        this.isComplete = new TimesData(n);
+        this.completionChecker = new NTimes(n);
         return this;
     }
 
@@ -237,8 +238,8 @@ export default class MockRuleBuilder {
     thenReply(status: number, data?: string | Buffer, headers?: Headers): Promise<MockedEndpoint> {
         const rule: MockRuleData = {
             matchers: this.matchers,
-            completionChecker: this.isComplete,
-            handler: new SimpleHandlerData(status, data, headers)
+            completionChecker: this.completionChecker,
+            handler: new SimpleHandler(status, data, headers)
         };
 
         return this.addRule(rule);
@@ -265,8 +266,8 @@ export default class MockRuleBuilder {
 
         const rule: MockRuleData = {
             matchers: this.matchers,
-            completionChecker: this.isComplete,
-            handler: new SimpleHandlerData(status, JSON.stringify(data), defaultHeaders)
+            completionChecker: this.completionChecker,
+            handler: new SimpleHandler(status, JSON.stringify(data), defaultHeaders)
         };
 
         return this.addRule(rule);
@@ -309,8 +310,8 @@ export default class MockRuleBuilder {
     ): Promise<MockedEndpoint> {
         const rule: MockRuleData = {
             matchers: this.matchers,
-            completionChecker: this.isComplete,
-            handler: new CallbackHandlerData(callback)
+            completionChecker: this.completionChecker,
+            handler: new CallbackHandler(callback)
         }
 
         return this.addRule(rule);
@@ -337,8 +338,8 @@ export default class MockRuleBuilder {
     thenStream(status: number, stream: Readable, headers?: Headers): Promise<MockedEndpoint> {
         const rule: MockRuleData = {
             matchers: this.matchers,
-            completionChecker: this.isComplete,
-            handler: new StreamHandlerData(status, stream, headers)
+            completionChecker: this.completionChecker,
+            handler: new StreamHandler(status, stream, headers)
         }
 
         return this.addRule(rule);
@@ -365,8 +366,8 @@ export default class MockRuleBuilder {
     thenPassThrough(options?: PassThroughHandlerOptions): Promise<MockedEndpoint> {
         const rule: MockRuleData = {
             matchers: this.matchers,
-            completionChecker: this.isComplete,
-            handler: new PassThroughHandlerData(options)
+            completionChecker: this.completionChecker,
+            handler: new PassThroughHandler(options)
         };
 
         return this.addRule(rule);
@@ -402,8 +403,8 @@ export default class MockRuleBuilder {
 
         const rule: MockRuleData = {
             matchers: this.matchers,
-            completionChecker: this.isComplete,
-            handler: new PassThroughHandlerData(options, forwardToLocation)
+            completionChecker: this.completionChecker,
+            handler: new PassThroughHandler(options, forwardToLocation)
         };
 
         return this.addRule(rule);
@@ -424,8 +425,8 @@ export default class MockRuleBuilder {
     thenCloseConnection(): Promise<MockedEndpoint> {
         const rule: MockRuleData = {
             matchers: this.matchers,
-            completionChecker: this.isComplete,
-            handler: new CloseConnectionHandlerData()
+            completionChecker: this.completionChecker,
+            handler: new CloseConnectionHandler()
         };
 
         return this.addRule(rule);
@@ -446,8 +447,8 @@ export default class MockRuleBuilder {
     thenTimeout(): Promise<MockedEndpoint> {
         const rule: MockRuleData = {
             matchers: this.matchers,
-            completionChecker: this.isComplete,
-            handler: new TimeoutHandlerData()
+            completionChecker: this.completionChecker,
+            handler: new TimeoutHandler()
         };
 
         return this.addRule(rule);
