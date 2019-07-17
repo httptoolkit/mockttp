@@ -16,6 +16,10 @@ abstract class SerializableMatcher extends Serializable implements RequestMatche
     abstract explain(): string;
 }
 
+function unescapeRegexp(input: string): string {
+    return input.replace(/\\(.)/g, '$1');
+}
+
 export class WildcardMatcher extends SerializableMatcher {
     readonly type: 'wildcard' = 'wildcard';
 
@@ -91,7 +95,7 @@ export class RegexPathMatcher extends SerializableMatcher {
     }
 
     explain() {
-        return `for paths matching /${this.regexString}/`;
+        return `matching /${unescapeRegexp(this.regexString)}/`;
     }
 }
 
@@ -193,7 +197,7 @@ export class RegexBodyMatcher extends SerializableMatcher {
     }
 
     explain() {
-        return `with body matching /${this.regexString}/`;
+        return `with body matching /${unescapeRegexp(this.regexString)}/`;
     }
 
 }
