@@ -107,28 +107,6 @@ nodeOnly(() => {
                 expect(response).to.equal('remote server');
             });
 
-            it("should be able to pass through requests to an overridden location", async () => {
-                await remoteServer.anyRequest().thenCallback(() => ({ status: 200, body: 'Hit remote server' }));
-                await server.get(/^http:\/\/example.com(\/.*)?/).thenPassThrough({
-                    forwardToLocation: remoteServer.url
-                });
-
-                let response = await request.get('http://example.com');
-
-                expect(response).to.deep.equal("Hit remote server");
-            });
-
-            it("should be able to pass through requests to an overridden location retaining the original path", async () => {
-                await remoteServer.anyRequest().thenCallback((req) => ({ status: 200, body: `Hit URL ${req.url}` }));
-                await server.get(/^http:\/\/example.com(\/.*)?/).thenPassThrough({
-                    forwardToLocation: remoteServer.url
-                });
-
-                let response = await request.get('http://example.com/test/path');
-
-                expect(response).to.deep.equal("Hit URL /test/path");
-            });
-
             describe("with an IPv6-only server", () => {
                 if (!isLocalIPv6Available) return;
 

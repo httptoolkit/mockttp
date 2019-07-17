@@ -4,7 +4,7 @@
 
 import url = require("url");
 import { OutgoingHttpHeaders } from "http";
-import { merge, defaults, isString } from "lodash";
+import { merge, isString } from "lodash";
 import { Readable } from "stream";
 import { stripIndent } from "common-tags";
 
@@ -403,7 +403,7 @@ export default class MockRuleBuilder {
         const rule: MockRuleData = {
             matchers: this.matchers,
             completionChecker: this.isComplete,
-            handler: new PassThroughHandlerData(defaults({ forwardToLocation }, options))
+            handler: new PassThroughHandlerData(options, forwardToLocation)
         };
 
         return this.addRule(rule);

@@ -383,7 +383,6 @@ export class StreamHandlerData extends Serializable {
 }
 
 export interface PassThroughHandlerOptions {
-    forwardToLocation?: string;
     ignoreHostCertificateErrors?: string[];
 }
 
@@ -393,10 +392,10 @@ export class PassThroughHandlerData extends Serializable {
     private forwardToLocation?: string;
     private ignoreHostCertificateErrors: string[] = [];
 
-    constructor(options: PassThroughHandlerOptions = {}) {
+    constructor(options: PassThroughHandlerOptions = {}, forwardToLocation?: string) {
         super();
 
-        this.forwardToLocation = options.forwardToLocation;
+        this.forwardToLocation = forwardToLocation;
         this.ignoreHostCertificateErrors = options.ignoreHostCertificateErrors || [];
     }
 
