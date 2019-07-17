@@ -1,6 +1,7 @@
 import MockttpClient from "./client/mockttp-client";
 
 import { Mockttp, MockttpOptions } from "./mockttp";
+export { Method } from "./types";
 
 // Export rule data builders:
 import * as matchers from './rules/matchers';

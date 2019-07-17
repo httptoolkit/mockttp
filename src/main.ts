@@ -9,7 +9,7 @@ import { MockttpStandalone, StandaloneServerOptions } from "./standalone/mockttp
 import { Mockttp, MockttpOptions } from "./mockttp";
 
 // Export the core type definitions:
-export { OngoingRequest, CompletedRequest, CompletedResponse, MockedEndpoint } from "./types";
+export { Method, OngoingRequest, CompletedRequest, CompletedResponse, MockedEndpoint } from "./types";
 export { Mockttp };
 
 // Export rule data builders & type definitions:
@@ -17,7 +17,12 @@ import * as matchers from './rules/matchers';
 import * as handlers from './rules/handlers';
 import * as completionCheckers from './rules/completion-checkers';
 
-export { MockRuleData } from './rules/mock-rule-types';
+export {
+    MockRuleData,
+    RequestMatcher,
+    RequestHandler,
+    RuleCompletionChecker
+} from './rules/mock-rule-types';
 export { matchers, handlers, completionCheckers };
 
 // Export TLS utilities:
