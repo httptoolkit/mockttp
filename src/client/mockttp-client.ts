@@ -43,12 +43,12 @@ export class RequestError extends TypedError {
 
 export class GraphQLError extends RequestError {
     constructor(
-        error: RequestError,
-        public errors: [ { message: string } ]
+        response: Response,
+        public errors: Array<{ message: string }>
     ) {
         super(
             `GraphQL request failed, with errors:\n${errors.map((e) => e.message).join('\n')}`,
-            error.response
+            response
         );
     }
 }
@@ -138,7 +138,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
         });
     }
 
-    private async requestFromMockServer<T>(path: string, options?: RequestInit): Promise<T> {
+    private async requestFromMockServer(path: string, options?: RequestInit): Promise<Response> {
         if (!this.mockServerConfig) throw new Error('Not connected to mock server');
 
         let url = `${this.mockServerOptions.standaloneServerUrl}/server/${this.mockServerConfig.port}${path}`;
@@ -150,19 +150,27 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                 response
             );
         } else {
-            return response.json();
+            return response;
         }
     }
 
     private async queryMockServer<T>(query: string, variables?: {}): Promise<T> {
         try {
-            return (await this.requestFromMockServer<{ data: T }>('/', {
+            const response = (await this.requestFromMockServer('/', {
                 method: 'POST',
                 headers: new Headers({
                     'Content-Type': 'application/json'
                 }),
                 body: JSON.stringify({ query, variables })
-            })).data;
+            }));
+
+            const { data, errors }: { data?: T, errors?: Error[] } = await response.json();
+
+            if (errors && errors.length) {
+                throw new GraphQLError(response, errors);
+            } else {
+                return data as T;
+            }
         } catch (e) {
             try {
                 let graphQLErrors = (await e.response.json()).errors;
@@ -201,7 +209,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
         if (!this.mockServerConfig) return;
 
         this.mockServerStream!.end();
-        await this.requestFromMockServer<void>('/stop', {
+        await this.requestFromMockServer('/stop', {
             method: 'POST'
         });
 
