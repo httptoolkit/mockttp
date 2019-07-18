@@ -1,6 +1,7 @@
+import * as _ from "lodash";
+
 import { getLocal, matchers, handlers } from "../..";
 import { expect, fetch } from "../test-utils";
-import * as _ from "lodash";
 
 describe("Mockttp rule building", function () {
     let server = getLocal();
@@ -53,5 +54,23 @@ describe("Mockttp rule building", function () {
         let firstResponseText = await firstResponse.text();
 
         expect(firstResponseText).to.include('replacement mock response');
+    });
+
+    it("should reject rules with no configured matchers", async () => {
+        return expect((async () => { // Funky setup to handle sync & async failure for node & browser
+            await server.addRules({
+                matchers: [],
+                handler: new handlers.SimpleHandler(200, 'mock response'),
+            })
+        })()).to.be.rejectedWith('Cannot create a rule without at least one matcher');
+    });
+
+    it("should reject rules with no configured handler", async () => {
+        return expect((async () => { // Funky setup to handle sync & async failure for node & browser
+            await server.addRules({
+                matchers: [new matchers.SimplePathMatcher('/')],
+                handler: <any> null
+            })
+        })()).to.be.rejectedWith('Cannot create a rule with no handler');
     });
 });

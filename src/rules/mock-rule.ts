@@ -21,7 +21,18 @@ import * as matching from "./matchers";
 import * as handling from "./handlers";
 import * as completion from "./completion-checkers";
 
+function validateMockRuleData(data: MockRuleData): void {
+    if (!data.matchers || data.matchers.length === 0) {
+        throw new Error('Cannot create a rule without at least one matcher');
+    }
+    if (!data.handler) {
+        throw new Error('Cannot create a rule with no handler');
+    }
+}
+
 export function serializeRuleData(data: MockRuleData, options?: SerializationOptions) {
+    validateMockRuleData(data);
+
     return {
         matchers: data.matchers.map(m => m.serialize(options)),
         handler: data.handler.serialize(options),
@@ -45,20 +56,18 @@ export function deserializeRuleData(data: MockRuleData, options?: SerializationO
 
 export class MockRule implements MockRuleInterface {
     private matchers: RequestMatcher[];
-    private completionChecker?: RuleCompletionChecker;
     private handler: RequestHandler;
+    private completionChecker?: RuleCompletionChecker;
 
     public id: string = uuid();
     public requests: Promise<CompletedRequest>[] = [];
 
-    constructor({
-        matchers,
-        handler,
-        completionChecker
-    }: MockRuleData) {
-        this.matchers = matchers;
-        this.handler = handler;
-        this.completionChecker = completionChecker;
+    constructor(data: MockRuleData) {
+        validateMockRuleData(data);
+
+        this.matchers = data.matchers;
+        this.handler = data.handler;
+        this.completionChecker = data.completionChecker;
     }
 
     matches(request: OngoingRequest) {
