@@ -241,6 +241,21 @@ export interface MockttpOptions {
      * When using a local server, this parameter is ignored.
      */
     standaloneServerUrl?: string;
+
+    /**
+     * Record the requests & response for all traffic matched by each rule, and make
+     * it available via endpoint.getSeenRequests().
+     *
+     * Defaults to true. It can be useful to set this to false if lots of data will
+     * be sent to/via the server, to avoid storing all traffic in memory unnecessarily,
+     * if getSeenRequests will not be used. Traffic can still be captured live using
+     * .on('request') & .on('response'), this only disables the built-in persistence
+     * of that data.
+     *
+     * Note that if this is set to true then getSeenRequests() will always return
+     * an empty array.
+     */
+    recordTraffic?: boolean;
 }
 
 /**
@@ -249,6 +264,7 @@ export interface MockttpOptions {
 export abstract class AbstractMockttp {
     protected cors: boolean;
     protected debug: boolean;
+    protected recordTraffic: boolean;
 
     abstract get url(): string;
     abstract on(event: 'request', callback: (req: CompletedRequest) => void): Promise<void>;
@@ -256,6 +272,9 @@ export abstract class AbstractMockttp {
     constructor(options: MockttpOptions) {
         this.debug = options.debug || false;
         this.cors = options.cors || false;
+        this.recordTraffic = options.recordTraffic !== undefined
+            ? options.recordTraffic
+            : true;
     }
 
     get proxyEnv(): ProxyConfig {

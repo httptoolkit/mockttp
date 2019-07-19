@@ -12,7 +12,7 @@ export interface MockRule extends Explainable {
 
     // We don't extend the main interfaces for these because MockRule is not serializable
     matches(request: OngoingRequest): boolean | Promise<boolean>;
-    handle(request: OngoingRequest, response: OngoingResponse): Promise<void>;
+    handle(request: OngoingRequest, response: OngoingResponse, record: boolean): Promise<void>;
     isComplete(): boolean | null;
 }
 
@@ -31,6 +31,6 @@ export interface RequestHandler extends Explainable, Serializable {
 }
 
 export interface RuleCompletionChecker extends Serializable {
-    isComplete(seenRequests: Promise<CompletedRequest>[]): boolean;
-    explain(seenRequests: Promise<CompletedRequest>[]): string;
+    isComplete(seenRequestCount: number): boolean;
+    explain(seenRequestCount: number): string;
 }

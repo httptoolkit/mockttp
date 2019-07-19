@@ -61,6 +61,7 @@ export class MockRule implements MockRuleInterface {
 
     public id: string = uuid();
     public requests: Promise<CompletedRequest>[] = [];
+    public requestCount = 0;
 
     constructor(data: MockRuleData) {
         validateMockRuleData(data);
@@ -74,21 +75,28 @@ export class MockRule implements MockRuleInterface {
         return matching.matchesAll(request, this.matchers);
     }
 
-    handle(request: OngoingRequest, response: OngoingResponse): Promise<void> {
-        let completedAndRecordedPromise = (async () => {
-            await this.handler.handle(request, response);
-            return waitForCompletedRequest(request);
+    handle(req: OngoingRequest, res: OngoingResponse, record: boolean): Promise<void> {
+        let completedPromise = (async () => {
+            await this.handler.handle(req, res);
+            return waitForCompletedRequest(req);
         })();
 
-        // Requests are added to rule.requests as soon as they start being handled.
-        this.requests.push(completedAndRecordedPromise);
+        // Requests are added to rule.requests as soon as they start being handled,
+        // as promises, which resolve when the response is complete.
+        if (record) {
+            this.requests.push(completedPromise);
+        }
 
-        return completedAndRecordedPromise as Promise<any>;
+        // Even if traffic recording is disabled, the number of matched
+        // requests is still tracked
+        this.requestCount += 1;
+
+        return completedPromise as Promise<any>;
     }
 
     isComplete(): boolean | null {
         if (this.completionChecker) {
-            return this.completionChecker.isComplete(this.requests);
+            return this.completionChecker.isComplete(this.requestCount);
         } else {
             return null;
         }
@@ -99,7 +107,7 @@ export class MockRule implements MockRuleInterface {
         `and then ${this.handler.explain()}`;
 
         if (this.completionChecker) {
-            explanation += `, ${this.completionChecker.explain(this.requests)}.`;
+            explanation += `, ${this.completionChecker.explain(this.requestCount)}.`;
         } else {
             explanation += '.';
         }

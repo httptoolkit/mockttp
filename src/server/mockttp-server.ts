@@ -245,7 +245,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
             if (nextRule) {
                 if (this.debug) console.log(`Request matched rule: ${nextRule.explain()}`);
-                await nextRule.handle(request, response);
+                await nextRule.handle(request, response, this.recordTraffic);
             } else {
                 await this.sendUnmatchedRequestError(request, response);
             }

@@ -7,8 +7,8 @@ import { RuleCompletionChecker } from './mock-rule-types';
 import { Serializable } from '../util/serialization';
 
 abstract class SerializableCompletionChecker extends Serializable implements RuleCompletionChecker {
-    abstract isComplete(seenRequests: Promise<CompletedRequest>[]): boolean;
-    abstract explain(seenRequests: Promise<CompletedRequest>[]): string;
+    abstract isComplete(seenRequestCount: number): boolean;
+    abstract explain(seenRequestCount: number): string;
 }
 
 export class Always extends SerializableCompletionChecker {
@@ -18,44 +18,44 @@ export class Always extends SerializableCompletionChecker {
         return false;
     }
 
-    explain(seenRequests: Promise<CompletedRequest>[]) {
-        return explainUntil(seenRequests, Infinity, 'always');
+    explain(seenRequestCount: number) {
+        return explainUntil(seenRequestCount, Infinity, 'always');
     }
 }
 
 export class Once extends SerializableCompletionChecker {
     readonly type: 'once' = 'once';
 
-    isComplete(seenRequests: Promise<CompletedRequest>[]) {
-        return seenRequests.length >= 1;
+    isComplete(seenRequestCount: number) {
+        return seenRequestCount >= 1;
     }
 
-    explain(seenRequests: Promise<CompletedRequest>[]) {
-        return explainUntil(seenRequests, 1, 'once');
+    explain(seenRequestCount: number) {
+        return explainUntil(seenRequestCount, 1, 'once');
     }
 }
 
 export class Twice extends SerializableCompletionChecker {
     readonly type: 'twice' = 'twice';
 
-    isComplete(seenRequests: Promise<CompletedRequest>[]) {
-        return seenRequests.length >= 2;
+    isComplete(seenRequestCount: number) {
+        return seenRequestCount >= 2;
     }
 
-    explain(seenRequests: Promise<CompletedRequest>[]) {
-        return explainUntil(seenRequests, 2, 'twice');
+    explain(seenRequestCount: number) {
+        return explainUntil(seenRequestCount, 2, 'twice');
     }
 }
 
 export class Thrice extends SerializableCompletionChecker {
     readonly type: 'thrice' = 'thrice';
 
-    isComplete(seenRequests: Promise<CompletedRequest>[]) {
-        return seenRequests.length >= 3;
+    isComplete(seenRequestCount: number) {
+        return seenRequestCount >= 3;
     }
 
-    explain(seenRequests: Promise<CompletedRequest>[]) {
-        return explainUntil(seenRequests, 3, 'thrice');
+    explain(seenRequestCount: number) {
+        return explainUntil(seenRequestCount, 3, 'thrice');
     }
 }
 
@@ -68,12 +68,12 @@ export class NTimes extends SerializableCompletionChecker {
         super();
     }
 
-    isComplete(seenRequests: Promise<CompletedRequest>[]) {
-        return seenRequests.length >= this.count;
+    isComplete(seenRequestCount: number) {
+        return seenRequestCount >= this.count;
     }
 
-    explain(seenRequests: Promise<CompletedRequest>[]) {
-        return explainUntil(seenRequests, this.count, `${this.count} times`);
+    explain(seenRequestCount: number) {
+        return explainUntil(seenRequestCount, this.count, `${this.count} times`);
     }
 }
 
@@ -85,7 +85,6 @@ export const CompletionCheckerLookup = {
     'times': NTimes
 }
 
-function explainUntil(requests: {}[], n: number, name: string): string {
-    const seen = requests.length;
+function explainUntil(seen: number, n: number, name: string): string {
     return name + " " + (seen < n ? `(seen ${seen})` : "(done)");
 }
