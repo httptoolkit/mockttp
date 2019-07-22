@@ -360,6 +360,10 @@ export default class MockRuleBuilder {
      *   before it is passed through, and may return an object with
      *   method, url, headers and/or body properties, to overwrite the
      *   request content before it is sent upstream.
+    * * beforeResponse, a callback that will be passed the full response
+     *   before it is completed, and may return an object with status,
+     *   headers, and/or body properties, to overwrite the response content
+     *   before it is returned to the client.
      *
      * Calling this method registers the rule with the server, so it
      * starts to handle requests.

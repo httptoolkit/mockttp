@@ -14,7 +14,12 @@ import { encode as encodeBase64, decode as decodeBase64 } from 'base64-arraybuff
 import { Readable, Transform } from 'stream';
 import { stripIndent } from 'common-tags';
 
-import { waitForCompletedRequest, setHeaders } from '../server/request-utils';
+import {
+    waitForCompletedRequest,
+    setHeaders,
+    buildBodyReader,
+    streamToBuffer
+} from '../server/request-utils';
 import { isLocalPortActive } from '../util/socket-util';
 import { Serializable, SerializationOptions } from "../util/serialization";
 import { MaybePromise } from '../util/type-utils';
@@ -25,7 +30,6 @@ import {
     OngoingRequest,
     CompletedRequest,
     OngoingResponse,
-    CompletedResponse,
     CompletedBody
 } from "../types";
 import { RequestHandler } from "./mock-rule-types";
@@ -403,9 +407,85 @@ export class StreamHandler extends SerializableRequestHandler {
     }
 }
 
+interface PassThroughResponse {
+    status: number;
+    headers: Headers;
+    body: CompletedBody;
+}
+
 export interface PassThroughHandlerOptions {
     ignoreHostCertificateErrors?: string[];
     beforeRequest?: (req: CompletedRequest) => MaybePromise<CallbackRequestResult>;
+    beforeResponse?: (res: PassThroughResponse) => MaybePromise<CallbackResponseResult>;
+}
+
+// Used to drop `undefined` headers, which cause problems
+function dropUndefinedValues<D extends {}>(obj: D): D {
+    return _.omitBy(obj, (v) => v === undefined) as D;
+}
+
+// Callback result bodies can take a few formats: tidy them up a little
+function getCallbackResultBody(
+    replacementBody: string | Buffer | CompletedBody | undefined
+): string | Buffer | undefined {
+    if (replacementBody === undefined) {
+        return replacementBody;
+    } else if (replacementBody.hasOwnProperty('decodedBuffer')) {
+        // It's our own bodyReader instance. That's not supposed to happen, but
+        // it's ok, we just need to use its buffer insteead of the whole object
+        return (replacementBody as CompletedBody).buffer;
+    } else if (replacementBody === '') {
+        // For empty bodies, it's slightly more convenient if they're truthy
+        return Buffer.alloc(0);
+    } else {
+        return replacementBody as string | Buffer;
+    }
+}
+
+// Helper to handle content-length nicely for you when rewriting requests with callbacks
+function getCorrectContentLength(
+    body: string | Buffer,
+    originalHeaders: Headers,
+    replacementHeaders: Headers | undefined
+): string | undefined {
+    // If there was a content-length header, it might now be wrong, and it's annoying
+    // to need to set your own content-length override when you just want to change
+    // the body. To help out, if you override the body but don't explicitly override
+    // the (now invalid) content-length, then we fix it for you.
+
+    if (!_.has(originalHeaders, 'content-length')) {
+        // Nothing to override - use the replacement value, or undefined
+        return (replacementHeaders || {})['content-length'];
+    }
+
+    if (!replacementHeaders) {
+        // There was a length set, and you've provided a body but not changed it.
+        // You probably just want to send this body and have it work correctly,
+        // so we should fix the content length for you automatically.
+        return body.length.toString();
+    }
+
+    // There was a content length before, and you're replacing the headers entirely
+    const lengthOverride = replacementHeaders['content-length'] === undefined
+        ? undefined
+        : replacementHeaders['content-length'].toString();
+
+    // If you're setting the content-length to the same as the origin headers, even
+    // though that's the wrong value, it *might* be that you're just extending the
+    // existing headers, and you're doing this by accident (we can't tell for sure).
+    // We use invalid content-length as instructed, but print a warning just in case.
+    if (
+        lengthOverride === originalHeaders['content-length'] &&
+        lengthOverride !== body.length.toString()
+    ) {
+        console.warn(
+`Passthrough callback overrode the body and the content-length header \
+with mismatched values, which may be a mistake. The body contains \
+${body.length} bytes, whilst the header was set to ${lengthOverride}.`
+        );
+    }
+
+    return lengthOverride;
 }
 
 export class PassThroughHandler extends SerializableRequestHandler {
@@ -415,6 +495,7 @@ export class PassThroughHandler extends SerializableRequestHandler {
     private ignoreHostCertificateErrors: string[] = [];
 
     private beforeRequest?: (req: CompletedRequest) => MaybePromise<CallbackRequestResult>;
+    private beforeResponse?: (res: PassThroughResponse) => MaybePromise<CallbackResponseResult>;
 
     constructor(options: PassThroughHandlerOptions = {}, forwardToLocation?: string) {
         super();
@@ -423,6 +504,7 @@ export class PassThroughHandler extends SerializableRequestHandler {
         this.ignoreHostCertificateErrors = options.ignoreHostCertificateErrors || [];
 
         this.beforeRequest = options.beforeRequest;
+        this.beforeResponse = options.beforeResponse;
     }
 
     explain() {
@@ -478,28 +560,17 @@ export class PassThroughHandler extends SerializableRequestHandler {
             method = modifiedReq.method || method;
             reqUrl = modifiedReq.url || reqUrl;
             headers = modifiedReq.headers || headers;
+            reqBodyOverride = getCallbackResultBody(modifiedReq.body);
 
-            if (modifiedReq.body) {
-                if (modifiedReq.body.hasOwnProperty('decodedBuffer')) {
-                    // It's our own bodyReader instance. That's not supposed to happen, but
-                    // it's ok, we just need to use its buffer insteead of the whole object
-                    reqBodyOverride = (modifiedReq.body as unknown as CompletedBody).buffer;
-                } else {
-                    reqBodyOverride = modifiedReq.body;
-                }
-
-                // Fix up content-length, if necessary & not explicitly set
-                if (
-                    headers['content-length'] && (
-                        !modifiedReq.headers ||
-                        !modifiedReq.headers.hasOwnProperty('content-length')
-                    )
-                ) {
-                    // You've probably made a mistake, and we should fix the
-                    // content length for you automatically.
-                    headers['content-length'] = reqBodyOverride.length.toString();
-                }
+            if (reqBodyOverride !== undefined) {
+                headers['content-length'] = getCorrectContentLength(
+                    reqBodyOverride,
+                    clientReq.headers,
+                    modifiedReq.headers
+                );
             }
+
+            headers = dropUndefinedValues(headers);
 
             // Reparse the new URL, if necessary
             if (modifiedReq.url) {
@@ -536,22 +607,59 @@ export class PassThroughHandler extends SerializableRequestHandler {
                 path,
                 headers,
                 rejectUnauthorized: checkServerCertificate
-            }, (serverRes) => {
-                Object.keys(serverRes.headers).forEach((header) => {
+            }, async (serverRes) => {
+                serverRes.once('error', reject);
+
+                let serverStatus = serverRes.statusCode!;
+                let serverHeaders = serverRes.headers;
+                let resBodyOverride: string | Buffer | undefined;
+
+                if (this.beforeResponse) {
+                    const body = await streamToBuffer(serverRes);
+                    const modifiedRes = await this.beforeResponse({
+                        status: serverStatus,
+                        headers: serverHeaders,
+                        body: buildBodyReader(body, serverHeaders)
+                    });
+
+                    serverStatus = modifiedRes.status || serverStatus;
+                    serverHeaders = modifiedRes.headers || serverHeaders;
+                    resBodyOverride = getCallbackResultBody(modifiedRes.body);
+
+                    if (resBodyOverride !== undefined) {
+                        serverHeaders['content-length'] = getCorrectContentLength(
+                            resBodyOverride,
+                            serverRes.headers,
+                            modifiedRes.headers
+                        );
+                    }
+
+                    serverHeaders = dropUndefinedValues(serverHeaders);
+                }
+
+                Object.keys(serverHeaders).forEach((header) => {
+                    const headerValue = serverHeaders[header];
+                    if (headerValue === undefined) return;
+
                     try {
-                        clientRes.setHeader(header, serverRes.headers[header]!);
+                        clientRes.setHeader(header, headerValue);
                     } catch (e) {
-                        // A surprising number of real sites have slightly invalid headers (e.g. extra spaces)
-                        // If we hit any, just drop that header and print a message.
+                        // A surprising number of real sites have slightly invalid headers
+                        // (e.g. extra spaces). If we hit any, we just drop that header
+                        // and print a warning.
                         console.log(`Error setting header on passthrough response: ${e.message}`);
                     }
                 });
 
-                clientRes.status(serverRes.statusCode!);
+                clientRes.status(serverStatus);
 
-                serverRes.pipe(clientRes);
-                serverRes.once('end', resolve);
-                serverRes.once('error', reject);
+                if (resBodyOverride) {
+                    clientRes.end(resBodyOverride);
+                    resolve();
+                } else {
+                    serverRes.pipe(clientRes);
+                    serverRes.once('end', resolve);
+                }
             });
 
             serverReq.once('socket', (socket: net.Socket) => {

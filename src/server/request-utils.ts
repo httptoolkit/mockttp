@@ -60,7 +60,8 @@ type BufferInProgress = Promise<Buffer> & {
     currentChunks: Buffer[] // Stores the body chunks as they arrive
     failedWith?: Error // Stores the error that killed the stream, if one did
 };
-const streamToBuffer = (input: stream.Readable) => {
+
+export const streamToBuffer = (input: stream.Readable) => {
     const chunks: Buffer[] = [];
     const bufferPromise = <BufferInProgress> new Promise(
         (resolve, reject) => {

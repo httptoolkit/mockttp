@@ -139,7 +139,7 @@ mockServer.get("/endpoint").thenReply(200, "your response");`);
 mockServer.post("/endpoint").withForm({"shouldMatch":"yes"}).thenReply(200, "your response");`);
     });
 
-    it("should explain why passthrough fails for non-proxy requests", async () => {        
+    it("should explain why passthrough fails for non-proxy requests", async () => {
         await server.get("/endpoint").thenPassThrough();
 
         let result = await fetch(server.urlFor("/endpoint"));

@@ -131,7 +131,7 @@ nodeOnly(() => {
                 });
 
                 let response = await request.get(remoteServer.urlFor("/"));
-                expect(response).to.include("POST");
+                expect(response).to.equal("POST");
             });
 
             it("should be able to rewrite a request's URL", async () => {
@@ -143,7 +143,7 @@ nodeOnly(() => {
                 });
 
                 let response = await request.get(remoteServer.urlFor("/"));
-                expect(response).to.include("/endpoint");
+                expect(response).to.equal("/endpoint");
             });
 
             it("should be able to rewrite a request's headers", async () => {
@@ -197,7 +197,71 @@ nodeOnly(() => {
                 let response = await request.post(remoteServer.urlFor("/"), {
                     body: "initial body"
                 });
-                expect(response).to.include("initial body extended");
+                expect(response).to.equal("initial body extended");
+            });
+
+            it("should be able to rewrite a request's body with an empty string", async () => {
+                await remoteServer.post('/').thenCallback((req) => ({
+                    status: 200,
+                    body: req.body.text
+                }));
+                await server.post(remoteServer.urlFor("/")).thenPassThrough({
+                    beforeRequest: () => ({ body: '' })
+                });
+
+                let response = await request.post(remoteServer.urlFor("/"), {
+                    body: "initial body"
+                });
+                expect(response).to.equal("");
+            });
+
+            it("should be able to rewrite a response's status", async () => {
+                await remoteServer.get('/').thenReply(404);
+                await server.get(remoteServer.urlFor("/")).thenPassThrough({
+                    beforeResponse: () => ({ status: 204 })
+                });
+
+                let response = await request.get(remoteServer.urlFor("/"), {
+                    resolveWithFullResponse: true,
+                    simple: false
+                });
+                expect(response.statusCode).to.equal(204);
+            });
+
+            it("should be able to rewrite a response's headers", async () => {
+                await remoteServer.get('/').thenReply(200, '', {
+                    'x-header': 'original'
+                });
+
+                await server.get(remoteServer.urlFor("/")).thenPassThrough({
+                    beforeResponse: (res) => ({
+                        headers: { 'x-header': res.headers['x-header'] + ' extended' }
+                    })
+                });
+
+                let response = await request.get(remoteServer.urlFor("/"), {
+                    resolveWithFullResponse: true,
+                    simple: false
+                });
+                expect(response.headers['x-header']).to.equal('original extended');
+            });
+
+            it("should be able to rewrite a response's body", async () => {
+                await remoteServer.get('/').thenReply(200, 'original text', {
+                    "content-length": "13"
+                });
+
+                await server.get(remoteServer.urlFor("/")).thenPassThrough({
+                    beforeResponse: (res) => ({
+                        headers: { 'content-length': undefined },
+                        body: res.body.text + ' extended'
+                    })
+                });
+
+                let response = await request.get(remoteServer.urlFor("/"), {
+                    resolveWithFullResponse: true
+                });
+                expect(response.body).to.equal('original text extended');
             });
 
             describe("with an IPv6-only server", () => {
