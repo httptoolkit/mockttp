@@ -146,6 +146,22 @@ nodeOnly(() => {
                 expect(response).to.include("/endpoint");
             });
 
+            it("should be able to rewrite a request's headers", async () => {
+                await remoteServer.get('/rewrite').thenCallback((req) => ({
+                    status: 200,
+                    json: req.headers
+                }));
+
+                await server.get(remoteServer.urlFor("/rewrite")).thenPassThrough({
+                    beforeRequest: (req) => ({
+                        headers: Object.assign({}, req.headers, { 'x-test-header': 'test' })
+                    })
+                });
+
+                let response = await request.get(remoteServer.urlFor("/rewrite"));
+                expect(JSON.parse(response)['x-test-header']).to.equal("test");
+            });
+
             it("should be able to mutatively rewrite a request's headers", async () => {
                 await remoteServer.get('/rewrite').thenCallback((req) => ({
                     status: 200,
@@ -155,12 +171,33 @@ nodeOnly(() => {
                 await server.get(remoteServer.urlFor("/rewrite")).thenPassThrough({
                     beforeRequest: (req) => {
                         req.headers['x-test-header'] = 'test';
-                        return req;
+                        // You shouldn't be able to return the request itself like this
+                        // according to the types, but people will anyway, so check it
+                        // more or less works:
+                        return req as any;
                     }
                 });
 
                 let response = await request.get(remoteServer.urlFor("/rewrite"));
                 expect(JSON.parse(response)['x-test-header']).to.equal("test");
+            });
+
+            it("should be able to rewrite a request's body", async () => {
+                await remoteServer.post('/').thenCallback((req) => ({
+                    status: 200,
+                    body: req.body.text
+                }));
+
+                await server.post(remoteServer.urlFor("/")).thenPassThrough({
+                    beforeRequest: (req) => ({
+                        body: Buffer.from(req.body.text + ' extended')
+                    })
+                });
+
+                let response = await request.post(remoteServer.urlFor("/"), {
+                    body: "initial body"
+                });
+                expect(response).to.include("initial body extended");
             });
 
             describe("with an IPv6-only server", () => {

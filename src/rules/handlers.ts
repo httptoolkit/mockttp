@@ -24,7 +24,9 @@ import {
     RequestHeaders,
     OngoingRequest,
     CompletedRequest,
-    OngoingResponse
+    OngoingResponse,
+    CompletedResponse,
+    CompletedBody
 } from "../types";
 import { RequestHandler } from "./mock-rule-types";
 
@@ -73,7 +75,9 @@ export class SimpleHandler extends SerializableRequestHandler {
 export interface CallbackRequestResult {
     method?: string;
     url?: string;
+
     headers?: RequestHeaders;
+    body?: string | Buffer;
 }
 
 export interface CallbackResponseResult {
@@ -463,19 +467,43 @@ export class PassThroughHandler extends SerializableRequestHandler {
         }
 
         // Override the request details, if a callback is specified:
+        let reqBodyOverride: string | Buffer | undefined;
         if (this.beforeRequest) {
-            const modifiedRequest = await this.beforeRequest(
+            const modifiedReq = await this.beforeRequest(
                 await waitForCompletedRequest(Object.assign({}, clientReq, {
                     url: new url.URL(reqUrl, `${protocol}//${hostname}${port ? `:${port}` : ''}`).toString()
                 }))
             );
 
-            method = modifiedRequest.method || method;
-            reqUrl = modifiedRequest.url || reqUrl;
-            headers = modifiedRequest.headers || headers;
+            method = modifiedReq.method || method;
+            reqUrl = modifiedReq.url || reqUrl;
+            headers = modifiedReq.headers || headers;
 
-            if (modifiedRequest.url) {
-                reqUrl = modifiedRequest.url;
+            if (modifiedReq.body) {
+                if (modifiedReq.body.hasOwnProperty('decodedBuffer')) {
+                    // It's our own bodyReader instance. That's not supposed to happen, but
+                    // it's ok, we just need to use its buffer insteead of the whole object
+                    reqBodyOverride = (modifiedReq.body as unknown as CompletedBody).buffer;
+                } else {
+                    reqBodyOverride = modifiedReq.body;
+                }
+
+                // Fix up content-length, if necessary & not explicitly set
+                if (
+                    headers['content-length'] && (
+                        !modifiedReq.headers ||
+                        !modifiedReq.headers.hasOwnProperty('content-length')
+                    )
+                ) {
+                    // You've probably made a mistake, and we should fix the
+                    // content length for you automatically.
+                    headers['content-length'] = reqBodyOverride.length.toString();
+                }
+            }
+
+            // Reparse the new URL, if necessary
+            if (modifiedReq.url) {
+                reqUrl = modifiedReq.url;
                 ({ protocol, hostname, port, path } = url.parse(reqUrl));
             }
         }
@@ -542,10 +570,15 @@ export class PassThroughHandler extends SerializableRequestHandler {
                 });
             });
 
-            // asStream includes all content, including the body before this call
-            const reqBodyStream = clientReq.body.asStream();
-            reqBodyStream.pipe(serverReq);
-            reqBodyStream.once('error', () => serverReq.abort());
+            if (reqBodyOverride) {
+                serverReq.end(reqBodyOverride);
+            } else {
+                // asStream includes all content, including the body before this call
+                const reqBodyStream = clientReq.body.asStream();
+                reqBodyStream.pipe(serverReq);
+                reqBodyStream.once('error', () => serverReq.abort());
+            }
+
             clientReq.once('abort', () => serverReq.abort());
             clientRes.once('close', () => serverReq.abort());
 
