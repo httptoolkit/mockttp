@@ -44,12 +44,13 @@ import {
     SimpleHandler,
     PassThroughHandler,
     CallbackHandler,
-    CallbackHandlerResult,
+    CallbackResponseResult,
     StreamHandler,
     CloseConnectionHandler,
     TimeoutHandler,
     PassThroughHandlerOptions,
 } from "./handlers";
+import { MaybePromise } from "../util/type-utils";
 
 /**
  * @class MockRuleBuilder
@@ -306,7 +307,7 @@ export default class MockRuleBuilder {
      * can be used to assert on the requests matched by this rule.
      */
     thenCallback(callback:
-        (request: CompletedRequest) => CallbackHandlerResult | Promise<CallbackHandlerResult>
+        (request: CompletedRequest) => MaybePromise<CallbackResponseResult>
     ): Promise<MockedEndpoint> {
         const rule: MockRuleData = {
             matchers: this.matchers,
@@ -351,9 +352,14 @@ export default class MockRuleBuilder {
      * an error.
      *
      * This method takes options to configure how the request is passed
-     * through. The only option currently supported is ignoreHostCertificateErrors,
-     * a list of hostnames for which server certificate errors should
-     * be ignored (none, by default).
+     * through. The available options are:
+     *
+     * * ignoreHostCertificateErrors, a list of hostnames for which server
+     *   certificate errors should be ignored (none, by default).
+     * * beforeRequest, a callback that will be passed the full request
+     *   before it is passed through, and may return an object with
+     *   method, url, headers and/or body properties, to overwrite the
+     *   request content before it is sent upstream.
      *
      * Calling this method registers the rule with the server, so it
      * starts to handle requests.

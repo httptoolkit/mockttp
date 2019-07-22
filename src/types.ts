@@ -30,7 +30,7 @@ export interface Headers {
     [key: string]: undefined | string | string[];
 }
 
-interface RequestHeaders extends Headers {
+export interface RequestHeaders extends Headers {
     // An arbitrary set of headers that are known to
     // only ever appear once (for legal requests).
     host: string;

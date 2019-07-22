@@ -17,8 +17,15 @@ import { stripIndent } from 'common-tags';
 import { waitForCompletedRequest, setHeaders } from '../server/request-utils';
 import { isLocalPortActive } from '../util/socket-util';
 import { Serializable, SerializationOptions } from "../util/serialization";
+import { MaybePromise } from '../util/type-utils';
 
-import { Headers, CompletedRequest, OngoingRequest, OngoingResponse } from "../types";
+import {
+    Headers,
+    RequestHeaders,
+    OngoingRequest,
+    CompletedRequest,
+    OngoingResponse
+} from "../types";
 import { RequestHandler } from "./mock-rule-types";
 
 export type SerializedBuffer = { type: 'Buffer', data: number[] };
@@ -63,7 +70,13 @@ export class SimpleHandler extends SerializableRequestHandler {
     }
 }
 
-export interface CallbackHandlerResult {
+export interface CallbackRequestResult {
+    method?: string;
+    url?: string;
+    headers?: RequestHeaders;
+}
+
+export interface CallbackResponseResult {
     status?: number;
     json?: any;
     body?: string;
@@ -72,7 +85,7 @@ export interface CallbackHandlerResult {
 
 export interface SerializedStreamBackedHandlerData {
     type: string;
-    topicId: string
+    topicId: string;
 };
 
 interface StreamMessage {
@@ -92,14 +105,14 @@ interface CallbackResponseMessage extends StreamMessage {
     requestId: string;
     // Exactly one of these is always set:
     error?: Error;
-    result?: CallbackHandlerResult;
+    result?: CallbackResponseResult;
 }
 
 export class CallbackHandler extends SerializableRequestHandler {
     readonly type: 'callback' = 'callback';
 
     constructor(
-        public callback: (request: CompletedRequest) => CallbackHandlerResult | Promise<CallbackHandlerResult>
+        public callback: (request: CompletedRequest) => MaybePromise<CallbackResponseResult>
     ) {
         super();
     }
@@ -111,7 +124,7 @@ export class CallbackHandler extends SerializableRequestHandler {
     async handle(request: OngoingRequest, response: express.Response) {
         let req = await waitForCompletedRequest(request);
 
-        let outResponse: CallbackHandlerResult;
+        let outResponse: CallbackResponseResult;
         try {
             outResponse = await this.callback(req);
         } catch (error) {
@@ -154,7 +167,7 @@ export class CallbackHandler extends SerializableRequestHandler {
             if (topicId !== requestTopicId) return;
 
             try {
-                let result: CallbackHandlerResult = await this.callback.apply(null, serverRequest.args);
+                let result: CallbackResponseResult = await this.callback.apply(null, serverRequest.args);
 
                 clientStream.write(JSON.stringify(<CallbackResponseMessage> {
                     topicId,
@@ -180,7 +193,7 @@ export class CallbackHandler extends SerializableRequestHandler {
 
         const { clientStream } = options;
 
-        let outstandingRequests: { [id: string]: (error?: Error, result?: CallbackHandlerResult) => void } = {};
+        let outstandingRequests: { [id: string]: (error?: Error, result?: CallbackResponseResult) => void } = {};
 
         const responseListener = (streamMsg: string | Buffer) => {
             let clientResponse: CallbackResponseMessage = JSON.parse(streamMsg.toString());
@@ -196,14 +209,14 @@ export class CallbackHandler extends SerializableRequestHandler {
         clientStream.on('data', responseListener);
 
         const rpcCallback = (request: CompletedRequest) => {
-            return new Promise<CallbackHandlerResult>((resolve, reject) => {
+            return new Promise<CallbackResponseResult>((resolve, reject) => {
                 let requestId = uuid();
-                outstandingRequests[requestId] = (error?: Error, result?: CallbackHandlerResult) => {
+                outstandingRequests[requestId] = (error?: Error, result?: CallbackResponseResult) => {
                     if (error) {
                         reject(error);
                     } else {
                         // If error is not set, result must be
-                        resolve(result as CallbackHandlerResult);
+                        resolve(result as CallbackResponseResult);
                     }
                     delete outstandingRequests[requestId];
                 };
@@ -388,6 +401,7 @@ export class StreamHandler extends SerializableRequestHandler {
 
 export interface PassThroughHandlerOptions {
     ignoreHostCertificateErrors?: string[];
+    beforeRequest?: (req: CompletedRequest) => MaybePromise<CallbackRequestResult>;
 }
 
 export class PassThroughHandler extends SerializableRequestHandler {
@@ -396,11 +410,15 @@ export class PassThroughHandler extends SerializableRequestHandler {
     private forwardToLocation?: string;
     private ignoreHostCertificateErrors: string[] = [];
 
+    private beforeRequest?: (req: CompletedRequest) => MaybePromise<CallbackRequestResult>;
+
     constructor(options: PassThroughHandlerOptions = {}, forwardToLocation?: string) {
         super();
 
         this.forwardToLocation = forwardToLocation;
         this.ignoreHostCertificateErrors = options.ignoreHostCertificateErrors || [];
+
+        this.beforeRequest = options.beforeRequest;
     }
 
     explain() {
@@ -410,12 +428,16 @@ export class PassThroughHandler extends SerializableRequestHandler {
     }
 
     async handle(clientReq: OngoingRequest, clientRes: express.Response) {
-        const { method, originalUrl, headers } = clientReq;
-        let { protocol, hostname, port, path } = url.parse(originalUrl);
+        // Capture raw request data:
+        let { method, originalUrl: reqUrl, headers } = clientReq;
+        let { protocol, hostname, port, path } = url.parse(reqUrl);
+
         if (this.forwardToLocation) {
+            // Forward to location overrides the host only, not the path
             ({ protocol, hostname, port } = url.parse(this.forwardToLocation));
         }
 
+        // Check if this request is a request loop:
         const socket: net.Socket = (<any> clientReq).socket;
         // If it's ipv4 masquerading as v6, strip back to ipv4
         const remoteAddress = socket.remoteAddress!.replace(/^::ffff:/, '');
@@ -428,15 +450,34 @@ export class PassThroughHandler extends SerializableRequestHandler {
                 }passthrough endpoint, which is forwarding it to the target URL, which is a ${''
                 }passthrough endpoint...
 
-                You should either explicitly mock a response for this URL (${originalUrl}), or use ${''
-                }the server as a proxy, instead of making requests to it directly
+                You should either explicitly mock a response for this URL (${reqUrl}), or use ${''
+                }the server as a proxy, instead of making requests to it directly.
             `);
         }
 
+        // Make sure the URL is absolute, if we're transparent proxying:
         if (!hostname) {
             const hostHeader = headers.host;
             [ hostname, port ] = hostHeader.split(':');
             protocol = clientReq.protocol + ':';
+        }
+
+        // Override the request details, if a callback is specified:
+        if (this.beforeRequest) {
+            const modifiedRequest = await this.beforeRequest(
+                await waitForCompletedRequest(Object.assign({}, clientReq, {
+                    url: new url.URL(reqUrl, `${protocol}//${hostname}${port ? `:${port}` : ''}`).toString()
+                }))
+            );
+
+            method = modifiedRequest.method || method;
+            reqUrl = modifiedRequest.url || reqUrl;
+            headers = modifiedRequest.headers || headers;
+
+            if (modifiedRequest.url) {
+                reqUrl = modifiedRequest.url;
+                ({ protocol, hostname, port, path } = url.parse(reqUrl));
+            }
         }
 
         const checkServerCertificate = !_.includes(this.ignoreHostCertificateErrors, hostname);

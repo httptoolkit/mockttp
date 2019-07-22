@@ -107,6 +107,47 @@ nodeOnly(() => {
                 expect(response).to.equal('remote server');
             });
 
+            it("should be able to rewrite a request's method", async () => {
+                await remoteServer.get('/').thenReply(200, 'GET');
+                await remoteServer.post('/').thenReply(200, 'POST');
+
+                await server.get(remoteServer.urlFor("/")).thenPassThrough({
+                    beforeRequest: () => ({ method: 'POST' })
+                });
+
+                let response = await request.get(remoteServer.urlFor("/"));
+                expect(response).to.include("POST");
+            });
+
+            it("should be able to rewrite a request's URL", async () => {
+                await remoteServer.get('/').thenReply(200, 'Root');
+                await remoteServer.get('/endpoint').thenReply(200, '/endpoint');
+
+                await server.get(remoteServer.urlFor("/")).thenPassThrough({
+                    beforeRequest: (req) => ({ url: req.url.replace(/\/$/, '/endpoint') })
+                });
+
+                let response = await request.get(remoteServer.urlFor("/"));
+                expect(response).to.include("/endpoint");
+            });
+
+            it("should be able to mutatively rewrite a request's headers", async () => {
+                await remoteServer.get('/rewrite').thenCallback((req) => ({
+                    status: 200,
+                    json: req.headers
+                }));
+
+                await server.get(remoteServer.urlFor("/rewrite")).thenPassThrough({
+                    beforeRequest: (req) => {
+                        req.headers['x-test-header'] = 'test';
+                        return req;
+                    }
+                });
+
+                let response = await request.get(remoteServer.urlFor("/rewrite"));
+                expect(JSON.parse(response)['x-test-header']).to.equal("test");
+            });
+
             describe("with an IPv6-only server", () => {
                 if (!isLocalIPv6Available) return;
 

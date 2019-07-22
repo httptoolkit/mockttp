@@ -4,15 +4,16 @@
 
 import * as _ from 'lodash';
 import * as url from 'url';
+import { stripIndent } from 'common-tags';
 
 import { OngoingRequest, Method } from "../types";
 import { RequestMatcher } from "./mock-rule-types";
 import { Serializable } from "../util/serialization";
 import normalizeUrl from "../util/normalize-url";
-import { stripIndent } from 'common-tags';
+import { MaybePromise } from '../util/type-utils';
 
 abstract class SerializableMatcher extends Serializable implements RequestMatcher {
-    abstract matches(request: OngoingRequest): boolean | Promise<boolean>;
+    abstract matches(request: OngoingRequest): MaybePromise<boolean>;
     abstract explain(): string;
 }
 
