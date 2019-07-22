@@ -79,7 +79,7 @@ export interface CallbackRequestResult {
 export interface CallbackResponseResult {
     status?: number;
     json?: any;
-    body?: string;
+    body?: string | Buffer;
     headers?: Headers;
 }
 
