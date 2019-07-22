@@ -291,7 +291,7 @@ export default class MockRuleBuilder {
      *
      * Valid fields are:
      * - `status` (number)
-     * - `body` (string)
+     * - `body` (string or buffer)
      * - `headers` (object with string keys & values)
      * - `json` (object, which will be sent as a JSON response)
      *
@@ -357,13 +357,27 @@ export default class MockRuleBuilder {
      * * ignoreHostCertificateErrors, a list of hostnames for which server
      *   certificate errors should be ignored (none, by default).
      * * beforeRequest, a callback that will be passed the full request
-     *   before it is passed through, and may return an object with
-     *   method, url, headers and/or body properties, to overwrite the
-     *   request content before it is sent upstream.
-    * * beforeResponse, a callback that will be passed the full response
-     *   before it is completed, and may return an object with status,
-     *   headers, and/or body properties, to overwrite the response content
-     *   before it is returned to the client.
+     *   before it is passed through, and which returns an object that defines
+     *   how the the request content should be changed before it's passed
+     *   to the upstream server (details below).
+     * * beforeResponse, a callback that will be passed the full response
+     *   before it is completed, and which returns an object that defines
+     *   how the the response content should be changed before it's returned
+     *   to the client (details below).
+     *
+     * The beforeRequest & beforeResponse callbacks should return objects
+     * defining how the request/response should be changed. All fields on
+     * the object are optional. The valid fields are:
+     *
+     * Valid fields are:
+     * - Request only: `method` (a replacement HTTP verb, capitalized)
+     * - Request only: `url` (a full URL to send the request to)
+     * - Response only: `status` (number, will replace the HTTP status code)
+     * - Both: `headers` (object with string keys & values, replaces all
+     *   headers if set)
+     * - Both: `body` (string or buffer, replaces the body if set)
+     * - Both: `json` (object, to be sent as a JSON-encoded body, taking
+     *   precedence over `body` if both are set)
      *
      * Calling this method registers the rule with the server, so it
      * starts to handle requests.

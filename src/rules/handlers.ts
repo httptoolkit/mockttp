@@ -79,16 +79,18 @@ export class SimpleHandler extends SerializableRequestHandler {
 export interface CallbackRequestResult {
     method?: string;
     url?: string;
-
     headers?: RequestHeaders;
+
+    json?: any;
     body?: string | Buffer;
 }
 
 export interface CallbackResponseResult {
     status?: number;
+    headers?: Headers;
+
     json?: any;
     body?: string | Buffer;
-    headers?: Headers;
 }
 
 export interface SerializedStreamBackedHandlerData {
@@ -560,7 +562,13 @@ export class PassThroughHandler extends SerializableRequestHandler {
             method = modifiedReq.method || method;
             reqUrl = modifiedReq.url || reqUrl;
             headers = modifiedReq.headers || headers;
-            reqBodyOverride = getCallbackResultBody(modifiedReq.body);
+
+            if (modifiedReq.json) {
+                headers['content-type'] = 'application/json';
+                reqBodyOverride = JSON.stringify(modifiedReq.json);
+            } else {
+                reqBodyOverride = getCallbackResultBody(modifiedReq.body);
+            }
 
             if (reqBodyOverride !== undefined) {
                 headers['content-length'] = getCorrectContentLength(
@@ -569,7 +577,6 @@ export class PassThroughHandler extends SerializableRequestHandler {
                     modifiedReq.headers
                 );
             }
-
             headers = dropUndefinedValues(headers);
 
             // Reparse the new URL, if necessary
@@ -624,7 +631,13 @@ export class PassThroughHandler extends SerializableRequestHandler {
 
                     serverStatus = modifiedRes.status || serverStatus;
                     serverHeaders = modifiedRes.headers || serverHeaders;
-                    resBodyOverride = getCallbackResultBody(modifiedRes.body);
+
+                    if (modifiedRes.json) {
+                        serverHeaders['content-type'] = 'application/json';
+                        resBodyOverride = JSON.stringify(modifiedRes.json);
+                    } else {
+                        resBodyOverride = getCallbackResultBody(modifiedRes.body);
+                    }
 
                     if (resBodyOverride !== undefined) {
                         serverHeaders['content-length'] = getCorrectContentLength(

@@ -215,6 +215,24 @@ nodeOnly(() => {
                 expect(response).to.equal("");
             });
 
+            it("should be able to rewrite a request's body with json", async () => {
+                await remoteServer.post('/').thenCallback((req) => ({
+                    status: 200,
+                    json: req.body.json
+                }));
+
+                await server.post(remoteServer.urlFor("/")).thenPassThrough({
+                    beforeRequest: () => ({
+                        json: { hello: "world" }
+                    })
+                });
+
+                let response = await request.post(remoteServer.urlFor("/"), {
+                    json: true
+                });
+                expect(response).to.deep.equal({ hello: "world" });
+            });
+
             it("should be able to rewrite a response's status", async () => {
                 await remoteServer.get('/').thenReply(404);
                 await server.get(remoteServer.urlFor("/")).thenPassThrough({
@@ -258,10 +276,23 @@ nodeOnly(() => {
                     })
                 });
 
-                let response = await request.get(remoteServer.urlFor("/"), {
-                    resolveWithFullResponse: true
+                let response = await request.get(remoteServer.urlFor("/"));
+                expect(response).to.equal('original text extended');
+            });
+
+            it("should be able to rewrite a response's body with json", async () => {
+                await remoteServer.get('/').thenReply(200, 'text');
+
+                await server.get(remoteServer.urlFor("/")).thenPassThrough({
+                    beforeResponse: (res) => ({
+                        json: { hello: "world" }
+                    })
                 });
-                expect(response.body).to.equal('original text extended');
+
+                let response = await request.get(remoteServer.urlFor("/"), {
+                    json: true
+                });
+                expect(response).to.deep.equal({ hello: "world" });
             });
 
             describe("with an IPv6-only server", () => {
