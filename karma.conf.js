@@ -36,10 +36,16 @@ module.exports = function(config) {
         port: 9876,
         logLevel: config.LOG_INFO,
 
-        browsers: ['ChromeWithCert'],
+        browsers: ['ChromeHeadlessWithCert'],
         customLaunchers: {
+            ChromeHeadlessWithCert: {
+                base: 'ChromeHeadless',
+                // This is the fingerprint for the test-ca.pem CA cert
+                flags: ['--ignore-certificate-errors-spki-list=dV1LxiEDeQEtLjeMCGZ4ON7Mu1TvULkgt/kg1DGk/vM=']
+            },
+            // Used for debugging (npm run test:browser:debug)
             ChromeWithCert: {
-                base: 'Chrome', // TODO: Find a way to ignore certs with ChromeHeadless in here
+                base: 'Chrome',
                 // This is the fingerprint for the test-ca.pem CA cert
                 flags: ['--ignore-certificate-errors-spki-list=dV1LxiEDeQEtLjeMCGZ4ON7Mu1TvULkgt/kg1DGk/vM=']
             }
