@@ -110,11 +110,11 @@ Match requests making POSTs for /endpointB, and then respond using provided call
             }),
             body: form
         })).to.have.responseText(/This request was: POST request to \/endpoint with body `a=123`/);
-    });    
+    });
 
     it("should provide suggestions for new GET rules you could use", async () => {
         let response = await fetch(server.urlFor("/endpoint"));
-        
+
         let text = await response.text();
 
         expect(text).to.include(`You can fix this by adding a rule to match this request, for example:

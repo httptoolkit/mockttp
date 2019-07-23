@@ -19,14 +19,14 @@ import { GraphQLSchema, execute, subscribe } from 'graphql';
 import { makeExecutableSchema } from 'graphql-tools';
 import { SubscriptionServer } from 'subscriptions-transport-ws';
 import connectWebSocketStream = require('websocket-stream');
-import DuplexPassthrough = require('duplex-passthrough');
+import { Duplex } from 'stream';
+import DuplexPair = require('native-duplexpair');
 
 import destroyable, { DestroyableServer } from "../util/destroyable-server";
 import MockttpServer from "../server/mockttp-server";
 import { buildStandaloneModel } from "./standalone-model";
 import { DEFAULT_STANDALONE_PORT } from '../types';
 import { MockttpOptions, PortRange } from '../mockttp';
-import { Duplex } from 'stream';
 
 export interface StandaloneServerOptions {
     debug?: boolean;
@@ -189,30 +189,31 @@ export class MockttpStandalone {
             }));
         });
 
-        const serverSideStream = new DuplexPassthrough(null, { objectMode: true });
-        const clientSideStream = new DuplexPassthrough(null, { objectMode: true });
-
-        serverSideStream._writer.pipe(clientSideStream._reader);
-        clientSideStream._writer.pipe(serverSideStream._reader);
+        // A pair of sockets, representing the 2-way connection between the server & WSs.
+        // All websocket messages are written to wsSocket, and then read from serverSocket
+        // All server messages are written to serverSocket, and then read from wsSocket and sent
+        const { socket1: wsSocket, socket2: serverSocket } = new DuplexPair();
 
         if (this.debug) {
-            clientSideStream._writer.on('data', (d) => {
-                console.debug('Streaming data to clients:', d.toString());
+            serverSocket.on('data', (d: any) => {
+                console.debug('Streaming data to WS clients:', d.toString());
             });
-            clientSideStream._reader.on('data', (d) => {
-                console.debug('Streaming data from clients:', d.toString());
+            wsSocket.on('data', (d: any) => {
+                console.debug('Streaming data from WS clients:', d.toString());
             });
         }
 
         this.streamServers[mockPort] = new ws.Server({ noServer: true });
         this.streamServers[mockPort].on('connection', (ws: WebSocket) => {
-            let newClientStream = connectWebSocketStream(ws, { objectMode: true });
-            newClientStream.pipe(clientSideStream, { end: false });
-            clientSideStream.pipe(newClientStream);
+            let newClientStream = connectWebSocketStream(ws);
+            wsSocket.pipe(newClientStream).pipe(wsSocket, { end: false });
         });
-        this.streamServers[mockPort].on('close', () => clientSideStream.end());
+        this.streamServers[mockPort].on('close', () => {
+            wsSocket.end();
+            serverSocket.end();
+        });
 
-        const schema = await this.loadSchema('schema.gql', mockServer, serverSideStream);
+        const schema = await this.loadSchema('schema.gql', mockServer, serverSocket);
 
         this.subscriptionServers[mockPort] = SubscriptionServer.create({
             schema, execute, subscribe
