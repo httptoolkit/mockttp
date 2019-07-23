@@ -73,9 +73,11 @@ interface Message {
     topicId?: string;
 }
 
-interface RequestMessage {
+interface RequestMessage<R> {
     requestId?: string;
+    action?: string;
     error?: Error;
+    data?: R;
 }
 
 const DISPOSE_MESSAGE = { disposeChannel: true };
@@ -132,36 +134,75 @@ export class ClientServerChannel extends Duplex {
         }
     }
 
-    request<T extends {}, R>(data: T & RequestMessage): Promise<R> {
+    request<T extends {}, R>(data: T): Promise<R>;
+    request<T extends {}, R>(action: string, data: T): Promise<R>;
+    request<T extends {}, R>(actionOrData: string | T, dataOrNothing?: T): Promise<R> {
+        let action: string | undefined;
+        let data: T;
+        if (_.isString(actionOrData)) {
+            action = actionOrData;
+            data = dataOrNothing!;
+        } else {
+            data = actionOrData;
+        }
+
         const requestId = uuid();
 
         return new Promise<R>((resolve, reject) => {
-            const responseListener = (response: R & RequestMessage) => {
+            const responseListener = (response: RequestMessage<R>) => {
                 if (response.requestId === requestId) {
                     if (response.error) {
                         reject(response.error);
                     } else {
-                        resolve(response);
+                        resolve(response.data);
                     }
                     this.removeListener('data', responseListener);
                 }
             }
 
-            data.requestId = requestId;
-            this.write(data, (e) => {
+            const request: RequestMessage<T> = { data, requestId };
+            if (action) request.action = action;
+
+            this.write(request, (e) => {
                 if (e) reject(e);
                 else this.on('data', responseListener);
             });
         });
     }
 
-    onRequest<T, R>(cb: (request: T) => MaybePromise<R & RequestMessage>): void {
-        this.on('data', async (request: T & RequestMessage) => {
-            const { requestId } = request;
+    // Wait for requests from the other side, and respond to them
+    onRequest<T, R>(cb: (request: T) => MaybePromise<R>): void;
+    // Wait for requests with a specific { action: actionName } property, and respond
+    onRequest<T, R>(
+        actionName: string,
+        cb: (request: T) => MaybePromise<R>
+    ): void;
+    onRequest<T, R>(
+        cbOrAction: string | ((r: T) => MaybePromise<R>),
+        cbOrNothing?: (request: T) => MaybePromise<R>
+    ): void {
+        let actionName: string | undefined;
+        let cb: (request: T) => MaybePromise<R>;
+
+        if (_.isString(cbOrAction)) {
+            actionName = cbOrAction;
+            cb = cbOrNothing!;
+        } else {
+            cb = cbOrAction;
+        }
+
+        this.on('data', async (request: RequestMessage<T>) => {
+            const { requestId, action } = request;
+
+            // Filter by actionName, if set
+            if (actionName !== undefined && action !== actionName) return;
+
             try {
-                const result = await cb(request);
-                result.requestId = requestId;
-                this.write(result);
+                const response = {
+                    requestId,
+                    data: await cb(request.data!)
+                };
+                this.write(response);
             } catch (error) {
                 this.write({ requestId, error });
             }

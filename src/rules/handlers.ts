@@ -101,10 +101,6 @@ interface CallbackRequestMessage {
     args: [CompletedRequest];
 }
 
-interface CallbackResponseMessage {
-    result: CallbackResponseResult;
-}
-
 export class CallbackHandler extends SerializableRequestHandler {
     readonly type: 'callback' = 'callback';
 
@@ -147,9 +143,9 @@ export class CallbackHandler extends SerializableRequestHandler {
     serialize(channel: ClientServerChannel): SerializedCallbackHandlerData {
         channel.onRequest<
             CallbackRequestMessage,
-            CallbackResponseMessage
-        >(async (streamMsg) => {
-            return { result: await this.callback.apply(null, streamMsg.args) };
+            CallbackResponseResult
+        >((streamMsg) => {
+            return this.callback.apply(null, streamMsg.args);
         });
 
         return { type: this.type, name: this.callback.name };
@@ -157,12 +153,10 @@ export class CallbackHandler extends SerializableRequestHandler {
 
     static deserialize({ name }: SerializedCallbackHandlerData, channel: ClientServerChannel): CallbackHandler {
         const rpcCallback = async (request: CompletedRequest) => {
-            const response = await channel.request<
+            return await channel.request<
                 CallbackRequestMessage,
-                CallbackResponseMessage
+                CallbackResponseResult
             >({ args: [request] });
-
-            return response.result;
         };
         // Pass across the name from the real callback, for explain()
         Object.defineProperty(rpcCallback, "name", { value: name });
