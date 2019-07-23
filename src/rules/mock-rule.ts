@@ -4,8 +4,9 @@
 
 import * as _ from 'lodash';
 import uuid = require("uuid/v4");
+import { Duplex } from 'stream';
 
-import { deserialize, SerializationOptions } from '../util/serialization';
+import { deserialize, serialize,  Serialized } from '../util/serialization';
 import { waitForCompletedRequest } from '../server/request-utils';
 
 import { OngoingRequest, CompletedRequest, OngoingResponse } from "../types";
@@ -30,26 +31,26 @@ function validateMockRuleData(data: MockRuleData): void {
     }
 }
 
-export function serializeRuleData(data: MockRuleData, options?: SerializationOptions) {
+export function serializeRuleData(data: MockRuleData, stream: Duplex): Serialized<MockRuleData> {
     validateMockRuleData(data);
 
     return {
-        matchers: data.matchers.map(m => m.serialize(options)),
-        handler: data.handler.serialize(options),
-        completionChecker: data.completionChecker && data.completionChecker.serialize(options)
+        matchers: data.matchers.map(m => serialize(m, stream)),
+        handler: serialize(data.handler, stream),
+        completionChecker: data.completionChecker && serialize(data.completionChecker, stream)
     }
 };
 
-export function deserializeRuleData(data: MockRuleData, options?: SerializationOptions): MockRuleData {
+export function deserializeRuleData(data: Serialized<MockRuleData>, stream: Duplex): MockRuleData {
     return {
         matchers: data.matchers.map((m) =>
-            deserialize(m, matching.MatcherLookup, options)
+            deserialize(m, stream, matching.MatcherLookup)
         ),
-        handler: deserialize(data.handler, handling.HandlerLookup, options),
+        handler: deserialize(data.handler, stream, handling.HandlerLookup),
         completionChecker: data.completionChecker && deserialize(
             data.completionChecker,
-            completion.CompletionCheckerLookup,
-            options
+            stream,
+            completion.CompletionCheckerLookup
         )
     };
 }

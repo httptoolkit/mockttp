@@ -265,7 +265,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                 }
             }`, {
                 newRules: rules.map((rule) =>
-                    serializeRuleData(rule, { clientStream: this.mockServerStream })
+                    serializeRuleData(rule, this.mockServerStream!)
                 )
             }
         )).rules.map(r => r.id);

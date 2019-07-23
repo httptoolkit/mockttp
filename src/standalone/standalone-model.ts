@@ -3,6 +3,7 @@
  */
 
 import * as _ from "lodash";
+import { Duplex } from "stream";
 
 import {
   GraphQLScalarType,
@@ -17,7 +18,7 @@ import MockttpServer from "../server/mockttp-server";
 import { MockedEndpoint, MockedEndpointData, CompletedRequest, CompletedResponse } from "../types";
 import { MockRuleData, RequestMatcher, RequestHandler, RuleCompletionChecker } from "../rules/mock-rule-types";
 import { deserializeRuleData } from "../rules/mock-rule";
-import { Duplex } from "stream";
+import { Serialized } from "../util/serialization";
 
 const REQUEST_RECEIVED_TOPIC = 'request-received';
 const RESPONSE_COMPLETED_TOPIC = 'response-completed';
@@ -174,17 +175,17 @@ export function buildStandaloneModel(mockServer: MockttpServer, stream: Duplex):
         },
 
         Mutation: {
-            addRule: async (__: any, { input }: { input: MockRuleData }) => {
-                return mockServer.addRule(deserializeRuleData(input, { clientStream: stream }));
+            addRule: async (__: any, { input }: { input: Serialized<MockRuleData> }) => {
+                return mockServer.addRule(deserializeRuleData(input, stream));
             },
-            addRules: async (__: any, { input }: { input: MockRuleData[] }) => {
+            addRules: async (__: any, { input }: { input: Array<Serialized<MockRuleData>> }) => {
                 return mockServer.addRules(...input.map((rule) =>
-                    deserializeRuleData(rule, { clientStream: stream })
+                    deserializeRuleData(rule, stream)
                 ));
             },
-            setRules: async (__: any, { input }: { input: MockRuleData[] }) => {
+            setRules: async (__: any, { input }: { input: Array<Serialized<MockRuleData>> }) => {
                 return mockServer.setRules(...input.map((rule) =>
-                    deserializeRuleData(rule, { clientStream: stream })
+                    deserializeRuleData(rule, stream)
                 ));
             },
 

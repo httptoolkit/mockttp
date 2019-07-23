@@ -9,7 +9,6 @@ import net = require('net');
 import http = require('http');
 import https = require('https');
 import express = require("express");
-import uuid = require('uuid/v4');
 import { encode as encodeBase64, decode as decodeBase64 } from 'base64-arraybuffer';
 import { Readable, Transform } from 'stream';
 import { stripIndent } from 'common-tags';
@@ -21,7 +20,7 @@ import {
     streamToBuffer
 } from '../server/request-utils';
 import { isLocalPortActive } from '../util/socket-util';
-import { Serializable, SerializationOptions } from "../util/serialization";
+import { Serializable, ClientServerChannel } from "../util/serialization";
 import { MaybePromise } from '../util/type-utils';
 
 import {
@@ -35,6 +34,23 @@ import {
 import { RequestHandler } from "./mock-rule-types";
 
 export type SerializedBuffer = { type: 'Buffer', data: number[] };
+
+export interface CallbackRequestResult {
+    method?: string;
+    url?: string;
+    headers?: RequestHeaders;
+
+    json?: any;
+    body?: string | Buffer;
+}
+
+export interface CallbackResponseResult {
+    status?: number;
+    headers?: Headers;
+
+    json?: any;
+    body?: string | Buffer;
+}
 
 function isSerializedBuffer(obj: any): obj is SerializedBuffer {
     return obj && obj.type === 'Buffer' && !!obj.data;
@@ -76,46 +92,17 @@ export class SimpleHandler extends SerializableRequestHandler {
     }
 }
 
-export interface CallbackRequestResult {
-    method?: string;
-    url?: string;
-    headers?: RequestHeaders;
-
-    json?: any;
-    body?: string | Buffer;
-}
-
-export interface CallbackResponseResult {
-    status?: number;
-    headers?: Headers;
-
-    json?: any;
-    body?: string | Buffer;
-}
-
-export interface SerializedStreamBackedHandlerData {
+export interface SerializedCallbackHandlerData {
     type: string;
-    topicId: string;
-};
-
-interface StreamMessage {
-    topicId: string;
-}
-
-export interface SerializedCallbackHandlerData extends SerializedStreamBackedHandlerData {
     name?: string;
 }
 
-interface CallbackRequestMessage extends StreamMessage {
-    requestId: string;
+interface CallbackRequestMessage {
     args: [CompletedRequest];
 }
 
-interface CallbackResponseMessage extends StreamMessage {
-    requestId: string;
-    // Exactly one of these is always set:
-    error?: Error;
-    result?: CallbackResponseResult;
+interface CallbackResponseMessage {
+    result: CallbackResponseResult;
 }
 
 export class CallbackHandler extends SerializableRequestHandler {
@@ -157,88 +144,27 @@ export class CallbackHandler extends SerializableRequestHandler {
         response.end(outResponse.body || "");
     }
 
-    serialize(options?: SerializationOptions): SerializedCallbackHandlerData {
-        if (!options || !options.clientStream) {
-            throw new Error('Client-side callback handlers require a streaming client connection.');
-        }
-
-        const { clientStream } = options;
-
-        // The topic id is used to identify the client-side source rule, so when a message comes
-        // across we know which callback needs to be run.
-        const topicId = uuid();
-
-        // When we receive a request from the server: check it's us, call the callback, stream back the result.
-        clientStream.on('data', async (streamMsg) => {
-            let serverRequest: CallbackRequestMessage = JSON.parse(streamMsg.toString());
-            let { requestId, topicId: requestTopicId } = serverRequest;
-
-            // This message isn't meant for us.
-            if (topicId !== requestTopicId) return;
-
-            try {
-                let result: CallbackResponseResult = await this.callback.apply(null, serverRequest.args);
-
-                clientStream.write(JSON.stringify(<CallbackResponseMessage> {
-                    topicId,
-                    requestId,
-                    result
-                }));
-            } catch (error) {
-                clientStream.write(JSON.stringify(<CallbackResponseMessage> {
-                    topicId,
-                    requestId,
-                    error
-                }));
-            }
+    serialize(channel: ClientServerChannel): SerializedCallbackHandlerData {
+        channel.onRequest<
+            CallbackRequestMessage,
+            CallbackResponseMessage
+        >(async (streamMsg) => {
+            return { result: await this.callback.apply(null, streamMsg.args) };
         });
 
-        return { type: this.type, topicId, name: this.callback.name };
+        return { type: this.type, name: this.callback.name };
     }
 
-    static deserialize({ topicId, name }: SerializedCallbackHandlerData, options?: SerializationOptions): CallbackHandler {
-        if (!options || !options.clientStream) {
-            throw new Error('Client-side callback handlers require a streaming client connection.');
-        }
+    static deserialize({ name }: SerializedCallbackHandlerData, channel: ClientServerChannel): CallbackHandler {
+        const rpcCallback = async (request: CompletedRequest) => {
+            const response = await channel.request<
+                CallbackRequestMessage,
+                CallbackResponseMessage
+            >({ args: [request] });
 
-        const { clientStream } = options;
-
-        let outstandingRequests: { [id: string]: (error?: Error, result?: CallbackResponseResult) => void } = {};
-
-        const responseListener = (streamMsg: string | Buffer) => {
-            let clientResponse: CallbackResponseMessage = JSON.parse(streamMsg.toString());
-            let { requestId } = clientResponse;
-
-            if (outstandingRequests[requestId]) {
-                outstandingRequests[requestId](clientResponse.error, clientResponse.result);
-                clientStream.removeListener('data', responseListener);
-            }
+            return response.result;
         };
-
-        // Listen to the client for responses to our callbacks
-        clientStream.on('data', responseListener);
-
-        const rpcCallback = (request: CompletedRequest) => {
-            return new Promise<CallbackResponseResult>((resolve, reject) => {
-                let requestId = uuid();
-                outstandingRequests[requestId] = (error?: Error, result?: CallbackResponseResult) => {
-                    if (error) {
-                        reject(error);
-                    } else {
-                        // If error is not set, result must be
-                        resolve(result as CallbackResponseResult);
-                    }
-                    delete outstandingRequests[requestId];
-                };
-
-                clientStream.write(JSON.stringify(<CallbackRequestMessage> {
-                    topicId,
-                    requestId,
-                    args: [request]
-                }));
-            });
-        };
-        // Pass across the name from the real callback
+        // Pass across the name from the real callback, for explain()
         Object.defineProperty(rpcCallback, "name", { value: name });
 
         // Call the client's callback (via stream), and save a handler on our end for
@@ -247,17 +173,18 @@ export class CallbackHandler extends SerializableRequestHandler {
     }
 }
 
-export interface SerializedStreamHandlerData extends SerializedStreamBackedHandlerData {
+export interface SerializedStreamHandlerData {
+    type: string;
     status: number;
     headers?: Headers;
 };
 
-interface StreamHandlerMessage extends StreamMessage {
+interface StreamHandlerMessage {
     event: 'data' | 'end' | 'close' | 'error';
     content: StreamHandlerEventMessage;
 }
 
-type StreamHandlerEventMessage = 
+type StreamHandlerEventMessage =
     { type: 'string', value: string } |
     { type: 'buffer', value: string } |
     { type: 'arraybuffer', value: string } |
@@ -301,19 +228,10 @@ export class StreamHandler extends SerializableRequestHandler {
         }
     }
 
-    serialize(options?: SerializationOptions): SerializedStreamHandlerData {
-        if (!options || !options.clientStream) {
-            throw new Error('Client-side stream handlers require a streaming client connection.');
-        }
-
-        const { clientStream } = options;
-
-        // The topic id is used to identify the client-side source rule, so when a message comes
-        // across we know which handler should handle it.
-        const topicId = uuid();
-
+    serialize(channel: ClientServerChannel): SerializedStreamHandlerData {
         const serializationStream = new Transform({
-            transform: function (this: Transform, chunk, encoding, callback) {
+            objectMode: true,
+            transform: function (this: Transform, chunk, _encoding, callback) {
                 let serializedEventData: StreamHandlerEventMessage | false =
                     _.isString(chunk) ? { type: 'string', value: chunk } :
                     _.isBuffer(chunk) ? { type: 'buffer', value: chunk.toString('base64') } :
@@ -324,57 +242,33 @@ export class StreamHandler extends SerializableRequestHandler {
                     callback(new Error(`Can't serialize streamed value: ${chunk.toString()}. Streaming must output strings, buffers or array buffers`));
                 }
 
-                callback(undefined, JSON.stringify(<StreamHandlerMessage> {
-                    topicId,
+                callback(undefined, <StreamHandlerMessage> {
                     event: 'data',
                     content: serializedEventData
-                }));
+                });
             },
 
             flush: function(this: Transform, callback) {
-                this.push(JSON.stringify(<StreamHandlerMessage> {
-                    topicId,
+                this.push(<StreamHandlerMessage> {
                     event: 'end'
-                }));
+                });
                 callback();
             }
         });
 
-        // We pause the data stream until the client stream requests the data (so we know the handler downstream is connected)
-        // In theory we could split up the clientstream itself by topicId, and use normal backpressure to manage this,
-        // but we haven't, so we can't.
+        // When we get a ping from the server-side, pipe the real stream to serialize it and send the data across
+        channel.once('data', () => {
+            this.stream.pipe(serializationStream).pipe(channel, { end: false });
+        });
 
-        const startStreamListener = (streamMsg: string) => {
-            let serverRequest: CallbackRequestMessage = JSON.parse(streamMsg.toString());
-            let { topicId: requestTopicId } = serverRequest;
-
-            // This message isn't meant for us.
-            if (topicId !== requestTopicId) return;
-
-            this.stream.pipe(serializationStream).pipe(clientStream, { end: false });
-
-            clientStream.removeListener('data', startStreamListener);
-        };
-
-        clientStream.on('data', startStreamListener);
-
-        return { type: this.type, topicId, status: this.status, headers: this.headers };
+        return { type: this.type, status: this.status, headers: this.headers };
     }
 
-    static deserialize(handlerData: SerializedStreamHandlerData, options?: SerializationOptions): StreamHandler {
-        if (!options || !options.clientStream) {
-            throw new Error('Client-side stream handlers require a streaming client connection.');
-        }
-
-        const { clientStream } = options;
-
+    static deserialize(handlerData: SerializedStreamHandlerData, channel: ClientServerChannel): StreamHandler {
         const handlerStream = new Transform({
-            transform: function (this: Transform, chunk, encoding, callback) {
-                let clientMessage: StreamHandlerMessage = JSON.parse(chunk.toString());
-
-                const { topicId, event, content } = clientMessage;
-
-                if (handlerData.topicId !== topicId) return;
+            objectMode: true,
+            transform: function (this: Transform, message, encoding, callback) {
+                const { event, content } = message;
 
                 let deserializedEventData = content && (
                     content.type === 'string' ? content.value :
@@ -393,12 +287,11 @@ export class StreamHandler extends SerializableRequestHandler {
             }
         });
 
-        // When we get piped (i.e. to a live request), ping upstream to start streaming
+        // When we get piped (i.e. to a live request), ping upstream to start streaming, and then
+        // pipe the resulting data into our live stream (which is streamed to the request, like normal)
         handlerStream.once('resume', () => {
-            clientStream.pipe(handlerStream);
-            clientStream.write(JSON.stringify(<StreamMessage> {
-                topicId: handlerData.topicId
-            }));
+            channel.pipe(handlerStream);
+            channel.write({});
         });
 
         return new StreamHandler(
