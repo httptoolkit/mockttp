@@ -20,7 +20,7 @@
     "prebuild": "rimraf dist/*",
     "build": "npm run build:src && npm run build:doc",
     "build:src": "tsc && cp src/standalone/schema.gql dist/standalone/schema.gql && chmod +x ./dist/standalone/standalone-bin.js",
-    "build:doc": "typedoc --excludeExternals --readme none --exclude '**/+(main-browser|standalone-bin).ts' --out typedoc/ src/ custom-typings/",
+    "build:doc": "typedoc --ignoreCompilerErrors --excludeExternals --readme none --exclude '**/+(main-browser|standalone-bin).ts' --out typedoc/ src/ custom-typings/",
     "test": "npm run build && npm run test:node && npm run test:browser",
     "test:node": "NODE_EXTRA_CA_CERTS=./test/fixtures/test-ca.pem mocha -r ts-node/register 'test/**/*.spec.ts'",
     "test:browser": "ts-node ./src/standalone/standalone-bin.ts -c karma start",
