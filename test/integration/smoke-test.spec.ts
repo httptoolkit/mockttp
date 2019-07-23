@@ -17,13 +17,16 @@ describe("Basic HTTP mocking", function () {
     });
 
     it("should mock request via callback", async () => {
-        await server.get("/callback-endpoint").thenCallback(req => {
-            return {status: 200, body: "hello"};
+        await server.post("/callback-endpoint").thenCallback(req => {
+            return { status: 200, body: req.body.text };
         });
 
         await expect(
-            fetch(server.urlFor("/callback-endpoint"))
-        ).to.have.responseText("hello");
+            fetch(server.urlFor("/callback-endpoint"), {
+                method: 'post',
+                body: 'test-body'
+            })
+        ).to.have.responseText("test-body");
     });
 
     it("should reject non-matching requests", async () => {

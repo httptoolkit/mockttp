@@ -59,6 +59,50 @@ nodeOnly(() => {
                 expect(response2).to.equal("calls: 2");
             });
 
+            describe("proxying to a remote server", () => {
+                const targetServer = getLocal();
+
+                beforeEach(() => targetServer.start());
+                afterEach(() => targetServer.stop());
+
+                it("should successfully rewrite requests with live callbacks", async () => {
+                    targetServer.post('/different-endpoint').thenCallback((req) => ({
+                        status: 200,
+                        body: `response, body: ${req.body.text}`,
+                        headers: { 'my-header': 'real value' }
+                    }));
+
+                    await client.get(targetServer.url).thenPassThrough({
+                        beforeRequest: (req) => ({
+                            method: 'POST',
+                            url: req.url.replace(/\/$/, '/different-endpoint'),
+                            body: 'injected'
+                        }),
+                        beforeResponse: (res) => ({
+                            status: 201,
+                            headers: Object.assign(res.headers, {
+                                'intercepted-response': 'true'
+                            }),
+                            body: res.body.text + ' (intercepted response)'
+                        })
+                    });
+
+                    const response = await request.get(targetServer.url, {
+                        proxy: client.urlFor("/"),
+                        resolveWithFullResponse: true
+                    });
+
+                    expect(response.statusCode).to.equal(201);
+                    expect(response.headers).to.include({
+                        'my-header': 'real value',
+                        'intercepted-response': 'true'
+                    });
+                    expect(response.body).to.equal(
+                        'response, body: injected (intercepted response)'
+                    );
+                });
+            });
+
             it("should successfully mock requests with live streams", async () => {
                 let stream1 = new PassThrough();
                 await client.get('/stream').thenStream(200, stream1);

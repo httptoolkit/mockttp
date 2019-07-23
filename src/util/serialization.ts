@@ -1,7 +1,10 @@
 import * as _ from 'lodash';
 import { Duplex } from 'stream';
 import uuid = require('uuid/v4');
-import { MaybePromise } from './type-utils';
+
+import { MaybePromise, Replace, Omit } from './type-utils';
+import { CompletedBody, Headers } from '../types';
+import { buildBodyReader } from '../server/request-utils';
 
 export function serialize<T extends Serializable>(
     obj: T,
@@ -219,4 +222,14 @@ export class ClientServerChannel extends Duplex {
         // Stop receiving upstream messages from the global stream:
         this.rawStream.removeListener('data', this._readFromRawStream);
     }
+}
+
+export function withSerializedBody<T extends { body: CompletedBody }>(input: T): Replace<T, 'body', string> {
+    return Object.assign({}, input, { body: input.body.buffer.toString('base64') });
+}
+
+export function withDeserializedBody<T extends { headers: Headers, body: CompletedBody }>(input: Replace<T, 'body', string>) {
+    return <T> Object.assign({}, input as Omit<T, 'body'>, {
+        body: buildBodyReader(Buffer.from(input.body, 'base64'), input.headers)
+    })
 }

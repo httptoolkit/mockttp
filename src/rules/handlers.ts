@@ -20,8 +20,8 @@ import {
     streamToBuffer
 } from '../server/request-utils';
 import { isLocalPortActive } from '../util/socket-util';
-import { Serializable, ClientServerChannel } from "../util/serialization";
-import { MaybePromise } from '../util/type-utils';
+import { Serializable, ClientServerChannel, withSerializedBody, withDeserializedBody } from "../util/serialization";
+import { MaybePromise, Replace } from '../util/type-utils';
 
 import {
     Headers,
@@ -306,6 +306,23 @@ export interface PassThroughHandlerOptions {
     ignoreHostCertificateErrors?: string[];
     beforeRequest?: (req: CompletedRequest) => MaybePromise<CallbackRequestResult>;
     beforeResponse?: (res: PassThroughResponse) => MaybePromise<CallbackResponseResult>;
+}
+
+interface SerializedPassThroughData {
+    type: 'passthrough';
+    forwardToLocation?: string;
+    ignoreHostCertificateErrors?: string[];
+
+    hasBeforeRequestCallback?: boolean;
+    hasBeforeResponseCallback?: boolean;
+}
+
+interface BeforePassthroughRequestRequest {
+    args: [Replace<CompletedRequest, 'body', string>];
+}
+
+interface BeforePassthroughResponseRequest {
+    args: [Replace<PassThroughResponse, 'body', string>];
 }
 
 // Used to drop `undefined` headers, which cause problems
@@ -598,6 +615,66 @@ export class PassThroughHandler extends SerializableRequestHandler {
                 reject(e);
             });
         });
+    }
+
+    serialize(channel: ClientServerChannel): SerializedPassThroughData {
+        if (this.beforeRequest) {
+            channel.onRequest<
+                BeforePassthroughRequestRequest,
+                CallbackRequestResult
+            >('beforeRequest', (req) => {
+                return this.beforeRequest!(withDeserializedBody(req.args[0]));
+            });
+        }
+
+        if (this.beforeResponse) {
+            channel.onRequest<
+                BeforePassthroughResponseRequest,
+                CallbackResponseResult
+            >('beforeResponse', (req) => {
+                return this.beforeResponse!(withDeserializedBody(req.args[0]));
+            });
+        }
+
+        return {
+            type: this.type,
+            forwardToLocation: this.forwardToLocation,
+            hasBeforeRequestCallback: !!this.beforeRequest,
+            hasBeforeResponseCallback: !!this.beforeResponse
+        };
+    }
+
+    static deserialize(data: SerializedPassThroughData, channel: ClientServerChannel): PassThroughHandler {
+        let beforeRequest: ((req: CompletedRequest) => MaybePromise<CallbackRequestResult>) | undefined;
+        let beforeResponse: ((res: PassThroughResponse) => MaybePromise<CallbackResponseResult>) | undefined;
+
+        if (data.hasBeforeRequestCallback) {
+            beforeRequest = (req: CompletedRequest) => {
+                return channel.request<
+                    BeforePassthroughRequestRequest,
+                    CallbackRequestResult
+                >('beforeRequest', {
+                    args: [withSerializedBody(req)]
+                });
+            };
+        }
+
+        if (data.hasBeforeResponseCallback) {
+            beforeResponse = (res: PassThroughResponse) => {
+                return channel.request<
+                    BeforePassthroughResponseRequest,
+                    CallbackResponseResult
+                >('beforeResponse', {
+                    args: [withSerializedBody(res)]
+                });
+            };
+        }
+
+        return new PassThroughHandler({
+            beforeRequest,
+            beforeResponse,
+            ignoreHostCertificateErrors: data.ignoreHostCertificateErrors
+        }, data.forwardToLocation);
     }
 }
 
