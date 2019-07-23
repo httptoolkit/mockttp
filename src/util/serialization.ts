@@ -1,8 +1,73 @@
 import * as _ from 'lodash';
 import { Duplex } from 'stream';
-
 import uuid = require('uuid/v4');
 import { MaybePromise } from './type-utils';
+
+export function serialize<T extends Serializable>(
+    obj: T,
+    stream: Duplex
+): SerializedValue<T> {
+    const channel = new ClientServerChannel(stream);
+    const data = obj.serialize(channel) as SerializedValue<T>;
+    data.topicId = channel.topicId;
+    return data;
+}
+
+export function deserialize<
+    T extends SerializedValue<Serializable>,
+    C extends {
+        new(...args: any): any;
+        deserialize(data: SerializedValue<any>, channel: ClientServerChannel): any
+    }
+>(
+    data: T,
+    stream: Duplex,
+    lookup: { [key: string]: C }
+): InstanceType<C> {
+    const type = <keyof typeof lookup> data.type;
+    const channel = new ClientServerChannel(stream, data.topicId);
+
+    const deserialized = lookup[type].deserialize(data, channel);
+
+    // Wrap .dispose and ensure the channel is always disposed too.
+    const builtinDispose = deserialized.dispose;
+    deserialized.dispose = () => {
+        builtinDispose();
+        channel.dispose();
+    };
+
+    return deserialized;
+}
+
+type SerializedValue<T> = T & { topicId: string };
+
+// Serialized data = data + type + topicId on every prop/prop's array elements
+export type Serialized<T> = {
+    [K in keyof T]:
+        T[K] extends Array<unknown>
+            ? Array<SerializedValue<T[K][0]>>
+            : SerializedValue<T[K]>;
+};
+
+export abstract class Serializable {
+    abstract type: string;
+
+    serialize(_channel: ClientServerChannel): unknown {
+        // By default, we assume data is transferrable as-is
+        return this;
+    }
+
+    static deserialize(data: SerializedValue<any>, _channel: ClientServerChannel): any {
+        // By default, we assume we just need to assign the right prototype
+        return _.create(this.prototype, data);
+    }
+
+    // This rule is being unregistered. Any handlers who need to cleanup when they know
+    // they're no longer in use should implement this and dispose accordingly.
+    // Only deserialized rules are disposed - if the originating rule needs
+    // disposing too, ping the channel and let it know.
+    dispose(): void { }
+}
 
 interface Message {
     topicId?: string;
@@ -113,70 +178,4 @@ export class ClientServerChannel extends Duplex {
         // Stop receiving upstream messages from the global stream:
         this.rawStream.removeListener('data', this._readFromRawStream);
     }
-}
-
-type SerializedValue<T> = T & { topicId: string };
-
-// Serialized data = data + type + topicId on every prop/prop's array elements
-export type Serialized<T> = {
-    [K in keyof T]:
-        T[K] extends Array<unknown>
-            ? Array<SerializedValue<T[K][0]>>
-            : SerializedValue<T[K]>;
-};
-
-export abstract class Serializable {
-    abstract type: string;
-
-    serialize(_channel: ClientServerChannel): unknown {
-        // By default, we assume data is transferrable as-is
-        return this;
-    }
-
-    static deserialize(data: SerializedValue<any>, _channel: ClientServerChannel): any {
-        // By default, we assume we just need to assign the right prototype
-        return _.create(this.prototype, data);
-    }
-
-    // This rule is being unregistered. Any handlers who need to cleanup when they know
-    // they're no longer in use should implement this and dispose accordingly.
-    // Only deserialized rules are disposed - if the originating rule needs
-    // disposing too, ping the channel and let it know.
-    dispose(): void { }
-}
-
-export function serialize<T extends Serializable>(
-    obj: T,
-    stream: Duplex
-): SerializedValue<T> {
-    const channel = new ClientServerChannel(stream);
-    const data = obj.serialize(channel) as SerializedValue<T>;
-    data.topicId = channel.topicId;
-    return data;
-}
-
-export function deserialize<
-    T extends SerializedValue<Serializable>,
-    C extends {
-        new(...args: any): any;
-        deserialize(data: SerializedValue<any>, channel: ClientServerChannel): any
-    }
->(
-    data: T,
-    stream: Duplex,
-    lookup: { [key: string]: C }
-): InstanceType<C> {
-    const type = <keyof typeof lookup> data.type;
-    const channel = new ClientServerChannel(stream, data.topicId);
-
-    const deserialized = lookup[type].deserialize(data, channel);
-
-    // Wrap .dispose and ensure the channel is always disposed too.
-    const builtinDispose = deserialized.dispose;
-    deserialized.dispose = () => {
-        builtinDispose();
-        channel.dispose();
-    };
-
-    return deserialized;
 }

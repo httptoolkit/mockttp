@@ -8,6 +8,7 @@ import _ = require('lodash');
 import * as WebSocket from 'universal-websocket-client';
 import connectWebSocketStream = require('websocket-stream');
 import { SubscriptionClient } from 'subscriptions-transport-ws';
+import { Duplex } from 'stream';
 
 const {
     /** @hidden */
@@ -25,7 +26,6 @@ import { MockServerConfig } from "../standalone/mockttp-standalone";
 import { serializeRuleData } from "../rules/mock-rule";
 import { MockedEndpointData, DEFAULT_STANDALONE_PORT } from "../types";
 import { MockedEndpointClient } from "./mocked-endpoint-client";
-import { Duplex } from 'stream';
 import { buildBodyReader } from '../server/request-utils';
 import { RequireProps } from '../util/type-utils';
 import { introspectionQuery } from './introspection-query';
