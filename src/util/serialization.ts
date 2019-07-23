@@ -13,6 +13,8 @@ interface RequestMessage {
     error?: Error;
 }
 
+const DISPOSE_MESSAGE = { disposeChannel: true };
+
 // Wraps another stream, ensuring that messages go only to the paired channel on the
 // other client/server. In practice, each handler gets one end of these streams in
 // their serialize/deserialize methods, and can use them to sync live data reliably.
@@ -51,7 +53,8 @@ export class ClientServerChannel extends Duplex {
         }
 
         if (data.topicId === this.topicId) {
-            this.push(data);
+            if (_.isEqual(data, DISPOSE_MESSAGE)) this.dispose();
+            else this.push(data);
         }
     }
 
@@ -99,6 +102,17 @@ export class ClientServerChannel extends Duplex {
             }
         });
     }
+
+    // Shuts down the channel. Only needs to be called on one side, the other side
+    // will be shut down automatically when it receives DISPOSE_MESSAGE.
+    dispose() {
+        this.end(DISPOSE_MESSAGE);
+
+        // Kill any remaining channel usage:
+        this.removeAllListeners();
+        // Stop receiving upstream messages from the global stream:
+        this.rawStream.removeListener('data', this._readFromRawStream);
+    }
 }
 
 type SerializedValue<T> = T & { topicId: string };
@@ -123,6 +137,12 @@ export abstract class Serializable {
         // By default, we assume we just need to assign the right prototype
         return _.create(this.prototype, data);
     }
+
+    // This rule is being unregistered. Any handlers who need to cleanup when they know
+    // they're no longer in use should implement this and dispose accordingly.
+    // Only deserialized rules are disposed - if the originating rule needs
+    // disposing too, ping the channel and let it know.
+    dispose(): void { }
 }
 
 export function serialize<T extends Serializable>(
@@ -148,5 +168,15 @@ export function deserialize<
 ): InstanceType<C> {
     const type = <keyof typeof lookup> data.type;
     const channel = new ClientServerChannel(stream, data.topicId);
-    return lookup[type].deserialize(data, channel);
+
+    const deserialized = lookup[type].deserialize(data, channel);
+
+    // Wrap .dispose and ensure the channel is always disposed too.
+    const builtinDispose = deserialized.dispose;
+    deserialized.dispose = () => {
+        builtinDispose();
+        channel.dispose();
+    };
+
+    return deserialized;
 }

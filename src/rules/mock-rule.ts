@@ -115,4 +115,10 @@ export class MockRule implements MockRuleInterface {
 
         return explanation;
     }
+
+    dispose() {
+        this.handler.dispose();
+        this.matchers.forEach(m => m.dispose());
+        if (this.completionChecker) this.completionChecker.dispose();
+    }
 }

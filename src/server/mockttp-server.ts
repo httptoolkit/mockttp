@@ -122,6 +122,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
     }
 
     reset() {
+        this.rules.forEach(r => r.dispose());
         this.rules = [];
         this.debug = this.initialDebugSetting;
     }
@@ -153,6 +154,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
     }
 
     public setRules = (...ruleData: MockRuleData[]): Promise<MockedEndpoint[]> => {
+        this.rules.forEach(r => r.dispose());
         this.rules = ruleData.map((ruleDatum) => new MockRule(ruleDatum));
         return Promise.resolve(this.rules.map(r => new MockedEndpoint(r)));
     }
