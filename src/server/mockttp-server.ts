@@ -3,6 +3,7 @@
  */
 
 import net = require("net");
+import url = require("url");
 import { EventEmitter } from "events";
 import portfinder = require("portfinder");
 import express = require("express");
@@ -23,10 +24,11 @@ import { filter } from "../util/promise";
 import normalizeUrl from "../util/normalize-url";
 
 import {
+    isIndirectPathRequest,
     parseBody,
     waitForCompletedRequest,
     trackResponse,
-    waitForCompletedResponse,
+    waitForCompletedResponse
 } from "./request-utils";
 import { WebSocketHandler } from "./websocket-handler";
 
@@ -67,6 +69,15 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         }
 
         this.app.use(parseBody);
+        this.app.use((req, res, next) => {
+            // Relative URLs might be direct requests, or they might be transparently proxied
+            // (i.e. forcefully sent to us, they don't know a proxy is involved). If they appear
+            // to be the latter, we transform the URL into the absolute form.
+            if (isIndirectPathRequest(this.port, req)) {
+                req.url = new url.URL(req.url, `${req.protocol}://${req.headers['host']}`).toString();
+            }
+            next();
+        });
         this.app.use(this.handleRequest.bind(this));
     }
 
@@ -141,9 +152,9 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         if (!this.server) throw new Error('Cannot get url before server is started');
 
         if (this.httpsOptions) {
-            return "https://localhost:" + this.address.port;
+            return "https://localhost:" + this.port;
         } else {
-            return "http://localhost:" + this.address.port;
+            return "http://localhost:" + this.port;
         }
     }
 

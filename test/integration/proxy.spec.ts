@@ -112,7 +112,7 @@ nodeOnly(() => {
 
             it("should successfully pass through non-proxy requests with a host header", async () => {
                 await remoteServer.get('/').thenReply(200, 'remote server');
-                server.anyRequest().thenPassThrough();
+                server.get(remoteServer.url).thenPassThrough();
                 process.env = INITIAL_ENV;
 
                 let response = await request.get(server.urlFor("/"), {

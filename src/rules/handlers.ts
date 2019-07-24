@@ -4,7 +4,6 @@
 
 import _ = require('lodash');
 import url = require('url');
-import os = require('os');
 import net = require('net');
 import http = require('http');
 import https = require('https');
@@ -19,8 +18,13 @@ import {
     buildBodyReader,
     streamToBuffer
 } from '../server/request-utils';
-import { isLocalPortActive } from '../util/socket-util';
-import { Serializable, ClientServerChannel, withSerializedBody, withDeserializedBody } from "../util/serialization";
+import { isLocalPortActive, localAddresses } from '../util/socket-util';
+import {
+    Serializable,
+    ClientServerChannel,
+    withSerializedBody,
+    withDeserializedBody
+} from "../util/serialization";
 import { MaybePromise, Replace } from '../util/type-utils';
 
 import {
@@ -716,13 +720,6 @@ export const HandlerLookup = {
 
 // Passthrough handlers need to spot loops - tracking ongoing request ports and the local machine's
 // ip lets us get pretty close to doing that (for 1 step loops, at least):
-
-// We don't think about interface address changes at all here. Very unlikely to be a problem, but
-// we might want to listen for events/periodically update this list some time in future.
-const localAddresses = _(os.networkInterfaces())
-    .map((interfaceAddresses) => interfaceAddresses.map((addressDetails) => addressDetails.address))
-    .flatten()
-    .valueOf();
 
 // Track currently live ports for forwarded connections, so we can spot requests from them later.
 let currentlyForwardingPorts: Array<number> = [];
