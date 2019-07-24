@@ -425,7 +425,7 @@ export class PassThroughHandler extends SerializableRequestHandler {
 
     async handle(clientReq: OngoingRequest, clientRes: express.Response) {
         // Capture raw request data:
-        let { method, originalUrl: reqUrl, headers } = clientReq;
+        let { method, url: reqUrl, headers } = clientReq;
         let { protocol, hostname, port, path } = url.parse(reqUrl);
 
         if (this.forwardToLocation) {
@@ -452,7 +452,8 @@ export class PassThroughHandler extends SerializableRequestHandler {
             `);
         }
 
-        // Make sure the URL is absolute, if we're transparent proxying:
+        // Make sure the URL is absolute, if we're transparent proxying, or redirecting/proxying
+        // to URLs on this mock server (instead of externally).
         if (!hostname) {
             const hostHeader = headers.host;
             [ hostname, port ] = hostHeader.split(':');

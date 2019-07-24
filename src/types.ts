@@ -56,7 +56,6 @@ export type TlsRequest = {
 
 export interface OngoingRequest extends Request, EventEmitter {
     id: string;
-    originalUrl: string;
     normalizedUrl: string;
 
     body: ParsedBody;
