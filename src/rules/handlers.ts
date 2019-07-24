@@ -301,6 +301,7 @@ export class StreamHandler extends SerializableRequestHandler {
 }
 
 interface PassThroughResponse {
+    id: string;
     status: number;
     headers: Headers;
     body: CompletedBody;
@@ -565,6 +566,7 @@ export class PassThroughHandler extends SerializableRequestHandler {
                 if (this.beforeResponse) {
                     const body = await streamToBuffer(serverRes);
                     const modifiedRes = await this.beforeResponse({
+                        id: clientReq.id,
                         status: serverStatus,
                         headers: serverHeaders,
                         body: buildBodyReader(body, serverHeaders)
