@@ -1,4 +1,5 @@
 import * as _ from 'lodash';
+import portfinder = require('portfinder');
 import { getLocal } from "../..";
 import { expect } from '../test-utils';
 
@@ -11,21 +12,22 @@ describe("Port selection", function () {
         server2.stop()
     ]));
 
-    it("should use a free port starting from 8000 if none is specified", async() => {
+    it("should use a free port starting from 8000 if none is specified", async () => {
         await server1.start();
 
         expect(server1.port).to.be.gte(8000);
         expect(server1.port).to.be.lt(9000);
     });
 
-    it("should use a fixed port if one is specified", async() => {
-        const chosenPort = 10000 + _.random(100);
-        await server1.start(chosenPort);
+    it("should use a fixed port if one is specified", async function () {
+        this.retries(3); // Random ports can be in use, esp on Travis, so retry a little
 
+        const chosenPort = 10000 + _.random(1000);
+        await server1.start(chosenPort);
         expect(server1.port).to.equal(chosenPort);
     });
 
-    it("should use a port in a range if one is provided", async() => {
+    it("should use a port in a range if one is provided", async () => {
         const portRange = { startPort: 10000, endPort: 15000 };
 
         await server1.start(portRange);
