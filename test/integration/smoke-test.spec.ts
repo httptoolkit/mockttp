@@ -18,7 +18,7 @@ describe("Basic HTTP mocking", function () {
 
     it("should mock request via callback", async () => {
         await server.post("/callback-endpoint").thenCallback(req => {
-            return { status: 200, body: req.body.text };
+            return { statusCode: 200, body: req.body.text };
         });
 
         await expect(

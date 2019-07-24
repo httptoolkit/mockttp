@@ -49,7 +49,9 @@ export interface CallbackRequestResult {
 }
 
 export interface CallbackResponseResult {
-    status?: number;
+    statusCode?: number;
+    status?: number; // exists for backwards compatibility only
+    statusMessage?: string;
     headers?: Headers;
 
     json?: any;
@@ -140,7 +142,10 @@ export class CallbackHandler extends SerializableRequestHandler {
             setHeaders(response, outResponse.headers);
         }
 
-        response.writeHead(outResponse.status || 200);
+        response.writeHead(
+            outResponse.statusCode || outResponse.status || 200,
+            outResponse.statusMessage
+        );
         response.end(outResponse.body || "");
     }
 
@@ -302,7 +307,8 @@ export class StreamHandler extends SerializableRequestHandler {
 
 interface PassThroughResponse {
     id: string;
-    status: number;
+    statusCode: number;
+    statusMessage?: string;
     headers: Headers;
     body: CompletedBody;
 }
@@ -559,7 +565,8 @@ export class PassThroughHandler extends SerializableRequestHandler {
             }, async (serverRes) => {
                 serverRes.once('error', reject);
 
-                let serverStatus = serverRes.statusCode!;
+                let serverStatusCode = serverRes.statusCode!;
+                let serverStatusMessage = serverRes.statusMessage
                 let serverHeaders = serverRes.headers;
                 let resBodyOverride: string | Buffer | undefined;
 
@@ -567,12 +574,18 @@ export class PassThroughHandler extends SerializableRequestHandler {
                     const body = await streamToBuffer(serverRes);
                     const modifiedRes = await this.beforeResponse({
                         id: clientReq.id,
-                        status: serverStatus,
+                        statusCode: serverStatusCode,
+                        statusMessage: serverRes.statusMessage,
                         headers: serverHeaders,
                         body: buildBodyReader(body, serverHeaders)
                     });
 
-                    serverStatus = modifiedRes.status || serverStatus;
+                    serverStatusCode = modifiedRes.statusCode ||
+                        modifiedRes.status ||
+                        serverStatusCode;
+                    serverStatusMessage = modifiedRes.statusMessage ||
+                        serverStatusMessage;
+
                     serverHeaders = modifiedRes.headers || serverHeaders;
 
                     if (modifiedRes.json) {
@@ -607,7 +620,8 @@ export class PassThroughHandler extends SerializableRequestHandler {
                     }
                 });
 
-                clientRes.status(serverStatus);
+                clientRes.statusMessage = serverStatusMessage || clientRes.statusMessage;
+                clientRes.status(serverStatusCode);
 
                 if (resBodyOverride) {
                     clientRes.end(resBodyOverride);

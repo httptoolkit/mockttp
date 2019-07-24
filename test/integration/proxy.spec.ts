@@ -61,7 +61,10 @@ nodeOnly(() => {
             });
 
             it("should be able to pass through requests with a body", async () => {
-                await remoteServer.anyRequest().thenCallback((req) => ({ status: 200, body: req.body.text }));
+                await remoteServer.anyRequest().thenCallback((req) => ({
+                    statusCode: 200,
+                    body: req.body.text
+                }));
                 await server.post(remoteServer.url).thenPassThrough();
 
                 let response = await request.post({
@@ -74,7 +77,7 @@ nodeOnly(() => {
 
             it("should be able to pass through requests with a body buffer", async () => {
                 await remoteServer.anyRequest().thenCallback((req) => ({
-                    status: 200,
+                    statusCode: 200,
                     body: req.body.buffer
                 }));
                 await server.post(remoteServer.url).thenPassThrough();
@@ -88,7 +91,10 @@ nodeOnly(() => {
             });
 
             it("should be able to pass through requests with parameters", async () => {
-                await remoteServer.anyRequest().thenCallback((req) => ({ status: 200, body: req.url }));
+                await remoteServer.anyRequest().thenCallback((req) => ({
+                    statusCode: 200,
+                    body: req.url
+                }));
                 await server.get(remoteServer.urlFor('/get')).thenPassThrough();
 
                 let response = await request.get(remoteServer.urlFor('/get?a=b'));
@@ -159,7 +165,7 @@ nodeOnly(() => {
 
             it("should be able to rewrite a request's headers", async () => {
                 await remoteServer.get('/rewrite').thenCallback((req) => ({
-                    status: 200,
+                    statusCode: 200,
                     json: req.headers
                 }));
 
@@ -175,7 +181,7 @@ nodeOnly(() => {
 
             it("should be able to mutatively rewrite a request's headers", async () => {
                 await remoteServer.get('/rewrite').thenCallback((req) => ({
-                    status: 200,
+                    statusCode: 200,
                     json: req.headers
                 }));
 
@@ -195,7 +201,7 @@ nodeOnly(() => {
 
             it("should be able to rewrite a request's body", async () => {
                 await remoteServer.post('/').thenCallback((req) => ({
-                    status: 200,
+                    statusCode: 200,
                     body: req.body.text
                 }));
 
@@ -213,7 +219,7 @@ nodeOnly(() => {
 
             it("should be able to rewrite a request's body with an empty string", async () => {
                 await remoteServer.post('/').thenCallback((req) => ({
-                    status: 200,
+                    statusCode: 200,
                     body: req.body.text
                 }));
                 await server.post(remoteServer.urlFor("/")).thenPassThrough({
@@ -228,7 +234,7 @@ nodeOnly(() => {
 
             it("should be able to rewrite a request's body with json", async () => {
                 await remoteServer.post('/').thenCallback((req) => ({
-                    status: 200,
+                    statusCode: 200,
                     json: req.body.json
                 }));
 
@@ -247,7 +253,10 @@ nodeOnly(() => {
             it("should be able to rewrite a response's status", async () => {
                 await remoteServer.get('/').thenReply(404);
                 await server.get(remoteServer.urlFor("/")).thenPassThrough({
-                    beforeResponse: () => ({ status: 204 })
+                    beforeResponse: () => ({
+                        statusCode: 204,
+                        statusMessage: 'muy bien'
+                    })
                 });
 
                 let response = await request.get(remoteServer.urlFor("/"), {
@@ -255,6 +264,7 @@ nodeOnly(() => {
                     simple: false
                 });
                 expect(response.statusCode).to.equal(204);
+                expect(response.statusMessage).to.equal('muy bien');
             });
 
             it("should be able to rewrite a response's headers", async () => {

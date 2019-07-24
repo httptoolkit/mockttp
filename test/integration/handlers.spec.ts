@@ -142,18 +142,19 @@ describe("HTTP mock rule handling", function () {
     });
 
     it("should allow mocking body as json with callback", async () => {
-        await server.get("/mocked-endpoint").thenCallback((req) => {
-            return { status: 200, json: { myVar: "foo" } }
+        await server.get("/mocked-endpoint").thenCallback(() => {
+            return { statusCode: 201, statusMessage: 'all good', json: { myVar: "foo" } }
         });
 
         let response = await fetch(server.urlFor("/mocked-endpoint"));
 
-        expect(await response.status).to.equal(200);
+        expect(await response.status).to.equal(201);
+        expect(await response.statusText).to.equal('all good');
         expect(await response.json()).to.deep.equal({myVar: "foo"});
     });
 
     it("should return a 500 if a callback handler throws an exception", async () => {
-        await server.get("/mocked-endpoint").thenCallback((req) => {
+        await server.get("/mocked-endpoint").thenCallback(() => {
             throw new Error('Oh no!');
         });
 
