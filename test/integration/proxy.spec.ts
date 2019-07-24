@@ -146,6 +146,17 @@ nodeOnly(() => {
                 expect(response).to.equal("/endpoint");
             });
 
+            it("should be able to rewrite a request's URL to a different host", async () => {
+                await remoteServer.get('/').thenReply(200, 'my remote');
+
+                await server.get('http://example.com').thenPassThrough({
+                    beforeRequest: () => ({ url: remoteServer.url })
+                });
+
+                let response = await request.get('http://example.com');
+                expect(response).to.equal("my remote");
+            });
+
             it("should be able to rewrite a request's headers", async () => {
                 await remoteServer.get('/rewrite').thenCallback((req) => ({
                     status: 200,

@@ -10,7 +10,7 @@ import https = require('https');
 import express = require("express");
 import { encode as encodeBase64, decode as decodeBase64 } from 'base64-arraybuffer';
 import { Readable, Transform } from 'stream';
-import { stripIndent } from 'common-tags';
+import { stripIndent, oneLine } from 'common-tags';
 
 import {
     waitForCompletedRequest,
@@ -352,6 +352,36 @@ function getCallbackResultBody(
     }
 }
 
+// Helper to autocorrect the host header, but only if you didn't explicitly
+// override it yourself for some reason (e.g. testing bad behaviour).
+function getCorrectHost(
+    reqUrl: string,
+    originalHeaders: Headers,
+    replacementHeaders: Headers | undefined
+): string {
+    const correctHost = url.parse(reqUrl).host!;
+    const replacementHost = !!replacementHeaders ? replacementHeaders['host'] : undefined;
+
+    if (replacementHost !== undefined) {
+        if (replacementHost !== correctHost && replacementHost === originalHeaders['host']) {
+            // If you rewrite the host header wrongly, by explicitly setting it to the
+            // existing value, we accept it, but print a warning. This would be easy to
+            // do if you mutate the existing headers, for example, but not the host.
+            console.warn(oneLine`
+                Passthrough callback overrode the URL and the Host header
+                with mismatched values, which may be a mistake. The URL is
+                ${reqUrl} bytes, whilst the header was set to ${replacementHost}.
+            `);
+        }
+        // Whatever happens, if you explicitly set a value, we use it.
+        return replacementHost;
+    }
+
+    // If you didn't override the host at all, then we automatically ensure
+    // the correct header is set automatically.
+    return correctHost;
+}
+
 // Helper to handle content-length nicely for you when rewriting requests with callbacks
 function getCorrectContentLength(
     body: string | Buffer,
@@ -388,11 +418,11 @@ function getCorrectContentLength(
         lengthOverride === originalHeaders['content-length'] &&
         lengthOverride !== body.length.toString()
     ) {
-        console.warn(
-`Passthrough callback overrode the body and the content-length header \
-with mismatched values, which may be a mistake. The body contains \
-${body.length} bytes, whilst the header was set to ${lengthOverride}.`
-        );
+        console.warn(oneLine`
+            Passthrough callback overrode the body and the content-length header
+            with mismatched values, which may be a mistake. The body contains
+            ${body.length} bytes, whilst the header was set to ${lengthOverride}.
+        `);
     }
 
     return lengthOverride;
@@ -441,14 +471,14 @@ export class PassThroughHandler extends SerializableRequestHandler {
         const remotePort = port ? Number.parseInt(port) : socket.remotePort;
 
         if (isRequestLoop(remoteAddress, remotePort!)) {
-            throw new Error(stripIndent`
-                Passthrough loop detected. This probably means you're sending a request directly ${''
-                }to a passthrough endpoint, which is forwarding it to the target URL, which is a ${''
-                }passthrough endpoint, which is forwarding it to the target URL, which is a ${''
-                }passthrough endpoint...
-
-                You should either explicitly mock a response for this URL (${reqUrl}), or use ${''
-                }the server as a proxy, instead of making requests to it directly.
+            throw new Error(oneLine`
+                Passthrough loop detected. This probably means you're sending a request directly
+                to a passthrough endpoint, which is forwarding it to the target URL, which is a
+                passthrough endpoint, which is forwarding it to the target URL, which is a
+                passthrough endpoint...` +
+                '\n\n' + oneLine`
+                You should either explicitly mock a response for this URL (${reqUrl}), or use
+                the server as a proxy, instead of making requests to it directly.
             `);
         }
 
@@ -473,6 +503,8 @@ export class PassThroughHandler extends SerializableRequestHandler {
             reqUrl = modifiedReq.url || reqUrl;
             headers = modifiedReq.headers || headers;
 
+            headers['host'] = getCorrectHost(reqUrl, clientReq.headers, modifiedReq.headers);
+
             if (modifiedReq.json) {
                 headers['content-type'] = 'application/json';
                 reqBodyOverride = JSON.stringify(modifiedReq.json);
@@ -491,7 +523,6 @@ export class PassThroughHandler extends SerializableRequestHandler {
 
             // Reparse the new URL, if necessary
             if (modifiedReq.url) {
-                reqUrl = modifiedReq.url;
                 ({ protocol, hostname, port, path } = url.parse(reqUrl));
             }
         }
