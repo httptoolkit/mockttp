@@ -441,7 +441,7 @@ nodeOnly(() => {
             });
 
             it("forwards to the location specified in the rule builder", async () => {
-                await remoteServer.anyRequest().thenReply(200, "forwarded response");
+                await remoteServer.get('/').thenReply(200, "forwarded response");
                 await server.anyRequest().thenForwardTo(remoteServer.url);
 
                 let response = await request.get(server.urlFor("/"));
@@ -450,7 +450,7 @@ nodeOnly(() => {
             });
 
             it("uses the path portion from the original request url", async () => {
-                let remoteEndpointMock = await remoteServer.anyRequest().thenReply(200, "mocked data");
+                let remoteEndpointMock = await remoteServer.get('/get').thenReply(200, "mocked data");
                 await server.anyRequest().thenForwardTo(remoteServer.url);
 
                 await request.get(server.urlFor("/get"));
