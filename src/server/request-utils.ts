@@ -22,6 +22,10 @@ import {
 } from "../types";
 import { localAddresses } from '../util/socket-util';
 
+export const shouldKeepAlive = (req: OngoingRequest): boolean =>
+    req.httpVersion !== '1.0' &&
+    req.headers['connection'] !== 'close';
+
 export const setHeaders = (response: express.Response, headers: Headers) => {
     Object.keys(headers).forEach((header) => {
         let value = headers[header];

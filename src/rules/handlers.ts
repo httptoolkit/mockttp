@@ -16,7 +16,8 @@ import {
     waitForCompletedRequest,
     setHeaders,
     buildBodyReader,
-    streamToBuffer
+    streamToBuffer,
+    shouldKeepAlive
 } from '../server/request-utils';
 import { isLocalPortActive, localAddresses } from '../util/socket-util';
 import {
@@ -435,6 +436,15 @@ function getCorrectContentLength(
     return lengthOverride;
 }
 
+const KeepAliveAgents = {
+    'http:': new http.Agent({
+        keepAlive: true
+    }),
+    'https:': new https.Agent({
+        keepAlive: true
+    })
+};
+
 export class PassThroughHandler extends Serializable implements RequestHandler {
     readonly type = 'passthrough';
 
@@ -551,6 +561,11 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
             else family = 4;
         }
 
+        // Mirror the keep-alive-ness of the incoming request in our outgoing request
+        const agent = shouldKeepAlive(clientReq)
+            ? KeepAliveAgents[(protocol as 'http:' | 'https:') || 'http:']
+            : undefined;
+
         let outgoingPort: null | number = null;
         return new Promise<void>((resolve, reject) => {
             let serverReq = makeRequest({
@@ -561,6 +576,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 family,
                 path,
                 headers,
+                agent,
                 rejectUnauthorized: checkServerCertificate
             }, async (serverRes) => {
                 serverRes.once('error', reject);
