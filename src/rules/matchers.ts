@@ -6,23 +6,22 @@ import * as _ from 'lodash';
 import * as url from 'url';
 import { stripIndent } from 'common-tags';
 
-import { OngoingRequest, Method } from "../types";
-import { RequestMatcher } from "./mock-rule-types";
+import { OngoingRequest, Method, Explainable } from "../types";
 import { Serializable } from "../util/serialization";
 import normalizeUrl from "../util/normalize-url";
 import { MaybePromise } from '../util/type-utils';
 
-abstract class SerializableMatcher extends Serializable implements RequestMatcher {
-    abstract matches(request: OngoingRequest): MaybePromise<boolean>;
-    abstract explain(): string;
+export interface RequestMatcher extends Explainable, Serializable {
+    type: keyof typeof MatcherLookup;
+    matches(request: OngoingRequest): MaybePromise<boolean>;
 }
 
 function unescapeRegexp(input: string): string {
     return input.replace(/\\(.)/g, '$1');
 }
 
-export class WildcardMatcher extends SerializableMatcher {
-    readonly type: 'wildcard' = 'wildcard';
+export class WildcardMatcher extends Serializable implements RequestMatcher {
+    readonly type = 'wildcard';
 
     matches() {
         return true;
@@ -33,8 +32,8 @@ export class WildcardMatcher extends SerializableMatcher {
     }
 }
 
-export class MethodMatcher extends SerializableMatcher {
-    readonly type: 'method' = 'method';
+export class MethodMatcher extends Serializable implements RequestMatcher {
+    readonly type = 'method';
 
     constructor(
         public method: Method
@@ -51,8 +50,8 @@ export class MethodMatcher extends SerializableMatcher {
     }
 }
 
-export class SimplePathMatcher extends SerializableMatcher {
-    readonly type: 'simple-path' = 'simple-path';
+export class SimplePathMatcher extends Serializable implements RequestMatcher {
+    readonly type = 'simple-path';
 
     private normalizedUrl: string;
 
@@ -81,8 +80,8 @@ export class SimplePathMatcher extends SerializableMatcher {
     }
 }
 
-export class RegexPathMatcher extends SerializableMatcher {
-    readonly type: 'regex-path' = 'regex-path';
+export class RegexPathMatcher extends Serializable implements RequestMatcher {
+    readonly type = 'regex-path';
     readonly regexString: string;
 
     constructor(regex: RegExp) {
@@ -100,8 +99,8 @@ export class RegexPathMatcher extends SerializableMatcher {
     }
 }
 
-export class HeaderMatcher extends SerializableMatcher {
-    readonly type: 'header' = 'header';
+export class HeaderMatcher extends Serializable implements RequestMatcher {
+    readonly type = 'header';
 
     public headers: { [key: string]: string };
 
@@ -119,8 +118,8 @@ export class HeaderMatcher extends SerializableMatcher {
     }
 }
 
-export class QueryMatcher extends SerializableMatcher {
-    readonly type: 'query' = 'query';
+export class QueryMatcher extends Serializable implements RequestMatcher {
+    readonly type = 'query';
 
     public queryObject: { [key: string]: string | string[] };
 
@@ -143,8 +142,8 @@ export class QueryMatcher extends SerializableMatcher {
     }
 }
 
-export class FormDataMatcher extends SerializableMatcher {
-    readonly type: 'form-data' = 'form-data';
+export class FormDataMatcher extends Serializable implements RequestMatcher {
+    readonly type = 'form-data';
 
     constructor(
         public formData: { [key: string]: string }
@@ -165,8 +164,8 @@ export class FormDataMatcher extends SerializableMatcher {
     }
 }
 
-export class RawBodyMatcher extends SerializableMatcher {
-    readonly type: 'raw-body' = 'raw-body';
+export class RawBodyMatcher extends Serializable implements RequestMatcher {
+    readonly type = 'raw-body';
 
     constructor(
         public content: string
@@ -183,8 +182,8 @@ export class RawBodyMatcher extends SerializableMatcher {
     }
 }
 
-export class RegexBodyMatcher extends SerializableMatcher {
-    readonly type: 'raw-body-regexp' = 'raw-body-regexp';
+export class RegexBodyMatcher extends Serializable implements RequestMatcher {
+    readonly type = 'raw-body-regexp';
     readonly regexString: string;
 
     constructor(regex: RegExp) {
@@ -203,8 +202,8 @@ export class RegexBodyMatcher extends SerializableMatcher {
 
 }
 
-export class JsonBodyMatcher extends SerializableMatcher {
-    readonly type: 'json-body' = 'json-body';
+export class JsonBodyMatcher extends Serializable implements RequestMatcher {
+    readonly type = 'json-body';
 
     constructor(
         public body: {}
@@ -225,8 +224,8 @@ export class JsonBodyMatcher extends SerializableMatcher {
 
 }
 
-export class JsonBodyFlexibleMatcher extends SerializableMatcher {
-    readonly type: 'json-body-matching' = 'json-body-matching';
+export class JsonBodyFlexibleMatcher extends Serializable implements RequestMatcher {
+    readonly type = 'json-body-matching';
 
     constructor(
         public body: {}
@@ -247,8 +246,8 @@ export class JsonBodyFlexibleMatcher extends SerializableMatcher {
 
 }
 
-export class CookieMatcher extends SerializableMatcher {
-    readonly type: 'cookie' = 'cookie';
+export class CookieMatcher extends Serializable implements RequestMatcher {
+    readonly type = 'cookie';
 
     constructor(
         public cookie: { [key: string]: string },

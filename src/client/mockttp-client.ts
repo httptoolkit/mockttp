@@ -18,12 +18,9 @@ const {
 } = getFetchPonyfill();
 
 import { MockedEndpoint } from "../types";
-import {
-  MockRuleData
-} from "../rules/mock-rule-types";
 import { Mockttp, AbstractMockttp, MockttpOptions, PortRange } from "../mockttp";
 import { MockServerConfig } from "../standalone/mockttp-standalone";
-import { serializeRuleData } from "../rules/mock-rule";
+import { MockRuleData, serializeRuleData } from "../rules/mock-rule";
 import { MockedEndpointData, DEFAULT_STANDALONE_PORT } from "../types";
 import { MockedEndpointClient } from "./mocked-endpoint-client";
 import { buildBodyReader } from '../server/request-utils';

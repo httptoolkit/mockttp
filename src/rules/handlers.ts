@@ -33,9 +33,9 @@ import {
     OngoingRequest,
     CompletedRequest,
     OngoingResponse,
-    CompletedBody
+    CompletedBody,
+    Explainable
 } from "../types";
-import { RequestHandler } from "./mock-rule-types";
 
 export type SerializedBuffer = { type: 'Buffer', data: number[] };
 
@@ -62,13 +62,13 @@ function isSerializedBuffer(obj: any): obj is SerializedBuffer {
     return obj && obj.type === 'Buffer' && !!obj.data;
 }
 
-abstract class SerializableRequestHandler extends Serializable implements RequestHandler {
-    abstract handle(request: OngoingRequest, response: OngoingResponse): Promise<void>;
-    abstract explain(): string;
+export interface RequestHandler extends Explainable, Serializable {
+    type: keyof typeof HandlerLookup;
+    handle(request: OngoingRequest, response: OngoingResponse): Promise<void>;
 }
 
-export class SimpleHandler extends SerializableRequestHandler {
-    readonly type: 'simple' = 'simple';
+export class SimpleHandler extends Serializable implements RequestHandler {
+    readonly type = 'simple';
 
     constructor(
         public status: number,
@@ -107,8 +107,8 @@ interface CallbackRequestMessage {
     args: [CompletedRequest];
 }
 
-export class CallbackHandler extends SerializableRequestHandler {
-    readonly type: 'callback' = 'callback';
+export class CallbackHandler extends Serializable implements RequestHandler {
+    readonly type = 'callback';
 
     constructor(
         public callback: (request: CompletedRequest) => MaybePromise<CallbackResponseResult>
@@ -193,8 +193,8 @@ type StreamHandlerEventMessage =
     { type: 'arraybuffer', value: string } |
     { type: 'nil' };
 
-export class StreamHandler extends SerializableRequestHandler {
-    readonly type: 'stream' = 'stream';
+export class StreamHandler extends Serializable implements RequestHandler {
+    readonly type = 'stream';
 
     constructor(
         public status: number,
@@ -435,8 +435,8 @@ function getCorrectContentLength(
     return lengthOverride;
 }
 
-export class PassThroughHandler extends SerializableRequestHandler {
-    readonly type: 'passthrough' = 'passthrough';
+export class PassThroughHandler extends Serializable implements RequestHandler {
+    readonly type = 'passthrough';
 
     private forwardToLocation?: string;
     private ignoreHostCertificateErrors: string[] = [];
@@ -731,8 +731,8 @@ export class PassThroughHandler extends SerializableRequestHandler {
     }
 }
 
-export class CloseConnectionHandler extends SerializableRequestHandler {
-    readonly type: 'close-connection' = 'close-connection';
+export class CloseConnectionHandler extends Serializable implements RequestHandler {
+    readonly type = 'close-connection';
 
     explain() {
         return 'close the connection';
@@ -744,8 +744,8 @@ export class CloseConnectionHandler extends SerializableRequestHandler {
     }
 }
 
-export class TimeoutHandler extends SerializableRequestHandler {
-    readonly type: 'timeout' = 'timeout';
+export class TimeoutHandler extends Serializable implements RequestHandler {
+    readonly type = 'timeout';
 
     explain() {
         return 'timeout (never respond)';

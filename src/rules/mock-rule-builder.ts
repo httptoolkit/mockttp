@@ -9,15 +9,10 @@ import { Readable } from "stream";
 import { stripIndent } from "common-tags";
 
 import { Headers, CompletedRequest, Method, MockedEndpoint } from "../types";
+import { MockRuleData } from "./mock-rule";
 
 import {
-    MockRuleData,
-    RequestMatcher,
-    RequestHandler,
-    RuleCompletionChecker
-} from "./mock-rule-types";
-
-import {
+    RuleCompletionChecker,
     Always,
     NTimes,
     Thrice,
@@ -26,6 +21,7 @@ import {
 } from "./completion-checkers";
 
 import {
+    RequestMatcher,
     MethodMatcher,
     SimplePathMatcher,
     RegexPathMatcher,

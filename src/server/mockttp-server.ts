@@ -13,11 +13,10 @@ import now = require("performance-now");
 import _ = require("lodash");
 
 import { OngoingRequest, CompletedRequest, CompletedResponse, OngoingResponse, TlsRequest } from "../types";
-import { MockRuleData } from "../rules/mock-rule-types";
 import { CAOptions } from '../util/tls';
 import { DestroyableServer } from "../util/destroyable-server";
 import { Mockttp, AbstractMockttp, MockttpOptions, PortRange } from "../mockttp";
-import { MockRule } from "../rules/mock-rule";
+import { MockRule, MockRuleData } from "../rules/mock-rule";
 import { MockedEndpoint } from "./mocked-endpoint";
 import { createComboServer } from "./http-combo-server";
 import { filter } from "../util/promise";

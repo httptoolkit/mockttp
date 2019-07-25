@@ -2,17 +2,16 @@
  * @module MockRule
  */
 
-import { CompletedRequest } from '../types';
-import { RuleCompletionChecker } from './mock-rule-types';
 import { Serializable } from '../util/serialization';
 
-abstract class SerializableCompletionChecker extends Serializable implements RuleCompletionChecker {
-    abstract isComplete(seenRequestCount: number): boolean;
-    abstract explain(seenRequestCount: number): string;
+export interface RuleCompletionChecker extends Serializable {
+    type: keyof typeof CompletionCheckerLookup;
+    isComplete(seenRequestCount: number): boolean;
+    explain(seenRequestCount: number): string;
 }
 
-export class Always extends SerializableCompletionChecker {
-    readonly type: 'always' = 'always';
+export class Always extends Serializable implements RuleCompletionChecker {
+    readonly type = 'always';
 
     isComplete() {
         return false;
@@ -23,8 +22,8 @@ export class Always extends SerializableCompletionChecker {
     }
 }
 
-export class Once extends SerializableCompletionChecker {
-    readonly type: 'once' = 'once';
+export class Once extends Serializable implements RuleCompletionChecker {
+    readonly type = 'once';
 
     isComplete(seenRequestCount: number) {
         return seenRequestCount >= 1;
@@ -35,8 +34,8 @@ export class Once extends SerializableCompletionChecker {
     }
 }
 
-export class Twice extends SerializableCompletionChecker {
-    readonly type: 'twice' = 'twice';
+export class Twice extends Serializable implements RuleCompletionChecker {
+    readonly type = 'twice';
 
     isComplete(seenRequestCount: number) {
         return seenRequestCount >= 2;
@@ -47,8 +46,8 @@ export class Twice extends SerializableCompletionChecker {
     }
 }
 
-export class Thrice extends SerializableCompletionChecker {
-    readonly type: 'thrice' = 'thrice';
+export class Thrice extends Serializable implements RuleCompletionChecker {
+    readonly type = 'thrice';
 
     isComplete(seenRequestCount: number) {
         return seenRequestCount >= 3;
@@ -59,8 +58,8 @@ export class Thrice extends SerializableCompletionChecker {
     }
 }
 
-export class NTimes extends SerializableCompletionChecker {
-    readonly type: 'times' = 'times';
+export class NTimes extends Serializable implements RuleCompletionChecker {
+    readonly type = 'times';
 
     constructor(
         public count: number

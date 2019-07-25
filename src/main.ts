@@ -18,11 +18,8 @@ import * as handlers from './rules/handlers';
 import * as completionCheckers from './rules/completion-checkers';
 
 export {
-    MockRuleData,
-    RequestMatcher,
-    RequestHandler,
-    RuleCompletionChecker
-} from './rules/mock-rule-types';
+    MockRuleData
+} from './rules/mock-rule';
 export { matchers, handlers, completionCheckers };
 
 // Export TLS utilities:

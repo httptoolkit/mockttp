@@ -6,21 +6,14 @@ import * as _ from 'lodash';
 import uuid = require("uuid/v4");
 import { Duplex } from 'stream';
 
+import { OngoingRequest, CompletedRequest, OngoingResponse, Explainable } from "../types";
 import { deserialize, serialize,  Serialized } from '../util/serialization';
 import { waitForCompletedRequest } from '../server/request-utils';
+import { MaybePromise } from '../util/type-utils';
 
-import { OngoingRequest, CompletedRequest, OngoingResponse } from "../types";
-import {
-  MockRule as MockRuleInterface,
-  RuleCompletionChecker,
-  RequestHandler,
-  RequestMatcher,
-  MockRuleData
-} from "./mock-rule-types";
-
-import * as matching from "./matchers";
-import * as handling from "./handlers";
-import * as completion from "./completion-checkers";
+import * as matchers from "./matchers";
+import * as handlers from "./handlers";
+import * as completionCheckers from "./completion-checkers";
 
 function validateMockRuleData(data: MockRuleData): void {
     if (!data.matchers || data.matchers.length === 0) {
@@ -29,6 +22,23 @@ function validateMockRuleData(data: MockRuleData): void {
     if (!data.handler) {
         throw new Error('Cannot create a rule with no handler');
     }
+}
+
+// The internal representation of a mocked endpoint
+export interface MockRule extends Explainable {
+    id: string;
+    requests: Promise<CompletedRequest>[];
+
+    // We don't extend the main interfaces for these, because MockRules are not Serializable
+    matches(request: OngoingRequest): MaybePromise<boolean>;
+    handle(request: OngoingRequest, response: OngoingResponse, record: boolean): Promise<void>;
+    isComplete(): boolean | null;
+}
+
+export interface MockRuleData {
+    matchers: matchers.RequestMatcher[];
+    handler: handlers.RequestHandler;
+    completionChecker?: completionCheckers.RuleCompletionChecker;
 }
 
 export function serializeRuleData(data: MockRuleData, stream: Duplex): Serialized<MockRuleData> {
@@ -44,21 +54,21 @@ export function serializeRuleData(data: MockRuleData, stream: Duplex): Serialize
 export function deserializeRuleData(data: Serialized<MockRuleData>, stream: Duplex): MockRuleData {
     return {
         matchers: data.matchers.map((m) =>
-            deserialize(m, stream, matching.MatcherLookup)
+            deserialize(m, stream, matchers.MatcherLookup)
         ),
-        handler: deserialize(data.handler, stream, handling.HandlerLookup),
+        handler: deserialize(data.handler, stream, handlers.HandlerLookup),
         completionChecker: data.completionChecker && deserialize(
             data.completionChecker,
             stream,
-            completion.CompletionCheckerLookup
+            completionCheckers.CompletionCheckerLookup
         )
     };
 }
 
-export class MockRule implements MockRuleInterface {
-    private matchers: RequestMatcher[];
-    private handler: RequestHandler;
-    private completionChecker?: RuleCompletionChecker;
+export class MockRule implements MockRule {
+    private matchers: matchers.RequestMatcher[];
+    private handler: handlers.RequestHandler;
+    private completionChecker?: completionCheckers.RuleCompletionChecker;
 
     public id: string = uuid();
     public requests: Promise<CompletedRequest>[] = [];
@@ -73,7 +83,7 @@ export class MockRule implements MockRuleInterface {
     }
 
     matches(request: OngoingRequest) {
-        return matching.matchesAll(request, this.matchers);
+        return matchers.matchesAll(request, this.matchers);
     }
 
     handle(req: OngoingRequest, res: OngoingResponse, record: boolean): Promise<void> {
@@ -104,7 +114,7 @@ export class MockRule implements MockRuleInterface {
     }
 
     explain(): string {
-        let explanation = `Match requests ${matching.explainMatchers(this.matchers)}, ` +
+        let explanation = `Match requests ${matchers.explainMatchers(this.matchers)}, ` +
         `and then ${this.handler.explain()}`;
 
         if (this.completionChecker) {

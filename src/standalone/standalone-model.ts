@@ -16,9 +16,11 @@ import { PubSub } from "graphql-subscriptions";
 
 import MockttpServer from "../server/mockttp-server";
 import { MockedEndpoint, MockedEndpointData, CompletedRequest, CompletedResponse } from "../types";
-import { MockRuleData, RequestMatcher, RequestHandler, RuleCompletionChecker } from "../rules/mock-rule-types";
-import { deserializeRuleData } from "../rules/mock-rule";
 import { Serialized } from "../util/serialization";
+import { MockRuleData, deserializeRuleData } from "../rules/mock-rule";
+import { RequestMatcher } from "../rules/matchers";
+import { RequestHandler } from "../rules/handlers";
+import { RuleCompletionChecker } from "../rules/completion-checkers";
 
 const REQUEST_RECEIVED_TOPIC = 'request-received';
 const RESPONSE_COMPLETED_TOPIC = 'response-completed';

@@ -5,7 +5,7 @@ import { stripIndent } from "common-tags";
 
 import MockRuleBuilder from "./rules/mock-rule-builder";
 import { ProxyConfig, MockedEndpoint, Method, CompletedRequest, CompletedResponse, TlsRequest } from "./types";
-import { MockRuleData } from "./rules/mock-rule-types";
+import { MockRuleData } from "./rules/mock-rule";
 import { CAOptions } from './util/tls';
 
 export type PortRange = { startPort: number, endPort: number };
