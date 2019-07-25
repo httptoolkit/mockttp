@@ -50,7 +50,7 @@ nodeOnly(() => {
             it("should successfully mock requests with live callbacks", async () => {
                 let count = 0;
                 await client.get("/mocked-endpoint").thenCallback((req) => {
-                    return { status: 200, body: `calls: ${++count}` }
+                    return { statusCode: 200, body: `calls: ${++count}` }
                 });
 
                 const response1 = await request.get(client.urlFor("/mocked-endpoint"));
@@ -67,7 +67,7 @@ nodeOnly(() => {
 
                 it("should successfully rewrite requests with live callbacks", async () => {
                     targetServer.post('/different-endpoint').thenCallback((req) => ({
-                        status: 200,
+                        statusCode: 200,
                         body: `response, body: ${req.body.text}`,
                         headers: { 'my-header': 'real value' }
                     }));
@@ -79,7 +79,7 @@ nodeOnly(() => {
                             body: 'injected'
                         }),
                         beforeResponse: (res) => ({
-                            status: 201,
+                            statusCode: 201,
                             headers: Object.assign(res.headers, {
                                 'intercepted-response': 'true'
                             }),
