@@ -4,11 +4,9 @@ sourceMapSupport.install({ handleUncaughtExceptions: false });
 import getFetchPonyfill = require("fetch-ponyfill");
 
 import chai = require("chai");
-import sinonChai = require("sinon-chai");
 import chaiAsPromised = require("chai-as-promised");
 import chaiFetch = require("chai-fetch");
 
-chai.use(sinonChai);
 chai.use(chaiAsPromised);
 chai.use(chaiFetch);
 

@@ -8,7 +8,7 @@ const requestWithCookies = async (url: string, ...cookies: string[]) => {
         const cookieJar = request.jar();
 
         _.forEach(cookies, (cookieString) => {
-            const cookie = request.cookie(cookieString);
+            const cookie = request.cookie(cookieString)!;
             cookieJar.setCookie(cookie, url);
         });
 
