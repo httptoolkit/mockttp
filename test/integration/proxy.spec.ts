@@ -40,6 +40,18 @@ nodeOnly(() => {
                 expect(response).to.equal("mocked data");
             });
 
+            it("should mock proxied HTTP matching relative URLs", async () => {
+                await server.get("/endpoint").thenReply(200, "mocked data");
+                let response = await request.get("http://example.com/endpoint");
+                expect(response).to.equal("mocked data");
+            });
+
+            it("should mock proxied HTTP matching absolute protocol-less URLs", async () => {
+                await server.get("example.com/endpoint").thenReply(200, "mocked data");
+                let response = await request.get("http://example.com/endpoint");
+                expect(response).to.equal("mocked data");
+            });
+
             it("should be able to pass through requests", async () => {
                 await server.get("http://example.com/").thenPassThrough();
 
@@ -99,7 +111,7 @@ nodeOnly(() => {
 
                 let response = await request.get(remoteServer.urlFor('/get?a=b'));
 
-                expect(response).to.equal('/get?a=b');
+                expect(response).to.equal(remoteServer.urlFor('/get?a=b'));
             });
 
             it("should be able to verify requests passed through with a body", async () => {

@@ -103,7 +103,7 @@ describe("Mockttp", () => {
         // Inspect the mock to get the requests it received and assert on their details
         const requests = await endpointMock.getSeenRequests();
         expect(requests.length).to.equal(1);
-        expect(requests[0].url).to.equal("/mocked-endpoint");
+        expect(requests[0].url).to.equal(`http://localhost:${mockServer.port}/mocked-endpoint`);
     });
 
     it("lets you proxy requests made to any other hosts", async () => {

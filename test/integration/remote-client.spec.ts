@@ -131,7 +131,9 @@ nodeOnly(() => {
                 expect(seenRequests[0].protocol).to.equal('http');
                 expect(seenRequests[0].method).to.equal('GET');
                 expect(seenRequests[0].httpVersion).to.equal('1.1');
-                expect(seenRequests[0].url).to.equal('/mocked-endpoint');
+                expect(seenRequests[0].url).to.equal(
+                    client.urlFor("/mocked-endpoint")
+                );
             });
 
             it("should allow resetting the mock server configured responses", async () => {

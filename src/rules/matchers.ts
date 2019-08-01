@@ -8,8 +8,8 @@ import { stripIndent } from 'common-tags';
 
 import { OngoingRequest, Method, Explainable } from "../types";
 import { Serializable } from "../util/serialization";
-import normalizeUrl from "../util/normalize-url";
 import { MaybePromise } from '../util/type-utils';
+import { normalizeUrl } from '../util/normalize-url';
 
 export interface RequestMatcher extends Explainable, Serializable {
     type: keyof typeof MatcherLookup;
@@ -50,6 +50,18 @@ export class MethodMatcher extends Serializable implements RequestMatcher {
     }
 }
 
+function nthIndexOf(input: string, matcher: string, n: number) {
+    let index = -1;
+
+    while (n > 0) {
+        n = n - 1;
+        index = input.indexOf(matcher, index + 1);
+        if (index === -1) break;
+    }
+
+    return index;
+}
+
 export class SimplePathMatcher extends Serializable implements RequestMatcher {
     readonly type = 'simple-path';
 
@@ -72,7 +84,26 @@ export class SimplePathMatcher extends Serializable implements RequestMatcher {
     }
 
     matches(request: OngoingRequest) {
-        return request.normalizedUrl === this.normalizedUrl;
+        const reqUrl = normalizeUrl(request.url);
+
+        if (this.path.startsWith('/')) {
+            // Match the path only, for any host
+            const pathIndex = nthIndexOf(reqUrl, '/', 3);
+            const reqPath = pathIndex >= 0 ? reqUrl.slice(pathIndex) : '';
+            return reqPath === this.normalizedUrl;
+        } else if (this.path.startsWith('http://') || this.path.startsWith('https://')) {
+            // Full absolute URL: Match everything
+            return reqUrl === this.normalizedUrl;
+        } else {
+            // Absolute URL with no protocol
+            // Path specified no protocol, but normalized will have defaulted to http
+
+            const hostIndex = this.normalizedUrl.indexOf('://') + 3; // After protocol://
+            const urlWithoutProtocol = this.normalizedUrl.slice(hostIndex);
+            const normalizedWithCorrectProtocol = request.protocol + '://' + urlWithoutProtocol;
+
+            return reqUrl === normalizedWithCorrectProtocol;
+        }
     }
 
     explain() {
@@ -90,8 +121,13 @@ export class RegexPathMatcher extends Serializable implements RequestMatcher {
     }
 
     matches(request: OngoingRequest) {
-        let urlMatcher = new RegExp(this.regexString);
-        return urlMatcher.test(request.normalizedUrl);
+        const absoluteUrl = request.url;
+        const urlPath = request.url.slice(nthIndexOf(request.url, '/', 3));
+
+        // Test the matcher against both the path alone & the full URL
+        const urlMatcher = new RegExp(this.regexString);
+        return urlMatcher.test(absoluteUrl) ||
+            urlMatcher.test(urlPath);
     }
 
     explain() {

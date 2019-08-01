@@ -36,7 +36,7 @@ describe("Request subscriptions", () => {
             expect(seenRequest.method).to.equal('POST');
             expect(seenRequest.httpVersion).to.equal('1.1');
             expect(seenRequest.hostname).to.equal('localhost');
-            expect(seenRequest.url).to.equal('/mocked-endpoint');
+            expect(seenRequest.url).to.equal(server.urlFor("/mocked-endpoint"));
             expect(seenRequest.body.text).to.equal('body-text');
         });
 
@@ -75,7 +75,9 @@ describe("Request subscriptions", () => {
 
                 let seenRequest = await seenRequestPromise;
                 expect(seenRequest.method).to.equal('POST');
-                expect(seenRequest.url).to.equal('/mocked-endpoint');
+                expect(seenRequest.url).to.equal(
+                    `http://localhost:${client.port}/mocked-endpoint`
+                );
                 expect(seenRequest.body.text).to.equal('body-text');
             });
         });

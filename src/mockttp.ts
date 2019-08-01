@@ -84,51 +84,135 @@ export interface Mockttp {
     anyRequest(): MockRuleBuilder;
     /**
      * Get a builder for a mock rule that will match GET requests for the given path.
-     * 
+     *
      * The path can be either a string, or a regular expression to match against.
+     * Path matching always ignores query parameters. To match query parameters,
+     * use .withQuery({ a: 'b' })
+     *
+     * There are a few supported matching formats:
+     * - Relative string paths (`/abc`) will be compared only to the request's path,
+     *   independent of the host & protocol, ignoring query params.
+     * - Absolute string paths with no protocol (`localhost:8000/abc`) will be
+     *   compared to the URL independent of the protocol, ignoring query params.
+     * - Fully absolute string paths (`http://localhost:8000/abc`) will be compared
+     *   to entire URL, ignoring query params.
+     * - Regular expressions can match the absolute URL: `/^http:\/\/localhost:8000\/abc$/`
+     * - Regular expressions can also match the path: `/^\/abc/`
      */
     get(url: string | RegExp): MockRuleBuilder;
     /**
      * Get a builder for a mock rule that will match POST requests for the given path.
-     * 
+     *
      * The path can be either a string, or a regular expression to match against.
+     * Path matching always ignores query parameters. To match query parameters,
+     * use .withQuery({ a: 'b' })
+     *
+     * There are a few supported matching formats:
+     * - Relative string paths (`/abc`) will be compared only to the request's path,
+     *   independent of the host & protocol, ignoring query params.
+     * - Absolute string paths with no protocol (`localhost:8000/abc`) will be
+     *   compared to the URL independent of the protocol, ignoring query params.
+     * - Fully absolute string paths (`http://localhost:8000/abc`) will be compared
+     *   to entire URL, ignoring query params.
+     * - Regular expressions can match the absolute URL: `/^http:\/\/localhost:8000\/abc$/`
+     * - Regular expressions can also match the path: `/^\/abc/`
      */
     post(url: string | RegExp): MockRuleBuilder;
     /**
      * Get a builder for a mock rule that will match PUT requests for the given path.
-     * 
+     *
      * The path can be either a string, or a regular expression to match against.
+     * Path matching always ignores query parameters. To match query parameters,
+     * use .withQuery({ a: 'b' })
+     *
+     * There are a few supported matching formats:
+     * - Relative string paths (`/abc`) will be compared only to the request's path,
+     *   independent of the host & protocol, ignoring query params.
+     * - Absolute string paths with no protocol (`localhost:8000/abc`) will be
+     *   compared to the URL independent of the protocol, ignoring query params.
+     * - Fully absolute string paths (`http://localhost:8000/abc`) will be compared
+     *   to entire URL, ignoring query params.
+     * - Regular expressions can match the absolute URL: `/^http:\/\/localhost:8000\/abc$/`
+     * - Regular expressions can also match the path: `/^\/abc/`
      */
     put(url: string | RegExp): MockRuleBuilder;
     /**
      * Get a builder for a mock rule that will match DELETE requests for the given path.
-     * 
+     *
      * The path can be either a string, or a regular expression to match against.
+     * Path matching always ignores query parameters. To match query parameters,
+     * use .withQuery({ a: 'b' })
+     *
+     * There are a few supported matching formats:
+     * - Relative string paths (`/abc`) will be compared only to the request's path,
+     *   independent of the host & protocol, ignoring query params.
+     * - Absolute string paths with no protocol (`localhost:8000/abc`) will be
+     *   compared to the URL independent of the protocol, ignoring query params.
+     * - Fully absolute string paths (`http://localhost:8000/abc`) will be compared
+     *   to entire URL, ignoring query params.
+     * - Regular expressions can match the absolute URL: `/^http:\/\/localhost:8000\/abc$/`
+     * - Regular expressions can also match the path: `/^\/abc/`
      */
     delete(url: string | RegExp): MockRuleBuilder;
     /**
      * Get a builder for a mock rule that will match PATCH requests for the given path.
-     * 
+     *
      * The path can be either a string, or a regular expression to match against.
+     * Path matching always ignores query parameters. To match query parameters,
+     * use .withQuery({ a: 'b' })
+     *
+     * There are a few supported matching formats:
+     * - Relative string paths (`/abc`) will be compared only to the request's path,
+     *   independent of the host & protocol, ignoring query params.
+     * - Absolute string paths with no protocol (`localhost:8000/abc`) will be
+     *   compared to the URL independent of the protocol, ignoring query params.
+     * - Fully absolute string paths (`http://localhost:8000/abc`) will be compared
+     *   to entire URL, ignoring query params.
+     * - Regular expressions can match the absolute URL: `/^http:\/\/localhost:8000\/abc$/`
+     * - Regular expressions can also match the path: `/^\/abc/`
      */
     patch(url: string | RegExp): MockRuleBuilder;
     /**
      * Get a builder for a mock rule that will match HEAD requests for the given path.
-     * 
+     *
      * The path can be either a string, or a regular expression to match against.
+     * Path matching always ignores query parameters. To match query parameters,
+     * use .withQuery({ a: 'b' })
+     *
+     * There are a few supported matching formats:
+     * - Relative string paths (`/abc`) will be compared only to the request's path,
+     *   independent of the host & protocol, ignoring query params.
+     * - Absolute string paths with no protocol (`localhost:8000/abc`) will be
+     *   compared to the URL independent of the protocol, ignoring query params.
+     * - Fully absolute string paths (`http://localhost:8000/abc`) will be compared
+     *   to entire URL, ignoring query params.
+     * - Regular expressions can match the absolute URL: `/^http:\/\/localhost:8000\/abc$/`
+     * - Regular expressions can also match the path: `/^\/abc/`
      */
     head(url: string | RegExp): MockRuleBuilder;
     /**
      * Get a builder for a mock rule that will match OPTIONS requests for the given path.
-     * 
+     *
      * The path can be either a string, or a regular expression to match against.
-     * 
+     * Path matching always ignores query parameters. To match query parameters,
+     * use .withQuery({ a: 'b' })
+     *
+     * There are a few supported matching formats:
+     * - Relative string paths (`/abc`) will be compared only to the request's path,
+     *   independent of the host & protocol, ignoring query params.
+     * - Absolute string paths with no protocol (`localhost:8000/abc`) will be
+     *   compared to the URL independent of the protocol, ignoring query params.
+     * - Fully absolute string paths (`http://localhost:8000/abc`) will be compared
+     *   to entire URL, ignoring query params.
+     * - Regular expressions can match the absolute URL: `/^http:\/\/localhost:8000\/abc$/`
+     * - Regular expressions can also match the path: `/^\/abc/`
+     *
      * This can only be used if the `cors` option has been set to false.
-     * 
+     *
      * If cors is true (the default when using a remote client, e.g. in the browser),
      * then the mock server automatically handles OPTIONS requests to ensure requests
      * to the server are allowed by clients observing CORS rules.
-     * 
+     *
      * You can pass `{cors: false}` to `getLocal`/`getRemote` to disable this behaviour,
      * but if you're testing in a browser you will need to ensure you mock all OPTIONS
      * requests appropriately so that the browser allows your other requests to be sent.

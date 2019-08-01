@@ -20,10 +20,8 @@ import { MockRule, MockRuleData } from "../rules/mock-rule";
 import { MockedEndpoint } from "./mocked-endpoint";
 import { createComboServer } from "./http-combo-server";
 import { filter } from "../util/promise";
-import normalizeUrl from "../util/normalize-url";
 
 import {
-    isIndirectPathRequest,
     parseBody,
     waitForCompletedRequest,
     trackResponse,
@@ -69,12 +67,10 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
         this.app.use(parseBody);
         this.app.use((req, res, next) => {
-            // Relative URLs might be direct requests, or they might be transparently proxied
-            // (i.e. forcefully sent to us, they don't know a proxy is involved). If they appear
-            // to be the latter, we transform the URL into the absolute form.
-            if (isIndirectPathRequest(this.port, req)) {
-                req.url = new url.URL(req.url, `${req.protocol}://${req.headers['host']}`).toString();
-            }
+            // Make req.url always absolute, if it isn't already, using the host header.
+            // It might not be if this is a direct request, or if it's being transparently proxied.
+            // The 2nd argument is ignored if req.url is already absolute.
+            req.url = new url.URL(req.url, `${req.protocol}://${req.headers['host']}`).toString();
             next();
         });
         this.app.use(this.handleRequest.bind(this));
@@ -235,8 +231,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
         const request = <OngoingRequest>Object.assign(rawRequest, {
             id: id,
-            timingEvents,
-            normalizedUrl: normalizeUrl(rawRequest.url)
+            timingEvents
         });
         response.id = id;
 

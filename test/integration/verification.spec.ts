@@ -23,7 +23,7 @@ describe("HTTP request spying", function () {
 
             const seenRequests = await endpointMock.getSeenRequests();
             expect(seenRequests.length).to.equal(1);
-            expect(seenRequests[0].url).to.equal("/mocked-endpoint");
+            expect(seenRequests[0].url).to.equal(`http://localhost:${server.port}/mocked-endpoint`);
         });
 
         it("should let you spy on the bodies of requests that happened", async () => {

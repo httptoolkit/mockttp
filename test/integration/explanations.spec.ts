@@ -88,7 +88,9 @@ Match requests making POSTs for /endpointB, and then respond using provided call
 
     it("should explain received unmatched requests", async () => {
         await expect(fetch(server.urlFor("/endpoint")))
-        .to.have.responseText(/This request was: GET request to \/endpoint/);
+        .to.have.responseText(
+            /This request was: GET request to http:\/\/localhost:\d+\/endpoint/
+        );
     });
 
     it("should explain the headers of received unmatched requests", async () => {
@@ -96,7 +98,9 @@ Match requests making POSTs for /endpointB, and then respond using provided call
             headers: new Headers({
                 abc: '123'
             })
-        })).to.have.responseText(/This request was: GET request to \/endpoint with headers:\n{[.\s\S]+"abc": "123"[.\s\S]+}/);
+        })).to.have.responseText(
+            /This request was: GET request to http:\/\/localhost:\d+\/endpoint with headers:\n{[.\s\S]+"abc": "123"[.\s\S]+}/
+        );
     });
 
     it("should explain the body of received unmatched requests", async () => {
@@ -109,7 +113,9 @@ Match requests making POSTs for /endpointB, and then respond using provided call
               'Content-Type': 'application/x-www-form-urlencoded'
             }),
             body: form
-        })).to.have.responseText(/This request was: POST request to \/endpoint with body `a=123`/);
+        })).to.have.responseText(
+            /This request was: POST request to http:\/\/localhost:\d+\/endpoint with body `a=123`/
+        );
     });
 
     it("should provide suggestions for new GET rules you could use", async () => {
@@ -151,7 +157,7 @@ mockServer.post("/endpoint").withForm({"shouldMatch":"yes"}).thenReply(200, "you
 which is forwarding it to the target URL, which is a passthrough endpoint, which is forwarding it to the target \
 URL, which is a passthrough endpoint...
 
-You should either explicitly mock a response for this URL (/endpoint), or use the server as a proxy, \
-instead of making requests to it directly`);
+You should either explicitly mock a response for this URL (http://localhost:8000/endpoint), or use the server \
+as a proxy, instead of making requests to it directly`);
     });
 });

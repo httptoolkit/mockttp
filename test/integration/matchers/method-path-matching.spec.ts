@@ -47,8 +47,40 @@ responses by hand.`);
         });
     });
 
+    it("should match requests for a matching relative path", async () => {
+        await server.get('/').thenReply(200, 'Fake file');
+
+        let result = await fetch(server.urlFor('/'));
+
+        await expect(result).to.have.responseText('Fake file');
+    });
+
+    it("should match requests for a matching absolute url", async () => {
+        await server.get(`http://localhost:${server.port}/file.txt`).thenReply(200, 'Fake file');
+
+        let result = await fetch(server.urlFor('/file.txt'));
+
+        await expect(result).to.have.responseText('Fake file');
+    });
+
+    it("should match requests for a matching absolute protocol-independent url", async () => {
+        await server.get(`localhost:${server.port}/file.txt`).thenReply(200, 'Fake file');
+
+        let result = await fetch(server.urlFor('/file.txt'));
+
+        await expect(result).to.have.responseText('Fake file');
+    });
+
     it("should match requests for a matching regex path", async () => {
-        await server.get(/.*.txt/).thenReply(200, 'Fake file');
+        await server.get(/^\/matching-\w+.txt/).thenReply(200, 'Fake file');
+
+        let result = await fetch(server.urlFor('/matching-file.txt'));
+
+        await expect(result).to.have.responseText('Fake file');
+    });
+
+    it("should match requests for a matching regex URL", async () => {
+        await server.get(/localhost:\d+\/[\w\-]+.txt/).thenReply(200, 'Fake file');
 
         let result = await fetch(server.urlFor('/matching-file.txt'));
 

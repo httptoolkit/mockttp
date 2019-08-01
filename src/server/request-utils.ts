@@ -20,7 +20,6 @@ import {
     CompletedBody,
     TimingEvents
 } from "../types";
-import { localAddresses } from '../util/socket-util';
 
 export const shouldKeepAlive = (req: OngoingRequest): boolean =>
     req.httpVersion !== '1.0' &&
@@ -285,39 +284,4 @@ export async function waitForCompletedResponse(response: OngoingResponse): Promi
         headers: response.getHeaders(),
         body: body
     }).valueOf();
-}
-
-/**
- * Is the request a non-absolute URL (/abc) intended for a different host?
- *
- * This will happen for transparently proxied requests, where the client
- * is unaware that it's talking to a proxy. We can detect that it's
- * happening by checking if the Host header is us, or somebody else.
- *
- * This is a strong guess - false positives & negatives are still possible,
- * but very unlikely (and hard to avoid).
- */
-export function isIndirectPathRequest(serverPort: number, req: express.Request) {
-    // Path (relative) URL requests must always start with a slash.
-    // Clients must only send absolute URIs when explicitly talking to a proxy.
-    if (req.url[0] !== '/') return false;
-
-    // If they're talking to this machine, on this port, they're talking to us.
-    // Only false negative would be transparently proxing localhost traffic to a
-    // proxy on a different machine, on the same port. *Very* unlikely.
-    const validHosts = localAddresses.concat('localhost').map(addr => `${addr}:${serverPort}`);
-
-    if (
-        (serverPort === 80 && req.protocol === 'http') ||
-        (serverPort === 443 && req.protocol === 'https')
-    ) {
-        // On a default port, the port can be omitted entirely
-        validHosts.push(...localAddresses);
-    }
-
-    // If the Host header is one of our hostnames, it's a direct request.
-    // There can be false positives here if connections use unknown host names, but
-    // to avoid that we'd need to resolve the hostname itself, which might not be
-    // possible, and would be expensive.
-    return !validHosts.includes(req.headers['host']!.toLowerCase());
 }

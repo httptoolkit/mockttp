@@ -485,9 +485,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
         const socket: net.Socket = (<any> clientReq).socket;
         // If it's ipv4 masquerading as v6, strip back to ipv4
         const remoteAddress = socket.remoteAddress!.replace(/^::ffff:/, '');
-        const remotePort = port ? Number.parseInt(port) : socket.remotePort;
-
-        if (isRequestLoop(remoteAddress, remotePort!)) {
+        if (isRequestLoop(remoteAddress, socket.remotePort!)) {
             throw new Error(oneLine`
                 Passthrough loop detected. This probably means you're sending a request directly
                 to a passthrough endpoint, which is forwarding it to the target URL, which is a
