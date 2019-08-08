@@ -40,10 +40,12 @@ export async function isLocalPortActive(interfaceIp: '::1' | '127.0.0.1', port: 
     });
 }
 
-// This file imported in browsers as it's used in handlers,
-// but none of these methods are used. It is useful though to
-// guard sections that perform immediate actions:
-const isNode = typeof window === 'undefined';
+// This file imported in browsers etc as it's used in handlers, but none of these methods are used
+// directly. It is useful though to guard sections that immediately perform actions:
+declare const WorkerGlobalScope: Function | undefined;
+const isWorker = typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope;
+const isWeb = typeof Window !== 'undefined' && self instanceof Window;
+const isNode = !isWorker && !isWeb && typeof process === 'object' && process.version;
 
 export const isLocalIPv6Available = isNode
     ? _.some(os.networkInterfaces(),
