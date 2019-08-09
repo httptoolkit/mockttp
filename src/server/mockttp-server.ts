@@ -26,7 +26,7 @@ import {
     waitForCompletedRequest,
     trackResponse,
     waitForCompletedResponse
-} from "./request-utils";
+} from "../util/request-utils";
 import { WebSocketHandler } from "./websocket-handler";
 
 /**

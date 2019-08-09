@@ -4,7 +4,7 @@ import uuid = require('uuid/v4');
 
 import { MaybePromise, Replace, Omit } from './type-utils';
 import { CompletedBody, Headers } from '../types';
-import { buildBodyReader } from '../server/request-utils';
+import { buildBodyReader } from './request-utils';
 
 export function serialize<T extends Serializable>(
     obj: T,

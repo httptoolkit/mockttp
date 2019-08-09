@@ -7,12 +7,11 @@ import chai = require("chai");
 import chaiAsPromised = require("chai-as-promised");
 import chaiFetch = require("chai-fetch");
 
+import { isNode } from '../src/util/util';
+export { isNode };
+
 chai.use(chaiAsPromised);
 chai.use(chaiFetch);
-
-export function isNode() {
-    return typeof window === 'undefined';
-}
 
 function getGlobalFetch() {
     return {
@@ -23,7 +22,7 @@ function getGlobalFetch() {
     };
 }
 
-let fetchImplementation = isNode() ? getFetchPonyfill() : getGlobalFetch();
+let fetchImplementation = isNode ? getFetchPonyfill() : getGlobalFetch();
 
 export const fetch = fetchImplementation.fetch;
 
@@ -36,17 +35,17 @@ export { headersImplementation as Headers };
 export { requestImplementation as Request };
 export { responseImplementation as Response };
 
-export const URLSearchParams: typeof window.URLSearchParams = (isNode() || !window.URLSearchParams) ?
+export const URLSearchParams: typeof window.URLSearchParams = (isNode || !window.URLSearchParams) ?
     require('url').URLSearchParams : window.URLSearchParams;
 
 export const expect = chai.expect;
 
 export function browserOnly(body: Function) {
-    if (!isNode()) body();
+    if (!isNode) body();
 }
 
 export function nodeOnly(body: Function) {
-    if (isNode()) body();
+    if (isNode) body();
 }
 
 export function delay(t: number): Promise<void> {

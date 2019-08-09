@@ -7,6 +7,8 @@ import * as url from 'url';
 import { stripIndent } from 'common-tags';
 
 import { OngoingRequest, Method, Explainable } from "../types";
+import { nthIndexOf } from '../util/util';
+import { isAbsoluteUrl } from '../util/request-utils';
 import { Serializable } from "../util/serialization";
 import { MaybePromise } from '../util/type-utils';
 import { normalizeUrl } from '../util/normalize-url';
@@ -50,18 +52,6 @@ export class MethodMatcher extends Serializable implements RequestMatcher {
     }
 }
 
-function nthIndexOf(input: string, matcher: string, n: number) {
-    let index = -1;
-
-    while (n > 0) {
-        n = n - 1;
-        index = input.indexOf(matcher, index + 1);
-        if (index === -1) break;
-    }
-
-    return index;
-}
-
 export class SimplePathMatcher extends Serializable implements RequestMatcher {
     readonly type = 'simple-path';
 
@@ -91,8 +81,8 @@ export class SimplePathMatcher extends Serializable implements RequestMatcher {
             const pathIndex = nthIndexOf(reqUrl, '/', 3);
             const reqPath = pathIndex >= 0 ? reqUrl.slice(pathIndex) : '';
             return reqPath === this.normalizedUrl;
-        } else if (this.path.startsWith('http://') || this.path.startsWith('https://')) {
-            // Full absolute URL: Match everything
+        } else if (isAbsoluteUrl(this.path)) {
+            // Full absolute URL: match everything
             return reqUrl === this.normalizedUrl;
         } else {
             // Absolute URL with no protocol

@@ -2,6 +2,8 @@ import * as _ from 'lodash';
 import * as os from 'os';
 import * as net from 'net';
 
+import { isNode } from './util';
+
 // Grab the first byte of a stream
 // Note that this isn't a great abstraction: you might
 // need to manually resume() the stream afterwards.
@@ -42,11 +44,6 @@ export async function isLocalPortActive(interfaceIp: '::1' | '127.0.0.1', port: 
 
 // This file imported in browsers etc as it's used in handlers, but none of these methods are used
 // directly. It is useful though to guard sections that immediately perform actions:
-declare const WorkerGlobalScope: Function | undefined;
-const isWorker = typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope;
-const isWeb = typeof Window !== 'undefined' && self instanceof Window;
-const isNode = !isWorker && !isWeb && typeof process === 'object' && process.version;
-
 export const isLocalIPv6Available = isNode
     ? _.some(os.networkInterfaces(),
         (addresses) => _.some(addresses, a => a.address === '::1')

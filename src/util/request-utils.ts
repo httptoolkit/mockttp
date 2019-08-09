@@ -21,6 +21,12 @@ import {
     TimingEvents
 } from "../types";
 
+// Is this URL fully qualified?
+// Note that this supports only HTTP - no websockets or anything else.
+export const isAbsoluteUrl = (url: string) =>
+    url.startsWith('http://') ||
+    url.startsWith('https://');
+
 export const shouldKeepAlive = (req: OngoingRequest): boolean =>
     req.httpVersion !== '1.0' &&
     req.headers['connection'] !== 'close';

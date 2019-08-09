@@ -4,7 +4,7 @@ import { expect, fetch, isNode } from "../../test-utils";
 import * as request from 'request-promise-native';
 
 const requestWithCookies = async (url: string, ...cookies: string[]) => {
-    if (isNode()) {
+    if (isNode) {
         const cookieJar = request.jar();
 
         _.forEach(cookies, (cookieString) => {
@@ -33,7 +33,7 @@ describe("Cookie matching", function () {
     afterEach(() => server.stop());
 
     beforeEach(() => {
-        const headers: _.Dictionary<string> = isNode() ? {} : {
+        const headers: _.Dictionary<string> = isNode ? {} : {
             // Can't just use 'A-C-A-O: *', because fetch will refuse to expose
             // the response unless the server specificly confirms the origin.
             'Access-Control-Allow-Origin': window.origin,

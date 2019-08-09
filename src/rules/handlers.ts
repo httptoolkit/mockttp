@@ -18,7 +18,7 @@ import {
     buildBodyReader,
     streamToBuffer,
     shouldKeepAlive
-} from '../server/request-utils';
+} from '../util/request-utils';
 import { isLocalPortActive, localAddresses } from '../util/socket-util';
 import {
     Serializable,

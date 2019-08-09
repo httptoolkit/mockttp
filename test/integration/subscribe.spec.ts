@@ -7,7 +7,7 @@ import { expect, fetch, nodeOnly, getDeferred, delay, isNode } from "../test-uti
 import { CompletedResponse, TimingEvents, TlsRequest } from "../../dist/types";
 
 function makeAbortableRequest(server: Mockttp, path: string) {
-    if (isNode()) {
+    if (isNode) {
         let req = http.get({ hostname: 'localhost', port: server.port, path });
         req.on('error', () => {});
         req.end();
@@ -324,7 +324,7 @@ describe("TLS error subscriptions", () => {
             fetch(badServer.urlFor("/"))
         ).to.be.rejectedWith(
             // Broken by bad TS handling of overrides, see https://github.com/DefinitelyTyped/DefinitelyTyped/pull/37292
-            (isNode() ? /certificate/ : 'Failed to fetch') as any
+            (isNode ? /certificate/ : 'Failed to fetch') as any
         );
 
         const tlsError = await seenTlsErrorPromise;

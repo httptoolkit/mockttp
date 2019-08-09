@@ -23,7 +23,7 @@ import { MockServerConfig } from "../standalone/mockttp-standalone";
 import { MockRuleData, serializeRuleData } from "../rules/mock-rule";
 import { MockedEndpointData, DEFAULT_STANDALONE_PORT } from "../types";
 import { MockedEndpointClient } from "./mocked-endpoint-client";
-import { buildBodyReader } from '../server/request-utils';
+import { buildBodyReader } from '../util/request-utils';
 import { RequireProps } from '../util/type-utils';
 import { introspectionQuery } from './introspection-query';
 

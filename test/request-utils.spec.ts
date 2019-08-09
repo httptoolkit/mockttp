@@ -1,7 +1,7 @@
 import * as zlib from 'zlib';
 
 import { expect } from './test-utils';
-import { buildBodyReader } from '../src/server/request-utils';
+import { buildBodyReader } from '../src/util/request-utils';
 
 describe("buildBodyReader", () => {
     describe(".text", () => {

@@ -8,7 +8,7 @@ import { Duplex } from 'stream';
 
 import { OngoingRequest, CompletedRequest, OngoingResponse, Explainable } from "../types";
 import { deserialize, serialize,  Serialized } from '../util/serialization';
-import { waitForCompletedRequest } from '../server/request-utils';
+import { waitForCompletedRequest } from '../util/request-utils';
 import { MaybePromise } from '../util/type-utils';
 
 import * as matchers from "./matchers";
