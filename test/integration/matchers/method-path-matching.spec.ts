@@ -140,7 +140,8 @@ responses by hand.`);
             () => server.get('/?a=b').thenReply(200, 'Mocked response')
         ).to.throw(stripIndent`
             Tried to match a path that contained a query (?a=b). ${''
-            }To match query parameters, add .withQuery({"a":"b"}) instead.
+            }To match query parameters, use .withQuery({"a":"b"}) instead${''
+            }, or .withExactQuery('?a=b') to match this exact query string.
         `);
     });
 

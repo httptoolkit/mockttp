@@ -33,7 +33,8 @@ import {
     CookieMatcher,
     RegexBodyMatcher,
     JsonBodyMatcher,
-    JsonBodyFlexibleMatcher
+    JsonBodyFlexibleMatcher,
+    ExactQueryMatcher
 } from "./matchers";
 
 import {
@@ -105,7 +106,7 @@ export default class MockRuleBuilder {
     private completionChecker?: RuleCompletionChecker;
 
     /**
-     * Match only requests that include the given headers
+     * Match only requests that include the given headers.
      */
     withHeaders(headers: { [key: string]: string }) {
         this.matchers.push(new HeaderMatcher(headers));
@@ -113,7 +114,7 @@ export default class MockRuleBuilder {
     }
 
     /**
-     * Match only requests that include the given query parameters
+     * Match only requests that include the given query parameters.
      */
     withQuery(query: { [key: string]: string | number | (string | number)[] }): MockRuleBuilder {
         this.matchers.push(new QueryMatcher(query));
@@ -121,7 +122,16 @@ export default class MockRuleBuilder {
     }
 
     /**
-     * Match only requests whose bodies include the given form data
+     * Match only requests that include the exact query string provided.
+     * The query string must start with a ? or be entirely empty.
+     */
+    withExactQuery(query: string): MockRuleBuilder {
+        this.matchers.push(new ExactQueryMatcher(query));
+        return this;
+    }
+
+    /**
+     * Match only requests whose bodies include the given form data.
      */
     withForm(formData: { [key: string]: string }): MockRuleBuilder {
         this.matchers.push(new FormDataMatcher(formData));

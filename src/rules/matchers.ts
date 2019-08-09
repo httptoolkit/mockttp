@@ -4,7 +4,7 @@
 
 import * as _ from 'lodash';
 import * as url from 'url';
-import { stripIndent } from 'common-tags';
+import { oneLine } from 'common-tags';
 
 import { OngoingRequest, Method, Explainable } from "../types";
 import { nthIndexOf } from '../util/util';
@@ -64,9 +64,10 @@ export class SimplePathMatcher extends Serializable implements RequestMatcher {
 
         let { search, query } = url.parse(this.path, true);
         if (search) {
-            throw new Error(stripIndent`
-                Tried to match a path that contained a query (${search}). ${''
-                }To match query parameters, add .withQuery(${JSON.stringify(query)}) instead.
+            throw new Error(oneLine`
+                Tried to match a path that contained a query (${search}).
+                To match query parameters, use .withQuery(${JSON.stringify(query)}) instead,
+                or .withExactQuery('${search}') to match this exact query string.
             `);
         }
 
@@ -143,6 +144,31 @@ export class HeaderMatcher extends Serializable implements RequestMatcher {
 
     explain() {
         return `with headers including ${JSON.stringify(this.headers)}`;
+    }
+}
+
+export class ExactQueryMatcher extends Serializable implements RequestMatcher {
+    readonly type = 'exact-query-string';
+
+    constructor(
+        public query: string
+    ) {
+        super();
+
+        if (query !== '' && query[0] !== '?') {
+            throw new Error('Exact query matches must start with ?, or be empty');
+        }
+    }
+
+    matches(request: OngoingRequest) {
+        const { search } = url.parse(request.url);
+        return this.query === search || (!search && !this.query);
+    }
+
+    explain() {
+        return this.query
+            ? `with a query exactly matching \`${this.query}\``
+            : 'with no query string';
     }
 }
 
@@ -309,6 +335,7 @@ export const MatcherLookup = {
     'regex-path': RegexPathMatcher,
     'header': HeaderMatcher,
     'query': QueryMatcher,
+    'exact-query-string': ExactQueryMatcher,
     'form-data': FormDataMatcher,
     'raw-body': RawBodyMatcher,
     'raw-body-regexp': RegexBodyMatcher,
