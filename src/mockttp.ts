@@ -87,7 +87,7 @@ export interface Mockttp {
      *
      * The path can be either a string, or a regular expression to match against.
      * Path matching always ignores query parameters. To match query parameters,
-     * use .withQuery({ a: 'b' })
+     * use .withQuery({ a: 'b' }) or withExactQuery('?a=b').
      *
      * There are a few supported matching formats:
      * - Relative string paths (`/abc`) will be compared only to the request's path,
@@ -105,7 +105,7 @@ export interface Mockttp {
      *
      * The path can be either a string, or a regular expression to match against.
      * Path matching always ignores query parameters. To match query parameters,
-     * use .withQuery({ a: 'b' })
+     * use .withQuery({ a: 'b' }) or withExactQuery('?a=b').
      *
      * There are a few supported matching formats:
      * - Relative string paths (`/abc`) will be compared only to the request's path,
@@ -123,7 +123,7 @@ export interface Mockttp {
      *
      * The path can be either a string, or a regular expression to match against.
      * Path matching always ignores query parameters. To match query parameters,
-     * use .withQuery({ a: 'b' })
+     * use .withQuery({ a: 'b' }) or withExactQuery('?a=b').
      *
      * There are a few supported matching formats:
      * - Relative string paths (`/abc`) will be compared only to the request's path,
@@ -141,7 +141,7 @@ export interface Mockttp {
      *
      * The path can be either a string, or a regular expression to match against.
      * Path matching always ignores query parameters. To match query parameters,
-     * use .withQuery({ a: 'b' })
+     * use .withQuery({ a: 'b' }) or withExactQuery('?a=b').
      *
      * There are a few supported matching formats:
      * - Relative string paths (`/abc`) will be compared only to the request's path,
@@ -159,7 +159,7 @@ export interface Mockttp {
      *
      * The path can be either a string, or a regular expression to match against.
      * Path matching always ignores query parameters. To match query parameters,
-     * use .withQuery({ a: 'b' })
+     * use .withQuery({ a: 'b' }) or withExactQuery('?a=b').
      *
      * There are a few supported matching formats:
      * - Relative string paths (`/abc`) will be compared only to the request's path,
@@ -177,7 +177,7 @@ export interface Mockttp {
      *
      * The path can be either a string, or a regular expression to match against.
      * Path matching always ignores query parameters. To match query parameters,
-     * use .withQuery({ a: 'b' })
+     * use .withQuery({ a: 'b' }) or withExactQuery('?a=b').
      *
      * There are a few supported matching formats:
      * - Relative string paths (`/abc`) will be compared only to the request's path,
@@ -195,7 +195,7 @@ export interface Mockttp {
      *
      * The path can be either a string, or a regular expression to match against.
      * Path matching always ignores query parameters. To match query parameters,
-     * use .withQuery({ a: 'b' })
+     * use .withQuery({ a: 'b' }) or withExactQuery('?a=b').
      *
      * There are a few supported matching formats:
      * - Relative string paths (`/abc`) will be compared only to the request's path,
