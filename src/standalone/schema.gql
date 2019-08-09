@@ -42,7 +42,7 @@ type Request {
     method: String!
     url: String!
     path: String!
-    hostname: String!
+    hostname: String
 
     headers: Json!
     body: Buffer!

@@ -1,12 +1,14 @@
 import * as sourceMapSupport from 'source-map-support'
 sourceMapSupport.install({ handleUncaughtExceptions: false });
 
+import * as net from 'net';
 import getFetchPonyfill = require("fetch-ponyfill");
 
 import chai = require("chai");
 import chaiAsPromised = require("chai-as-promised");
 import chaiFetch = require("chai-fetch");
 
+import { Mockttp } from "..";
 import { isNode } from '../src/util/util';
 export { isNode };
 
@@ -67,4 +69,20 @@ export function getDeferred<T>(): Deferred<T> {
     result.reject = rejectCallback!;
 
     return result;
+}
+
+export async function sendRawRequest(server: Mockttp, requestContent: string): Promise<string> {
+    const client = new net.Socket();
+    await new Promise((resolve) => client.connect(server.port, '127.0.0.1', resolve));
+
+    const dataPromise = new Promise<string>((resolve) => {
+        client.on('data', function(data) {
+            resolve(data.toString());
+            client.destroy();
+        });
+    });
+
+    // Note the (invalid) lack of trailing slash:
+    client.write(requestContent);
+    return dataPromise;
 }

@@ -43,7 +43,11 @@ export interface Request {
     method: string;
     url: string;
     path: string;
-    hostname: string;
+
+    // Exists only if a host header is sent. A strong candidate for deprecation
+    // in future, since it's not clear that this comes from headers not the URL, and
+    // either way it duplicates existing data.
+    hostname?: string;
 
     headers: RequestHeaders;
 }

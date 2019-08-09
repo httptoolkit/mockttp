@@ -25,7 +25,8 @@ import {
     parseBody,
     waitForCompletedRequest,
     trackResponse,
-    waitForCompletedResponse
+    waitForCompletedResponse,
+    isAbsoluteUrl
 } from "../util/request-utils";
 import { WebSocketHandler } from "./websocket-handler";
 
@@ -70,7 +71,9 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
             // Make req.url always absolute, if it isn't already, using the host header.
             // It might not be if this is a direct request, or if it's being transparently proxied.
             // The 2nd argument is ignored if req.url is already absolute.
-            req.url = new url.URL(req.url, `${req.protocol}://${req.headers['host']}`).toString();
+            if (!isAbsoluteUrl(req.url)) {
+                req.url = new url.URL(req.url, `${req.protocol}://${req.headers['host']}`).toString();
+            }
             next();
         });
         this.app.use(this.handleRequest.bind(this));

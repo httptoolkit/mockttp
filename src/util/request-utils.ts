@@ -211,19 +211,20 @@ export async function waitForCompletedRequest(request: OngoingRequest): Promise<
     const body = await waitForBody(request.body, request.headers);
     const bodyReceivedTimestamp = request.timingEvents.bodyReceivedTimestamp || now();
 
-    return _(request).pick([
-        'id',
-        'protocol',
-        'httpVersion',
-        'method',
-        'url',
-        'path',
-        'hostname',
-        'headers'
-    ]).assign({
+    return {
+        ..._.pick(request, [
+            'id',
+            'protocol',
+            'httpVersion',
+            'method',
+            'url',
+            'path',
+            'hostname',
+            'headers'
+        ]),
         body: body,
         timingEvents: Object.assign(request.timingEvents, { bodyReceivedTimestamp })
-    }).valueOf();
+    };
 }
 
 export function trackResponse(response: express.Response, timingEvents: TimingEvents): OngoingResponse {

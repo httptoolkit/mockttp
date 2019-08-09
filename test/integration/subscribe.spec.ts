@@ -3,7 +3,7 @@ import HttpProxyAgent = require('https-proxy-agent');
 import * as zlib from 'zlib';
 
 import { getLocal, getStandalone, getRemote, CompletedRequest, Mockttp } from "../..";
-import { expect, fetch, nodeOnly, getDeferred, delay, isNode } from "../test-utils";
+import { expect, fetch, nodeOnly, getDeferred, delay, isNode, sendRawRequest } from "../test-utils";
 import { CompletedResponse, TimingEvents, TlsRequest } from "../../dist/types";
 
 function makeAbortableRequest(server: Mockttp, path: string) {
@@ -35,7 +35,6 @@ describe("Request subscriptions", () => {
             let seenRequest = await seenRequestPromise;
             expect(seenRequest.method).to.equal('POST');
             expect(seenRequest.httpVersion).to.equal('1.1');
-            expect(seenRequest.hostname).to.equal('localhost');
             expect(seenRequest.url).to.equal(server.urlFor("/mocked-endpoint"));
             expect(seenRequest.body.text).to.equal('body-text');
         });
@@ -53,6 +52,18 @@ describe("Request subscriptions", () => {
             expect(timingEvents.startTime).not.to.equal(timingEvents.startTimestamp);
 
             expect(timingEvents.abortedTimestamp).to.equal(undefined);
+        });
+
+        nodeOnly(() => {
+            it("should report unnormalized URLs", async () => {
+                let seenRequestPromise = getDeferred<CompletedRequest>();
+                await server.on('request', (r) => seenRequestPromise.resolve(r));
+
+                sendRawRequest(server, 'GET http://example.com HTTP/1.1\n\n');
+
+                let seenRequest = await seenRequestPromise;
+                expect(seenRequest.url).to.equal('http://example.com');
+            });
         });
     });
 
