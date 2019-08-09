@@ -70,18 +70,20 @@ export class SimplePathMatcher extends Serializable implements RequestMatcher {
             `);
         }
 
+        // Exists only for backward compat:
         this.normalizedUrl = normalizeUrl(this.path);
     }
 
     matches(request: OngoingRequest) {
+        const expectedUrl = normalizeUrl(this.path);
         const reqUrl = normalizeUrl(request.url);
 
-        if (this.path.startsWith('/')) {
+        if (expectedUrl.startsWith('/')) {
             // Match the path only, for any host
             const pathIndex = nthIndexOf(reqUrl, '/', 3);
             const reqPath = pathIndex >= 0 ? reqUrl.slice(pathIndex) : '';
             return reqPath === this.normalizedUrl;
-        } else if (isAbsoluteUrl(this.path)) {
+        } else if (isAbsoluteUrl(expectedUrl)) {
             // Full absolute URL: match everything
             return reqUrl === this.normalizedUrl;
         } else {
@@ -111,8 +113,8 @@ export class RegexPathMatcher extends Serializable implements RequestMatcher {
     }
 
     matches(request: OngoingRequest) {
-        const absoluteUrl = request.url;
-        const urlPath = request.url.slice(nthIndexOf(request.url, '/', 3));
+        const absoluteUrl = normalizeUrl(request.url);
+        const urlPath = absoluteUrl.slice(nthIndexOf(absoluteUrl, '/', 3));
 
         // Test the matcher against both the path alone & the full URL
         const urlMatcher = new RegExp(this.regexString);

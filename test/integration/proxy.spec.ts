@@ -3,7 +3,7 @@ import http = require('http');
 import portfinder = require('portfinder');
 import { getLocal, Mockttp } from "../..";
 import request = require("request-promise-native");
-import { expect, nodeOnly, getDeferred, Deferred } from "../test-utils";
+import { expect, nodeOnly, getDeferred, Deferred, sendRawRequest } from "../test-utils";
 import { generateCACertificate } from "../../src/util/tls";
 import { isLocalIPv6Available } from "../../src/util/socket-util";
 
@@ -50,6 +50,14 @@ nodeOnly(() => {
                 await server.get("example.com/endpoint").thenReply(200, "mocked data");
                 let response = await request.get("http://example.com/endpoint");
                 expect(response).to.equal("mocked data");
+            });
+
+            it("should mock proxied HTTP matching badly formatted URLs with empty paths", async () => {
+                await server.get('/').thenReply(200, 'Mock response');
+
+                const response = await sendRawRequest(server, 'GET http://example.com HTTP/1.1\n\n');
+                expect(response).to.include('HTTP/1.1 200 OK');
+                expect(response).to.include('Mock response');
             });
 
             it("should be able to pass through requests", async () => {

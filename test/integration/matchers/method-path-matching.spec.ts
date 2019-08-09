@@ -1,6 +1,7 @@
+import { stripIndent } from "common-tags";
+
 import { getLocal } from "../../..";
 import { expect, fetch, browserOnly } from "../../test-utils";
-import { stripIndent } from "common-tags";
 
 describe("Method & path request matching", function () {
     let server = getLocal();
@@ -55,6 +56,13 @@ responses by hand.`);
         await expect(result).to.have.responseText('Fake file');
     });
 
+    it("should refuse to create a matcher for requests for an empty path", async () => {
+        await expect(
+            // Wrap, so that both sync/async errors become rejections
+            Promise.resolve().then(() => server.get('').thenReply(200, 'Fake file'))
+        ).to.be.rejectedWith('Invalid URL');
+    });
+
     it("should match requests for a matching absolute url", async () => {
         await server.get(`http://localhost:${server.port}/file.txt`).thenReply(200, 'Fake file');
 
@@ -71,7 +79,15 @@ responses by hand.`);
         await expect(result).to.have.responseText('Fake file');
     });
 
-    it("should match requests for a matching regex path", async () => {
+    it("should match requests for a matching absolute URL regardless of a missing trailing slash", async () => {
+        await server.get(`http://localhost:${server.port}`).thenReply(200, 'Root response');
+
+        let result = await fetch(server.urlFor('/'));
+
+        await expect(result).to.have.responseText('Root response');
+    });
+
+    it("should regex match requests for a matching path", async () => {
         await server.get(/^\/matching-\w+.txt/).thenReply(200, 'Fake file');
 
         let result = await fetch(server.urlFor('/matching-file.txt'));
@@ -79,7 +95,15 @@ responses by hand.`);
         await expect(result).to.have.responseText('Fake file');
     });
 
-    it("should match requests for a matching regex URL", async () => {
+    it("should regex match requests for a URL with trailing slashes included", async () => {
+        await server.get(/localhost:\d+\/$/).thenReply(200, 'Root response');
+
+        let result = await fetch(server.urlFor('/'));
+
+        await expect(result).to.have.responseText('Root response');
+    });
+
+    it("should regex match requests for a matching full URL", async () => {
         await server.get(/localhost:\d+\/[\w\-]+.txt/).thenReply(200, 'Fake file');
 
         let result = await fetch(server.urlFor('/matching-file.txt'));
