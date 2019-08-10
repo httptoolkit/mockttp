@@ -459,6 +459,18 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
     constructor(options: PassThroughHandlerOptions = {}, forwardToLocation?: string) {
         super();
 
+        // If a location is provided, and it's not a bare hostname, it must be parseable
+        if (forwardToLocation && forwardToLocation.includes('/')) {
+            const { protocol, hostname, port, path } = url.parse(forwardToLocation);
+            if (path && path.trim() !== "/") {
+                const suggestion = url.format({ protocol, hostname, port }) ||
+                    forwardToLocation.slice(0, forwardToLocation.indexOf('/'));
+                throw new Error(stripIndent`
+                    URLs passed to thenForwardTo cannot include a path, but "${forwardToLocation}" does. ${''
+                    }Did you mean ${suggestion}?
+                `);
+            }
+        }
         this.forwardToLocation = forwardToLocation;
         this.ignoreHostCertificateErrors = options.ignoreHostCertificateErrors || [];
 
@@ -478,10 +490,16 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
         let { protocol, hostname, port, path } = url.parse(reqUrl);
 
         if (this.forwardToLocation) {
-            // Forward to location overrides the host only, not the path
-            ({ protocol, hostname, port } = url.parse(this.forwardToLocation));
+            if (!this.forwardToLocation.includes('/')) {
+                // We're forwarding to a bare hostname
+                [hostname, port] = this.forwardToLocation.split(':');
+            } else {
+                // We're forwarding to a fully specified URL; override the host etc, but never the path.
+                ({ protocol, hostname, port } = url.parse(this.forwardToLocation));
+            }
             headers['host'] = hostname + (port ? `:${port}` : '');
         }
+
 
         // Check if this request is a request loop:
         const socket: net.Socket = (<any> clientReq).socket;

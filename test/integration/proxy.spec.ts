@@ -490,9 +490,9 @@ nodeOnly(() => {
                 expect(response).to.equal('forwarded response');
             });
 
-            it("forwards to the location even if the port is implicit", async () => {
+            it("forwards to the location even if the port & protocol is implicit", async () => {
                 await remoteServer.get('/').thenReply(200, "forwarded response");
-                await server.anyRequest().thenForwardTo('http://example.com');
+                await server.anyRequest().thenForwardTo('example.com');
 
                 let response = await request.get(server.urlFor("/"));
 

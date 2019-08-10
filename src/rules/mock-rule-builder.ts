@@ -429,6 +429,11 @@ export default class MockRuleBuilder {
      * specified must not include a path. Otherwise, an error is thrown.
      * The path portion of the original request url is used instead.
      *
+     * The url may optionally contain a protocol. If it does, it will override
+     * the protocol (and potentially the port, if unspecified) of the request.
+     * If no protocol is specified, the protocol (and potentially the port)
+     * of the original request URL will be used instead.
+     *
      * This method also takes options to configure how the request is passed
      * through. The only option currently supported is ignoreHostCertificateErrors,
      * a list of hostnames for which server certificate errors should
@@ -443,15 +448,6 @@ export default class MockRuleBuilder {
      * can be used to assert on the requests matched by this rule.
      */
     async thenForwardTo(forwardToLocation: string, options?: PassThroughHandlerOptions): Promise<MockedEndpoint> {
-        const { protocol, hostname, port, path } = url.parse(forwardToLocation);
-        if (path && path.trim() !== "/") {
-            const suggestion = url.format({ protocol, hostname, port });
-            throw new Error(stripIndent`
-                URLs passed to thenForwardTo cannot include a path, but "${forwardToLocation}" does. ${''
-                }Did you mean ${suggestion}?
-            `);
-        }
-
         const rule: MockRuleData = {
             matchers: this.matchers,
             completionChecker: this.completionChecker,
