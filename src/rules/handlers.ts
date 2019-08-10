@@ -450,11 +450,11 @@ const KeepAliveAgents = {
 export class PassThroughHandler extends Serializable implements RequestHandler {
     readonly type = 'passthrough';
 
-    private forwardToLocation?: string;
-    private ignoreHostCertificateErrors: string[] = [];
+    public readonly forwardToLocation?: string;
+    public readonly ignoreHostCertificateErrors: string[] = [];
 
-    private beforeRequest?: (req: CompletedRequest) => MaybePromise<CallbackRequestResult>;
-    private beforeResponse?: (res: PassThroughResponse) => MaybePromise<CallbackResponseResult>;
+    public readonly beforeRequest?: (req: CompletedRequest) => MaybePromise<CallbackRequestResult>;
+    public readonly beforeResponse?: (res: PassThroughResponse) => MaybePromise<CallbackResponseResult>;
 
     constructor(options: PassThroughHandlerOptions = {}, forwardToLocation?: string) {
         super();
