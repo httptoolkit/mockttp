@@ -12,7 +12,7 @@ describe("Mockttp rule building", function () {
     it("should allow manually adding a single rule", async () => {
         await server.addRules({
             matchers: [new matchers.SimplePathMatcher('/endpoint')],
-            handler: new handlers.SimpleHandler(200, 'mock response'),
+            handler: new handlers.SimpleHandler(200, '', 'mock response'),
         });
 
         let response = await fetch(server.urlFor('/endpoint'));
@@ -24,11 +24,11 @@ describe("Mockttp rule building", function () {
     it("should allow repeatedly adding rules", async () => {
         await server.addRules({
             matchers: [new matchers.SimplePathMatcher('/endpoint')],
-            handler: new handlers.SimpleHandler(200, 'first mock response'),
+            handler: new handlers.SimpleHandler(200, '', 'first mock response'),
         });
         await server.addRules({
             matchers: [new matchers.SimplePathMatcher('/endpoint')],
-            handler: new handlers.SimpleHandler(200, 'second mock response'),
+            handler: new handlers.SimpleHandler(200, '', 'second mock response'),
         });
 
         let firstResponse = await fetch(server.urlFor('/endpoint'));
@@ -43,11 +43,11 @@ describe("Mockttp rule building", function () {
     it("should allow completely replacing rules", async () => {
         await server.addRules({
             matchers: [new matchers.SimplePathMatcher('/endpoint')],
-            handler: new handlers.SimpleHandler(200, 'original mock response')
+            handler: new handlers.SimpleHandler(200, '',  'original mock response')
         });
         await server.setRules({
             matchers: [new matchers.SimplePathMatcher('/endpoint')],
-            handler: new handlers.SimpleHandler(200, 'replacement mock response')
+            handler: new handlers.SimpleHandler(200, '', 'replacement mock response')
         });
 
         let firstResponse = await fetch(server.urlFor('/endpoint'));

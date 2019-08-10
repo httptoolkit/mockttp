@@ -73,6 +73,7 @@ export class SimpleHandler extends Serializable implements RequestHandler {
 
     constructor(
         public status: number,
+        public statusMessage?: string,
         public data?: string | Buffer | SerializedBuffer,
         public headers?: Headers
     ) {
@@ -81,6 +82,7 @@ export class SimpleHandler extends Serializable implements RequestHandler {
 
     explain() {
         return `respond with status ${this.status}` +
+            (this.statusMessage ? ` (${this.statusMessage})`: "") +
             (this.headers ? `, headers ${JSON.stringify(this.headers)}` : "") +
             (this.data ? ` and body "${this.data}"` : "");
     }
@@ -89,7 +91,7 @@ export class SimpleHandler extends Serializable implements RequestHandler {
         if (this.headers) {
             setHeaders(response, this.headers);
         }
-        response.writeHead(this.status);
+        response.writeHead(this.status, this.statusMessage);
 
         if (isSerializedBuffer(this.data)) {
             this.data = new Buffer(<any> this.data);

@@ -4,7 +4,7 @@
 
 import url = require("url");
 import { OutgoingHttpHeaders } from "http";
-import { merge, isString } from "lodash";
+import { merge, isString, isBuffer } from "lodash";
 import { Readable } from "stream";
 import { stripIndent } from "common-tags";
 
@@ -231,8 +231,12 @@ export default class MockRuleBuilder {
     }
 
     /**
-     * Reply to matched with with given status and (optionally) body
-     * and headers.
+     * Reply to matched with with given status code and (optionally) status message,
+     * body and headers.
+     *
+     * If one string argument is provided, it's used as the body. If two are
+     * provided (even if one is empty), then 1st is the status message, and
+     * the 2nd the body.
      *
      * Calling this method registers the rule with the server, so it
      * starts to handle requests.
@@ -242,11 +246,28 @@ export default class MockRuleBuilder {
      * before sending requests to be matched. The mocked endpoint
      * can be used to assert on the requests matched by this rule.
      */
-    thenReply(status: number, data?: string | Buffer, headers?: Headers): Promise<MockedEndpoint> {
+    thenReply(status: number, data?: string | Buffer, headers?: Headers): Promise<MockedEndpoint>;
+    thenReply(status: number, statusMessage: string, data: string | Buffer, headers?: Headers): Promise<MockedEndpoint>
+    thenReply(
+        status: number,
+        dataOrMessage?: string | Buffer,
+        dataOrHeaders?: string | Buffer | Headers,
+        headers?: Headers
+    ): Promise<MockedEndpoint> {
+        let data: string | Buffer | undefined;
+        let statusMessage: string | undefined;
+        if (isBuffer(dataOrHeaders) || isString(dataOrHeaders)) {
+            data = dataOrHeaders as (Buffer | string);
+            statusMessage = dataOrMessage as string;
+        } else {
+            data = dataOrMessage as string | Buffer | undefined;
+            headers = dataOrHeaders as Headers | undefined;
+        }
+
         const rule: MockRuleData = {
             matchers: this.matchers,
             completionChecker: this.completionChecker,
-            handler: new SimpleHandler(status, data, headers)
+            handler: new SimpleHandler(status, statusMessage, data, headers)
         };
 
         return this.addRule(rule);
@@ -274,7 +295,7 @@ export default class MockRuleBuilder {
         const rule: MockRuleData = {
             matchers: this.matchers,
             completionChecker: this.completionChecker,
-            handler: new SimpleHandler(status, JSON.stringify(data), defaultHeaders)
+            handler: new SimpleHandler(status, undefined, JSON.stringify(data), defaultHeaders)
         };
 
         return this.addRule(rule);
