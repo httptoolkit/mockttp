@@ -480,7 +480,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
         if (this.forwardToLocation) {
             // Forward to location overrides the host only, not the path
             ({ protocol, hostname, port } = url.parse(this.forwardToLocation));
-            headers['host'] = `${hostname}:${port}`;
+            headers['host'] = hostname + (port ? `:${port}` : '');
         }
 
         // Check if this request is a request loop:

@@ -481,13 +481,22 @@ nodeOnly(() => {
                 expect(remoteServer.port).to.not.equal(server.port);
             });
 
-            it("forwards to the location specified in the rule builder", async () => {
+            it("forwards to the location specified", async () => {
                 await remoteServer.get('/').thenReply(200, "forwarded response");
                 await server.anyRequest().thenForwardTo(remoteServer.url);
 
                 let response = await request.get(server.urlFor("/"));
 
                 expect(response).to.equal('forwarded response');
+            });
+
+            it("forwards to the location even if the port is implicit", async () => {
+                await remoteServer.get('/').thenReply(200, "forwarded response");
+                await server.anyRequest().thenForwardTo('http://example.com');
+
+                let response = await request.get(server.urlFor("/"));
+
+                expect(response).to.include('Example Domain');
             });
 
             it("uses the path portion from the original request url", async () => {
