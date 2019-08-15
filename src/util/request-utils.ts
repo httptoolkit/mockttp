@@ -20,12 +20,28 @@ import {
     CompletedBody,
     TimingEvents
 } from "../types";
+import { nthIndexOf } from '../util/util';
 
 // Is this URL fully qualified?
 // Note that this supports only HTTP - no websockets or anything else.
 export const isAbsoluteUrl = (url: string) =>
     url.startsWith('http://') ||
     url.startsWith('https://');
+
+export const getProtocolFromAbsoluteUrl = (url: string): 'http' | 'https' | undefined => {
+    if (url.startsWith('https')) return 'https';
+    else if (url.startsWith('http')) return 'http';
+    else return undefined;
+};
+
+export const getPathFromAbsoluteUrl = (url: string) => {
+    const pathIndex = nthIndexOf(url, '/', 3);
+    if (pathIndex !== -1) {
+        return url.slice(pathIndex);
+    } else {
+        return '';
+    }
+}
 
 export const shouldKeepAlive = (req: OngoingRequest): boolean =>
     req.httpVersion !== '1.0' &&

@@ -406,6 +406,17 @@ nodeOnly(() => {
                     expect(response).to.equal("mocked data");
                 });
 
+                it("should mock proxied traffic ignoring the protocol", async () => {
+                    await server.get("example.com/endpoint").thenReply(200, "mocked data");
+
+                    expect(
+                        await request.get("https://example.com/endpoint")
+                    ).to.equal("mocked data");
+                    expect(
+                        await request.get("http://example.com/endpoint")
+                    ).to.equal("mocked data");
+                });
+
                 it("should mock proxied HTTPS with a specific port", async () => {
                     await server.get("https://example.com:1234/endpoint").thenReply(200, "mocked data");
 

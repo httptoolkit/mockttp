@@ -27,5 +27,13 @@ describe("An HTTPS server", () => {
             await server.get('/').thenReply(200, "Super secure response");
             return expect(fetch(server.url.replace('https', 'http'))).to.have.responseText("Super secure response");
         });
+
+        it("matches HTTPS requests against protocol-less URL matchers", async () => {
+            await server.get(`localhost:${server.port}/file.txt`).thenReply(200, 'Fake file');
+
+            let result = await fetch(server.urlFor('/file.txt'));
+
+            await expect(result).to.have.responseText('Fake file');
+        });
     });
 });
