@@ -726,6 +726,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
         return {
             type: this.type,
             forwardToLocation: this.forwardToLocation,
+            ignoreHostCertificateErrors: this.ignoreHostCertificateErrors,
             hasBeforeRequestCallback: !!this.beforeRequest,
             hasBeforeResponseCallback: !!this.beforeResponse
         };
