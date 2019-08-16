@@ -2,34 +2,94 @@
  * @module Internal
  */
 
+import * as url from 'url';
 import * as _ from 'lodash';
 import * as normalize from "normalize-url";
 
 import { nthIndexOf } from './util';
-import { isAbsoluteUrl } from './request-utils';
+import { isAbsoluteUrl, isAbsoluteProtocollessUrl } from './request-utils';
 
-/** Normalizes URLs to the form used when matching them. This:
- *   - Normalize empty paths (example.com) to a single slash (example.com/)
- *   - Removes all query parameters
- *   - ...probably some other things?
+// Preserved so we can correctly normalize serialized data, for backward compat
+// with legacy servers.
+export const legacyNormalizeUrl =
+    _.memoize(
+        (url: string): string =>
+            normalize(url, {
+                stripWWW: false,
+                removeTrailingSlash: false,
+                removeQueryParameters: [/.*/],
+            })
+    );
+
+/**
+ * Normalizes URLs to the form used when matching them.
+ *
+ * This accepts URLs in all three formats: relative, absolute, and protocolless-absolute,
+ * and returns them in the same format but normalized.
  */
 export const normalizeUrl =
     _.memoize(
-        (url: string): string => {
-            let normalized = normalize(url, {
-                stripWWW: false,
-                removeTrailingSlash: false, // Affects non-empty paths only
-                removeQueryParameters: [/.*/],
-            });
+        (urlInput: string): string => {
+            let parsedUrl: url.UrlWithStringQuery | undefined;
 
-            // If the URL represents an empty path (absolute or relative), add a trailing slash
-            if (isAbsoluteUrl(normalized)) {
-                const pathIndex = nthIndexOf(normalized, '/', 3);
-                if (pathIndex === -1) normalized += '/';
-            } else if (normalized === '') {
-                normalized = '/';
+            try {
+                // Strip the query and anything following it
+                const queryIndex = urlInput.indexOf('?');
+                if (queryIndex !== -1) {
+                    urlInput = urlInput.slice(0, queryIndex);
+                }
+
+                if (isAbsoluteProtocollessUrl(urlInput)) {
+                    // Funky hack to let us parse URLs without any protocol.
+                    // This is stripped off at the end of the function
+                    parsedUrl = url.parse('protocolless://' + urlInput);
+                } else {
+                    parsedUrl = url.parse(urlInput);
+                }
+
+                // Trim out lots of the bits we don't like:
+                delete parsedUrl.host;
+                delete parsedUrl.query;
+                delete parsedUrl.search;
+                delete parsedUrl.hash;
+
+                if (parsedUrl.pathname) {
+                    parsedUrl.pathname = parsedUrl.pathname.replace(
+                        /\%[A-Fa-z0-9]{2}/g,
+                        (encoded) => encoded.toUpperCase()
+                    ).replace(
+                        /[^\u0000-\u007F]+/g,
+                        (unicodeChar) => encodeURIComponent(unicodeChar)
+                    );
+                }
+
+                if (parsedUrl.hostname && parsedUrl.hostname.endsWith('.')) {
+                    parsedUrl.hostname = parsedUrl.hostname.slice(0, -1);
+                }
+
+                if (
+                    (parsedUrl.protocol === 'https:' && parsedUrl.port === '443') ||
+                    (parsedUrl.protocol === 'http:' && parsedUrl.port === '80')
+                ) {
+                    delete parsedUrl.port;
+                }
+            } catch (e) {
+                console.log(`Failed to normalize URL ${urlInput}`);
+                console.log(e);
+
+                if (!parsedUrl) return urlInput; // Totally unparseble: use as-is
+                // If we've successfully parsed it, we format what we managed
+                // and leave it at that:
             }
 
-            return normalized;
+            let normalizedUrl = url.format(parsedUrl);
+
+            // If the URL came in with no protocol, it should leave with
+            // no protocol (protocol added temporarily above to allow parsing)
+            if (normalizedUrl.startsWith('protocolless://')) {
+                normalizedUrl = normalizedUrl.slice('protocolless://'.length);
+            }
+
+            return normalizedUrl;
         }
     );

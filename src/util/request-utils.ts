@@ -25,14 +25,18 @@ import { nthIndexOf } from '../util/util';
 // Is this URL fully qualified?
 // Note that this supports only HTTP - no websockets or anything else.
 export const isAbsoluteUrl = (url: string) =>
-    url.startsWith('http://') ||
-    url.startsWith('https://');
+    url.toLowerCase().startsWith('http://') ||
+    url.toLowerCase().startsWith('https://');
 
-export const getProtocolFromAbsoluteUrl = (url: string): 'http' | 'https' | undefined => {
-    if (url.startsWith('https')) return 'https';
-    else if (url.startsWith('http')) return 'http';
-    else return undefined;
-};
+export const isRelativeUrl = (url: string) =>
+    url.startsWith('/');
+
+export const isAbsoluteProtocollessUrl = (url: string) =>
+    !isAbsoluteUrl(url) && !isRelativeUrl(url);
+
+export const getUrlWithoutProtocol = (url: string): string => {
+    return url.split('://', 2).slice(-1).join('');
+}
 
 export const getPathFromAbsoluteUrl = (url: string) => {
     const pathIndex = nthIndexOf(url, '/', 3);

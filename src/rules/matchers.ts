@@ -7,10 +7,15 @@ import * as url from 'url';
 import { oneLine } from 'common-tags';
 
 import { OngoingRequest, Method, Explainable } from "../types";
-import { isAbsoluteUrl, getPathFromAbsoluteUrl, getProtocolFromAbsoluteUrl } from '../util/request-utils';
+import {
+    isAbsoluteUrl,
+    getPathFromAbsoluteUrl,
+    isRelativeUrl,
+    getUrlWithoutProtocol
+} from '../util/request-utils';
 import { Serializable, ClientServerChannel } from "../util/serialization";
 import { MaybePromise } from '../util/type-utils';
-import { normalizeUrl } from '../util/normalize-url';
+import { normalizeUrl, legacyNormalizeUrl } from '../util/normalize-url';
 
 export interface RequestMatcher extends Explainable, Serializable {
     type: keyof typeof MatcherLookup;
@@ -59,6 +64,8 @@ export class SimplePathMatcher extends Serializable implements RequestMatcher {
     ) {
         super();
 
+        if (!this.path) throw new Error('Invalid URL: URL to match must not be empty');
+
         let { search, query } = url.parse(this.path, true);
         if (search) {
             throw new Error(oneLine`
@@ -75,21 +82,17 @@ export class SimplePathMatcher extends Serializable implements RequestMatcher {
         const expectedUrl = normalizeUrl(this.path);
         const reqUrl = normalizeUrl(request.url);
 
-        if (expectedUrl.startsWith('/')) {
+        // reqUrl is always absolute, expectedUrl can be absolute, relative or protocolless-absolute
+
+        if (isRelativeUrl(expectedUrl)) {
             // Match the path only, for any host
             return getPathFromAbsoluteUrl(reqUrl) === expectedUrl;
-        } else if (isAbsoluteUrl(this.path)) {
+        } else if (isAbsoluteUrl(expectedUrl)) {
             // Full absolute URL: match everything
             return reqUrl === expectedUrl;
         } else {
             // Absolute URL with no protocol
-            const reqUrlProtocol = getProtocolFromAbsoluteUrl(reqUrl);
-
-            // Path specified no protocol, so normalized will have defaulted to http://
-            const urlWithoutProtocol = expectedUrl.slice('http://'.length);
-            const normalizedWithCorrectProtocol = reqUrlProtocol + '://' + urlWithoutProtocol;
-
-            return reqUrl === normalizedWithCorrectProtocol;
+            return getUrlWithoutProtocol(reqUrl) === expectedUrl;
         }
     }
 
@@ -100,7 +103,7 @@ export class SimplePathMatcher extends Serializable implements RequestMatcher {
     serialize(channel: ClientServerChannel) {
         return Object.assign(super.serialize(channel), {
             // For backward compat, will used by older (<0.17) servers
-            normalizedUrl: normalizeUrl(this.path)
+            normalizedUrl: legacyNormalizeUrl(this.path)
         });
     }
 }
