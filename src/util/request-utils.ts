@@ -18,7 +18,8 @@ import {
     CompletedResponse,
     ParsedBody,
     CompletedBody,
-    TimingEvents
+    TimingEvents,
+    InitiatedRequest
 } from "../types";
 import { nthIndexOf } from '../util/util';
 
@@ -227,12 +228,9 @@ export const parseBody = (
     next();
 };
 
-export async function waitForCompletedRequest(request: OngoingRequest): Promise<CompletedRequest> {
-    const body = await waitForBody(request.body, request.headers);
-    const bodyReceivedTimestamp = request.timingEvents.bodyReceivedTimestamp || now();
-
+export function buildInitiatedRequest(request: OngoingRequest): InitiatedRequest {
     return {
-        ..._.pick(request, [
+        ..._.pick(request,
             'id',
             'protocol',
             'httpVersion',
@@ -241,7 +239,26 @@ export async function waitForCompletedRequest(request: OngoingRequest): Promise<
             'path',
             'hostname',
             'headers'
-        ]),
+        ),
+        timingEvents: _.clone(request.timingEvents)
+    };
+}
+
+export async function waitForCompletedRequest(request: OngoingRequest): Promise<CompletedRequest> {
+    const body = await waitForBody(request.body, request.headers);
+    const bodyReceivedTimestamp = request.timingEvents.bodyReceivedTimestamp || now();
+
+    return {
+        ..._.pick(request,
+            'id',
+            'protocol',
+            'httpVersion',
+            'method',
+            'url',
+            'path',
+            'hostname',
+            'headers'
+        ),
         body: body,
         timingEvents: Object.assign(request.timingEvents, { bodyReceivedTimestamp })
     };

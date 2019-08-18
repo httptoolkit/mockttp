@@ -22,6 +22,7 @@ import { RequestMatcher } from "../rules/matchers";
 import { RequestHandler } from "../rules/handlers";
 import { RuleCompletionChecker } from "../rules/completion-checkers";
 
+const REQUEST_INITIATED_TOPIC = 'request-initiated';
 const REQUEST_RECEIVED_TOPIC = 'request-received';
 const RESPONSE_COMPLETED_TOPIC = 'response-completed';
 const REQUEST_ABORTED_TOPIC = 'request-aborted';
@@ -135,6 +136,12 @@ const ScalarResolvers = {
 export function buildStandaloneModel(mockServer: MockttpServer, stream: Duplex): IResolvers {
     const pubsub = new PubSub();
 
+    mockServer.on('request-initiated', (request) => {
+        pubsub.publish(REQUEST_INITIATED_TOPIC, {
+            requestInitiated: request
+        })
+    });
+
     mockServer.on('request', (request) => {
         pubsub.publish(REQUEST_RECEIVED_TOPIC, {
             requestReceived: request
@@ -198,6 +205,9 @@ export function buildStandaloneModel(mockServer: MockttpServer, stream: Duplex):
         },
 
         Subscription: {
+            requestInitiated: {
+                subscribe: () => pubsub.asyncIterator(REQUEST_INITIATED_TOPIC)
+            },
             requestReceived: {
                 subscribe: () => pubsub.asyncIterator(REQUEST_RECEIVED_TOPIC)
             },

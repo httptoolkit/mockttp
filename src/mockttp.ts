@@ -4,7 +4,15 @@
 import { stripIndent } from "common-tags";
 
 import MockRuleBuilder from "./rules/mock-rule-builder";
-import { ProxyConfig, MockedEndpoint, Method, CompletedRequest, CompletedResponse, TlsRequest } from "./types";
+import {
+    ProxyConfig,
+    MockedEndpoint,
+    Method,
+    CompletedRequest,
+    CompletedResponse,
+    TlsRequest,
+    InitiatedRequest
+} from "./types";
 import { MockRuleData } from "./rules/mock-rule";
 import { CAOptions } from './util/tls';
 
@@ -220,7 +228,20 @@ export interface Mockttp {
     options(url: string | RegExp): MockRuleBuilder;
 
     /**
-     * Subscribe to hear about request details as they're received.
+     * Subscribe to hear about request details as soon as the initial request details
+     * (method, path & headers) are received, without waiting for the body.
+     *
+     * This is only useful in some niche use cases, such as logging all requests seen
+     * by the server independently of the rules defined.
+     *
+     * The callback will be called asynchronously from request handling. This function
+     * returns a promise, and the callback is not guaranteed to be registered until
+     * the promise is resolved.
+     */
+    on(event: 'request-initiated', callback: (req: InitiatedRequest) => void): Promise<void>;
+
+    /**
+     * Subscribe to hear about request details once the request is fully received.
      *
      * This is only useful in some niche use cases, such as logging all requests seen
      * by the server independently of the rules defined.

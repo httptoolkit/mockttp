@@ -50,9 +50,10 @@ export class GraphQLError extends RequestError {
     }
 }
 
-type SubscribableEvent = 'request' | 'response' | 'abort' | 'tlsClientError';
+type SubscribableEvent = 'request-initiated' | 'request' | 'response' | 'abort' | 'tlsClientError';
 
 const SUBSCRIBABLE_EVENTS: SubscribableEvent[] = [
+    'request-initiated',
     'request',
     'response',
     'abort',
@@ -273,29 +274,45 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
     }
 
     public on(event: SubscribableEvent, callback: (data: any) => void): Promise<void> {
-        // Ignore unknown events
-        if (!_.includes(SUBSCRIBABLE_EVENTS, event)) return Promise.resolve();
-        // Ignore TLS error events, if not supported by the server
-        if (
-            event === 'tlsClientError' &&
-            !this.typeHasField('Subscription', 'failedTlsRequest')
-        ) return Promise.resolve();
-
-        const standaloneStreamServer = this.mockServerOptions.standaloneServerUrl.replace(/^http/, 'ws');
-        const url = `${standaloneStreamServer}/server/${this.port}/subscription`;
-        const client = new SubscriptionClient(url, { }, WebSocket);
-
         const queryResultName = {
+            'request-initiated': 'requestInitiated',
             request: 'requestReceived',
             response: 'responseCompleted',
             abort: 'requestAborted',
             tlsClientError: 'failedTlsRequest'
         }[event];
 
+        // Ignore events unknown to either us or the server
+        if (
+            !queryResultName ||
+            !this.typeHasField('Subscription', queryResultName)
+        ) return Promise.resolve();
+
+        const standaloneStreamServer = this.mockServerOptions.standaloneServerUrl.replace(/^http/, 'ws');
+        const url = `${standaloneStreamServer}/server/${this.port}/subscription`;
+        const client = new SubscriptionClient(url, { }, WebSocket);
+
         // Note the typeHasField checks - these are a quick hack for backward compatibility,
         // introspecting the server schema to avoid requesting fields that don't exist on old servers.
 
         const query = {
+            'request-initiated': {
+                operationName: 'OnRequestInitiated',
+                query: `subscription OnRequestInitiated {
+                    ${queryResultName} {
+                        id,
+                        protocol,
+                        method,
+                        url,
+                        path,
+                        hostname,
+
+                        headers,
+                        timingEvents,
+                        httpVersion
+                    }
+                }`
+            },
             request: {
                 operationName: 'OnRequest',
                 query: `subscription OnRequest {
@@ -364,11 +381,13 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                     if (data.headers) {
                         data.headers = JSON.parse(data.headers);
                     }
+
                     if (data.timingEvents) {
                         data.timingEvents = JSON.parse(data.timingEvents);
                     } else if (event !== 'tlsClientError') {
                         data.timingEvents = {}; // For backward compat
                     }
+
                     if (data.body) {
                         data.body = buildBodyReader(Buffer.from(data.body, 'base64'), data.headers);
                     }

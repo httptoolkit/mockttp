@@ -58,6 +58,8 @@ export type TlsRequest = {
     failureCause: 'closed' | 'reset' | 'cert-rejected' | 'no-shared-cipher' | 'unknown'
 };
 
+
+// Internal representation of an ongoing HTTP request whilst it's being processed
 export interface OngoingRequest extends Request, EventEmitter {
     id: string;
 
@@ -81,6 +83,13 @@ export interface CompletedBody {
     formData: { [key: string]: string | string[] } | undefined;
 }
 
+// Internal & external representation of an initiated (no body yet received) HTTP request.
+export interface InitiatedRequest extends Request {
+    id: string;
+    timingEvents: TimingEvents;
+}
+
+// Internal & external representation of a fully completed HTTP request
 export interface CompletedRequest extends Request {
     id: string;
     body: CompletedBody;

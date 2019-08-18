@@ -11,6 +11,7 @@ type Mutation {
 }
 
 type Subscription {
+    requestInitiated: InitiatedRequest!
     requestReceived: Request!
     responseCompleted: Response!
     requestAborted: Request!
@@ -32,6 +33,20 @@ type TlsRequest {
     failureCause: String!
     hostname: String
     remoteIpAddress: String!
+}
+
+type InitiatedRequest {
+    id: ID!
+
+    protocol: String!
+    httpVersion: String!
+    method: String!
+    url: String!
+    path: String!
+    hostname: String
+
+    headers: Json!
+    timingEvents: Json!
 }
 
 type Request {

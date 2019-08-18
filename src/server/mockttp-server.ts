@@ -12,7 +12,7 @@ import cors = require("cors");
 import now = require("performance-now");
 import _ = require("lodash");
 
-import { OngoingRequest, CompletedRequest, CompletedResponse, OngoingResponse, TlsRequest } from "../types";
+import { OngoingRequest, CompletedRequest, CompletedResponse, OngoingResponse, TlsRequest, InitiatedRequest } from "../types";
 import { CAOptions } from '../util/tls';
 import { DestroyableServer } from "../util/destroyable-server";
 import { Mockttp, AbstractMockttp, MockttpOptions, PortRange } from "../mockttp";
@@ -26,7 +26,8 @@ import {
     waitForCompletedRequest,
     trackResponse,
     waitForCompletedResponse,
-    isAbsoluteUrl
+    isAbsoluteUrl,
+    buildInitiatedRequest
 } from "../util/request-utils";
 import { WebSocketHandler } from "./websocket-handler";
 
@@ -176,6 +177,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         }));
     }
 
+    public on(event: 'request-initiated', callback: (req: InitiatedRequest) => void): Promise<void>;
     public on(event: 'request', callback: (req: CompletedRequest) => void): Promise<void>;
     public on(event: 'response', callback: (req: CompletedResponse) => void): Promise<void>;
     public on(event: 'abort', callback: (req: CompletedRequest) => void): Promise<void>;
@@ -187,6 +189,8 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
     private announceRequestAsync(request: OngoingRequest) {
         setImmediate(() => {
+            this.eventEmitter.emit('request-initiated', buildInitiatedRequest(request));
+
             waitForCompletedRequest(request)
             .then((req: CompletedRequest) => {
                 this.eventEmitter.emit('request', Object.assign(req, {
