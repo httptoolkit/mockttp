@@ -600,14 +600,20 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 let resBodyOverride: string | Buffer | undefined;
 
                 if (this.beforeResponse) {
-                    const body = await streamToBuffer(serverRes);
-                    const modifiedRes = await this.beforeResponse({
-                        id: clientReq.id,
-                        statusCode: serverStatusCode,
-                        statusMessage: serverRes.statusMessage,
-                        headers: serverHeaders,
-                        body: buildBodyReader(body, serverHeaders)
-                    });
+                    let modifiedRes: CallbackResponseResult;
+                    try {
+                        const body = await streamToBuffer(serverRes);
+                        modifiedRes = await this.beforeResponse({
+                            id: clientReq.id,
+                            statusCode: serverStatusCode,
+                            statusMessage: serverRes.statusMessage,
+                            headers: serverHeaders,
+                            body: buildBodyReader(body, serverHeaders)
+                        });
+                    } catch (e) {
+                        serverReq.abort();
+                        return reject(e);
+                    }
 
                     serverStatusCode = modifiedRes.statusCode ||
                         modifiedRes.status ||
@@ -660,7 +666,6 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                     serverRes.once('end', resolve);
                 }
             });
-
 
             serverReq.once('socket', (socket: net.Socket) => {
                 // This event can fire multiple times for keep-alive sockets, which are used to

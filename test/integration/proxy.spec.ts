@@ -336,6 +336,34 @@ nodeOnly(() => {
                 expect(response).to.deep.equal({ hello: "world" });
             });
 
+            it("should return a 500 if the request rewriting fails", async () => {
+                await remoteServer.get('/').thenReply(200, 'text');
+
+                await server.get(remoteServer.urlFor("/")).thenPassThrough({
+                    beforeRequest: () => { throw new Error('Oops') }
+                });
+
+                let response = await request.get(remoteServer.urlFor("/"), {
+                    resolveWithFullResponse: true,
+                    simple: false
+                });
+                expect(response.statusCode).to.equal(500);
+            });
+
+            it("should return a 500 if the response rewriting fails", async () => {
+                await remoteServer.get('/').thenReply(200, 'text');
+
+                await server.get(remoteServer.urlFor("/")).thenPassThrough({
+                    beforeResponse: () => { throw new Error('Oops') }
+                });
+
+                let response = await request.get(remoteServer.urlFor("/"), {
+                    resolveWithFullResponse: true,
+                    simple: false
+                });
+                expect(response.statusCode).to.equal(500);
+            });
+
             describe("with an IPv6-only server", () => {
                 if (!isLocalIPv6Available) return;
 
