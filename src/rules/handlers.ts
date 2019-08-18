@@ -500,12 +500,8 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
             headers['host'] = hostname + (port ? `:${port}` : '');
         }
 
-
         // Check if this request is a request loop:
-        const socket: net.Socket = (<any> clientReq).socket;
-        // If it's ipv4 masquerading as v6, strip back to ipv4
-        const remoteAddress = socket.remoteAddress!.replace(/^::ffff:/, '');
-        if (isRequestLoop(remoteAddress, socket.remotePort!)) {
+        if (isRequestLoop((<any> clientReq).socket)) {
             throw new Error(oneLine`
                 Passthrough loop detected. This probably means you're sending a request directly
                 to a passthrough endpoint, which is forwarding it to the target URL, which is a
@@ -584,7 +580,6 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
             ? KeepAliveAgents[(protocol as 'http:' | 'https:') || 'http:']
             : undefined;
 
-        let outgoingPort: null | number = null;
         return new Promise<void>((resolve, reject) => {
             let serverReq = makeRequest({
                 protocol,
@@ -666,20 +661,14 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 }
             });
 
+
             serverReq.once('socket', (socket: net.Socket) => {
-                // We want the local port - it's not available until we actually connect
-                socket.once('connect', () => {
-                    // Add this port to our list of active ports
-                    outgoingPort = socket.localPort;
-                    currentlyForwardingPorts.push(outgoingPort);
-                });
-                socket.once('close', () => {
-                    // Remove this port from our list of active ports
-                    currentlyForwardingPorts = currentlyForwardingPorts.filter(
-                        (port) => port !== outgoingPort
-                    );
-                    outgoingPort = null;
-                });
+                // Add this port to our list of active ports, once it's connected (before then it has no port)
+                socket.once('connect', () => currentlyForwardingSockets.add(socket));
+
+                // Remove this port from our list of active ports when it's closed
+                // This is called for both clean closes & errors.
+                socket.once('close', () => currentlyForwardingSockets.delete(socket));
             });
 
             if (reqBodyOverride) {
@@ -801,12 +790,26 @@ export const HandlerLookup = {
     'timeout': TimeoutHandler
 }
 
-// Passthrough handlers need to spot loops - tracking ongoing request ports and the local machine's
-// ip lets us get pretty close to doing that (for 1 step loops, at least):
+// Passthrough handlers need to spot loops - tracking ongoing sockets lets us get pretty
+// close to doing that (for 1 step loops, at least):
 
-// Track currently live ports for forwarded connections, so we can spot requests from them later.
-let currentlyForwardingPorts: Array<number> = [];
+// We keep a list of all currently active outgoing sockets.
+const currentlyForwardingSockets = new Set<net.Socket>();
 
-const isRequestLoop = (remoteAddress: string, remotePort: number) =>
-    // If the request is local, and from a port we're sending a request on right now, we have a loop
-    _.includes(localAddresses, remoteAddress) && _.includes(currentlyForwardingPorts, remotePort)
+// We need to normalize ips for comparison, because the same ip may be reported as ::ffff:127.0.0.1
+// and 127.0.0.1 on the two sides of the connection, for the same ip.
+const normalizeIp = (ip: string | undefined) =>
+    (ip && ip.startsWith('::ffff:'))
+        ? ip.slice('::ffff:'.length)
+        : ip;
+
+// For incoming requests, compare the address & port: if they match, we've almost certainly got a loop.
+// I don't think it's generally possible to see the same ip on different interfaces from one process (you need
+// ip-netns network namespaces), but if it is, then there's a tiny chance of false positives here. If we have ip X,
+// and on another interface somebody else has ip X, and the send a request with the same incoming port as an
+// outgoing request we have on the other interface, we'll assume it's a loop. Extremely unlikely imo.
+const isRequestLoop = (incomingSocket: net.Socket) =>
+    _.some([...currentlyForwardingSockets], (outgoingSocket) =>
+        normalizeIp(outgoingSocket.localAddress) === normalizeIp(incomingSocket.remoteAddress) &&
+        outgoingSocket.remotePort === incomingSocket.localPort
+    );
