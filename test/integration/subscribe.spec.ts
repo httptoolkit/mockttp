@@ -16,13 +16,20 @@ import { TimingEvents, TlsRequest } from "../../dist/types";
 
 function makeAbortableRequest(server: Mockttp, path: string) {
     if (isNode) {
-        let req = http.get({ hostname: 'localhost', port: server.port, path });
+        let req = http.request({
+            method: 'POST',
+            hostname: 'localhost',
+            port: server.port,
+            path
+        });
         req.on('error', () => {});
-        req.end();
         return req;
     } else {
         let abortController = new AbortController();
-        fetch(server.urlFor(path), { signal: abortController.signal }).catch(() => {});
+        fetch(server.urlFor(path), {
+            method: 'POST',
+            signal: abortController.signal
+        }).catch(() => {});
         return abortController;
     }
 }
@@ -300,7 +307,7 @@ describe("Abort subscriptions", () => {
     afterEach(() => server.stop());
 
     it("should not be sent for successful requests", async () => {
-        let seenAbortPromise = getDeferred<{ id: string }>();
+        let seenAbortPromise = getDeferred<InitiatedRequest>();
         await server.on('abort', (r) => seenAbortPromise.resolve(r));
         await server.get('/mocked-endpoint').thenReply(200);
 
@@ -316,12 +323,14 @@ describe("Abort subscriptions", () => {
         let seenRequestPromise = getDeferred<CompletedRequest>();
         await server.on('request', (r) => seenRequestPromise.resolve(r));
 
-        let seenAbortPromise = getDeferred<{ id: string }>();
+        let seenAbortPromise = getDeferred<InitiatedRequest>();
         await server.on('abort', (r) => seenAbortPromise.resolve(r));
 
-        await server.get('/mocked-endpoint').thenCallback(() => delay(500).then(() => ({})));
+        await server.post('/mocked-endpoint').thenCallback(() => delay(500).then(() => ({})));
 
         let abortable = makeAbortableRequest(server, '/mocked-endpoint');
+        nodeOnly(() => (abortable as http.ClientRequest).end('request body'));
+
         let seenRequest = await seenRequestPromise;
         abortable.abort();
 
@@ -329,6 +338,23 @@ describe("Abort subscriptions", () => {
         expect(seenRequest.id).to.equal(seenAbort.id);
     });
 
+    nodeOnly(() => {
+        it("should be sent when a request is aborted before completion", async () => {
+            let wasRequestSeen = false;
+            await server.on('request', (r) => { wasRequestSeen = true; });
+
+            let seenAbortPromise = getDeferred<InitiatedRequest>();
+            await server.on('abort', (r) => seenAbortPromise.resolve(r));
+
+            let abortable = makeAbortableRequest(server, '/mocked-endpoint') as http.ClientRequest;
+            // Start writing a body, but never .end(), so it never completes
+            abortable.write('start request', () => abortable.abort());
+
+            let seenAbort = await seenAbortPromise;
+            expect(seenAbort.timingEvents.bodyReceivedTimestamp).to.equal(undefined);
+            expect(wasRequestSeen).to.equal(false);
+        });
+    });
 
     it("should be sent in place of response notifications, not in addition", async () => {
         let seenRequestPromise = getDeferred<CompletedRequest>();
@@ -337,9 +363,11 @@ describe("Abort subscriptions", () => {
         let seenResponsePromise = getDeferred<CompletedResponse>();
         await server.on('response', (r) => Promise.resolve(r));
 
-        await server.get('/mocked-endpoint').thenCallback((req) => delay(500).then(() => ({})));
+        await server.post('/mocked-endpoint').thenCallback((req) => delay(500).then(() => ({})));
 
         let abortable = makeAbortableRequest(server, '/mocked-endpoint');
+        nodeOnly(() => (abortable as http.ClientRequest).end('request body'));
+
         await seenRequestPromise;
         abortable.abort();
 
@@ -353,12 +381,14 @@ describe("Abort subscriptions", () => {
         let seenRequestPromise = getDeferred<CompletedRequest>();
         await server.on('request', (r) => seenRequestPromise.resolve(r));
 
-        let seenAbortPromise = getDeferred<CompletedRequest>();
+        let seenAbortPromise = getDeferred<InitiatedRequest>();
         await server.on('abort', (r) => seenAbortPromise.resolve(r));
 
-        await server.get('/mocked-endpoint').thenCallback(() => delay(500).then(() => ({})));
+        await server.post('/mocked-endpoint').thenCallback(() => delay(500).then(() => ({})));
 
         let abortable = makeAbortableRequest(server, '/mocked-endpoint');
+        nodeOnly(() => (abortable as http.ClientRequest).end('request body'));
+
         await seenRequestPromise;
         abortable.abort();
 

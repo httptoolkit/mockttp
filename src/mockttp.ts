@@ -265,7 +265,8 @@ export interface Mockttp {
     on(event: 'response', callback: (req: CompletedResponse) => void): Promise<void>;
 
     /**
-     * Subscribe to hear about requests that are aborted before the response is completed.
+     * Subscribe to hear about requests that are aborted before the request or
+     * response is fully completed.
      *
      * This is only useful in some niche use cases, such as logging all requests seen
      * by the server independently of the rules defined.
@@ -274,7 +275,7 @@ export interface Mockttp {
      * returns a promise, and the callback is not guaranteed to be registered until
      * the promise is resolved.
      */
-    on(event: 'abort', callback: (req: CompletedRequest) => void): Promise<void>;
+    on(event: 'abort', callback: (req: InitiatedRequest) => void): Promise<void>;
 
     /**
      * Subscribe to hear about requests that start a TLS handshake, but fail to complete it.

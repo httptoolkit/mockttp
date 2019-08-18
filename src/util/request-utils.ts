@@ -76,6 +76,8 @@ const bufferThenStream = (buffer: BufferInProgress, inputStream: stream.Readable
         inputStream.pipe(outputStream);
         // Forward any future errors from the input stream
         inputStream.once('error', (e) => outputStream.emit('error', e));
+        // Silence 'unhandled rejection' warnings here, since we'll handle them on the stream instead
+        buffer.catch(() => {});
     }
 
     return outputStream;
@@ -98,6 +100,10 @@ export const streamToBuffer = (input: stream.Readable) => {
         (resolve, reject) => {
             input.on('data', (d: Buffer) => chunks.push(d));
             input.once('end', () => resolve(Buffer.concat(chunks)));
+            input.once('aborted', () => {
+                bufferPromise.failedWith = new Error('Aborted');
+                reject(bufferPromise.failedWith);
+            });
             input.once('error', (e) => {
                 bufferPromise.failedWith = e;
                 reject(e);
@@ -125,7 +131,10 @@ const parseBodyStream = (bodyStream: stream.Readable): ParsedBody => {
         asBuffer() {
             if (!bufferPromise) {
                 bufferPromise = streamToBuffer(bodyStream);
-                bufferPromise.then((buffer) => completedBuffer = buffer);
+
+                bufferPromise
+                    .then((buffer) => completedBuffer = buffer)
+                    .catch(() => {}); // If we get no body, completedBuffer stays null
             }
             return bufferPromise;
         },
@@ -219,12 +228,7 @@ export const parseBody = (
     next: express.NextFunction
 ) => {
     let transformedRequest = <OngoingRequest> <any> req;
-
-    let bodyStream = new stream.PassThrough();
-    req.pipe(bodyStream);
-
-    transformedRequest.body = parseBodyStream(bodyStream);
-
+    transformedRequest.body = parseBodyStream(req);
     next();
 };
 
@@ -240,28 +244,24 @@ export function buildInitiatedRequest(request: OngoingRequest): InitiatedRequest
             'hostname',
             'headers'
         ),
-        timingEvents: _.clone(request.timingEvents)
+        timingEvents: request.timingEvents
     };
+}
+
+export function buildAbortedRequest(request: OngoingRequest): InitiatedRequest {
+    const requestData = buildInitiatedRequest(request);
+    return Object.assign(requestData, {
+        // Exists for backward compat: really Abort events should have no body at all
+        body: buildBodyReader(Buffer.alloc(0), {})
+    });
 }
 
 export async function waitForCompletedRequest(request: OngoingRequest): Promise<CompletedRequest> {
     const body = await waitForBody(request.body, request.headers);
-    const bodyReceivedTimestamp = request.timingEvents.bodyReceivedTimestamp || now();
+    request.timingEvents.bodyReceivedTimestamp = request.timingEvents.bodyReceivedTimestamp || now();
 
-    return {
-        ..._.pick(request,
-            'id',
-            'protocol',
-            'httpVersion',
-            'method',
-            'url',
-            'path',
-            'hostname',
-            'headers'
-        ),
-        body: body,
-        timingEvents: Object.assign(request.timingEvents, { bodyReceivedTimestamp })
-    };
+    const requestData = buildInitiatedRequest(request);
+    return Object.assign(requestData, { body });
 }
 
 export function trackResponse(response: express.Response, timingEvents: TimingEvents): OngoingResponse {

@@ -27,7 +27,8 @@ import {
     trackResponse,
     waitForCompletedResponse,
     isAbsoluteUrl,
-    buildInitiatedRequest
+    buildInitiatedRequest,
+    buildAbortedRequest
 } from "../util/request-utils";
 import { WebSocketHandler } from "./websocket-handler";
 
@@ -180,7 +181,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
     public on(event: 'request-initiated', callback: (req: InitiatedRequest) => void): Promise<void>;
     public on(event: 'request', callback: (req: CompletedRequest) => void): Promise<void>;
     public on(event: 'response', callback: (req: CompletedResponse) => void): Promise<void>;
-    public on(event: 'abort', callback: (req: CompletedRequest) => void): Promise<void>;
+    public on(event: 'abort', callback: (req: InitiatedRequest) => void): Promise<void>;
     public on(event: 'tlsClientError', callback: (req: TlsRequest) => void): Promise<void>;
     public on(event: string, callback: (...args: any[]) => void): Promise<void> {
         this.eventEmitter.on(event, callback);
@@ -189,13 +190,18 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
     private announceRequestAsync(request: OngoingRequest) {
         setImmediate(() => {
-            this.eventEmitter.emit('request-initiated', buildInitiatedRequest(request));
+            const initiatedReq = buildInitiatedRequest(request);
+            this.eventEmitter.emit('request-initiated', Object.assign(
+                initiatedReq,
+                { timingEvents: _.clone(initiatedReq.timingEvents) }
+            ));
 
             waitForCompletedRequest(request)
-            .then((req: CompletedRequest) => {
-                this.eventEmitter.emit('request', Object.assign(req, {
-                    timingEvents: _.clone(req.timingEvents)
-                }));
+            .then((completedReq: CompletedRequest) => {
+                this.eventEmitter.emit('request', Object.assign(
+                    completedReq,
+                    { timingEvents: _.clone(completedReq.timingEvents) }
+                ));
             })
             .catch(console.error);
         });
@@ -214,7 +220,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
     }
 
     private async announceAbortAsync(request: OngoingRequest) {
-        const req = await waitForCompletedRequest(request);
+        const req = buildAbortedRequest(request);
         this.eventEmitter.emit('abort', Object.assign(req, {
             timingEvents: _.clone(req.timingEvents)
         }));
