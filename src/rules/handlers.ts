@@ -663,6 +663,10 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
 
 
             serverReq.once('socket', (socket: net.Socket) => {
+                // This event can fire multiple times for keep-alive sockets, which are used to
+                // make multiple requests. If/when that happens, we don't need more event listeners.
+                if (currentlyForwardingSockets.has(socket)) return;
+
                 // Add this port to our list of active ports, once it's connected (before then it has no port)
                 socket.once('connect', () => currentlyForwardingSockets.add(socket));
 
