@@ -21,6 +21,18 @@ describe("Mockttp rule building", function () {
         expect(responseText).to.include('mock response');
     });
 
+    it("should allow manually setting a rule id", async () => {
+        const manualId = _.uniqueId();
+
+        const rule = await server.addRules({
+            id: manualId,
+            matchers: [new matchers.SimplePathMatcher('/endpoint')],
+            handler: new handlers.SimpleHandler(200, '', 'mock response'),
+        });
+
+        expect(rule[0].id).to.equal(manualId);
+    });
+
     it("should allow repeatedly adding rules", async () => {
         await server.addRules({
             matchers: [new matchers.SimplePathMatcher('/endpoint')],

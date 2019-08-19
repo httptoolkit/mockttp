@@ -24,6 +24,7 @@ type MockedEndpoint {
 }
 
 input MockRule {
+    id: String
     matchers: [RequestMatcher!]!
     handler: RequestHandler!
     completionChecker: RuleCompletionChecker

@@ -36,6 +36,7 @@ export interface MockRule extends Explainable {
 }
 
 export interface MockRuleData {
+    id?: string;
     matchers: matchers.RequestMatcher[];
     handler: handlers.RequestHandler;
     completionChecker?: completionCheckers.RuleCompletionChecker;
@@ -45,14 +46,16 @@ export function serializeRuleData(data: MockRuleData, stream: Duplex): Serialize
     validateMockRuleData(data);
 
     return {
+        id: data.id,
         matchers: data.matchers.map(m => serialize(m, stream)),
         handler: serialize(data.handler, stream),
         completionChecker: data.completionChecker && serialize(data.completionChecker, stream)
-    }
+    };
 };
 
 export function deserializeRuleData(data: Serialized<MockRuleData>, stream: Duplex): MockRuleData {
     return {
+        id: data.id,
         matchers: data.matchers.map((m) =>
             deserialize(m, stream, matchers.MatcherLookup)
         ),
@@ -70,13 +73,14 @@ export class MockRule implements MockRule {
     private handler: handlers.RequestHandler;
     private completionChecker?: completionCheckers.RuleCompletionChecker;
 
-    public id: string = uuid();
+    public id: string;
     public requests: Promise<CompletedRequest>[] = [];
     public requestCount = 0;
 
     constructor(data: MockRuleData) {
         validateMockRuleData(data);
 
+        this.id = data.id || uuid();
         this.matchers = data.matchers;
         this.handler = data.handler;
         this.completionChecker = data.completionChecker;

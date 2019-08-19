@@ -47,9 +47,11 @@ type SerializedValue<T> = T & { topicId: string };
 // Serialized data = data + type + topicId on every prop/prop's array elements
 export type Serialized<T> = {
     [K in keyof T]:
-        T[K] extends Array<unknown>
+        T[K] extends string | undefined
+            ? string | undefined
+        : T[K] extends Array<unknown>
             ? Array<SerializedValue<T[K][0]>>
-            : SerializedValue<T[K]>;
+        : SerializedValue<T[K]>;
 };
 
 export abstract class Serializable {

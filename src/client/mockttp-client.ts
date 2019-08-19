@@ -220,6 +220,12 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
         return !!_.find(type.fields, { name: fieldName });
     }
 
+    private typeHasInputField(typeName: string, fieldName: string): boolean {
+        const type: any = _.find(this.mockServerSchema.types, { name: typeName });
+        if (!type) return false;
+        return !!_.find(type.inputFields, { name: fieldName });
+    }
+
     enableDebug(): void {
         throw new Error("Client-side debug info not implemented.");
     }
@@ -262,9 +268,13 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                     id
                 }
             }`, {
-                newRules: rules.map((rule) =>
-                    serializeRuleData(rule, this.mockServerStream!)
-                )
+                newRules: rules.map((rule) => {
+                    const serializedData = serializeRuleData(rule, this.mockServerStream!)
+                    if (!this.typeHasInputField('MockRule', 'id')) {
+                        delete serializedData.id;
+                    }
+                    return serializedData;
+                })
             }
         )).rules.map(r => r.id);
 
