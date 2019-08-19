@@ -188,14 +188,18 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         return Promise.resolve();
     }
 
-    private announceRequestAsync(request: OngoingRequest) {
+    private announceInitialRequestAsync(request: OngoingRequest) {
         setImmediate(() => {
             const initiatedReq = buildInitiatedRequest(request);
             this.eventEmitter.emit('request-initiated', Object.assign(
                 initiatedReq,
                 { timingEvents: _.clone(initiatedReq.timingEvents) }
             ));
+        });
+    }
 
+    private announceCompletedRequestAsync(request: OngoingRequest) {
+        setImmediate(() => {
             waitForCompletedRequest(request)
             .then((completedReq: CompletedRequest) => {
                 this.eventEmitter.emit('request', Object.assign(
@@ -248,7 +252,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         });
         response.id = id;
 
-        this.announceRequestAsync(request);
+        this.announceInitialRequestAsync(request);
 
         let result: 'responded' | 'aborted' | null = null;
         request.once('aborted', () => {
@@ -259,10 +263,24 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
             }
         });
 
-        try {
-            let matchingRules = await filter(this.rules, (r) => r.matches(request));
-            let nextRule = matchingRules.filter((r) => !this.isComplete(r, matchingRules))[0];
+        let nextRulePromise = filter(this.rules, (r) => r.matches(request))
+            .then((matchingRules) =>
+                matchingRules.filter((r) =>
+                    !this.isComplete(r, matchingRules)
+                )[0] as MockRule | undefined
+            );
 
+        // Async: once we know what the next rule is, ping a request event
+        nextRulePromise
+            .then((rule) => rule ? rule.id : undefined)
+            .catch(() => undefined)
+            .then((ruleId) => {
+                request.matchedRuleId = ruleId;
+                this.announceCompletedRequestAsync(request);
+            });
+
+        try {
+            let nextRule = await nextRulePromise;
             if (nextRule) {
                 if (this.debug) console.log(`Request matched rule: ${nextRule.explain()}`);
                 await nextRule.handle(request, response, this.recordTraffic);

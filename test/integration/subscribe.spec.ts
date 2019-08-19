@@ -130,6 +130,17 @@ describe("Request subscriptions", () => {
             expect(seenRequest.body.text).to.equal('body-text');
         });
 
+        it("should include the matched rule id", async () => {
+            let seenRequestPromise = getDeferred<CompletedRequest>();
+            await server.on('request', (r) => seenRequestPromise.resolve(r));
+            let endpoint = await server.get('/').thenReply(200);
+
+            fetch(server.urlFor("/"));
+
+            let { matchedRuleId } = await seenRequestPromise;
+            expect(matchedRuleId).to.equal(endpoint.id);
+        });
+
         it("should include timing information", async () => {
             let seenRequestPromise = getDeferred<CompletedRequest>();
             await server.on('request', (r) => seenRequestPromise.resolve(r));

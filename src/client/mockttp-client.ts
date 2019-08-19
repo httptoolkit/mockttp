@@ -328,6 +328,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                 query: `subscription OnRequest {
                     ${queryResultName} {
                         id,
+                        ${this.typeHasField('Request', 'matchedRuleId') ? 'matchedRuleId' : ''}
                         protocol,
                         method,
                         url,

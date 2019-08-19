@@ -38,6 +38,7 @@ type TlsRequest {
 
 type InitiatedRequest {
     id: ID!
+    matchedRuleId: ID
 
     protocol: String!
     httpVersion: String!
@@ -52,6 +53,7 @@ type InitiatedRequest {
 
 type Request {
     id: ID!
+    matchedRuleId: ID
 
     protocol: String!
     httpVersion: String!

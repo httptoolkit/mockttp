@@ -38,6 +38,9 @@ export interface RequestHeaders extends Headers {
 }
 
 export interface Request {
+    id: string;
+    matchedRuleId?: string;
+
     protocol: string;
     httpVersion?: string; // Like timingEvents - not set remotely with older servers
     method: string;
@@ -50,19 +53,18 @@ export interface Request {
     hostname?: string;
 
     headers: RequestHeaders;
+
+    timingEvents: TimingEvents | {};
 }
 
-export type TlsRequest = {
+export interface TlsRequest {
     hostname?: string;
     remoteIpAddress: string;
     failureCause: 'closed' | 'reset' | 'cert-rejected' | 'no-shared-cipher' | 'unknown'
-};
-
+}
 
 // Internal representation of an ongoing HTTP request whilst it's being processed
 export interface OngoingRequest extends Request, EventEmitter {
-    id: string;
-
     body: ParsedBody;
     timingEvents: TimingEvents;
 }
@@ -85,15 +87,12 @@ export interface CompletedBody {
 
 // Internal & external representation of an initiated (no body yet received) HTTP request.
 export interface InitiatedRequest extends Request {
-    id: string;
     timingEvents: TimingEvents;
 }
 
 // Internal & external representation of a fully completed HTTP request
 export interface CompletedRequest extends Request {
-    id: string;
     body: CompletedBody;
-    timingEvents: TimingEvents | {};
 }
 
 export interface TimingEvents {

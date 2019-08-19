@@ -236,6 +236,7 @@ export function buildInitiatedRequest(request: OngoingRequest): InitiatedRequest
     return {
         ..._.pick(request,
             'id',
+            'matchedRuleId',
             'protocol',
             'httpVersion',
             'method',

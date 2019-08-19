@@ -9,7 +9,7 @@ import { MockttpStandalone, StandaloneServerOptions } from "./standalone/mockttp
 import { Mockttp, MockttpOptions } from "./mockttp";
 
 // Export the core type definitions:
-export { Method, Request, InitiatedRequest, CompletedRequest, CompletedResponse, MockedEndpoint } from "./types";
+export { Method, InitiatedRequest, CompletedRequest, CompletedResponse, MockedEndpoint } from "./types";
 export { Mockttp };
 
 // Export rule data builders & type definitions:
