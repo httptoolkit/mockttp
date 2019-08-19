@@ -259,6 +259,21 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
     }
 
     private _addRules = async (rules: MockRuleData[], reset: boolean = false): Promise<MockedEndpoint[]> => {
+        // Backward compat: make Add/SetRules work with servers that only define reset & addRule (singular).
+        // Adds a small risk of odd behaviour in the gap between reset & all the rules being added, but it
+        // should be extremely brief, and no worse than existing behaviour for those server versions.
+        if (!this.typeHasField('Mutation', 'addRules')) {
+            if (reset) await this.reset();
+
+            // Sequentially add the rules:
+            return rules.reduce((acc: Promise<MockedEndpoint[]>, rule) => {
+                return acc.then(async (endpoints) => {
+                    endpoints.push(await this._addRule(rule));
+                    return endpoints;
+                });
+            }, Promise.resolve<MockedEndpoint[]>([]));
+        }
+
         const requestName = reset ? 'SetRules' : 'AddRules';
         const mutationName = reset ? 'setRules' : 'addRules';
 
@@ -281,6 +296,27 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
         return ruleIds.map(ruleId =>
             new MockedEndpointClient(ruleId, this.getEndpointData(ruleId))
         );
+    }
+
+    // Exists purely for backward compat with servers that don't support AddRules/SetRules.
+    private _addRule = async (rule: MockRuleData): Promise<MockedEndpoint> => {
+        const ruleData = serializeRuleData(rule, this.mockServerStream!)
+        delete ruleData.id; // Old servers don't support sending ids.
+
+        const response = await this.queryMockServer<{
+            addRule: { id: string }
+        }>(
+            `mutation AddRule($newRule: MockRule!) {
+                addRule(input: $newRule) {
+                    id
+                }
+            }`, {
+                newRule: ruleData
+            }
+        );
+
+        const ruleId = response.addRule.id;
+        return new MockedEndpointClient(ruleId, this.getEndpointData(ruleId));
     }
 
     public on(event: SubscribableEvent, callback: (data: any) => void): Promise<void> {
