@@ -47,6 +47,8 @@ export interface CallbackRequestResult {
 
     json?: any;
     body?: string | Buffer;
+
+    response?: CallbackResponseResult;
 }
 
 export interface CallbackResponseResult {
@@ -110,6 +112,24 @@ interface CallbackRequestMessage {
     args: [CompletedRequest];
 }
 
+function writeResponseFromCallback(result: CallbackResponseResult, response: express.Response) {
+    if (result.json !== undefined) {
+        result.headers = _.assign(result.headers || {}, { 'Content-Type': 'application/json' });
+        result.body = JSON.stringify(result.json);
+        delete result.json;
+    }
+
+    if (result.headers) {
+        setHeaders(response, result.headers);
+    }
+
+    response.writeHead(
+        result.statusCode || result.status || 200,
+        result.statusMessage
+    );
+    response.end(result.body || "");
+}
+
 export class CallbackHandler extends Serializable implements RequestHandler {
     readonly type = 'callback';
 
@@ -135,21 +155,7 @@ export class CallbackHandler extends Serializable implements RequestHandler {
             return;
         }
 
-        if (outResponse.json !== undefined) {
-            outResponse.headers = _.assign(outResponse.headers || {}, { 'Content-Type': 'application/json' });
-            outResponse.body = JSON.stringify(outResponse.json);
-            delete outResponse.json;
-        }
-
-        if (outResponse.headers) {
-            setHeaders(response, outResponse.headers);
-        }
-
-        response.writeHead(
-            outResponse.statusCode || outResponse.status || 200,
-            outResponse.statusMessage
-        );
-        response.end(outResponse.body || "");
+        writeResponseFromCallback(outResponse, response);
     }
 
     serialize(channel: ClientServerChannel): SerializedCallbackHandlerData {
@@ -529,6 +535,12 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                     url: new url.URL(reqUrl, `${protocol}//${hostname}${port ? `:${port}` : ''}`).toString()
                 }))
             );
+
+            if (modifiedReq.response) {
+                // The callback has provided a full response: don't passthrough at all, just use it.
+                writeResponseFromCallback(modifiedReq.response, clientRes);
+                return;
+            }
 
             method = modifiedReq.method || method;
             reqUrl = modifiedReq.url || reqUrl;

@@ -270,6 +270,30 @@ nodeOnly(() => {
                 expect(response).to.deep.equal({ hello: "world" });
             });
 
+            it("should be able to edit a request to inject a response directly", async () => {
+                const remoteEndpoint = await remoteServer.post('/').thenReply(200);
+
+                await server.post(remoteServer.urlFor("/")).thenPassThrough({
+                    beforeRequest: () => ({
+                        response: {
+                            statusCode: 404,
+                            body: 'Fake 404'
+                        }
+                    })
+                });
+
+                let response = await request.post(remoteServer.urlFor("/"), {
+                    resolveWithFullResponse: true,
+                    simple: false
+                });
+
+                const seenRequests = await remoteEndpoint.getSeenRequests();
+                expect(seenRequests.length).to.equal(0);
+
+                expect(response.statusCode).to.equal(404);
+                expect(response.body).to.equal('Fake 404');
+            });
+
             it("should be able to rewrite a response's status", async () => {
                 await remoteServer.get('/').thenReply(404);
                 await server.get(remoteServer.urlFor("/")).thenPassThrough({

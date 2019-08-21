@@ -399,6 +399,9 @@ export default class MockRuleBuilder {
      * Valid fields are:
      * - Request only: `method` (a replacement HTTP verb, capitalized)
      * - Request only: `url` (a full URL to send the request to)
+     * - Request only: `response` (a response callback result: if provided
+     *   this will be used directly, the request will not be passed through
+     *   at all, and any beforeResponse callback will never fire)
      * - Response only: `status` (number, will replace the HTTP status code)
      * - Both: `headers` (object with string keys & values, replaces all
      *   headers if set)
