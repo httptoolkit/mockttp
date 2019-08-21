@@ -613,8 +613,9 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
 
                 if (this.beforeResponse) {
                     let modifiedRes: CallbackResponseResult;
+                    let body: Buffer;
                     try {
-                        const body = await streamToBuffer(serverRes);
+                        body = await streamToBuffer(serverRes);
                         modifiedRes = await this.beforeResponse({
                             id: clientReq.id,
                             statusCode: serverStatusCode,
@@ -648,6 +649,11 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                             serverRes.headers,
                             modifiedRes.headers
                         );
+                    } else {
+                        // If you don't specify a body override, we need to use the real
+                        // body anyway, because as we've read it already streaming it to
+                        // the response won't work
+                        resBodyOverride = body;
                     }
 
                     serverHeaders = dropUndefinedValues(serverHeaders);

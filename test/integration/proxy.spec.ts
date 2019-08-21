@@ -360,6 +360,16 @@ nodeOnly(() => {
                 expect(response).to.deep.equal({ hello: "world" });
             });
 
+            it("should use the original body if not overwritten in beforeResponse", async () => {
+                await remoteServer.get('/').thenReply(200, 'real body');
+                await server.get(remoteServer.urlFor("/")).thenPassThrough({
+                    beforeResponse: () => ({ })
+                });
+
+                let response = await request.get(remoteServer.urlFor("/"));
+                expect(response).to.equal('real body');
+            });
+
             it("should return a 500 if the request rewriting fails", async () => {
                 await remoteServer.get('/').thenReply(200, 'text');
 
