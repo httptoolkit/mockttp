@@ -13,8 +13,7 @@
     "dist",
     "src",
     "custom-typings",
-    "docs",
-    "typedoc"
+    "docs"
   ],
   "scripts": {
     "prebuild": "rimraf dist/*",
