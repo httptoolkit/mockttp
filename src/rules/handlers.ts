@@ -393,7 +393,7 @@ function getCorrectHost(
             console.warn(oneLine`
                 Passthrough callback overrode the URL and the Host header
                 with mismatched values, which may be a mistake. The URL is
-                ${reqUrl} bytes, whilst the header was set to ${replacementHost}.
+                ${reqUrl}, whilst the header was set to ${replacementHost}.
             `);
         }
         // Whatever happens, if you explicitly set a value, we use it.
