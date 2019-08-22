@@ -106,7 +106,7 @@ export class ClientServerChannel extends Duplex {
 
     _write(message: Message, encoding: string, callback: (error?: Error | null) => void) {
         message.topicId = this.topicId;
-        const chunk = JSON.stringify(message);
+        const chunk = JSON.stringify(message) + '\n';
 
         if (!this.rawStream.write(chunk, encoding)) {
             this.rawStream.once('drain', callback);
@@ -116,19 +116,22 @@ export class ClientServerChannel extends Duplex {
     }
 
     _readFromRawStream = (rawData: any) => {
-        let data: Message;
-        try {
-            data = JSON.parse(rawData);
-        } catch (e) {
-            console.log(e);
-            console.log('Received unparseable message, dropping.', rawData.toString());
-            return;
-        }
+        const stringData: string = rawData.toString();
+        stringData.split('\n').filter(d => !!d).forEach((rawDataLine) => {
+            let data: Message;
+            try {
+                data = JSON.parse(rawDataLine);
+            } catch (e) {
+                console.log(e);
+                console.log('Received unparseable message, dropping.', rawDataLine.toString());
+                return;
+            }
 
-        if (data.topicId === this.topicId) {
-            if (_.isEqual(data, DISPOSE_MESSAGE)) this.dispose();
-            else this.push(data);
-        }
+            if (data.topicId === this.topicId) {
+                if (_.isEqual(data, DISPOSE_MESSAGE)) this.dispose();
+                else this.push(data);
+            }
+        });
     }
 
     private reading = false;
