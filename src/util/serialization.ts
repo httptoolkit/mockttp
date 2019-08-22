@@ -1,6 +1,7 @@
 import * as _ from 'lodash';
 import { Duplex } from 'stream';
 import uuid = require('uuid/v4');
+import { encode as encodeBase64 } from 'base64-arraybuffer';
 
 import { MaybePromise, Replace, Omit } from './type-utils';
 import { CompletedBody, Headers } from '../types';
@@ -226,12 +227,52 @@ export class ClientServerChannel extends Duplex {
     }
 }
 
-export function withSerializedBody<T extends { body: CompletedBody }>(input: T): Replace<T, 'body', string> {
+export function withSerializedBodyReader<T extends {
+    body: CompletedBody
+}>(input: T): Replace<T, 'body', string> {
     return Object.assign({}, input, { body: input.body.buffer.toString('base64') });
 }
 
-export function withDeserializedBody<T extends { headers: Headers, body: CompletedBody }>(input: Replace<T, 'body', string>) {
+export function withDeserializedBodyReader<T extends { headers: Headers, body: CompletedBody }>(
+    input: Replace<T, 'body', string>
+): T {
     return <T> Object.assign({}, input as Omit<T, 'body'>, {
         body: buildBodyReader(Buffer.from(input.body, 'base64'), input.headers)
+    })
+}
+
+export function withSerializedBodyBuffer<T extends {
+    body?: CompletedBody | Buffer | ArrayBuffer | string
+}>(input: T): Replace<T, 'body', string | undefined> {
+    let serializedBody: string | undefined;
+
+    if (!input.body) {
+        serializedBody = undefined;
+    } else if (_.isString(input.body)) {
+        serializedBody = Buffer.from(input.body).toString('base64');
+    } else if (_.isBuffer(input.body)) {
+        serializedBody = input.body.toString('base64');
+    } else if (_.isArrayBuffer(input.body) || _.isTypedArray(input.body)) {
+        serializedBody = encodeBase64(input.body as ArrayBuffer);
+    } else if (input.body.hasOwnProperty('decodedBuffer')) {
+        serializedBody = input.body.buffer.toString('base64');
+    }
+
+    return Object.assign({}, input, { body: serializedBody });
+}
+
+export type WithSerializedBodyBuffer<T extends { body?: any }> =
+    Replace<T, 'body', string | undefined>;
+
+export function withDeserializedBodyBuffer<T extends {
+    headers?: Headers,
+    body?: Buffer | string | undefined
+}>(
+    input: Replace<T, 'body', string | undefined>
+): T {
+    if (input.body === undefined) return input as T;
+
+    return <T> Object.assign({}, input as Omit<T, 'body'>, {
+        body: Buffer.from(input.body, 'base64')
     })
 }

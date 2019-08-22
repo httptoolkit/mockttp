@@ -83,7 +83,7 @@ nodeOnly(() => {
                             headers: Object.assign(res.headers, {
                                 'intercepted-response': 'true'
                             }),
-                            body: res.body.text + ' (intercepted response)'
+                            body: Buffer.from(res.body.text + ' (intercepted response)')
                         })
                     });
 

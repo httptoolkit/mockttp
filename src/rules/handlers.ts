@@ -23,8 +23,11 @@ import { isLocalPortActive, localAddresses } from '../util/socket-util';
 import {
     Serializable,
     ClientServerChannel,
-    withSerializedBody,
-    withDeserializedBody
+    withSerializedBodyReader,
+    withDeserializedBodyReader,
+    withSerializedBodyBuffer,
+    withDeserializedBodyBuffer,
+    WithSerializedBodyBuffer
 } from "../util/serialization";
 import { MaybePromise, Replace } from '../util/type-utils';
 
@@ -162,8 +165,10 @@ export class CallbackHandler extends Serializable implements RequestHandler {
         channel.onRequest<
             CallbackRequestMessage,
             CallbackResponseResult
-        >((streamMsg) => {
-            return this.callback.apply(null, streamMsg.args);
+        >(async (streamMsg) => {
+            return withSerializedBodyBuffer(
+                await this.callback.apply(null, streamMsg.args)
+            );
         });
 
         return { type: this.type, name: this.callback.name };
@@ -171,10 +176,12 @@ export class CallbackHandler extends Serializable implements RequestHandler {
 
     static deserialize({ name }: SerializedCallbackHandlerData, channel: ClientServerChannel): CallbackHandler {
         const rpcCallback = async (request: CompletedRequest) => {
-            return await channel.request<
-                CallbackRequestMessage,
-                CallbackResponseResult
-            >({ args: [request] });
+            return withDeserializedBodyBuffer(
+                await channel.request<
+                    CallbackRequestMessage,
+                    WithSerializedBodyBuffer<CallbackResponseResult>
+                >({ args: [request] })
+            );
         };
         // Pass across the name from the real callback, for explain()
         Object.defineProperty(rpcCallback, "name", { value: name });
@@ -358,8 +365,8 @@ function getCallbackResultBody(
         return replacementBody;
     } else if (replacementBody.hasOwnProperty('decodedBuffer')) {
         // It's our own bodyReader instance. That's not supposed to happen, but
-        // it's ok, we just need to use its buffer insteead of the whole object
-        return (replacementBody as CompletedBody).buffer;
+        // it's ok, we just need to use the buffer data instead of the whole object
+        return Buffer.from((replacementBody as CompletedBody).buffer);
     } else if (replacementBody === '') {
         // For empty bodies, it's slightly more convenient if they're truthy
         return Buffer.alloc(0);
@@ -725,8 +732,12 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
             channel.onRequest<
                 BeforePassthroughRequestRequest,
                 CallbackRequestResult
-            >('beforeRequest', (req) => {
-                return this.beforeRequest!(withDeserializedBody(req.args[0]));
+            >('beforeRequest', async (req) => {
+                return withSerializedBodyBuffer(
+                    await this.beforeRequest!(
+                        withDeserializedBodyReader(req.args[0])
+                    )
+                );
             });
         }
 
@@ -734,8 +745,12 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
             channel.onRequest<
                 BeforePassthroughResponseRequest,
                 CallbackResponseResult
-            >('beforeResponse', (req) => {
-                return this.beforeResponse!(withDeserializedBody(req.args[0]));
+            >('beforeResponse', async (req) => {
+                return withSerializedBodyBuffer(
+                    await this.beforeResponse!(
+                        withDeserializedBodyReader(req.args[0])
+                    )
+                );
             });
         }
 
@@ -753,24 +768,26 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
         let beforeResponse: ((res: PassThroughResponse) => MaybePromise<CallbackResponseResult>) | undefined;
 
         if (data.hasBeforeRequestCallback) {
-            beforeRequest = (req: CompletedRequest) => {
-                return channel.request<
-                    BeforePassthroughRequestRequest,
-                    CallbackRequestResult
-                >('beforeRequest', {
-                    args: [withSerializedBody(req)]
-                });
+            beforeRequest = async (req: CompletedRequest) => {
+                return withDeserializedBodyBuffer(
+                    await channel.request<
+                        BeforePassthroughRequestRequest,
+                        WithSerializedBodyBuffer<CallbackRequestResult>
+                    >('beforeRequest', {
+                        args: [withSerializedBodyReader(req)]
+                    })
+                );
             };
         }
 
         if (data.hasBeforeResponseCallback) {
-            beforeResponse = (res: PassThroughResponse) => {
-                return channel.request<
+            beforeResponse = async (res: PassThroughResponse) => {
+                return withDeserializedBodyBuffer(await channel.request<
                     BeforePassthroughResponseRequest,
-                    CallbackResponseResult
+                    WithSerializedBodyBuffer<CallbackResponseResult>
                 >('beforeResponse', {
-                    args: [withSerializedBody(res)]
-                });
+                    args: [withSerializedBodyReader(res)]
+                }));
             };
         }
 
