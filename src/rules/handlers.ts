@@ -409,7 +409,8 @@ function getCorrectHost(
 function getCorrectContentLength(
     body: string | Buffer,
     originalHeaders: Headers,
-    replacementHeaders: Headers | undefined
+    replacementHeaders: Headers | undefined,
+    mismatchAllowed: boolean = false
 ): string | undefined {
     // If there was a content-length header, it might now be wrong, and it's annoying
     // to need to set your own content-length override when you just want to change
@@ -439,7 +440,8 @@ function getCorrectContentLength(
     // We use invalid content-length as instructed, but print a warning just in case.
     if (
         lengthOverride === originalHeaders['content-length'] &&
-        lengthOverride !== body.length.toString()
+        lengthOverride !== body.length.toString() &&
+        !mismatchAllowed // Set for HEAD responses
     ) {
         console.warn(oneLine`
             Passthrough callback overrode the body and the content-length header
@@ -654,7 +656,8 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                         serverHeaders['content-length'] = getCorrectContentLength(
                             resBodyOverride,
                             serverRes.headers,
-                            modifiedRes.headers
+                            modifiedRes.headers,
+                            method === 'HEAD' // HEAD responses are allowed mismatched content-length
                         );
                     } else {
                         // If you don't specify a body override, we need to use the real
