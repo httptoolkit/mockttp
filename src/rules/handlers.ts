@@ -321,7 +321,7 @@ export class StreamHandler extends Serializable implements RequestHandler {
     }
 }
 
-interface PassThroughResponse {
+export interface PassThroughResponse {
     id: string;
     statusCode: number;
     statusMessage?: string;
