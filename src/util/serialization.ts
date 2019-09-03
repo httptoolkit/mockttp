@@ -161,7 +161,8 @@ export class ClientServerChannel extends Duplex {
             const responseListener = (response: RequestMessage<R>) => {
                 if (response.requestId === requestId) {
                     if (response.error) {
-                        reject(response.error);
+                        // Derialize error from plain object
+                        reject(Object.assign(new Error(), { stack: undefined }, response.error));
                     } else {
                         resolve(response.data);
                     }
@@ -213,6 +214,8 @@ export class ClientServerChannel extends Duplex {
                 };
                 this.write(response);
             } catch (error) {
+                // Make the error serializable:
+                error = _.pick(error, Object.getOwnPropertyNames(error));
                 this.write({ requestId, error });
             }
         });
