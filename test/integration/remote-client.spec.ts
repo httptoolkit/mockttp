@@ -101,6 +101,34 @@ nodeOnly(() => {
                         'response, body: injected (intercepted response)'
                     );
                 });
+
+                it("should successfully inject responses with a beforeRequest callback", async () => {
+                    const targetEndpoint = await targetServer.post('/').thenReply(404);
+                    await client.get(targetServer.url).thenPassThrough({
+                        beforeRequest: (() => ({
+                            response: {
+                                statusCode: 200,
+                                headers: { 'intercepted-response': 'true' },
+                                body: Buffer.from('injected response body')
+                            }
+                        }))
+                    });
+
+                    const response = await request.get(targetServer.url, {
+                        proxy: client.urlFor("/"),
+                        resolveWithFullResponse: true
+                    });
+
+                    expect(response.statusCode).to.equal(200);
+                    expect(response.headers).to.include({
+                        'intercepted-response': 'true'
+                    });
+                    expect(response.body).to.equal(
+                        'injected response body'
+                    );
+
+                    expect(await targetEndpoint.getSeenRequests()).to.deep.equal([]);
+                });
             });
 
             it("should successfully mock requests with live streams", async () => {

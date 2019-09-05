@@ -736,11 +736,15 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 BeforePassthroughRequestRequest,
                 CallbackRequestResult
             >('beforeRequest', async (req) => {
-                return withSerializedBodyBuffer(
+                const result = withSerializedBodyBuffer(
                     await this.beforeRequest!(
                         withDeserializedBodyReader(req.args[0])
                     )
                 );
+                if (result.response) {
+                    result.response = withSerializedBodyBuffer(result.response);
+                }
+                return result;
             });
         }
 
@@ -772,7 +776,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
 
         if (data.hasBeforeRequestCallback) {
             beforeRequest = async (req: CompletedRequest) => {
-                return withDeserializedBodyBuffer(
+                const result = withDeserializedBodyBuffer(
                     await channel.request<
                         BeforePassthroughRequestRequest,
                         WithSerializedBodyBuffer<CallbackRequestResult>
@@ -780,6 +784,13 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                         args: [withSerializedBodyReader(req)]
                     })
                 );
+                if (result.response) {
+                    result.response = withDeserializedBodyBuffer(
+                        result.response as WithSerializedBodyBuffer<CallbackResponseResult>
+                    );
+                }
+
+                return result;
             };
         }
 
