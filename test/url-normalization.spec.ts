@@ -27,6 +27,12 @@ describe("URL normalization for matching", () => {
         ).to.equal('https://example.com/');
     });
 
+    it("should add trailing slashes for protocol-less empty paths", () => {
+        expect(
+            normalizeUrl('example.com')
+        ).to.equal('example.com/');
+    });
+
     it("should remove all query parameters", () => {
         expect(
             normalizeUrl('https://example.com/path?a=b')

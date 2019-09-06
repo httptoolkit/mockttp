@@ -32,6 +32,8 @@ export const normalizeUrl =
         (urlInput: string): string => {
             let parsedUrl: url.UrlWithStringQuery | undefined;
 
+            let isProtocolless = false;
+
             try {
                 // Strip the query and anything following it
                 const queryIndex = urlInput.indexOf('?');
@@ -40,9 +42,8 @@ export const normalizeUrl =
                 }
 
                 if (isAbsoluteProtocollessUrl(urlInput)) {
-                    // Funky hack to let us parse URLs without any protocol.
-                    // This is stripped off at the end of the function
-                    parsedUrl = url.parse('protocolless://' + urlInput);
+                    parsedUrl = url.parse('http://' + urlInput);
+                    isProtocolless = true;
                 } else {
                     parsedUrl = url.parse(urlInput);
                 }
@@ -86,8 +87,8 @@ export const normalizeUrl =
 
             // If the URL came in with no protocol, it should leave with
             // no protocol (protocol added temporarily above to allow parsing)
-            if (normalizedUrl.startsWith('protocolless://')) {
-                normalizedUrl = normalizedUrl.slice('protocolless://'.length);
+            if (isProtocolless) {
+                normalizedUrl = normalizedUrl.slice('http://'.length);
             }
 
             return normalizedUrl;
