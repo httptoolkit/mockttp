@@ -358,6 +358,8 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
     }
 
     private async suggestRule(request: OngoingRequest): Promise<string> {
+        if (!this.suggestChanges) return '';
+
         let msg = "You can fix this by adding a rule to match this request, for example:\n"
 
         msg += `mockServer.${request.method.toLowerCase()}("${request.path}")`;

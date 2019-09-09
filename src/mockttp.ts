@@ -362,6 +362,16 @@ export interface MockttpOptions {
      * an empty array.
      */
     recordTraffic?: boolean;
+
+    /**
+     * By default, requests that match no rules will receive an explanation of the
+     * request & existing rules, followed by some suggested example Mockttp code
+     * which could be used to match the rule.
+     *
+     * In some cases where the end client is unaware of Mockttp, these example
+     * suggestions are just confusing. Set `suggestChanges` to false to disable it.
+     */
+    suggestChanges?: boolean;
 }
 
 /**
@@ -371,6 +381,7 @@ export abstract class AbstractMockttp {
     protected cors: boolean;
     protected debug: boolean;
     protected recordTraffic: boolean;
+    protected suggestChanges: boolean;
 
     abstract get url(): string;
     abstract on(event: 'request', callback: (req: CompletedRequest) => void): Promise<void>;
@@ -380,6 +391,9 @@ export abstract class AbstractMockttp {
         this.cors = options.cors || false;
         this.recordTraffic = options.recordTraffic !== undefined
             ? options.recordTraffic
+            : true;
+        this.suggestChanges = options.suggestChanges !== undefined
+            ? options.suggestChanges
             : true;
     }
 
