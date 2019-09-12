@@ -98,13 +98,16 @@ export class MockttpStandalone {
         // Dynamically route to admin servers ourselves, so we can easily add/remove
         // servers as we see fit later on.
         this.app.use('/server/:port/', (req, res, next) => {
-            if (!this.routers[req.params.port]) {
+            const serverPort = Number(req.params.port);
+            const serverRouter = this.routers[serverPort];
+
+            if (!serverRouter) {
                 res.status(404).send('Unknown mock server');
                 console.error(`Request for unknown mock server port: ${req.params.port}`);
                 return;
             }
 
-            this.routers[req.params.port](req, res, next);
+            serverRouter(req, res, next);
         });
     }
 
