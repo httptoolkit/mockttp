@@ -23,7 +23,7 @@ export interface RequestMatcher extends Explainable, Serializable {
 }
 
 function unescapeRegexp(input: string): string {
-    return input.replace(/\\(.)/g, '$1');
+    return input.replace(/\\\//g, '/');
 }
 
 export class WildcardMatcher extends Serializable implements RequestMatcher {
