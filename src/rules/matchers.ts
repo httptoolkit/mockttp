@@ -56,6 +56,34 @@ export class MethodMatcher extends Serializable implements RequestMatcher {
     }
 }
 
+export class HostMatcher extends Serializable implements RequestMatcher {
+    readonly type = 'host';
+
+    constructor(
+        public host: string
+    ) {
+        super();
+
+        // Validate the hostname. Goal here isn't to catch every bad hostname, but allow
+        // every good hostname, and provide friendly errors for obviously bad hostnames.
+        if (host.includes('/')) {
+            throw new Error("Invalid hostname: hostnames can't contain slashes");
+        } else if (host.includes('?')) {
+            throw new Error("Invalid hostname: hostnames can't contain query strings");
+        } else if (!host.match(/^([a-zA-Z0-9\-]+\.)*[a-zA-Z0-9\-]+(:\d+)?$/)) {
+            throw new Error("Hostname is invalid");
+        }
+    }
+
+    matches(request: OngoingRequest) {
+        return new url.URL(request.url).host === this.host;
+    }
+
+    explain() {
+        return `for host ${this.host}`;
+    }
+}
+
 export class SimplePathMatcher extends Serializable implements RequestMatcher {
     readonly type = 'simple-path';
 
@@ -351,6 +379,7 @@ export class CookieMatcher extends Serializable implements RequestMatcher {
 export const MatcherLookup = {
     'wildcard': WildcardMatcher,
     'method': MethodMatcher,
+    'host': HostMatcher,
     'simple-path': SimplePathMatcher,
     'regex-path': RegexPathMatcher,
     'header': HeaderMatcher,

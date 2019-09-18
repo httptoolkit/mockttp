@@ -32,7 +32,8 @@ import {
     RegexBodyMatcher,
     JsonBodyMatcher,
     JsonBodyFlexibleMatcher,
-    ExactQueryMatcher
+    ExactQueryMatcher,
+    HostMatcher
 } from "./matchers";
 
 import {
@@ -101,6 +102,14 @@ export default class MockRuleBuilder {
 
     private matchers: RequestMatcher[] = [];
     private completionChecker?: RuleCompletionChecker;
+
+    /**
+     * Match only requests sent to the given host
+     */
+    forHost(host: string) {
+        this.matchers.push(new HostMatcher(host));
+        return this;
+    }
 
     /**
      * Match only requests that include the given headers.

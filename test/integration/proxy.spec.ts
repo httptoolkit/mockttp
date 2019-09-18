@@ -60,6 +60,18 @@ nodeOnly(() => {
                 expect(response).to.include('Mock response');
             });
 
+            it("should mock proxied HTTP matching requests by host", async () => {
+                await server.get().forHost('example.com').thenReply(200, "host matched");
+
+                await expect(
+                    await request.get("http://example.com/")
+                ).to.equal('host matched');
+
+                await expect(
+                    request.get("http://different-host.com/")
+                ).to.be.rejectedWith('No rules were found matching this request');
+            });
+
             it("should be able to pass through requests", async () => {
                 await server.get("http://example.com/").thenPassThrough();
 

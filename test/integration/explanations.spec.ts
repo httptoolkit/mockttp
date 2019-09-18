@@ -57,7 +57,7 @@ Match requests making GETs for /endpoint, and then respond with status 200 and b
         await server.post("/endpointB").withForm({ key: 'value' }).thenReply(500);
         await server.post("/endpointC").withJsonBody({ key: 'value' }).thenReply(500);
         await server.put("/endpointD").withQuery({ a: 1 }).always().thenCloseConnection();
-        await server.put("/endpointE").withExactQuery('?').thenTimeout();
+        await server.put("/endpointE").forHost('abc.com').withExactQuery('?').thenTimeout();
 
         await fetch(server.urlFor("/endpointA/123"));
         let response = await fetch(server.urlFor("/non-existent-endpoint"));
@@ -71,7 +71,7 @@ Match requests making GETs matching //endpointA/\\d+/, and then respond with sta
 Match requests making POSTs, for /endpointB, and with form data including {"key":"value"}, and then respond with status 500.
 Match requests making POSTs, for /endpointC, and with {"key":"value"} as a JSON body, and then respond with status 500.
 Match requests making PUTs, for /endpointD, and with a query including {"a":"1"}, and then close the connection, always (seen 0).
-Match requests making PUTs, for /endpointE, and with a query exactly matching \`?\`, and then timeout (never respond).
+Match requests making PUTs, for /endpointE, for host abc.com, and with a query exactly matching \`?\`, and then timeout (never respond).
 `);
     });
 
