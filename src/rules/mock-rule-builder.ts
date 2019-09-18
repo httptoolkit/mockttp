@@ -2,11 +2,9 @@
  * @module MockRule
  */
 
-import url = require("url");
 import { OutgoingHttpHeaders } from "http";
 import { merge, isString, isBuffer } from "lodash";
 import { Readable } from "stream";
-import { stripIndent } from "common-tags";
 
 import { Headers, CompletedRequest, Method, MockedEndpoint } from "../types";
 import { MockRuleData } from "./mock-rule";
@@ -77,7 +75,7 @@ export default class MockRuleBuilder {
     constructor(addRule: (rule: MockRuleData) => Promise<MockedEndpoint>)
     constructor(
         method: Method,
-        path: string | RegExp,
+        path: string | RegExp | undefined,
         addRule: (rule: MockRuleData) => Promise<MockedEndpoint>
     )
     constructor(
@@ -95,11 +93,10 @@ export default class MockRuleBuilder {
 
         if (path instanceof RegExp) {
             this.matchers.push(new RegexPathMatcher(path));
-            this.addRule = addRule!;
-        } else {
-            this.matchers.push(new SimplePathMatcher(path!));
-            this.addRule = addRule!;
+        } else if (typeof path === 'string') {
+            this.matchers.push(new SimplePathMatcher(path));
         }
+        this.addRule = addRule!;
     }
 
     private matchers: RequestMatcher[] = [];

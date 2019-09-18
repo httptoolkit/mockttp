@@ -6,8 +6,7 @@ import * as url from 'url';
 import * as _ from 'lodash';
 import * as normalize from "normalize-url";
 
-import { nthIndexOf } from './util';
-import { isAbsoluteUrl, isAbsoluteProtocollessUrl } from './request-utils';
+import { isAbsoluteProtocollessUrl } from './request-utils';
 
 // Preserved so we can correctly normalize serialized data, for backward compat
 // with legacy servers.

@@ -145,9 +145,21 @@ responses by hand.`);
         `);
     });
 
-    it("should allowing matching all requests, with a wildcard", async () => {
+    it("should allowing matching any possible requests", async () => {
         await server.anyRequest().thenReply(200, "wildcard response");
 
         await expect(fetch(server.urlFor('/any-old-endpoint'))).to.have.responseText('wildcard response');
+    });
+
+    it("should allowing matching any requests by method", async () => {
+        await server.get().thenReply(200, "get wildcard");
+        await server.post().thenReply(200, "post wildcard");
+
+        await expect(
+            fetch(server.urlFor('/anything'), { method: 'POST' })
+        ).to.have.responseText('post wildcard');
+        await expect(
+            fetch(server.urlFor('/anything'), { method: 'GET' })
+        ).to.have.responseText('get wildcard');
     });
 });
