@@ -20,7 +20,7 @@ import {
     streamToBuffer,
     shouldKeepAlive
 } from '../util/request-utils';
-import { isLocalPortActive, localAddresses } from '../util/socket-util';
+import { isLocalPortActive } from '../util/socket-util';
 import {
     Serializable,
     ClientServerChannel,

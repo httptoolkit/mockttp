@@ -49,24 +49,3 @@ export const isLocalIPv6Available = isNode
         (addresses) => _.some(addresses, a => a.address === '::1')
     )
     : true;
-
-// The current list of external ips for this device (v4 & v6). Updated every 10s.
-export let localAddresses: string[];
-const LOCAL_ADDRESS_UPDATE_FREQ = 10 * 1000;
-
-if (isNode) {
-    const updateLocalAddresses = () => {
-        localAddresses = _(os.networkInterfaces())
-            .map((interfaceAddresses) =>
-                interfaceAddresses.map((addressDetails) => addressDetails.address)
-            )
-            .flatten()
-            .valueOf();
-    };
-
-    updateLocalAddresses();
-    setInterval(
-        updateLocalAddresses,
-        LOCAL_ADDRESS_UPDATE_FREQ
-    ).unref(); // unref means this won't block shutdown
-}
