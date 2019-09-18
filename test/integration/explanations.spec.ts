@@ -71,7 +71,7 @@ Match requests making GETs matching //endpointA/\\d+/, and then respond with sta
 Match requests making POSTs, for /endpointB, and with form data including {"key":"value"}, and then respond with status 500.
 Match requests making POSTs, for /endpointC, and with {"key":"value"} as a JSON body, and then respond with status 500.
 Match requests making PUTs, for /endpointD, and with a query including {"a":"1"}, and then close the connection, always (seen 0).
-Match requests making PUTs, for /endpointE, for host abc.com, and with a query exactly matching \`?\`, and then timeout (never respond).
+Match requests making PUTs, for /endpointE, for host abc.com, and with a query exactly matching \`?\`, and then time out (never respond).
 `);
     });
 

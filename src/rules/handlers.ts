@@ -842,7 +842,7 @@ export class TimeoutHandler extends Serializable implements RequestHandler {
     readonly type = 'timeout';
 
     explain() {
-        return 'timeout (never respond)';
+        return 'time out (never respond)';
     }
 
     async handle() {
