@@ -148,6 +148,20 @@ nodeOnly(() => {
                 expect(response).to.equal('remote server');
             });
 
+            it("should be able to pass through upstream connection resets", async () => {
+                await remoteServer.anyRequest().thenCloseConnection();
+                await server.get(remoteServer.url).thenPassThrough();
+
+                let response: Response | Error = await request.get(remoteServer.url, {
+                    simple: false
+                }).catch((e) => e);
+
+                expect(response).to.be.instanceOf(Error);
+                expect((response as Error & {
+                    cause: { code: string }
+                }).cause.code).to.equal('ECONNRESET');
+            });
+
             it("should be able to rewrite a request's method", async () => {
                 await remoteServer.get('/').thenReply(200, 'GET');
                 await remoteServer.post('/').thenReply(200, 'POST');

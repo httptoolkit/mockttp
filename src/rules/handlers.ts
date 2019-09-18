@@ -728,9 +728,15 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
             serverReq.once('error', (e: any) => {
                 if ((<any>serverReq).aborted) return;
 
-                e.statusCode = 502;
-                e.statusMessage = 'Error communicating with upstream server';
-                reject(e);
+                if (e.code === 'ECONNRESET') {
+                    // The upstream socket closed: forcibly close the downstream too, to match
+                    (clientReq as any).socket.end();
+                    reject(new AbortError('Upstream connection was reset'));
+                } else {
+                    e.statusCode = 502;
+                    e.statusMessage = 'Error communicating with upstream server';
+                    reject(e);
+                }
             });
         });
     }
