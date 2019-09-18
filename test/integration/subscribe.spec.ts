@@ -349,6 +349,25 @@ describe("Abort subscriptions", () => {
         expect(seenRequest.id).to.equal(seenAbort.id);
     });
 
+    it("should be sent when a request is aborted during an intentional timeout", async () => {
+        let seenRequestPromise = getDeferred<CompletedRequest>();
+        await server.on('request', (r) => seenRequestPromise.resolve(r));
+
+        let seenAbortPromise = getDeferred<InitiatedRequest>();
+        await server.on('abort', (r) => seenAbortPromise.resolve(r));
+
+        await server.post('/mocked-endpoint').thenTimeout();
+
+        let abortable = makeAbortableRequest(server, '/mocked-endpoint');
+        nodeOnly(() => (abortable as http.ClientRequest).end('request body'));
+
+        let seenRequest = await seenRequestPromise;
+        abortable.abort();
+
+        let seenAbort = await seenAbortPromise;
+        expect(seenRequest.id).to.equal(seenAbort.id);
+    });
+
     nodeOnly(() => {
         it("should be sent when a request is aborted before completion", async () => {
             let wasRequestSeen = false;

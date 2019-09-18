@@ -834,8 +834,8 @@ export class TimeoutHandler extends Serializable implements RequestHandler {
     }
 
     async handle() {
-        // Do nothing, leaving the socket open, but never sending a response.
-        return;
+        // Do nothing, leaving the socket open but never sending a response.
+        return new Promise<void>(() => {});
     }
 }
 
