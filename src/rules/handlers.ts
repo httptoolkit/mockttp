@@ -11,6 +11,7 @@ import express = require("express");
 import { encode as encodeBase64, decode as decodeBase64 } from 'base64-arraybuffer';
 import { Readable, Transform } from 'stream';
 import { stripIndent, oneLine } from 'common-tags';
+import { TypedError } from 'typed-error';
 
 import {
     waitForCompletedRequest,
@@ -40,6 +41,10 @@ import {
     CompletedBody,
     Explainable
 } from "../types";
+
+// An error that indicates that the handler is aborting the request.
+// This could be intentional, or an upstream server aborting the request.
+export class AbortError extends TypedError { }
 
 export type SerializedBuffer = { type: 'Buffer', data: number[] };
 
@@ -823,6 +828,7 @@ export class CloseConnectionHandler extends Serializable implements RequestHandl
     async handle(request: OngoingRequest) {
         const socket: net.Socket = (<any> request).socket;
         socket.end();
+        throw new AbortError('Connection closed (intentionally)');
     }
 }
 

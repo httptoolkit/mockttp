@@ -31,6 +31,7 @@ import {
     buildAbortedRequest
 } from "../util/request-utils";
 import { WebSocketHandler } from "./websocket-handler";
+import { AbortError } from "../rules/handlers";
 
 /**
  * A in-process Mockttp implementation. This starts servers on the local machine in the
@@ -255,13 +256,14 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         this.announceInitialRequestAsync(request);
 
         let result: 'responded' | 'aborted' | null = null;
-        request.once('aborted', () => {
+        const abort = () => {
             if (result === null) {
                 result = 'aborted';
                 request.timingEvents.abortedTimestamp = now();
                 this.announceAbortAsync(request);
             }
-        });
+        }
+        request.once('aborted', abort);
 
         let nextRulePromise = filter(this.rules, (r) => r.matches(request))
             .then((matchingRules) =>
@@ -289,22 +291,30 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
             }
             result = result || 'responded';
         } catch (e) {
-            if (this.debug) {
-                console.error("Failed to handle request:", e);
+            if (e instanceof AbortError) {
+                abort();
+
+                if (this.debug) {
+                    console.error("Failed to handle request due to abort:", e);
+                }
             } else {
-                console.error("Failed to handle request:", e.message);
-            }
+                if (this.debug) {
+                    console.error("Failed to handle request:", e);
+                } else {
+                    console.error("Failed to handle request:", e.message);
+                }
 
-            // Make sure any errors here don't kill the process
-            response.on('error', (e) => {});
+                // Make sure any errors here don't kill the process
+                response.on('error', (e) => {});
 
-            // Do whatever we can to tell the client we broke
-            try { response.writeHead(e.statusCode || 500, e.statusMessage || 'Server error'); } catch (e) {}
-            try {
-                response.end(e.toString());
-                result = result || 'responded';
-            } catch (e) {
-                this.announceAbortAsync(request);
+                // Do whatever we can to tell the client we broke
+                try { response.writeHead(e.statusCode || 500, e.statusMessage || 'Server error'); } catch (e) {}
+                try {
+                    response.end(e.toString());
+                    result = result || 'responded';
+                } catch (e) {
+                    abort();
+                }
             }
         }
 
