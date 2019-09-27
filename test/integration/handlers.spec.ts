@@ -60,6 +60,19 @@ describe("HTTP mock rule handling", function () {
         expect(await response.text()).to.equal('Hi');
     });
 
+    it("should allow mocking a very large body", async function () {
+        this.timeout(5000); // In a browser, this can be slowwww
+
+        const bodyBuffer = Buffer.alloc(1024 * 1024 * 10, 'A'.charCodeAt(0));
+        await server.get("/mocked-endpoint").thenReply(200, bodyBuffer);
+
+        let response = await fetch(server.urlFor("/mocked-endpoint"));
+
+        const responseText = await response.text();
+        expect(responseText.length).to.equal(1024 * 1024 * 10);
+        expect(responseText.startsWith('AAAAAAAAAAAA')).to.equal(true);
+        expect(responseText.endsWith('AAAAAAAAAAAA')).to.equal(true);
+    });
 
     it("should reply with JSON when using the JSON helper", async () => {
         await server.get('/mocked-endpoint').thenJson(200, {myVar: 'foo'},

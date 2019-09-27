@@ -60,7 +60,8 @@ export class MockttpStandalone {
                 next();
             }
         });
-        this.app.use(bodyParser.json());
+
+        this.app.use(bodyParser.json({ limit: '50mb' }));
 
         this.app.post('/start', async (req, res) => {
             if (this.debug) console.log('Standalone starting mock server on port', req.query.port);
@@ -225,9 +226,7 @@ export class MockttpStandalone {
             noServer: true
         });
 
-        mockServerRouter.use(bodyParser.json(), graphqlExpress({
-            schema
-        }));
+        mockServerRouter.use(graphqlExpress({ schema }));
 
         return {
             mockPort,
