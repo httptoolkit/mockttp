@@ -1,9 +1,13 @@
 import _ = require("lodash");
-import http = require('http');
+import * as fs from 'fs-extra';
+import * as http from 'http';
+import * as https from 'https';
 import portfinder = require('portfinder');
-import { getLocal, Mockttp } from "../..";
 import request = require("request-promise-native");
-import { expect, nodeOnly, getDeferred, Deferred, sendRawRequest } from "../test-utils";
+
+import { getLocal, Mockttp } from "../..";
+import { destroyable, DestroyableServer } from "../../src/util/destroyable-server";
+import { expect, nodeOnly, getDeferred, Deferred, sendRawRequest, delay } from "../test-utils";
 import { generateCACertificate } from "../../src/util/tls";
 import { isLocalIPv6Available } from "../../src/util/socket-util";
 
@@ -565,6 +569,58 @@ nodeOnly(() => {
                         });
 
                         expect(response.statusCode).to.equal(502);
+                    });
+                });
+
+                describe("talking to a target server that requires a client cert", () => {
+                    let key: Buffer;
+                    let cert: Buffer;
+
+                    let authenticatingServerPort: number;
+                    let authenticatingServer: DestroyableServer;
+
+                    beforeEach(async () => {
+                        // We just reuse our standard certs for both server & client auth here.
+                        // A little lazy, but it works nicely.
+                        key = await fs.readFile('./test/fixtures/test-ca.key');
+                        cert = await fs.readFile('./test/fixtures/test-ca.pem');
+
+                        authenticatingServer = destroyable(https.createServer({
+                            key,
+                            cert,
+
+                            rejectUnauthorized: true,
+                            requestCert: true,
+                            ca: [cert]
+                        }, (_req, res) => {
+                            res.writeHead(200);
+                            res.end('OK');
+                        }));
+
+                        authenticatingServerPort = await portfinder.getPortPromise();
+                        return new Promise(async (resolve, reject) => {
+                            authenticatingServer.listen(authenticatingServerPort, (e: any) => {
+                                if (e) reject(e);
+                                else resolve();
+                            });
+                        });
+                    });
+
+                    afterEach(() => {
+                        authenticatingServer.destroy();
+                    });
+
+                    it("uses the matching client certificate for the hostname", async () => {
+                        await server.anyRequest().thenPassThrough({
+                            ignoreHostCertificateErrors: ['localhost'],
+                            clientCertificateHostMap: {
+                                [`localhost:${authenticatingServerPort}`]: { key, cert }
+                            }
+                        });
+
+                        let response = await request.get(`https://localhost:${authenticatingServerPort}/`);
+
+                        expect(response).to.equal("OK");
                     });
                 });
             });

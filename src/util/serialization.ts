@@ -233,6 +233,14 @@ export class ClientServerChannel extends Duplex {
     }
 }
 
+export function serializeBuffer(buffer: Buffer): string {
+    return buffer.toString('base64');
+}
+
+export function deserializeBuffer(buffer: string): Buffer {
+    return Buffer.from(buffer, 'base64');
+}
+
 export function withSerializedBodyReader<T extends {
     body: CompletedBody
 }>(input: T): Replace<T, 'body', string> {
@@ -243,7 +251,7 @@ export function withDeserializedBodyReader<T extends { headers: Headers, body: C
     input: Replace<T, 'body', string>
 ): T {
     return <T> Object.assign({}, input as Omit<T, 'body'>, {
-        body: buildBodyReader(Buffer.from(input.body, 'base64'), input.headers)
+        body: buildBodyReader(deserializeBuffer(input.body), input.headers)
     })
 }
 
@@ -255,13 +263,13 @@ export function withSerializedBodyBuffer<T extends {
     if (!input.body) {
         serializedBody = undefined;
     } else if (_.isString(input.body)) {
-        serializedBody = Buffer.from(input.body).toString('base64');
+        serializedBody = serializeBuffer(Buffer.from(input.body));
     } else if (_.isBuffer(input.body)) {
-        serializedBody = input.body.toString('base64');
+        serializedBody = serializeBuffer(input.body as Buffer);
     } else if (_.isArrayBuffer(input.body) || _.isTypedArray(input.body)) {
         serializedBody = encodeBase64(input.body as ArrayBuffer);
     } else if (input.body.hasOwnProperty('decodedBuffer')) {
-        serializedBody = input.body.buffer.toString('base64');
+        serializedBody = serializeBuffer(input.body.buffer);
     }
 
     return Object.assign({}, input, { body: serializedBody });

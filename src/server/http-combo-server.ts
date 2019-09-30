@@ -5,7 +5,7 @@ import http = require('http');
 import httpolyglot = require('httpolyglot');
 
 import { TlsRequest } from '../types';
-import destroyable, { DestroyableServer } from '../util/destroyable-server';
+import { destroyable, DestroyableServer } from '../util/destroyable-server';
 import { getCA, CAOptions } from '../util/tls';
 import { peekFirstByte, mightBeTLSHandshake } from '../util/socket-util';
 

@@ -22,7 +22,7 @@ import connectWebSocketStream = require('websocket-stream');
 import { Duplex } from 'stream';
 import DuplexPair = require('native-duplexpair');
 
-import destroyable, { DestroyableServer } from "../util/destroyable-server";
+import { destroyable, DestroyableServer } from "../util/destroyable-server";
 import MockttpServer from "../server/mockttp-server";
 import { buildStandaloneModel } from "./standalone-model";
 import { DEFAULT_STANDALONE_PORT } from '../types';

@@ -389,6 +389,8 @@ export default class MockRuleBuilder {
      *
      * * ignoreHostCertificateErrors, a list of hostnames for which server
      *   certificate errors should be ignored (none, by default).
+     * * clientCertificateHostMap, a mapping of hosts to client certificates to use,
+     *   in the form of { key, cert } objects (none, by default)
      * * beforeRequest, a callback that will be passed the full request
      *   before it is passed through, and which returns an object that defines
      *   how the the request content should be changed before it's passed
@@ -444,9 +446,7 @@ export default class MockRuleBuilder {
      * of the original request URL will be used instead.
      *
      * This method also takes options to configure how the request is passed
-     * through. The only option currently supported is ignoreHostCertificateErrors,
-     * a list of hostnames for which server certificate errors should
-     * be ignored (none, by default).
+     * through, see thenPassThrough for more details.
      *
      * Calling this method registers the rule with the server, so it
      * starts to handle requests.
