@@ -456,11 +456,22 @@ export default class MockRuleBuilder {
      * before sending requests to be matched. The mocked endpoint
      * can be used to assert on the requests matched by this rule.
      */
-    async thenForwardTo(forwardToLocation: string, options?: PassThroughHandlerOptions): Promise<MockedEndpoint> {
+    async thenForwardTo(
+        forwardToLocation: string,
+        options: Omit<PassThroughHandlerOptions, 'forwarding'> & {
+            forwarding?: Omit<PassThroughHandlerOptions['forwarding'], 'targetHost'>
+        } = {}
+    ): Promise<MockedEndpoint> {
         const rule: MockRuleData = {
             matchers: this.matchers,
             completionChecker: this.completionChecker,
-            handler: new PassThroughHandler(options, forwardToLocation)
+            handler: new PassThroughHandler({
+                ...options,
+                forwarding: {
+                    ...options.forwarding,
+                    targetHost: forwardToLocation
+                }
+            })
         };
 
         return this.addRule(rule);

@@ -336,7 +336,13 @@ export interface PassThroughResponse {
     body: CompletedBody;
 }
 
+interface ForwardingOptions {
+    targetHost: string,
+    updateHostHeader?: true | false | string // Change automatically/ignore/change to custom value
+}
+
 export interface PassThroughHandlerOptions {
+    forwarding?: ForwardingOptions,
     ignoreHostCertificateErrors?: string[];
     clientCertificateHostMap?: {
         [host: string]: { key: string | Buffer, cert: string | Buffer }
@@ -348,6 +354,7 @@ export interface PassThroughHandlerOptions {
 interface SerializedPassThroughData {
     type: 'passthrough';
     forwardToLocation?: string;
+    forwarding?: ForwardingOptions;
     ignoreHostCertificateErrors?: string[];
     clientCertificateHostMap?: { [host: string]: { key: string, cert: string } };
 
@@ -476,7 +483,8 @@ const KeepAliveAgents = {
 export class PassThroughHandler extends Serializable implements RequestHandler {
     readonly type = 'passthrough';
 
-    public readonly forwardToLocation?: string;
+    public readonly forwarding?: ForwardingOptions;
+
     public readonly ignoreHostCertificateErrors: string[] = [];
     public readonly clientCertificateHostMap: {
         [host: string]: { key: Buffer, cert: Buffer }
@@ -485,22 +493,25 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
     public readonly beforeRequest?: (req: CompletedRequest) => MaybePromise<CallbackRequestResult>;
     public readonly beforeResponse?: (res: PassThroughResponse) => MaybePromise<CallbackResponseResult>;
 
-    constructor(options: PassThroughHandlerOptions = {}, forwardToLocation?: string) {
+    constructor(options: PassThroughHandlerOptions = {}) {
         super();
 
         // If a location is provided, and it's not a bare hostname, it must be parseable
-        if (forwardToLocation && forwardToLocation.includes('/')) {
-            const { protocol, hostname, port, path } = url.parse(forwardToLocation);
+        const { forwarding } = options;
+        if (forwarding && forwarding.targetHost.includes('/')) {
+            const { protocol, hostname, port, path } = url.parse(forwarding.targetHost);
             if (path && path.trim() !== "/") {
                 const suggestion = url.format({ protocol, hostname, port }) ||
-                    forwardToLocation.slice(0, forwardToLocation.indexOf('/'));
+                    forwarding.targetHost.slice(0, forwarding.targetHost.indexOf('/'));
                 throw new Error(stripIndent`
-                    URLs passed to thenForwardTo cannot include a path, but "${forwardToLocation}" does. ${''
+                    URLs for forwarding cannot include a path, but "${forwarding.targetHost}" does. ${''
                     }Did you mean ${suggestion}?
                 `);
             }
         }
-        this.forwardToLocation = forwardToLocation;
+
+        this.forwarding = forwarding;
+
         this.ignoreHostCertificateErrors = options.ignoreHostCertificateErrors || [];
         this.clientCertificateHostMap = _.mapValues(
             options.clientCertificateHostMap || {},
@@ -515,8 +526,8 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
     }
 
     explain() {
-        return this.forwardToLocation
-            ? `forward the request to ${this.forwardToLocation}`
+        return this.forwarding
+            ? `forward the request to ${this.forwarding.targetHost}`
             : 'pass the request through to the target host';
     }
 
@@ -525,15 +536,23 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
         let { method, url: reqUrl, headers } = clientReq;
         let { protocol, hostname, port, path } = url.parse(reqUrl);
 
-        if (this.forwardToLocation) {
-            if (!this.forwardToLocation.includes('/')) {
+        if (this.forwarding) {
+            const { targetHost, updateHostHeader } = this.forwarding;
+            if (!targetHost.includes('/')) {
                 // We're forwarding to a bare hostname
-                [hostname, port] = this.forwardToLocation.split(':');
+                [hostname, port] = targetHost.split(':');
             } else {
                 // We're forwarding to a fully specified URL; override the host etc, but never the path.
-                ({ protocol, hostname, port } = url.parse(this.forwardToLocation));
+                ({ protocol, hostname, port } = url.parse(targetHost));
             }
-            headers['host'] = hostname + (port ? `:${port}` : '');
+
+            if (updateHostHeader === undefined || updateHostHeader === true) {
+                // If updateHostHeader is true, or just not specified, match the new target
+                headers['host'] = hostname + (port ? `:${port}` : '');
+            } else if (updateHostHeader) {
+                // If it's an explicit custom value, use that directly.
+                headers['host'] = updateHostHeader;
+            } // Otherwise: falsey means don't touch it.
         }
 
         // Check if this request is a request loop:
@@ -797,7 +816,10 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
 
         return {
             type: this.type,
-            forwardToLocation: this.forwardToLocation,
+            ...this.forwarding ? {
+                forwardToLocation: this.forwarding.targetHost,
+                forwarding: this.forwarding
+            } : {},
             ignoreHostCertificateErrors: this.ignoreHostCertificateErrors,
             clientCertificateHostMap: _.mapValues(this.clientCertificateHostMap, ({ key, cert }) => ({
                 key: serializeBuffer(key),
@@ -846,12 +868,17 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
         return new PassThroughHandler({
             beforeRequest,
             beforeResponse,
+            // Backward compat for old clients:
+            ...data.forwardToLocation ? {
+                forwarding: { targetHost: data.forwardToLocation }
+            } : {},
+            forwarding: data.forwarding,
             ignoreHostCertificateErrors: data.ignoreHostCertificateErrors,
             clientCertificateHostMap: _.mapValues(data.clientCertificateHostMap, ({ key, cert }) => ({
                 key: deserializeBuffer(key),
                 cert: deserializeBuffer(cert)
             })),
-        }, data.forwardToLocation);
+        });
     }
 }
 

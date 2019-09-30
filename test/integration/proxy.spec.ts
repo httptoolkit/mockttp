@@ -670,6 +670,40 @@ nodeOnly(() => {
                 await expect(server.anyRequest().thenForwardTo(locationWithPath))
                 .to.be.rejectedWith(/Did you mean http:\/\/localhost:1234\?$/g);
             });
+
+            it("updates the host header by default", async () => {
+                let remoteEndpointMock = await remoteServer.get('/get').thenReply(200, "mocked data");
+                await server.anyRequest().thenForwardTo(remoteServer.url);
+
+                await request.get(server.urlFor("/get"));
+
+                let seenRequests = await remoteEndpointMock.getSeenRequests();
+                expect(seenRequests[0].headers.host).to.equal(`localhost:${remoteServer.port}`);
+            });
+
+            it("can skip updating the host header if requested", async () => {
+                let remoteEndpointMock = await remoteServer.get('/get').thenReply(200, "mocked data");
+                await server.anyRequest().thenForwardTo(remoteServer.url, {
+                    forwarding: { updateHostHeader: false }
+                });
+
+                await request.get(server.urlFor("/get"));
+
+                let seenRequests = await remoteEndpointMock.getSeenRequests();
+                expect(seenRequests[0].headers.host).to.equal(`localhost:${server.port}`);
+            });
+
+            it("can update the host header to a custom value if requested", async () => {
+                let remoteEndpointMock = await remoteServer.get('/get').thenReply(200, "mocked data");
+                await server.anyRequest().thenForwardTo(remoteServer.url, {
+                    forwarding: { updateHostHeader: 'google.com' }
+                });
+
+                await request.get(server.urlFor("/get"));
+
+                let seenRequests = await remoteEndpointMock.getSeenRequests();
+                expect(seenRequests[0].headers.host).to.equal('google.com');
+            });
         });
     });
 });
