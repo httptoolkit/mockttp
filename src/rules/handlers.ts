@@ -345,7 +345,7 @@ export interface PassThroughHandlerOptions {
     forwarding?: ForwardingOptions,
     ignoreHostCertificateErrors?: string[];
     clientCertificateHostMap?: {
-        [host: string]: { key: string | Buffer, cert: string | Buffer }
+        [host: string]: { pfx: Buffer, passphrase?: string }
     };
     beforeRequest?: (req: CompletedRequest) => MaybePromise<CallbackRequestResult>;
     beforeResponse?: (res: PassThroughResponse) => MaybePromise<CallbackResponseResult>;
@@ -356,7 +356,7 @@ interface SerializedPassThroughData {
     forwardToLocation?: string;
     forwarding?: ForwardingOptions;
     ignoreHostCertificateErrors?: string[];
-    clientCertificateHostMap?: { [host: string]: { key: string, cert: string } };
+    clientCertificateHostMap?: { [host: string]: { pfx: string, passphrase?: string } };
 
     hasBeforeRequestCallback?: boolean;
     hasBeforeResponseCallback?: boolean;
@@ -487,7 +487,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
 
     public readonly ignoreHostCertificateErrors: string[] = [];
     public readonly clientCertificateHostMap: {
-        [host: string]: { key: Buffer, cert: Buffer }
+        [host: string]: { pfx: Buffer, passphrase?: string }
     };
 
     public readonly beforeRequest?: (req: CompletedRequest) => MaybePromise<CallbackRequestResult>;
@@ -513,13 +513,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
         this.forwarding = forwarding;
 
         this.ignoreHostCertificateErrors = options.ignoreHostCertificateErrors || [];
-        this.clientCertificateHostMap = _.mapValues(
-            options.clientCertificateHostMap || {},
-            ({ key, cert }) => ({
-                key: _.isString(key) ? Buffer.from(key) : key,
-                cert: _.isString(cert) ? Buffer.from(cert) : cert
-            })
-        );
+        this.clientCertificateHostMap = options.clientCertificateHostMap || {};
 
         this.beforeRequest = options.beforeRequest;
         this.beforeResponse = options.beforeResponse;
@@ -625,7 +619,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 ? '' // Omit the port if it's the default
                 : `:${port}` // Otherwise use it
         );
-        const clientKeyAndCert = this.clientCertificateHostMap[host] || {};
+        const clientCert = this.clientCertificateHostMap[host] || {};
 
         let makeRequest = protocol === 'https:' ? https.request : http.request;
 
@@ -658,7 +652,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 headers,
                 agent,
                 rejectUnauthorized: checkServerCertificate,
-                ...clientKeyAndCert
+                ...clientCert
             }, async (serverRes) => {
                 serverRes.once('error', reject);
 
@@ -821,10 +815,9 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 forwarding: this.forwarding
             } : {},
             ignoreHostCertificateErrors: this.ignoreHostCertificateErrors,
-            clientCertificateHostMap: _.mapValues(this.clientCertificateHostMap, ({ key, cert }) => ({
-                key: serializeBuffer(key),
-                cert: serializeBuffer(cert)
-            })),
+            clientCertificateHostMap: _.mapValues(this.clientCertificateHostMap,
+                ({ pfx, passphrase }) => ({ pfx: serializeBuffer(pfx), passphrase })
+            ),
             hasBeforeRequestCallback: !!this.beforeRequest,
             hasBeforeResponseCallback: !!this.beforeResponse
         };
@@ -874,10 +867,9 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
             } : {},
             forwarding: data.forwarding,
             ignoreHostCertificateErrors: data.ignoreHostCertificateErrors,
-            clientCertificateHostMap: _.mapValues(data.clientCertificateHostMap, ({ key, cert }) => ({
-                key: deserializeBuffer(key),
-                cert: deserializeBuffer(cert)
-            })),
+            clientCertificateHostMap: _.mapValues(data.clientCertificateHostMap,
+                ({ pfx, passphrase }) => ({ pfx: deserializeBuffer(pfx), passphrase })
+            ),
         });
     }
 }

@@ -573,21 +573,16 @@ nodeOnly(() => {
                 });
 
                 describe("talking to a target server that requires a client cert", () => {
-                    let key: Buffer;
-                    let cert: Buffer;
-
                     let authenticatingServerPort: number;
                     let authenticatingServer: DestroyableServer;
 
                     beforeEach(async () => {
-                        // We just reuse our standard certs for both server & client auth here.
-                        // A little lazy, but it works nicely.
-                        key = await fs.readFile('./test/fixtures/test-ca.key');
-                        cert = await fs.readFile('./test/fixtures/test-ca.pem');
+                        const key = await fs.readFile('./test/fixtures/test-ca.key');
+                        const cert = await fs.readFile('./test/fixtures/test-ca.pem');
 
                         authenticatingServer = destroyable(https.createServer({
-                            key,
-                            cert,
+                            key: key,
+                            cert: cert,
 
                             rejectUnauthorized: true,
                             requestCert: true,
@@ -614,7 +609,10 @@ nodeOnly(() => {
                         await server.anyRequest().thenPassThrough({
                             ignoreHostCertificateErrors: ['localhost'],
                             clientCertificateHostMap: {
-                                [`localhost:${authenticatingServerPort}`]: { key, cert }
+                                [`localhost:${authenticatingServerPort}`]: {
+                                    pfx: await fs.readFile('./test/fixtures/test-ca.pfx'),
+                                    passphrase: 'test-passphrase'
+                                }
                             }
                         });
 
