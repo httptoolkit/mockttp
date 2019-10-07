@@ -34,6 +34,7 @@ type TlsRequest {
     failureCause: String!
     hostname: String
     remoteIpAddress: String!
+    tags: [String!]!
 }
 
 type InitiatedRequest {
@@ -49,6 +50,7 @@ type InitiatedRequest {
 
     headers: Json!
     timingEvents: Json!
+    tags: [String!]!
 }
 
 type Request {
@@ -65,6 +67,7 @@ type Request {
     headers: Json!
     body: Buffer!
     timingEvents: Json!
+    tags: [String!]!
 }
 
 type Response {
@@ -76,6 +79,7 @@ type Response {
     headers: Json!
     body: Buffer!
     timingEvents: Json!
+    tags: [String!]!
 }
 
 scalar Any

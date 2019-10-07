@@ -355,7 +355,8 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
 
                         headers,
                         timingEvents,
-                        httpVersion
+                        httpVersion,
+                        ${this.typeHasField('InitiatedRequest', 'tags') ? 'tags' : ''}
                     }
                 }`
             },
@@ -375,6 +376,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                         body,
                         ${this.typeHasField('Request', 'timingEvents') ? 'timingEvents' : ''}
                         ${this.typeHasField('Request', 'httpVersion') ? 'httpVersion' : ''}
+                        ${this.typeHasField('Request', 'tags') ? 'tags' : ''}
                     }
                 }`
             },
@@ -388,6 +390,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                         headers,
                         body,
                         ${this.typeHasField('Response', 'timingEvents') ? 'timingEvents' : ''}
+                        ${this.typeHasField('Response', 'tags') ? 'tags' : ''}
                     }
                 }`
             },
@@ -405,6 +408,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                         headers,
                         body,
                         ${this.typeHasField('Response', 'timingEvents') ? 'timingEvents' : ''}
+                        ${this.typeHasField('Response', 'tags') ? 'tags' : ''}
                     }
                 }`
             },
@@ -415,6 +419,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                         failureCause
                         hostname
                         remoteIpAddress
+                        ${this.typeHasField('TlsRequest', 'tags') ? 'tags' : ''}
                     }
                 }`
             }
@@ -434,6 +439,8 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                     } else if (event !== 'tlsClientError') {
                         data.timingEvents = {}; // For backward compat
                     }
+
+                    if (!data.tags) data.tags = [];
 
                     if (data.body) {
                         data.body = buildBodyReader(Buffer.from(data.body, 'base64'), data.headers);

@@ -55,12 +55,14 @@ export interface Request {
     headers: RequestHeaders;
 
     timingEvents: TimingEvents | {};
+    tags: string[];
 }
 
 export interface TlsRequest {
     hostname?: string;
     remoteIpAddress: string;
-    failureCause: 'closed' | 'reset' | 'cert-rejected' | 'no-shared-cipher' | 'unknown'
+    failureCause: 'closed' | 'reset' | 'cert-rejected' | 'no-shared-cipher' | 'unknown';
+    tags: string[];
 }
 
 // Internal representation of an ongoing HTTP request whilst it's being processed
@@ -113,6 +115,7 @@ export interface OngoingResponse extends express.Response {
     getHeaders(): Headers;
     body: ParsedBody;
     timingEvents: TimingEvents;
+    tags: string[];
 }
 
 export interface CompletedResponse {
@@ -122,6 +125,7 @@ export interface CompletedResponse {
     headers: Headers;
     body: CompletedBody;
     timingEvents: TimingEvents | {};
+    tags: string[];
 }
 
 /**

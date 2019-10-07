@@ -128,6 +128,7 @@ describe("Request subscriptions", () => {
             expect(seenRequest.httpVersion).to.equal('1.1');
             expect(seenRequest.url).to.equal(server.urlFor("/mocked-endpoint"));
             expect(seenRequest.body.text).to.equal('body-text');
+            expect(seenRequest.tags).to.deep.equal([]);
         });
 
         it("should include the matched rule id", async () => {
@@ -192,6 +193,7 @@ describe("Request subscriptions", () => {
                     `http://localhost:${client.port}/mocked-endpoint`
                 );
                 expect(seenRequest.body.text).to.equal('body-text');
+                expect(seenRequest.tags).to.deep.equal([]);
             });
         });
     });
@@ -217,6 +219,7 @@ describe("Response subscriptions", () => {
         expect(seenResponse.statusCode).to.equal(200);
         expect(seenResponse.headers['x-extra-header']).to.equal('present');
         expect(seenResponse.body.text).to.equal('Mock response');
+        expect(seenResponse.tags).to.deep.equal([]);
     });
 
     it("should expose ungzipped bodies as .text", async () => {
@@ -347,6 +350,7 @@ describe("Abort subscriptions", () => {
 
         let seenAbort = await seenAbortPromise;
         expect(seenRequest.id).to.equal(seenAbort.id);
+        expect(seenRequest.tags).to.deep.equal([]);
     });
 
     it("should be sent when a request is aborted during an intentional timeout", async () => {
@@ -514,6 +518,7 @@ describe("TLS error subscriptions", () => {
             '::ffff:127.0.0.1', // IPv4 localhost
             '::1' // IPv6 localhost
         ]);
+        expect(tlsError.tags).to.deep.equal([]);
     });
 
     nodeOnly(() => {

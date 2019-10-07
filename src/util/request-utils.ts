@@ -243,7 +243,8 @@ export function buildInitiatedRequest(request: OngoingRequest): InitiatedRequest
             'url',
             'path',
             'hostname',
-            'headers'
+            'headers',
+            'tags'
         ),
         timingEvents: request.timingEvents
     };
@@ -265,7 +266,7 @@ export async function waitForCompletedRequest(request: OngoingRequest): Promise<
     return Object.assign(requestData, { body });
 }
 
-export function trackResponse(response: express.Response, timingEvents: TimingEvents): OngoingResponse {
+export function trackResponse(response: express.Response, timingEvents: TimingEvents, tags: string[]): OngoingResponse {
     let trackedResponse = <OngoingResponse> response;
     if (!trackedResponse.getHeaders) {
         // getHeaders was added in 7.7. - if it's not available, polyfill it
@@ -273,6 +274,7 @@ export function trackResponse(response: express.Response, timingEvents: TimingEv
     }
 
     trackedResponse.timingEvents = timingEvents;
+    trackedResponse.tags = tags;
 
     // Headers are sent when .writeHead or .write() are first called
 
@@ -324,7 +326,8 @@ export async function waitForCompletedResponse(response: OngoingResponse): Promi
         'id',
         'statusCode',
         'statusMessage',
-        'timingEvents'
+        'timingEvents',
+        'tags'
     ]).assign({
         headers: response.getHeaders(),
         body: body

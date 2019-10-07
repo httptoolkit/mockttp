@@ -5,7 +5,7 @@ import * as https from 'https';
 import portfinder = require('portfinder');
 import request = require("request-promise-native");
 
-import { getLocal, Mockttp } from "../..";
+import { getLocal, Mockttp, CompletedResponse } from "../..";
 import { destroyable, DestroyableServer } from "../../src/util/destroyable-server";
 import { expect, nodeOnly, getDeferred, Deferred, sendRawRequest, delay } from "../test-utils";
 import { generateCACertificate } from "../../src/util/tls";
@@ -541,6 +541,21 @@ nodeOnly(() => {
                         expect(response.statusCode).to.equal(502);
                     });
 
+                    it("should tag failed passthrough requests", async () => {
+                        await badServer.anyRequest().thenReply(200);
+                        await server.anyRequest().thenPassThrough();
+
+                        let responsePromise = getDeferred<CompletedResponse>();
+                        await server.on('response', (r) => responsePromise.resolve(r));
+
+                        await request.get(badServer.url).catch(() => {});
+
+                        const seenResponse = await responsePromise;
+                        expect(seenResponse.tags).to.deep.equal([
+                            'passthrough-error:SELF_SIGNED_CERT_IN_CHAIN'
+                        ]);
+                    });
+
                     it("should allow passing through requests if the host is specifically listed", async () => {
                         await badServer.anyRequest().thenReply(200);
 
@@ -556,7 +571,7 @@ nodeOnly(() => {
                         expect(response.statusCode).to.equal(200);
                     });
 
-                    it("should allow passing through requests if a non-matching host is specifically listed", async () => {
+                    it("should refuse to pass through requests if a non-matching host is listed", async () => {
                         await badServer.anyRequest().thenReply(200);
 
                         await server.get(badServer.urlFor('/')).thenPassThrough({

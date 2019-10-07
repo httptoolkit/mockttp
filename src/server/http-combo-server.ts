@@ -131,7 +131,8 @@ export async function createComboServer(
         tlsClientErrorListener({
             failureCause: getCauseFromError(error),
             hostname: socket.servername,
-            remoteIpAddress: socket.initialRemoteAddress!
+            remoteIpAddress: socket.initialRemoteAddress!,
+            tags: []
         });
     });
     server.on('secureConnection', (tlsSocket: tls.TLSSocket) =>
@@ -139,7 +140,8 @@ export async function createComboServer(
             tlsClientErrorListener({
                 failureCause: 'closed',
                 hostname: tlsSocket.servername,
-                remoteIpAddress: tlsSocket.remoteAddress!
+                remoteIpAddress: tlsSocket.remoteAddress!,
+                tags: []
             });
         })
     );
@@ -193,7 +195,8 @@ export async function createComboServer(
                     tlsClientErrorListener({
                         failureCause: 'closed',
                         hostname: targetHost,
-                        remoteIpAddress: socket.remoteAddress!
+                        remoteIpAddress: socket.remoteAddress!,
+                        tags: []
                     });
                 });
             });
@@ -207,7 +210,8 @@ export async function createComboServer(
         }).catch((cause) => tlsClientErrorListener({
             failureCause: cause,
             hostname: targetHost,
-            remoteIpAddress: socket.remoteAddress!
+            remoteIpAddress: socket.remoteAddress!,
+            tags: []
         }));
 
         // This is a little crazy, but only a little. We create a one-off server to handle HTTP parsing, but

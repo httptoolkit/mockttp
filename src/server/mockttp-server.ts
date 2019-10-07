@@ -194,7 +194,10 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
             const initiatedReq = buildInitiatedRequest(request);
             this.eventEmitter.emit('request-initiated', Object.assign(
                 initiatedReq,
-                { timingEvents: _.clone(initiatedReq.timingEvents) }
+                {
+                    timingEvents: _.clone(initiatedReq.timingEvents),
+                    tags: _.clone(initiatedReq.tags)
+                }
             ));
         });
     }
@@ -205,7 +208,10 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
             .then((completedReq: CompletedRequest) => {
                 this.eventEmitter.emit('request', Object.assign(
                     completedReq,
-                    { timingEvents: _.clone(completedReq.timingEvents) }
+                    {
+                        timingEvents: _.clone(completedReq.timingEvents),
+                        tags: _.clone(completedReq.tags)
+                    }
                 ));
             })
             .catch(console.error);
@@ -217,7 +223,8 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
             waitForCompletedResponse(response)
             .then((res: CompletedResponse) => {
                 this.eventEmitter.emit('response', Object.assign(res, {
-                    timingEvents: _.clone(res.timingEvents)
+                    timingEvents: _.clone(res.timingEvents),
+                    tags: _.clone(res.tags)
                 }));
             })
             .catch(console.error);
@@ -227,7 +234,8 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
     private async announceAbortAsync(request: OngoingRequest) {
         const req = buildAbortedRequest(request);
         this.eventEmitter.emit('abort', Object.assign(req, {
-            timingEvents: _.clone(req.timingEvents)
+            timingEvents: _.clone(req.timingEvents),
+            tags: _.clone(req.tags)
         }));
     }
 
@@ -242,14 +250,16 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         if (this.debug) console.log(`Handling request for ${rawRequest.url}`);
 
         const timingEvents = { startTime: Date.now(), startTimestamp: now() };
+        const tags: string[] = [];
 
-        const response = trackResponse(rawResponse, timingEvents);
+        const response = trackResponse(rawResponse, timingEvents, tags);
 
         const id = uuid();
 
         const request = <OngoingRequest>Object.assign(rawRequest, {
             id: id,
-            timingEvents
+            timingEvents,
+            tags
         });
         response.id = id;
 

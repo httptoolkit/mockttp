@@ -525,7 +525,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
             : 'pass the request through to the target host';
     }
 
-    async handle(clientReq: OngoingRequest, clientRes: express.Response) {
+    async handle(clientReq: OngoingRequest, clientRes: OngoingResponse) {
         // Capture raw request data:
         let { method, url: reqUrl, headers } = clientReq;
         let { protocol, hostname, port, path } = url.parse(reqUrl);
@@ -763,6 +763,9 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
 
             serverReq.once('error', (e: any) => {
                 if ((<any>serverReq).aborted) return;
+                // Tag responses, so programmatic examination can react to this
+                // event, without having to parse response data or similar.
+                clientRes.tags.push('passthrough-error:' + e.code);
 
                 if (e.code === 'ECONNRESET') {
                     // The upstream socket closed: forcibly close the downstream too, to match
