@@ -763,8 +763,13 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
 
             serverReq.once('error', (e: any) => {
                 if ((<any>serverReq).aborted) return;
+
                 // Tag responses, so programmatic examination can react to this
                 // event, without having to parse response data or similar.
+                const tlsAlertMatch = /SSL alert number (\d+)/.exec(e.message);
+                if (tlsAlertMatch) {
+                    clientRes.tags.push('passthrough-tls-error:ssl-alert-' + tlsAlertMatch[1]);
+                }
                 clientRes.tags.push('passthrough-error:' + e.code);
 
                 if (e.code === 'ECONNRESET') {
