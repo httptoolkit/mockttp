@@ -613,13 +613,16 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
             }
         }
 
-        const checkServerCertificate = !_.includes(this.ignoreHostCertificateErrors, hostname);
-        const host = hostname + (
-            (protocol === 'https:' && port === '443') || (protocol === 'http:' && port === '80')
-                ? '' // Omit the port if it's the default
-                : `:${port}` // Otherwise use it
-        );
-        const clientCert = this.clientCertificateHostMap[host] || {};
+        const hostWithPort = `${hostname}:${port}`
+
+        // Ignore cert errors if the host+port or whole hostname is whitelisted
+        const checkServerCertificate = !_.includes(this.ignoreHostCertificateErrors, hostname) &&
+            !_.includes(this.ignoreHostCertificateErrors, hostWithPort);
+
+        // Use a client cert if it's listed for the  host+port or whole hostname
+        const clientCert =this.clientCertificateHostMap[hostWithPort] ||
+            this.clientCertificateHostMap[hostname!] ||
+            {};
 
         let makeRequest = protocol === 'https:' ? https.request : http.request;
 
