@@ -64,7 +64,7 @@ export async function generateCACertificate(options: { commonName?: string, bits
 
     cert.validity.notAfter = new Date();
     // Valid for the next year by default.
-    cert.validity.notAfter.setFullYear(cert.validity.notBefore.getFullYear() + 1);
+    cert.validity.notAfter.setFullYear(cert.validity.notAfter.getFullYear() + 1);
 
     cert.setSubject([{ name: 'commonName', value: options.commonName }]);
 
