@@ -81,7 +81,7 @@ nodeOnly(() => {
 
                 let response = await request.get("http://example.com/");
                 expect(response).to.include(
-                    "This domain is established to be used for illustrative examples in documents."
+                    "This domain is for use in illustrative examples in documents."
                 );
             });
 
