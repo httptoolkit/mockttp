@@ -45,6 +45,7 @@ import {
     CloseConnectionHandler,
     TimeoutHandler,
     PassThroughHandlerOptions,
+    FileHandler,
 } from "./handlers";
 import { MaybePromise } from "../util/type-utils";
 
@@ -237,7 +238,7 @@ export default class MockRuleBuilder {
     }
 
     /**
-     * Reply to matched with with given status code and (optionally) status message,
+     * Reply to matched requests with a given status code and (optionally) status message,
      * body and headers.
      *
      * If one string argument is provided, it's used as the body. If two are
@@ -375,6 +376,53 @@ export default class MockRuleBuilder {
             completionChecker: this.completionChecker,
             handler: new StreamHandler(status, stream, headers)
         }
+
+        return this.addRule(rule);
+    }
+
+    /**
+     * Reply to matched requests with a given status code and the current contents
+     * of a given file. The status message and headers can also be optionally
+     * provided here.
+     *
+     * The file is read near-fresh for each request, and external changes to its
+     * content will be immediately appear in all subsequent requests.
+     *
+     * If one string argument is provided, it's used as the body file path.
+     * If two are provided (even if one is empty), then 1st is the status message,
+     * and the 2nd the body. This matches the argument order of thenReply().
+     *
+     * Calling this method registers the rule with the server, so it
+     * starts to handle requests.
+     *
+     * This method returns a promise that resolves with a mocked endpoint.
+     * Wait for the promise to confirm that the rule has taken effect
+     * before sending requests to be matched. The mocked endpoint
+     * can be used to assert on the requests matched by this rule.
+     */
+    thenFromFile(status: number, filePath: string, headers?: Headers): Promise<MockedEndpoint>;
+    thenFromFile(status: number, statusMessage: string, filePath: string, headers?: Headers): Promise<MockedEndpoint>
+    thenFromFile(
+        status: number,
+        pathOrMessage: string,
+        pathOrHeaders?: string | Headers,
+        headers?: Headers
+    ): Promise<MockedEndpoint> {
+        let path: string;
+        let statusMessage: string | undefined;
+        if (isString(pathOrHeaders)) {
+            path = pathOrHeaders;
+            statusMessage = pathOrMessage as string;
+        } else {
+            path = pathOrMessage;
+            headers = pathOrHeaders as Headers | undefined;
+        }
+
+        const rule: MockRuleData = {
+            matchers: this.matchers,
+            completionChecker: this.completionChecker,
+            handler: new FileHandler(status, statusMessage, path, headers)
+        };
 
         return this.addRule(rule);
     }

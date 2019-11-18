@@ -1,4 +1,5 @@
 import * as semver from 'semver';
+import * as path from 'path';
 import { PassThrough } from 'stream';
 import { getLocal } from "../..";
 import { expect, fetch, isNode, delay } from "../test-utils";
@@ -190,6 +191,42 @@ describe("HTTP mock rule handling", function () {
 
         let response = await fetch(server.urlFor("/mocked-endpoint"));
 
-        expect(await response.status).to.equal(500);
+        expect(response.status).to.equal(500);
+    });
+
+    it("should allow mocking the body with contents from a file", async () => {
+        await server.get('/mocked-endpoint').thenFromFile(200,
+            path.join(__dirname, '..', 'fixtures', 'response-file.txt')
+        );
+
+        let response = await fetch(server.urlFor("/mocked-endpoint"));
+
+        expect(response.status).to.equal(200);
+        expect(await response.text()).to.equal('Response from text file');
+    });
+
+    it("should allow mocking the body with contents from a file, with headers & status message", async () => {
+        await server.get('/mocked-endpoint').thenFromFile(200, "mock status",
+            path.join(__dirname, '..', 'fixtures', 'response-file.txt'),
+            { "Content-Type": "text/mocked" }
+        );
+
+        let response = await fetch(server.urlFor("/mocked-endpoint"));
+
+        expect(response.status).to.equal(200);
+        expect(response.statusText).to.equal("mock status");
+        expect(response.headers.get('Content-Type')).to.equal('text/mocked');
+        expect(await response.text()).to.equal('Response from text file');
+    });
+
+    it("should return a clear error when mocking the body with contents from a non-existent file", async () => {
+        await server.get('/mocked-endpoint').thenFromFile(200,
+            path.join(__dirname, '..', 'fixtures', 'non-existent-file.txt')
+        );
+
+        let response = await fetch(server.urlFor("/mocked-endpoint"));
+
+        expect(response.status).to.equal(500);
+        expect(await response.text()).to.include('no such file or directory');
     });
 });

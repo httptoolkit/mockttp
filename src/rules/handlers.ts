@@ -33,6 +33,7 @@ import {
     deserializeBuffer
 } from "../util/serialization";
 import { MaybePromise, Replace } from '../util/type-utils';
+import { readFile } from '../util/fs';
 
 import {
     Headers,
@@ -325,6 +326,35 @@ export class StreamHandler extends Serializable implements RequestHandler {
             handlerStream,
             handlerData.headers
         );
+    }
+}
+
+export class FileHandler extends Serializable implements RequestHandler {
+    readonly type = 'file';
+
+    constructor(
+        public status: number,
+        public statusMessage: string | undefined,
+        public filePath: string,
+        public headers?: Headers
+    ) {
+        super();
+    }
+
+    explain() {
+        return `respond with status ${this.status}` +
+            (this.statusMessage ? ` (${this.statusMessage})`: "") +
+            (this.headers ? `, headers ${JSON.stringify(this.headers)}` : "") +
+            (this.filePath ? ` and body from file ${this.filePath}` : "");
+    }
+
+    async handle(_request: OngoingRequest, response: OngoingResponse) {
+        // Read the file first, to ensure we error cleanly if it's unavailable
+        const fileContents = await readFile(this.filePath, null);
+
+        if (this.headers) setHeaders(response, this.headers);
+        response.writeHead(this.status, this.statusMessage);
+        response.end(fileContents);
     }
 }
 
@@ -916,6 +946,7 @@ export const HandlerLookup = {
     'simple': SimpleHandler,
     'callback': CallbackHandler,
     'stream': StreamHandler,
+    'file': FileHandler,
     'passthrough': PassThroughHandler,
     'close-connection': CloseConnectionHandler,
     'timeout': TimeoutHandler
