@@ -61,7 +61,7 @@ describe("HTTP mock rule handling", function () {
     });
 
     it("should allow mocking a very large body", async function () {
-        this.timeout(5000); // In a browser, this can be slowwww
+        this.timeout(10000); // In a browser, this can be slowwww
 
         const bodyBuffer = Buffer.alloc(1024 * 1024 * 10, 'A'.charCodeAt(0));
         await server.get("/mocked-endpoint").thenReply(200, bodyBuffer);
