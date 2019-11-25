@@ -9,6 +9,7 @@ import * as fs from '../util/fs';
 import * as _ from 'lodash';
 import * as express from 'express';
 import * as cors from 'cors';
+import corsGate = require('cors-gate');
 import * as http from 'http';
 import * as net from 'net';
 import * as bodyParser from 'body-parser';
@@ -31,7 +32,7 @@ import { MockttpOptions, PortRange } from '../mockttp';
 export interface StandaloneServerOptions {
     debug?: boolean;
     serverDefaults?: MockttpOptions;
-    corsOptions?: cors.CorsOptions;
+    corsOptions?: cors.CorsOptions & { strict: boolean };
 }
 
 export class MockttpStandalone {
@@ -46,20 +47,13 @@ export class MockttpStandalone {
         if (this.debug) console.log('Standalone server started in debug mode');
 
         this.app.use(cors(options.corsOptions));
-        this.app.use((req, res, next) => {
-            const origin = req.headers['origin'];
-            // This will have been set (or intentionally not set), by the CORS middleware
-            const allowedOrigin = res.getHeader('Access-Control-Allow-Origin');
-
-            // If origin is set (null or an origin) but was not accepted by the CORS options
-            // Note that if no options.cors is provided, allowedOrigin is always *.
-            if (origin !== undefined && allowedOrigin !== '*' && allowedOrigin !== origin) {
-                // Don't process the request: error out & skip the lot (to avoid CSRF)
-                res.status(403).send('CORS request sent by unacceptable origin');
-            } else {
-                next();
-            }
-        });
+        if (options.corsOptions && options.corsOptions.strict) {
+            this.app.use(corsGate({
+                strict: true, // MUST send an allowed origin
+                allowSafe: false, // Even for HEAD/GET requests (should be none anyway)
+                origin: '' // No origin - we accept *no* same-origin requests
+            }));
+        }
 
         this.app.use(bodyParser.json({ limit: '50mb' }));
 
