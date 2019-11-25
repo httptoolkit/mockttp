@@ -3,7 +3,7 @@ import * as net from 'net';
 import * as portfinder from 'portfinder';
 import request = require("request-promise-native");
 
-import { getLocal, getRemote, getStandalone } from "../..";
+import { getLocal, getRemote, getStandalone, Mockttp } from "../..";
 import { expect, fetch, nodeOnly, browserOnly } from "../test-utils";
 
 browserOnly(() => {
@@ -246,6 +246,65 @@ nodeOnly(() => {
 
             it("should use the provided configuration by default", async () => {
                 expect(client.url.split('://')[0]).to.equal('https');
+            });
+        });
+
+
+        describe("with strict CORS configured", () => {
+            let server = getStandalone({
+                corsOptions: {
+                    origin: 'https://example.com',
+                    strict: true
+                }
+            });
+
+            let client: Mockttp;
+
+            before(() => server.start());
+            after(() => server.stop());
+
+            afterEach(() => client.stop());
+
+            it("rejects clients with no origin", async () => {
+                client = getRemote();
+
+                await expect(client.start()).to.be.rejectedWith('403');
+            });
+
+            it("rejects clients with the wrong origin", async () => {
+                client = getRemote({
+                    client: {
+                        headers: {
+                            origin: 'https://twitter.com'
+                        }
+                    }
+                });
+
+                await expect(client.start()).to.be.rejectedWith('403');
+            });
+
+            it("rejects clients with the wrong origin protocol", async () => {
+                client = getRemote({
+                    client: {
+                        headers: {
+                            origin: 'http://example.com'
+                        }
+                    }
+                });
+
+                await expect(client.start()).to.be.rejectedWith('403');
+            });
+
+            it("allows clients that specify the correct origin", async () => {
+                client = getRemote({
+                    client: {
+                        headers: {
+                            origin: 'https://example.com'
+                        }
+                    }
+                });
+
+                await expect(client.start()).to.eventually.equal(undefined);
             });
         });
 

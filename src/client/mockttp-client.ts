@@ -52,13 +52,33 @@ export class GraphQLError extends RequestError {
 
 type SubscribableEvent = 'request-initiated' | 'request' | 'response' | 'abort' | 'tlsClientError';
 
-const SUBSCRIBABLE_EVENTS: SubscribableEvent[] = [
-    'request-initiated',
-    'request',
-    'response',
-    'abort',
-    'tlsClientError'
-];
+export interface MockttpClientOptions extends MockttpOptions {
+    client?: {
+        headers?: { [key: string]: string };
+    }
+}
+
+const mergeClientOptions = (
+    options: RequestInit | undefined,
+    defaultOptions: MockttpClientOptions['client']
+) => {
+    if (!defaultOptions) return options;
+    if (!options) return defaultOptions;
+
+    if (defaultOptions.headers) {
+        if (!options.headers) {
+            options.headers = defaultOptions.headers;
+        } else if (options.headers instanceof Headers) {
+            _.forEach(defaultOptions.headers, (value, key) => {
+                (options.headers as Headers).append(key, value);
+            });
+        } else if (_.isObject(options.headers)) {
+            Object.assign(options.headers, defaultOptions.headers);
+        }
+    }
+
+    return options;
+};
 
 /**
  * A Mockttp implementation, controlling a remote Mockttp standalone server.
@@ -68,13 +88,15 @@ const SUBSCRIBABLE_EVENTS: SubscribableEvent[] = [
  */
 export default class MockttpClient extends AbstractMockttp implements Mockttp {
 
-    private mockServerOptions: RequireProps<MockttpOptions, 'cors' | 'standaloneServerUrl'>;
+    private mockServerOptions: RequireProps<MockttpClientOptions, 'cors' | 'standaloneServerUrl'>;
+    private mockClientOptions: MockttpClientOptions['client'];
+
     private mockServerConfig: MockServerConfig | undefined;
     private mockServerStream: Duplex | undefined;
     private mockServerSchema: any;
 
-    constructor(mockServerOptions: MockttpOptions = {}) {
-        super(_.defaults(mockServerOptions, {
+    constructor(options: MockttpClientOptions = {}) {
+        super(_.defaults(options, {
             // Browser clients generally want cors enabled. For other clients, it doesn't hurt.
             // TODO: Maybe detect whether we're in a browser in future
             cors: true,
@@ -83,9 +105,10 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
 
         // Note that 'defaults' above mutates this, so this includes
         // the default parameter values too (and thus the type assertion)
-        this.mockServerOptions = mockServerOptions as RequireProps<
+        this.mockServerOptions = _.omit(options, 'client') as RequireProps<
             MockttpOptions, 'cors' | 'standaloneServerUrl'
         >
+        this.mockClientOptions = options.client || {};
     }
 
     private async requestFromStandalone<T>(path: string, options?: RequestInit): Promise<T> {
@@ -93,7 +116,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
 
         let response;
         try {
-            response = await fetch(url, options);
+            response = await fetch(url, mergeClientOptions(options, this.mockClientOptions));
         } catch (e) {
             if (e.code === 'ECONNREFUSED') {
                 throw new ConnectionError(`Failed to connect to standalone server at ${this.mockServerOptions.standaloneServerUrl}`);
@@ -140,7 +163,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
         if (!this.mockServerConfig) throw new Error('Not connected to mock server');
 
         let url = `${this.mockServerOptions.standaloneServerUrl}/server/${this.mockServerConfig.port}${path}`;
-        let response = await fetch(url, options);
+        let response = await fetch(url, mergeClientOptions(options, this.mockClientOptions));
 
         if (response.status >= 400) {
             throw new RequestError(

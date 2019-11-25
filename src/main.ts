@@ -3,7 +3,7 @@
  */
 
 import MockttpServer from "./server/mockttp-server";
-import MockttpClient from "./client/mockttp-client";
+import MockttpClient, { MockttpClientOptions } from "./client/mockttp-client";
 import { MockttpStandalone, StandaloneServerOptions } from "./standalone/mockttp-standalone";
 
 import { Mockttp, MockttpOptions } from "./mockttp";
@@ -49,7 +49,7 @@ export function getLocal(options: MockttpOptions = {}): Mockttp {
  * This connects to a Mockttp standalone server, and uses that to start
  * and stop mock servers.
  */
-export function getRemote(options: MockttpOptions = {}): Mockttp {
+export function getRemote(options: MockttpClientOptions = {}): Mockttp {
     return new MockttpClient(options);
 }
 
