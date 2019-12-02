@@ -239,6 +239,10 @@ export class MockttpStandalone {
             this.server = null;
         });
     }
+
+    get activeServerPorts() {
+        return this.mockServers.map(s => s.port);
+    }
 }
 
 export interface MockServerConfig {
