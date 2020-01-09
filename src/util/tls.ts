@@ -88,11 +88,11 @@ export async function generateCACertificate(options: { commonName?: string, bits
 export function generateSPKIFingerprint(certPem: PEM) {
     let cert = pki.certificateFromPem(certPem.toString('utf8'));
     return encode64(
-        // TODO: Include this method in the real types
-        (pki as any).getPublicKeyFingerprint(cert.publicKey, {
+        pki.getPublicKeyFingerprint(cert.publicKey, {
             type: 'SubjectPublicKeyInfo',
-            md: md.sha256.create()
-        }).getBytes()
+            md: md.sha256.create(),
+            encoding: 'binary'
+        })
     );
 }
 
