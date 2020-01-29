@@ -359,7 +359,10 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
 
         const standaloneStreamServer = this.mockServerOptions.standaloneServerUrl.replace(/^http/, 'ws');
         const url = `${standaloneStreamServer}/server/${this.port}/subscription`;
-        const client = new SubscriptionClient(url, { }, WebSocket);
+        const client = new SubscriptionClient(url, {
+            reconnect: true,
+            reconnectionAttempts: 8
+        }, WebSocket);
 
         // Note the typeHasField checks - these are a quick hack for backward compatibility,
         // introspecting the server schema to avoid requesting fields that don't exist on old servers.
@@ -477,8 +480,18 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
         });
 
         return new Promise((resolve, reject) => {
-            client.onConnected(resolve);
-            client.onDisconnected(reject);
+            client.onConnected(() => {
+                if (this.debug) console.log("Subscription connected");
+                resolve();
+            });
+            client.onDisconnected(() => {
+                if (this.debug) console.warn("Subscription disconnected");
+                reject();
+            });
+            client.onError((e) => {
+                if (this.debug) console.error("Subscription error", e)
+            });
+            client.onReconnecting(() => console.warn(`Reconnecting ${event} subscription`));
         });
     }
 
