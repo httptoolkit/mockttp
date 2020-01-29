@@ -133,7 +133,7 @@ export class MockttpStandalone {
                     let port = parseInt(isMatch[1], 10);
 
                     let wsServer: ws.Server = isSubscriptionRequest ?
-                        (<any> this.subscriptionServers[port]).wsServer :
+                        (<any> this.subscriptionServers[port])?.wsServer :
                         this.streamServers[port];
 
                     if (wsServer) {
