@@ -99,6 +99,9 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
         this.server!.listen(port);
 
+        // Handle & report client request errors
+        this.server!.on('clientError', this.handleInvalidRequest.bind(this));
+
         // Handle websocket connections too (ignore for now, just forward on)
         const webSocketHander = new WebSocketHandler(this.debug);
         this.server!.on('upgrade', webSocketHander.handleUpgrade.bind(webSocketHander));
@@ -395,5 +398,24 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         msg += '.thenReply(200, "your response");';
 
         return msg;
+    }
+
+    // Called on server clientError, e.g. if the client disconnects during initial
+    // request data, or sends totally invalid gibberish
+    private async handleInvalidRequest(error: Error & { code?: string }, socket: net.Socket) {
+        const isHeaderOverflow = error.code === "HPE_HEADER_OVERFLOW";
+
+        if (socket.writable) {
+            const [statusCode, statusMessage] = isHeaderOverflow
+                ? [431, "Request Header Fields Too Large"]
+                : [400, "Bad Request"];
+
+            socket.write(Buffer.from(
+                `HTTP/1.1 ${statusCode} ${statusMessage}\r\n` +
+                "Connection: close\r\n\r\n",
+                'ascii'
+            ));
+        }
+        socket.destroy(error);
     }
 }
