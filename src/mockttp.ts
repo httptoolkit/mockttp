@@ -2,6 +2,7 @@
  * @module Mockttp
  */
 import { stripIndent } from "common-tags";
+import * as cors from 'cors';
 
 import MockRuleBuilder from "./rules/mock-rule-builder";
 import {
@@ -333,7 +334,7 @@ export interface MockttpOptions {
      * If this is set to false, browser requests will typically fail unless you 
      * stub OPTIONS responses by hand.
      */
-    cors?: boolean;
+    cors?: boolean | cors.CorsOptions;
 
     /**
      * Should the server print extra debug information?
@@ -384,7 +385,7 @@ export interface MockttpOptions {
  * @hidden
  */
 export abstract class AbstractMockttp {
-    protected cors: boolean;
+    protected corsOptions: boolean | cors.CorsOptions;
     protected debug: boolean;
     protected recordTraffic: boolean;
     protected suggestChanges: boolean;
@@ -394,7 +395,7 @@ export abstract class AbstractMockttp {
 
     constructor(options: MockttpOptions) {
         this.debug = options.debug || false;
-        this.cors = options.cors || false;
+        this.corsOptions = options.cors || false;
         this.recordTraffic = options.recordTraffic !== undefined
             ? options.recordTraffic
             : true;
@@ -449,7 +450,7 @@ export abstract class AbstractMockttp {
     }
 
     options(url?: string | RegExp): MockRuleBuilder {
-        if (this.cors) {
+        if (this.corsOptions) {
             throw new Error(stripIndent`
                 Cannot mock OPTIONS requests with CORS enabled.
 

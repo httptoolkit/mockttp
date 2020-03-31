@@ -62,11 +62,14 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         this.app = express();
         this.app.disable('x-powered-by');
 
-        if (this.cors) {
+        if (this.corsOptions) {
             if (this.debug) console.log('Enabling CORS');
-            this.app.use(cors({
-                methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']
-            }));
+
+            const corsOptions = this.corsOptions === true
+                ? { methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'] }
+                : this.corsOptions;
+
+            this.app.use(cors(corsOptions));
         }
 
         this.app.use(parseBody);

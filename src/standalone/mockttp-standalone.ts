@@ -32,7 +32,7 @@ import { MockttpOptions, PortRange } from '../mockttp';
 export interface StandaloneServerOptions {
     debug?: boolean;
     serverDefaults?: MockttpOptions;
-    corsOptions?: cors.CorsOptions & { strict: boolean };
+    corsOptions?: cors.CorsOptions & { strict?: boolean };
 }
 
 export class MockttpStandalone {
