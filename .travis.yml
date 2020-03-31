@@ -3,9 +3,9 @@ sudo: required
 language: node_js
 node_js:
     - 'node'
+    - '12'
     - '10'
     - '8'
-    - '6'
 install:
     - npm install --global npm@4
     - npm install
