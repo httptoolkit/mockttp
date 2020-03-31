@@ -18,7 +18,8 @@ import {
     setHeaders,
     buildBodyReader,
     streamToBuffer,
-    shouldKeepAlive
+    shouldKeepAlive,
+    dropDefaultHeaders
 } from '../util/request-utils';
 import { isLocalPortActive } from '../util/socket-util';
 import {
@@ -102,6 +103,7 @@ export class SimpleHandler extends Serializable implements RequestHandler {
 
     async handle(_request: OngoingRequest, response: OngoingResponse) {
         if (this.headers) {
+            dropDefaultHeaders(response);
             setHeaders(response, this.headers);
         }
         response.writeHead(this.status, this.statusMessage);
@@ -123,7 +125,7 @@ interface CallbackRequestMessage {
     args: [CompletedRequest];
 }
 
-function writeResponseFromCallback(result: CallbackResponseResult, response: express.Response) {
+function writeResponseFromCallback(result: CallbackResponseResult, response: OngoingResponse) {
     if (result.json !== undefined) {
         result.headers = _.assign(result.headers || {}, { 'Content-Type': 'application/json' });
         result.body = JSON.stringify(result.json);
@@ -131,6 +133,7 @@ function writeResponseFromCallback(result: CallbackResponseResult, response: exp
     }
 
     if (result.headers) {
+        dropDefaultHeaders(response);
         setHeaders(response, result.headers);
     }
 
@@ -154,7 +157,7 @@ export class CallbackHandler extends Serializable implements RequestHandler {
         return 'respond using provided callback' + (this.callback.name ? ` (${this.callback.name})` : '');
     }
 
-    async handle(request: OngoingRequest, response: express.Response) {
+    async handle(request: OngoingRequest, response: OngoingResponse) {
         let req = await waitForCompletedRequest(request);
 
         let outResponse: CallbackResponseResult;
@@ -234,9 +237,10 @@ export class StreamHandler extends Serializable implements RequestHandler {
             ' and a stream of response data';
     }
 
-    async handle(_request: OngoingRequest, response: express.Response) {
+    async handle(_request: OngoingRequest, response: OngoingResponse) {
         if (!this.stream.done) {
             if (this.headers) {
+                dropDefaultHeaders(response);
                 setHeaders(response, this.headers);
             }
 
@@ -352,7 +356,11 @@ export class FileHandler extends Serializable implements RequestHandler {
         // Read the file first, to ensure we error cleanly if it's unavailable
         const fileContents = await readFile(this.filePath, null);
 
-        if (this.headers) setHeaders(response, this.headers);
+        if (this.headers) {
+            dropDefaultHeaders(response);
+            setHeaders(response, this.headers);
+        }
+
         response.writeHead(this.status, this.statusMessage);
         response.end(fileContents);
     }
@@ -556,6 +564,9 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
     }
 
     async handle(clientReq: OngoingRequest, clientRes: OngoingResponse) {
+        // Don't let Node add any default standard headers - we want full control
+        dropDefaultHeaders(clientRes);
+
         // Capture raw request data:
         let { method, url: reqUrl, headers } = clientReq;
         let { protocol, hostname, port, path } = url.parse(reqUrl);

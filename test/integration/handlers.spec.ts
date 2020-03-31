@@ -5,7 +5,11 @@ import { getLocal } from "../..";
 import { expect, fetch, isNode, delay } from "../test-utils";
 
 describe("HTTP mock rule handling", function () {
-    let server = getLocal();
+    let server = getLocal({
+        cors: isNode
+            ? false
+            : { exposedHeaders: '*' }
+    });
 
     beforeEach(() => server.start());
     afterEach(() => server.stop());
@@ -27,6 +31,16 @@ describe("HTTP mock rule handling", function () {
         expect(await response.text()).to.equal("mocked data");
     });
 
+    it("should set default headers when none are provided", async () => {
+        await server.get("/mocked-endpoint").thenReply(200, "mocked data");
+
+        let response = await fetch(server.urlFor("/mocked-endpoint"));
+
+        expect(await response.text()).to.equal("mocked data");
+        expect(response.headers.get('Date')).to.match(/^\w+, \d+ \w+ \d+ \d\d:\d\d:\d\d \w+$/);
+        expect(response.headers.get('Transfer-Encoding')).to.equal('chunked');
+    });
+
     it("should allow mocking the status code, body & headers", async () => {
         await server.get("/mocked-endpoint").thenReply(200, "mock body", {
             "Content-Type": "text/mocked"
@@ -38,6 +52,10 @@ describe("HTTP mock rule handling", function () {
         expect(response.statusText).to.equal('OK');
         expect(await response.text()).to.equal('mock body');
         expect(response.headers.get("Content-Type")).to.equal("text/mocked");
+
+        // Defaults are not set when headers are explicitly provided:
+        expect(response.headers.get("Date")).to.equal(null);
+        expect(response.headers.get("Content-Length")).to.equal(null);
     });
 
     it("should allow mocking the status code, status message, body & headers", async () => {
@@ -51,6 +69,11 @@ describe("HTTP mock rule handling", function () {
         expect(response.statusText).to.equal('mock status');
         expect(await response.text()).to.equal('mock body');
         expect(response.headers.get("Content-Type")).to.equal("text/mocked");
+
+        // Defaults are not set when headers are explicitly provided:
+        expect(response.headers.get("Date")).to.equal(null);
+        expect(response.headers.get('Content-Length')).to.equal(null);
+        expect(response.headers.get('Transfer-Encoding')).to.equal(null);
     });
 
     it("should allow mocking a binary body with a buffer", async () => {
@@ -76,24 +99,43 @@ describe("HTTP mock rule handling", function () {
     });
 
     it("should reply with JSON when using the JSON helper", async () => {
-        await server.get('/mocked-endpoint').thenJson(200, {myVar: 'foo'},
-            { 'other-header': 'header-data' });
+        await server.get('/mocked-endpoint').thenJson(200, { myVar: 'foo' });
 
         let response = await fetch(server.urlFor('/mocked-endpoint'));
 
-        expect(await response.status).to.equal(200);
-        expect(await response.statusText).to.equal('OK');
-        expect(await response.json()).to.deep.equal({myVar: 'foo'});
+        expect(response.status).to.equal(200);
+        expect(response.statusText).to.equal('OK');
+        expect(response.headers.get('Content-Type')).to.equal('application/json');
+        expect(response.headers.get('Content-Length')).to.equal('15');
+        expect(await response.json()).to.deep.equal({"myVar":"foo"});
+    });
+
+    it("should reply with JSON and merge in extra headers when using the JSON helper", async () => {
+        await server.get('/mocked-endpoint').thenJson(200, { myVar: 'foo' },
+            { 'other-header': 'header-data' }
+        );
+
+        let response = await fetch(server.urlFor('/mocked-endpoint'));
+
+        expect(response.status).to.equal(200);
+        expect(response.statusText).to.equal('OK');
+        expect(response.headers.get('Other-Header')).to.equal('header-data');
+        expect(response.headers.get('Content-Type')).to.equal('application/json');
+        expect(response.headers.get('Content-Length')).to.equal('15');
+        expect(await response.json()).to.deep.equal({"myVar":"foo"});
     });
 
     it("should reply with JSON when using the deprecated JSON helper alias", async () => {
-        await server.get('/mocked-endpoint').thenJSON(200, {myVar: 'foo'},
+        await server.get('/mocked-endpoint').thenJSON(200, { myVar: 'foo' },
             { 'other-header': 'header-data' });
 
         let response = await fetch(server.urlFor('/mocked-endpoint'));
 
-        expect(await response.status).to.equal(200);
-        expect(await response.json()).to.deep.equal({myVar: 'foo'});
+        expect(response.status).to.equal(200);
+        expect(response.statusText).to.equal('OK');
+        expect(response.headers.get('Content-Type')).to.equal('application/json');
+        expect(response.headers.get('Content-Length')).to.equal('15');
+        expect(await response.json()).to.deep.equal({"myVar":"foo"});
     });
 
     it("should allow streaming a response", async () => {
@@ -172,6 +214,21 @@ describe("HTTP mock rule handling", function () {
         expect(result).to.equal('timed out');
     });
 
+    it("should allow mocking bodyy with callback", async () => {
+        await server.get("/mocked-endpoint").thenCallback(() => {
+            return { statusCode: 204, statusMessage: 'all good' }
+        });
+
+        let response = await fetch(server.urlFor("/mocked-endpoint"));
+
+        expect(response.status).to.equal(204);
+        expect(response.statusText).to.equal('all good');
+        expect(await response.text()).to.equal("");
+
+        // No headers => defaults set:
+        expect(response.headers.get('Date')).to.match(/^\w+, \d+ \w+ \d+ \d\d:\d\d:\d\d \w+$/);
+    });
+
     it("should allow mocking body as json with callback", async () => {
         await server.get("/mocked-endpoint").thenCallback(() => {
             return { statusCode: 201, statusMessage: 'all good', json: { myVar: "foo" } }
@@ -179,8 +236,9 @@ describe("HTTP mock rule handling", function () {
 
         let response = await fetch(server.urlFor("/mocked-endpoint"));
 
-        expect(await response.status).to.equal(201);
-        expect(await response.statusText).to.equal('all good');
+        expect(response.status).to.equal(201);
+        expect(response.statusText).to.equal('all good');
+        expect(response.headers.get('Date')).to.equal(null); // JSON headers => no defaults
         expect(await response.json()).to.deep.equal({myVar: "foo"});
     });
 
@@ -202,6 +260,8 @@ describe("HTTP mock rule handling", function () {
         let response = await fetch(server.urlFor("/mocked-endpoint"));
 
         expect(response.status).to.equal(200);
+        expect(response.headers.get('Transfer-Encoding')).to.equal('chunked');
+        expect(response.headers.get('Date')).to.match(/^\w+, \d+ \w+ \d+ \d\d:\d\d:\d\d \w+$/);
         expect(await response.text()).to.equal('Response from text file');
     });
 
@@ -217,6 +277,11 @@ describe("HTTP mock rule handling", function () {
         expect(response.statusText).to.equal("mock status");
         expect(response.headers.get('Content-Type')).to.equal('text/mocked');
         expect(await response.text()).to.equal('Response from text file');
+
+        // Default headers aren't set if you pass explicit headers:
+        expect(response.headers.get('Date')).to.equal(null);
+        expect(response.headers.get('Transfer-Encoding')).to.equal(null);
+        expect(response.headers.get('Content-Length')).to.equal(null);
     });
 
     it("should return a clear error when mocking the body with contents from a non-existent file", async () => {

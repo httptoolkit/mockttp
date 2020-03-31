@@ -86,14 +86,21 @@ nodeOnly(() => {
             });
 
             it("should be able to pass through request headers", async () => {
-                await server.get("http://example.com/").thenPassThrough();
+                await remoteServer.anyRequest().thenCallback((req) => ({
+                    statusCode: 200,
+                    body: req.body.text,
+                    headers: { "my-header": "123" }
+                }));
+
+                await server.get(remoteServer.url).thenPassThrough();
 
                 let response = await request.get({
-                    uri: "http://example.com/",
+                    url: remoteServer.url,
                     resolveWithFullResponse: true
                 });
 
-                expect(response.headers['content-type']).to.equal('text/html; charset=UTF-8');
+                expect(response.headers['my-header']).to.equal('123');
+                expect(response.headers['date']).to.equal(undefined); // No default headers added!
             });
 
             it("should be able to pass through requests with a body", async () => {

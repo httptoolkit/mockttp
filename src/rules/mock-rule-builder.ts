@@ -2,7 +2,6 @@
  * @module MockRule
  */
 
-import { OutgoingHttpHeaders } from "http";
 import { merge, isString, isBuffer } from "lodash";
 import { Readable } from "stream";
 
@@ -243,7 +242,8 @@ export default class MockRuleBuilder {
      *
      * If one string argument is provided, it's used as the body. If two are
      * provided (even if one is empty), then 1st is the status message, and
-     * the 2nd the body.
+     * the 2nd the body. If no headers are provided, only the standard required
+     * headers are set, e.g. Date and Transfer-Encoding.
      *
      * Calling this method registers the rule with the server, so it
      * starts to handle requests.
@@ -295,14 +295,18 @@ export default class MockRuleBuilder {
      * before sending requests to be matched. The mocked endpoint
      * can be used to assert on the requests matched by this rule.
      */
-    thenJson(status: number, data: object, headers: OutgoingHttpHeaders = {}): Promise<MockedEndpoint> {
-        const defaultHeaders = { 'Content-Type': 'application/json' };
-        merge(defaultHeaders, headers);
+    thenJson(status: number, data: object, headers: Headers = {}): Promise<MockedEndpoint> {
+        const jsonData = JSON.stringify(data);
+
+        headers = merge({
+            'Content-Type': 'application/json',
+            'Content-Length': jsonData.length.toString()
+        }, headers);
 
         const rule: MockRuleData = {
             matchers: this.matchers,
             completionChecker: this.completionChecker,
-            handler: new SimpleHandler(status, undefined, JSON.stringify(data), defaultHeaders)
+            handler: new SimpleHandler(status, undefined, jsonData, headers)
         };
 
         return this.addRule(rule);
@@ -320,14 +324,13 @@ export default class MockRuleBuilder {
      *
      * The callback should return a response object or a promise for one.
      * The response object may include various fields to define the response.
-     * All fields are optional, and default to being empty/blank, except for
-     * the status, which defaults to 200.
+     * All fields are optional, with the defaults listed below.
      *
      * Valid fields are:
-     * - `status` (number)
-     * - `body` (string or buffer)
-     * - `headers` (object with string keys & values)
-     * - `json` (object, which will be sent as a JSON response)
+     * - `status` (number, defaults to 200)
+     * - `body` (string or buffer, defaults to empty)
+     * - `headers` (object with string keys & values, defaults to standard required headers)
+     * - `json` (object, which will be sent as a JSON response, unset by default)
      *
      * If the callback throws an exception, the server will return a 500
      * with the exception message.
@@ -383,7 +386,8 @@ export default class MockRuleBuilder {
     /**
      * Reply to matched requests with a given status code and the current contents
      * of a given file. The status message and headers can also be optionally
-     * provided here.
+     * provided here. If no headers are provided, only the standard required
+     * headers are set.
      *
      * The file is read near-fresh for each request, and external changes to its
      * content will be immediately appear in all subsequent requests.

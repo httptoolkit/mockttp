@@ -61,6 +61,20 @@ export const setHeaders = (response: express.Response, headers: Headers) => {
     });
 };
 
+// If the user explicitly specifies headers, we tell Node not to handle them,
+// so the user-defined headers are the full set.
+export function dropDefaultHeaders(response: OngoingResponse) {
+    // Drop the default headers, so only the headers we explicitly configure are included
+    [
+        'connection',
+        'content-length',
+        'transfer-encoding',
+        'date'
+    ].forEach((defaultHeader) =>
+        response.removeHeader(defaultHeader)
+    );
+}
+
 // Takes a buffer and a stream, returns a simple stream that outputs the buffer then the stream.
 const bufferThenStream = (buffer: BufferInProgress, inputStream: stream.Readable): stream.Readable => {
     const outputStream = new stream.PassThrough();
@@ -276,12 +290,6 @@ export function trackResponse(response: express.Response, timingEvents: TimingEv
         // getHeaders was added in 7.7. - if it's not available, polyfill it
         trackedResponse.getHeaders = function (this: any) { return this._headers; }
     }
-
-    // Drop the default headers, so only the headers we explicitly configure are included
-    ['connection', 'content-length', 'transfer-encoding', 'date'].forEach((defaultHeader) =>
-        response.removeHeader(defaultHeader)
-    );
-
 
     trackedResponse.timingEvents = timingEvents;
     trackedResponse.tags = tags;
