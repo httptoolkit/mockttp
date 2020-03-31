@@ -277,6 +277,12 @@ export function trackResponse(response: express.Response, timingEvents: TimingEv
         trackedResponse.getHeaders = function (this: any) { return this._headers; }
     }
 
+    // Drop the default headers, so only the headers we explicitly configure are included
+    ['connection', 'content-length', 'transfer-encoding', 'date'].forEach((defaultHeader) =>
+        response.removeHeader(defaultHeader)
+    );
+
+
     trackedResponse.timingEvents = timingEvents;
     trackedResponse.tags = tags;
 
