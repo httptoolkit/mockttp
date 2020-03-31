@@ -50,7 +50,8 @@ export const getPathFromAbsoluteUrl = (url: string) => {
 
 export const shouldKeepAlive = (req: OngoingRequest): boolean =>
     req.httpVersion !== '1.0' &&
-    req.headers['connection'] !== 'close';
+    req.headers['connection'] !== 'close' &&
+    req.headers['proxy-connection'] !== 'close';
 
 export const setHeaders = (response: express.Response, headers: Headers) => {
     Object.keys(headers).forEach((header) => {
