@@ -238,18 +238,22 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
     }
 
     private async announceAbortAsync(request: OngoingRequest) {
-        const req = buildAbortedRequest(request);
-        this.eventEmitter.emit('abort', Object.assign(req, {
-            timingEvents: _.clone(req.timingEvents),
-            tags: _.clone(req.tags)
-        }));
+        setImmediate(() => {
+            const req = buildAbortedRequest(request);
+            this.eventEmitter.emit('abort', Object.assign(req, {
+                timingEvents: _.clone(req.timingEvents),
+                tags: _.clone(req.tags)
+            }));
+        });
     }
 
     private async announceTlsErrorAsync(request: TlsRequest) {
-        // We can get falsey but set hostname values - drop them
-        if (!request.hostname) delete request.hostname;
-        if (this.debug) console.warn(`TLS client error: ${JSON.stringify(request)}`);
-        this.eventEmitter.emit('tlsClientError', request);
+        setImmediate(() => {
+            // We can get falsey but set hostname values - drop them
+            if (!request.hostname) delete request.hostname;
+            if (this.debug) console.warn(`TLS client error: ${JSON.stringify(request)}`);
+            this.eventEmitter.emit('tlsClientError', request);
+        });
     }
 
     private async handleRequest(rawRequest: express.Request, rawResponse: express.Response) {
