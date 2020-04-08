@@ -160,7 +160,7 @@ export function buildStandaloneModel(mockServer: MockttpServer, stream: Duplex):
         })
     });
 
-    mockServer.on('tlsClientError', (request) => {
+    mockServer.on('tls-client-error', (request) => {
         pubsub.publish(TLS_CLIENT_ERROR_TOPIC, {
             failedTlsRequest: request
         })

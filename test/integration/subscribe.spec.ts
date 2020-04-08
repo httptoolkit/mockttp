@@ -484,7 +484,7 @@ describe("TLS error subscriptions", () => {
 
     it("should not be sent for successful requests", async () => {
         let seenTlsErrorPromise = getDeferred<TlsRequest>();
-        await goodServer.on('tlsClientError', (r) => seenTlsErrorPromise.resolve(r));
+        await goodServer.on('tls-client-error', (r) => seenTlsErrorPromise.resolve(r));
 
         await fetch(goodServer.urlFor("/").replace('http:', 'https:'));
 
@@ -496,12 +496,13 @@ describe("TLS error subscriptions", () => {
 
     it("should be sent for requests from clients that reject the certificate initially", async () => {
         let seenTlsErrorPromise = getDeferred<TlsRequest>();
-        await badServer.on('tlsClientError', (r) => seenTlsErrorPromise.resolve(r));
+        await badServer.on('tls-client-error', (r) => seenTlsErrorPromise.resolve(r));
 
         await expect(
             fetch(badServer.urlFor("/"))
         ).to.be.rejectedWith(
-            // Broken by bad TS handling of overrides, see https://github.com/DefinitelyTyped/DefinitelyTyped/pull/37292
+            // Broken by bad TS handling of overrides, see
+            // https://github.com/DefinitelyTyped/DefinitelyTyped/pull/37292
             (isNode ? /certificate/ : 'Failed to fetch') as any
         );
 
@@ -521,10 +522,32 @@ describe("TLS error subscriptions", () => {
         expect(tlsError.tags).to.deep.equal([]);
     });
 
+    it("should be sent for requests that reject the cert, using the deprecated alias", async () => {
+        let seenTlsErrorPromise = getDeferred<TlsRequest>();
+        await badServer.on('tlsClientError', (r) => seenTlsErrorPromise.resolve(r));
+
+        await expect(
+            fetch(badServer.urlFor("/"))
+        ).to.be.rejectedWith(
+            // Broken by bad TS handling of overrides, see
+            // https://github.com/DefinitelyTyped/DefinitelyTyped/pull/37292
+            (isNode ? /certificate/ : 'Failed to fetch') as any
+        );
+
+        const tlsError = await seenTlsErrorPromise;
+
+        expect(tlsError.failureCause).to.be.oneOf([
+            // Depends on specific client behaviour:
+            'reset', // Node 12
+            'closed', // Node 10
+            'cert-rejected' // Chrome
+        ]);
+    });
+
     nodeOnly(() => {
         it("should be sent for requests from clients that reject the certificate for the upstream server", async () => {
             let seenTlsErrorPromise = getDeferred<TlsRequest>();
-            await badServer.on('tlsClientError', (r) => seenTlsErrorPromise.resolve(r));
+            await badServer.on('tls-client-error', (r) => seenTlsErrorPromise.resolve(r));
             await badServer.anyRequest().thenPassThrough();
 
             await expect(

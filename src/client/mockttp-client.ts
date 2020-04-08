@@ -50,7 +50,13 @@ export class GraphQLError extends RequestError {
     }
 }
 
-type SubscribableEvent = 'request-initiated' | 'request' | 'response' | 'abort' | 'tlsClientError';
+type SubscribableEvent =
+    | 'request-initiated'
+    | 'request'
+    | 'response'
+    | 'abort'
+    | 'tls-client-error'
+    | 'tlsClientError'; // Deprecated
 
 export interface MockttpClientOptions extends MockttpOptions {
     client?: {
@@ -343,12 +349,14 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
     }
 
     public on(event: SubscribableEvent, callback: (data: any) => void): Promise<void> {
+        if (event === 'tlsClientError') event = 'tls-client-error';
+
         const queryResultName = {
             'request-initiated': 'requestInitiated',
             request: 'requestReceived',
             response: 'responseCompleted',
             abort: 'requestAborted',
-            tlsClientError: 'failedTlsRequest'
+            'tls-client-error': 'failedTlsRequest'
         }[event];
 
         // Ignore events unknown to either us or the server
@@ -438,7 +446,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                     }
                 }`
             },
-            tlsClientError: {
+            'tls-client-error': {
                 operationName: 'OnTlsClientError',
                 query: `subscription OnTlsClientError {
                     ${queryResultName} {
@@ -462,7 +470,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
 
                     if (data.timingEvents) {
                         data.timingEvents = JSON.parse(data.timingEvents);
-                    } else if (event !== 'tlsClientError') {
+                    } else if (event !== 'tls-client-error') {
                         data.timingEvents = {}; // For backward compat
                     }
 

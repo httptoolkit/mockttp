@@ -301,6 +301,12 @@ export interface Mockttp {
      * returns a promise, and the callback is not guaranteed to be registered until
      * the promise is resolved.
      */
+    on(event: 'tls-client-error', callback: (req: TlsRequest) => void): Promise<void>;
+
+    /**
+     * Deprecated alias for tls-client-error event
+     * @deprecated
+     */
     on(event: 'tlsClientError', callback: (req: TlsRequest) => void): Promise<void>;
 
     /**

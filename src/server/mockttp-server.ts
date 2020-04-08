@@ -189,6 +189,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
     public on(event: 'request', callback: (req: CompletedRequest) => void): Promise<void>;
     public on(event: 'response', callback: (req: CompletedResponse) => void): Promise<void>;
     public on(event: 'abort', callback: (req: InitiatedRequest) => void): Promise<void>;
+    public on(event: 'tls-client-error', callback: (req: TlsRequest) => void): Promise<void>;
     public on(event: 'tlsClientError', callback: (req: TlsRequest) => void): Promise<void>;
     public on(event: string, callback: (...args: any[]) => void): Promise<void> {
         this.eventEmitter.on(event, callback);
@@ -252,6 +253,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
             // We can get falsey but set hostname values - drop them
             if (!request.hostname) delete request.hostname;
             if (this.debug) console.warn(`TLS client error: ${JSON.stringify(request)}`);
+            this.eventEmitter.emit('tls-client-error', request);
             this.eventEmitter.emit('tlsClientError', request);
         });
     }
