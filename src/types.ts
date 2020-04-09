@@ -135,8 +135,18 @@ export interface CompletedResponse {
  */
 export interface ClientError {
     errorCode?: string;
-    request: Omit<Partial<InitiatedRequest>, 'headers'> & {
-        headers?: Partial<RequestHeaders>
+    request: {
+        id: string;
+        timingEvents: TimingEvents;
+        tags: string[];
+
+        // All of these are best guess, depending on what's parseable:
+        protocol?: string;
+        httpVersion?: string;
+        method?: string;
+        url?: string;
+        path?: string;
+        headers: Partial<RequestHeaders>;
     };
     response: CompletedResponse | 'aborted';
 }

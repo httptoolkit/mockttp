@@ -463,7 +463,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
             protocol: parsedRequest?.protocol,
             url: parsedRequest?.url,
             path: parsedRequest?.path,
-            headers: { host: parsedRequest?.hostname }
+            headers: parsedRequest?.hostname ? { host: parsedRequest.hostname } : {}
         };
 
         if (socket.writable) {
