@@ -96,6 +96,10 @@ function normalizeHttpMessage(event: SubscribableEvent, message: any) {
         message.timingEvents = {};
     }
 
+    if (message.headers) {
+        message.headers = JSON.parse(message.headers);
+    }
+
     if (message.body) {
         // Body is serialized as the raw encoded buffer in base64
         message.body = buildBodyReader(Buffer.from(message.body, 'base64'), message.headers);
@@ -511,11 +515,6 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
             next: (value) => {
                 if (value.data) {
                     const data = (<any> value.data)[queryResultName];
-
-                    // Deserialize the JSON-stringified headers:
-                    if (data.headers) {
-                        data.headers = JSON.parse(data.headers);
-                    }
 
                     if (event === 'client-error') {
                         data.request = _.mapValues(data.request, (v) =>
