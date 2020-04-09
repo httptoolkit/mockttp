@@ -491,11 +491,11 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
                 'ascii'
             ));
 
-            commonParams.timingEvents.headersSentTimestamp = Date.now();
-            commonParams.timingEvents.responseSentTimestamp = Date.now();
+            commonParams.timingEvents.headersSentTimestamp = now();
+            commonParams.timingEvents.responseSentTimestamp = now();
             this.announceClientErrorAsync({ errorCode, request, response });
         } else {
-            commonParams.timingEvents.abortedTimestamp = Date.now();
+            commonParams.timingEvents.abortedTimestamp = now();
             this.announceClientErrorAsync({ errorCode, request, response: 'aborted' });
         }
 
