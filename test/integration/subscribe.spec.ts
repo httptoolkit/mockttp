@@ -1,3 +1,4 @@
+import * as _ from 'lodash';
 import * as http from 'http';
 import HttpProxyAgent = require('https-proxy-agent');
 import * as zlib from 'zlib';
@@ -12,7 +13,7 @@ import {
     Mockttp
 } from "../..";
 import { expect, fetch, nodeOnly, getDeferred, delay, isNode, sendRawRequest } from "../test-utils";
-import { TimingEvents, TlsRequest } from "../../dist/types";
+import { TimingEvents, TlsRequest, ClientError } from "../../dist/types";
 
 function makeAbortableRequest(server: Mockttp, path: string) {
     if (isNode) {
@@ -49,6 +50,7 @@ describe("Request initiated subscriptions", () => {
 
             let seenRequest = await seenRequestPromise;
             expect(seenRequest.method).to.equal('POST');
+            expect(seenRequest.protocol).to.equal('http');
             expect(seenRequest.httpVersion).to.equal('1.1');
             expect(seenRequest.url).to.equal(server.urlFor("/mocked-endpoint"));
             expect((seenRequest as any).body).to.equal(undefined); // No body included yet
@@ -72,6 +74,7 @@ describe("Request initiated subscriptions", () => {
 
                 let seenInitialRequest = await seenInitialRequestPromise;
                 expect(seenInitialRequest.method).to.equal('POST');
+                expect(seenInitialRequest.protocol).to.equal('http');
                 expect(seenInitialRequest.httpVersion).to.equal('1.1');
                 expect(seenInitialRequest.url).to.equal(server.urlFor('/'));
                 expect((seenInitialRequest as any).body).to.equal(undefined);
@@ -125,6 +128,7 @@ describe("Request subscriptions", () => {
 
             let seenRequest = await seenRequestPromise;
             expect(seenRequest.method).to.equal('POST');
+            expect(seenRequest.protocol).to.equal('http');
             expect(seenRequest.httpVersion).to.equal('1.1');
             expect(seenRequest.url).to.equal(server.urlFor("/mocked-endpoint"));
             expect(seenRequest.body.text).to.equal('body-text');
@@ -566,4 +570,120 @@ describe("TLS error subscriptions", () => {
             expect(tlsError.remoteIpAddress).to.equal('::ffff:127.0.0.1');
         });
     });
+});
+
+describe("Client error subscription", () => {
+    let server = getLocal();
+
+    beforeEach(() => server.start());
+    afterEach(() => server.stop());
+
+    it("should report error responses from header overflows", async () => {
+        let errorPromise = getDeferred<ClientError>();
+        await server.on('client-error', (e) => errorPromise.resolve(e));
+
+        fetch(server.urlFor("/mocked-endpoint"), {
+            headers: {
+                // 10KB of 'X':
+                "long-value": _.range(10 * 1024).map(() => "X").join("")
+            }
+        });
+
+        let clientError = await errorPromise;
+
+        expect(clientError.errorCode).to.equal("HPE_HEADER_OVERFLOW");
+        expect(clientError.request.method).to.equal("GET");
+        expect(clientError.request.url).to.equal(server.urlFor("/mocked-endpoint"));
+
+        const response = clientError.response as CompletedResponse;
+        expect(response.statusCode).to.equal(431);
+        expect(response.statusMessage).to.equal("Request Header Fields Too Large");
+        expect(response.tags).to.deep.equal(['client-error', 'header-overflow']);
+    });
+
+    nodeOnly(() => {
+        it("should report error responses from invalid HTTP versions", async () => {
+            let errorPromise = getDeferred<ClientError>();
+            await server.on('client-error', (e) => errorPromise.resolve(e));
+
+            sendRawRequest(server, 'GET https://example.com HTTP/0\r\n\r\n');
+
+            let clientError = await errorPromise;
+
+            expect(clientError.errorCode).to.equal("HPE_INVALID_VERSION");
+            expect(clientError.request.method).to.equal("GET");
+            expect(clientError.request.httpVersion).to.equal("0");
+            expect(clientError.request.url).to.equal("https://example.com");
+
+            const response = clientError.response as CompletedResponse;
+            expect(response.statusCode).to.equal(400);
+            expect(response.statusMessage).to.equal("Bad Request");
+            expect(response.body.text).to.equal("");
+            expect(response.tags).to.deep.equal(['client-error']);
+        });
+
+        it("should report error responses from unparseable requests", async () => {
+            let errorPromise = getDeferred<ClientError>();
+            await server.on('client-error', (e) => errorPromise.resolve(e));
+
+            sendRawRequest(server, '?? ?? ?? ??\r\n\r\n');
+
+            let clientError = await errorPromise;
+
+            expect(clientError.errorCode).to.equal("HPE_INVALID_METHOD");
+            expect(clientError.request.method).to.equal("??");
+            expect(clientError.request.url).to.equal("??");
+
+            const response = clientError.response as CompletedResponse;
+            expect(response.statusCode).to.equal(400);
+            expect(response.statusMessage).to.equal("Bad Request");
+            expect(response.tags).to.deep.equal(['client-error']);
+        });
+
+        it("should report error responses from unexpected HTTP/2 requests", async () => {
+            let errorPromise = getDeferred<ClientError>();
+            await server.on('client-error', (e) => errorPromise.resolve(e));
+
+            const client = (await import('http2')).connect(server.url);
+            const req = client.request({ ':path': '/' });
+            req.end();
+
+            // This will fail, but that's ok for now:
+            client.on('error', _.noop);
+            req.on('error', _.noop);
+
+            let clientError = await errorPromise;
+
+            expect(clientError.errorCode).to.equal("HPE_INVALID_METHOD");
+            expect(clientError.request.method).to.equal("PRI");
+            expect(clientError.request.url).to.equal("*");
+            expect(clientError.request.httpVersion).to.equal("2.0");
+
+            const response = clientError.response as CompletedResponse;
+            expect(response.statusCode).to.equal(505);
+            expect(response.statusMessage).to.equal("HTTP Version Not Supported");
+            expect(response.tags).to.deep.equal(['client-error', 'http-2']);
+        });
+
+        it("should notify for incomplete requests", async () => {
+            let errorPromise = getDeferred<ClientError>();
+            await server.on('client-error', (e) => errorPromise.resolve(e));
+
+            await sendRawRequest(server, 'GET /');
+
+            let clientError = await errorPromise;
+
+            expect(clientError.errorCode).to.equal("HPE_INVALID_EOF_STATE");
+
+            expect(clientError.request.method).to.equal(undefined);
+            expect(clientError.request.url).to.equal(undefined);
+
+            const response = clientError.response as CompletedResponse;
+
+            expect(response.statusCode).to.equal(400);
+            expect(response.statusMessage).to.equal("Bad Request");
+            expect(response.tags).to.deep.equal(['client-error']);
+        });
+    });
+
 });

@@ -4,6 +4,7 @@
 
 import net = require("net");
 import url = require("url");
+import { TLSSocket } from "tls";
 import { EventEmitter } from "events";
 import portfinder = require("portfinder");
 import express = require("express");
@@ -12,7 +13,16 @@ import cors = require("cors");
 import now = require("performance-now");
 import _ = require("lodash");
 
-import { OngoingRequest, CompletedRequest, CompletedResponse, OngoingResponse, TlsRequest, InitiatedRequest } from "../types";
+import {
+    InitiatedRequest,
+    OngoingRequest,
+    CompletedRequest,
+    OngoingResponse,
+    CompletedResponse,
+    TlsRequest,
+    ClientError,
+    TimingEvents
+} from "../types";
 import { CAOptions } from '../util/tls';
 import { DestroyableServer } from "../util/destroyable-server";
 import { Mockttp, AbstractMockttp, MockttpOptions, PortRange } from "../mockttp";
@@ -28,7 +38,9 @@ import {
     waitForCompletedResponse,
     isAbsoluteUrl,
     buildInitiatedRequest,
-    buildAbortedRequest
+    buildAbortedRequest,
+    tryToParseHttp,
+    buildBodyReader
 } from "../util/request-utils";
 import { WebSocketHandler } from "./websocket-handler";
 import { AbortError } from "../rules/handlers";
@@ -191,6 +203,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
     public on(event: 'abort', callback: (req: InitiatedRequest) => void): Promise<void>;
     public on(event: 'tls-client-error', callback: (req: TlsRequest) => void): Promise<void>;
     public on(event: 'tlsClientError', callback: (req: TlsRequest) => void): Promise<void>;
+    public on(event: 'client-error', callback: (error: ClientError) => void): Promise<void>;
     public on(event: string, callback: (...args: any[]) => void): Promise<void> {
         this.eventEmitter.on(event, callback);
         return Promise.resolve();
@@ -255,6 +268,13 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
             if (this.debug) console.warn(`TLS client error: ${JSON.stringify(request)}`);
             this.eventEmitter.emit('tls-client-error', request);
             this.eventEmitter.emit('tlsClientError', request);
+        });
+    }
+
+    private async announceClientErrorAsync(error: ClientError) {
+        setImmediate(() => {
+            if (this.debug) console.warn(`Client error: ${JSON.stringify(error)}`);
+            this.eventEmitter.emit('client-error', error);
         });
     }
 
@@ -411,20 +431,74 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
     // Called on server clientError, e.g. if the client disconnects during initial
     // request data, or sends totally invalid gibberish
-    private async handleInvalidRequest(error: Error & { code?: string }, socket: net.Socket) {
-        const isHeaderOverflow = error.code === "HPE_HEADER_OVERFLOW";
+    private async handleInvalidRequest(error: Error & { code?: string, rawPacket?: Buffer }, socket: net.Socket) {
+        if (
+            error.code === 'ECONNRESET' &&
+            socket instanceof TLSSocket &&
+            !error.rawPacket
+        ) return; // This case is handled separately as a TLS client error.
+
+        const errorCode = error.code;
+        const isHeaderOverflow = errorCode === "HPE_HEADER_OVERFLOW";
+
+        const commonParams = {
+            id: uuid(),
+            tags: ['client-error'],
+            timingEvents: { startTime: Date.now(), startTimestamp: now() } as TimingEvents
+        };
+
+        const parsedRequest = error.rawPacket instanceof Buffer
+            ? tryToParseHttp(error.rawPacket, socket)
+            : undefined;
+
+        const isHTTP2 = parsedRequest?.httpVersion?.startsWith("2.");
+
+        if (isHeaderOverflow) commonParams.tags.push('header-overflow');
+        if (isHTTP2) commonParams.tags.push('http-2');
+
+        const request: ClientError['request'] = {
+            ...commonParams,
+            httpVersion: parsedRequest?.httpVersion,
+            method: parsedRequest?.method,
+            protocol: parsedRequest?.protocol,
+            url: parsedRequest?.url,
+            path: parsedRequest?.path,
+            headers: { host: parsedRequest?.hostname }
+        };
 
         if (socket.writable) {
-            const [statusCode, statusMessage] = isHeaderOverflow
-                ? [431, "Request Header Fields Too Large"]
-                : [400, "Bad Request"];
+            const response: ClientError['response'] = {
+                ...commonParams,
+                headers: { 'Connection': 'close' },
+                statusCode:
+                    isHeaderOverflow
+                        ? 431
+                    : isHTTP2
+                        ? 505
+                    : 400,
+                statusMessage:
+                    isHeaderOverflow
+                        ? "Request Header Fields Too Large"
+                    : isHTTP2
+                        ? "HTTP Version Not Supported"
+                    : "Bad Request",
+                body: buildBodyReader(Buffer.from([]), {})
+            };
 
             socket.write(Buffer.from(
-                `HTTP/1.1 ${statusCode} ${statusMessage}\r\n` +
+                `HTTP/1.1 ${response.statusCode} ${response.statusMessage}\r\n` +
                 "Connection: close\r\n\r\n",
                 'ascii'
             ));
+
+            commonParams.timingEvents.headersSentTimestamp = Date.now();
+            commonParams.timingEvents.responseSentTimestamp = Date.now();
+            this.announceClientErrorAsync({ errorCode, request, response });
+        } else {
+            commonParams.timingEvents.abortedTimestamp = Date.now();
+            this.announceClientErrorAsync({ errorCode, request, response: 'aborted' });
         }
+
         socket.destroy(error);
     }
 }

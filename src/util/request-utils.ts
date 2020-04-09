@@ -3,12 +3,15 @@
  */
 
 import * as _ from 'lodash';
+import * as net from 'net';
+import { TLSSocket } from 'tls';
 import * as stream from 'stream';
 import * as querystring from 'querystring';
 import * as express from 'express';
 import * as zlib from 'zlib';
 import * as brotliDecompress from 'brotli/decompress';
 import now = require("performance-now");
+import * as url from 'url';
 
 import {
     Headers,
@@ -351,4 +354,58 @@ export async function waitForCompletedResponse(response: OngoingResponse): Promi
         headers: response.getHeaders(),
         body: body
     }).valueOf();
+}
+
+// Take raw HTTP bytes recieved, have a go at parsing something useful out of them.
+// Very lax - this is a method to use when normal parsing has failed, not as standard
+export function tryToParseHttp(input: Buffer, socket: net.Socket) {
+    try {
+        const endOfFirstLine = input.indexOf('\r');
+        if (endOfFirstLine === -1) return; // Didn't even get a whole line, give up.
+
+        const requestLine = input.slice(0, endOfFirstLine).toString('ascii');
+
+        const protocol = socket instanceof TLSSocket ? "https" : "http"; // Wild guess really
+
+        const [method, rawUri, httpProtocol] = requestLine.split(" ");
+
+        const parsedUrl = url.parse(rawUri);
+        const httpVersion = httpProtocol.split('/')[1];
+
+        const hostLine = searchLines(input, (line) =>
+            line.slice(0, 5).toString().toLowerCase() === 'host:'
+        );
+
+        const host = hostLine?.slice(5).toString().trimLeft();
+
+        return {
+            protocol,
+            httpVersion,
+            method,
+            url: rawUri.includes('://') || !host
+                ? rawUri // URI is absolute, or we have no way to guess the host
+                : `${protocol}://${host}${rawUri}`, // URI is relative - add the host
+            hostname: host || parsedUrl.hostname || "",
+            path: parsedUrl.path
+        };
+    } catch (e) {
+        return undefined;
+    }
+}
+
+function searchLines(input: Buffer, linePredicate: (line: Buffer) => boolean) {
+    let remainingBuffer = input;
+
+    while (remainingBuffer.length) {
+        let endOfLine = remainingBuffer.indexOf('\r');
+
+        if (endOfLine === -1) endOfLine = remainingBuffer.length;
+
+        const line = remainingBuffer.slice(0, endOfLine);
+        if (linePredicate(line)) {
+            return line;
+        } else {
+            remainingBuffer = remainingBuffer.slice(endOfLine + 2); // Skip /r/n
+        }
+    }
 }

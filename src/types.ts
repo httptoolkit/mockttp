@@ -129,6 +129,19 @@ export interface CompletedResponse {
 }
 
 /**
+ * A client error event describes a request (or our best guess at parsing it),
+ * that wasn't correctly completed, and the error response it received, or
+ * 'aborted' if the connection was disconnected before we could respond.
+ */
+export interface ClientError {
+    errorCode?: string;
+    request: Omit<Partial<InitiatedRequest>, 'headers'> & {
+        headers?: Partial<RequestHeaders>
+    };
+    response: CompletedResponse | 'aborted';
+}
+
+/**
  * A mocked endpoint provides methods to see the current state of
  * a mock rule.
  */

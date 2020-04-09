@@ -56,7 +56,8 @@ type SubscribableEvent =
     | 'response'
     | 'abort'
     | 'tls-client-error'
-    | 'tlsClientError'; // Deprecated
+    | 'tlsClientError' // Deprecated
+    | 'client-error';
 
 export interface MockttpClientOptions extends MockttpOptions {
     client?: {
@@ -85,6 +86,24 @@ const mergeClientOptions = (
 
     return options;
 };
+
+function normalizeHttpMessage(event: SubscribableEvent, message: any) {
+    if (message.timingEvents) {
+        // Timing events are serialized as raw JSON
+        message.timingEvents = JSON.parse(message.timingEvents);
+    } else if (event !== 'tls-client-error' && event !== 'client-error') {
+        // For backwards compat, all except errors should have timing events if they're missing
+        message.timingEvents = {};
+    }
+
+    if (message.body) {
+        // Body is serialized as the raw encoded buffer in base64
+        message.body = buildBodyReader(Buffer.from(message.body, 'base64'), message.headers);
+    }
+
+    // For backwards compat, all except errors should have tags if they're missing
+    if (!message.tags) message.tags = [];
+}
 
 /**
  * A Mockttp implementation, controlling a remote Mockttp standalone server.
@@ -356,7 +375,8 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
             request: 'requestReceived',
             response: 'responseCompleted',
             abort: 'requestAborted',
-            'tls-client-error': 'failedTlsRequest'
+            'tls-client-error': 'failedTlsRequest',
+            'client-error': 'failedClientRequest',
         }[event];
 
         // Ignore events unknown to either us or the server
@@ -456,6 +476,34 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                         ${this.typeHasField('TlsRequest', 'tags') ? 'tags' : ''}
                     }
                 }`
+            },
+            'client-error': {
+                operationName: 'OnClientError',
+                query: `subscription OnClientError {
+                    ${queryResultName} {
+                        errorCode
+                        request {
+                            id
+                            timingEvents
+                            tags
+                            protocol
+                            httpVersion
+                            method
+                            url
+                            path
+                            headers
+                        }
+                        response {
+                            id
+                            timingEvents
+                            tags
+                            statusCode
+                            statusMessage
+                            headers
+                            body
+                        }
+                    }
+                }`
             }
         }[event];
 
@@ -463,22 +511,28 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
             next: (value) => {
                 if (value.data) {
                     const data = (<any> value.data)[queryResultName];
-                    // TODO: Get a proper graphql client that does all this automatically from the schema itself
+
+                    // Deserialize the JSON-stringified headers:
                     if (data.headers) {
                         data.headers = JSON.parse(data.headers);
                     }
 
-                    if (data.timingEvents) {
-                        data.timingEvents = JSON.parse(data.timingEvents);
-                    } else if (event !== 'tls-client-error') {
-                        data.timingEvents = {}; // For backward compat
+                    if (event === 'client-error') {
+                        data.request = _.mapValues(data.request, (v) =>
+                            // Normalize missing values to undefined to match the local result
+                            v === null ? undefined : v
+                        );
+
+                        normalizeHttpMessage(event, data.request);
+                        if (data.response) {
+                            normalizeHttpMessage(event, data.response);
+                        } else {
+                            data.response = 'aborted';
+                        }
+                    } else {
+                        normalizeHttpMessage(event, data);
                     }
 
-                    if (!data.tags) data.tags = [];
-
-                    if (data.body) {
-                        data.body = buildBodyReader(Buffer.from(data.body, 'base64'), data.headers);
-                    }
                     callback(data);
                 } else if (value.errors) {
                     console.error('Error in subscription', value.errors);

@@ -12,7 +12,8 @@ import {
     CompletedRequest,
     CompletedResponse,
     TlsRequest,
-    InitiatedRequest
+    InitiatedRequest,
+    ClientError
 } from "./types";
 import { MockRuleData } from "./rules/mock-rule";
 import { CAOptions } from './util/tls';
@@ -308,6 +309,26 @@ export interface Mockttp {
      * @deprecated
      */
     on(event: 'tlsClientError', callback: (req: TlsRequest) => void): Promise<void>;
+
+    /**
+     * Subscribe to hear about requests that fail before successfully sending their
+     * initial parameters (the request line & headers). This will fire for requests
+     * that drop connections early, send invalid or too-long headers, or aren't
+     * correctly parseable in some form.
+     *
+     * This is typically useful to detect clients who aren't correctly configured.
+     * The callback is given an object containing the request (as we were best
+     * able to parse it) and either the error response returned, or 'aborted'
+     * if the connection was disconnected before the server could respond.
+     *
+     * This is only useful in some niche use cases, such as logging all requests
+     * seen by the server, independently of the rules defined.
+     *
+     * The callback will be called asynchronously from request handling. This function
+     * returns a promise, and the callback is not guaranteed to be registered until
+     * the promise is resolved.
+     */
+    on(event: 'client-error', callback: (error: ClientError) => void): Promise<void>;
 
     /**
      * Adds the given rules to the server.

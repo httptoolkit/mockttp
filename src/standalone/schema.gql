@@ -16,6 +16,7 @@ type Subscription {
     responseCompleted: Response!
     requestAborted: Request!
     failedTlsRequest: TlsRequest!
+    failedClientRequest: ClientError!
 }
 
 type MockedEndpoint {
@@ -37,8 +38,29 @@ type TlsRequest {
     tags: [String!]!
 }
 
+type ClientError {
+    errorCode: String
+    request: ClientErrorRequest!
+    response: Response
+}
+
+type ClientErrorRequest {
+    id: ID!
+    timingEvents: Json!
+    tags: [String!]!
+
+    protocol: String
+    httpVersion: String
+    method: String
+    url: String
+    path: String
+    headers: Json
+}
+
 type InitiatedRequest {
     id: ID!
+    timingEvents: Json!
+    tags: [String!]!
     matchedRuleId: ID
 
     protocol: String!
@@ -49,12 +71,12 @@ type InitiatedRequest {
     hostname: String
 
     headers: Json!
-    timingEvents: Json!
-    tags: [String!]!
 }
 
 type Request {
     id: ID!
+    timingEvents: Json!
+    tags: [String!]!
     matchedRuleId: ID
 
     protocol: String!
@@ -66,20 +88,18 @@ type Request {
 
     headers: Json!
     body: Buffer!
-    timingEvents: Json!
-    tags: [String!]!
 }
 
 type Response {
     id: ID!
+    timingEvents: Json!
+    tags: [String!]!
 
     statusCode: Int!
     statusMessage: String!
 
     headers: Json!
     body: Buffer!
-    timingEvents: Json!
-    tags: [String!]!
 }
 
 scalar Any

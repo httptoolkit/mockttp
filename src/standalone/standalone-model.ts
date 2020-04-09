@@ -15,7 +15,7 @@ import { IResolvers } from "graphql-tools/dist/Interfaces";
 import { PubSub } from "graphql-subscriptions";
 
 import MockttpServer from "../server/mockttp-server";
-import { MockedEndpoint, MockedEndpointData, CompletedRequest, CompletedResponse } from "../types";
+import { MockedEndpoint, MockedEndpointData, CompletedRequest, CompletedResponse, ClientError } from "../types";
 import { Serialized } from "../util/serialization";
 import { MockRuleData, deserializeRuleData } from "../rules/mock-rule";
 import { RequestMatcher } from "../rules/matchers";
@@ -27,6 +27,7 @@ const REQUEST_RECEIVED_TOPIC = 'request-received';
 const RESPONSE_COMPLETED_TOPIC = 'response-completed';
 const REQUEST_ABORTED_TOPIC = 'request-aborted';
 const TLS_CLIENT_ERROR_TOPIC = 'tls-client-error';
+const CLIENT_ERROR_TOPIC = 'client-error';
 
 function astToObject<T>(ast: ObjectValueNode): T {
     return <T> _.zipObject(
@@ -166,6 +167,12 @@ export function buildStandaloneModel(mockServer: MockttpServer, stream: Duplex):
         })
     });
 
+    mockServer.on('client-error', (error) => {
+        pubsub.publish(CLIENT_ERROR_TOPIC, {
+            failedClientRequest: error
+        })
+    });
+
     return <any> {
         Query: {
             mockedEndpoints: (): Promise<MockedEndpointData[]> => {
@@ -219,6 +226,9 @@ export function buildStandaloneModel(mockServer: MockttpServer, stream: Duplex):
             },
             failedTlsRequest: {
                 subscribe: () => pubsub.asyncIterator(TLS_CLIENT_ERROR_TOPIC)
+            },
+            failedClientRequest: {
+                subscribe: () => pubsub.asyncIterator(CLIENT_ERROR_TOPIC)
             }
         },
 
@@ -231,6 +241,13 @@ export function buildStandaloneModel(mockServer: MockttpServer, stream: Duplex):
         Response: {
             body: (response: CompletedResponse) => {
                 return response.body.buffer;
+            }
+        },
+
+        ClientError: {
+            response: (error: ClientError) => {
+                if (error.response === 'aborted') return undefined;
+                else return error.response;
             }
         },
 

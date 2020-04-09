@@ -82,7 +82,7 @@ export async function sendRawRequest(server: Mockttp, requestContent: string): P
         });
     });
 
-    // Note the (invalid) lack of trailing slash:
     client.write(requestContent);
+    client.end();
     return dataPromise;
 }
