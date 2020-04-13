@@ -111,3 +111,21 @@ export async function writeAndReset(socket: net.Socket, content: string) {
     socket.write(content);
     setTimeout(() => socket.destroy(), 0);
 }
+
+export function watchForEvent(event: string, ...servers: Mockttp[]) {
+    let eventResult: any;
+
+    beforeEach(async () => {
+        eventResult = undefined;
+        await Promise.all(servers.map((server) =>
+            server.on(event as any, (result: any) => {
+                eventResult = result || true;
+            })
+        ));
+    });
+
+    return async () => {
+        await delay(100);
+        expect(eventResult).to.equal(undefined, `Unexpected ${event} event`);
+    }
+}

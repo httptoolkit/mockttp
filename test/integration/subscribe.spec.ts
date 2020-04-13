@@ -24,7 +24,8 @@ import {
     openRawSocket,
     openRawTlsSocket,
     writeAndReset,
-    AssertionError
+    AssertionError,
+    watchForEvent
 } from "../test-utils";
 import { TimingEvents, TlsRequest, ClientError } from "../../dist/types";
 
@@ -489,30 +490,12 @@ describe("TLS error subscriptions", () => {
         }
     });
 
-    // We reject this if any unexpected client errors appear, and check
-    // that it's not rejected after each test.
-    let anyClientErrors: Deferred<any>;
-
     beforeEach(async () => {
-        await badServer.start();
-        await goodServer.start();
-
-        anyClientErrors = getDeferred();
-        const failWithClientError = (e: any) => anyClientErrors.resolve(e);
-        await badServer.on('client-error', failWithClientError);
-        await goodServer.on('client-error', failWithClientError);
+        await badServer.start(),
+        await goodServer.start()
     });
 
-    async function expectNoClientErrors() {
-        await delay(100)
-        anyClientErrors.resolve(false); // Ignored if we saw an error already
-
-        const clientErrorResult = await anyClientErrors;
-        if (clientErrorResult !== false) {
-            console.log(clientErrorResult);
-            throw new AssertionError('Unexpected client error');
-        }
-    }
+    const expectNoClientErrors = watchForEvent('client-error', goodServer, badServer);
 
     afterEach(() => Promise.all([
         badServer.stop(),
