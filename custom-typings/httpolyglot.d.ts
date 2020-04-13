@@ -1,4 +1,4 @@
-declare module 'httpolyglot' {
+declare module '@httptoolkit/httpolyglot' {
     import * as net from 'net';
     import * as http from 'http';
     import * as https from "https";
