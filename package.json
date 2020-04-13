@@ -94,8 +94,7 @@
     "typedoc": "^0.16.4",
     "typedoc-plugin-external-module-name": "^3.0.0",
     "typescript": "3.7.5",
-    "webpack": "^3.7.1",
-    "ws": "^6.1.2"
+    "webpack": "^3.7.1"
   },
   "engines": {
     "node": ">=8.0.0"
@@ -128,6 +127,7 @@
     "typed-error": "^3.0.2",
     "universal-websocket-client": "^1.0.2",
     "uuid": "^3.1.0",
-    "websocket-stream": "^5.1.2"
+    "websocket-stream": "^5.1.2",
+    "ws": "^5.2.0"
   }
 }
