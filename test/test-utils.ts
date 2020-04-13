@@ -2,6 +2,7 @@ import * as sourceMapSupport from 'source-map-support'
 sourceMapSupport.install({ handleUncaughtExceptions: false });
 
 import * as net from 'net';
+import * as tls from 'tls';
 import getFetchPonyfill = require("fetch-ponyfill");
 
 import chai = require("chai");
@@ -14,6 +15,8 @@ export { isNode };
 
 chai.use(chaiAsPromised);
 chai.use(chaiFetch);
+
+export const AssertionError = chai.AssertionError;
 
 function getGlobalFetch() {
     return {
@@ -71,6 +74,12 @@ export function getDeferred<T>(): Deferred<T> {
     return result;
 }
 
+export async function openRawSocket(server: Mockttp) {
+    const client = new net.Socket();
+    await new Promise((resolve) => client.connect(server.port, '127.0.0.1', resolve));
+    return client;
+}
+
 export async function sendRawRequest(server: Mockttp, requestContent: string): Promise<string> {
     const client = new net.Socket();
     await new Promise((resolve) => client.connect(server.port, '127.0.0.1', resolve));
@@ -85,4 +94,20 @@ export async function sendRawRequest(server: Mockttp, requestContent: string): P
     client.write(requestContent);
     client.end();
     return dataPromise;
+}
+
+export async function openRawTlsSocket(server: Mockttp): Promise<tls.TLSSocket> {
+    return await new Promise<tls.TLSSocket>((resolve) => {
+        const socket: tls.TLSSocket = tls.connect({
+            host: 'localhost',
+            port: server.port
+        }, () => resolve(socket));
+    });
+}
+
+// Write a message to a socket that will trigger a respnse, but kill the socket
+// before the response is received, so a real response triggers a reset.
+export async function writeAndReset(socket: net.Socket, content: string) {
+    socket.write(content);
+    setTimeout(() => socket.destroy(), 0);
 }

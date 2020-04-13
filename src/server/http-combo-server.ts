@@ -31,6 +31,10 @@ declare module "tls" {
         // We cache the initially set remote address on sockets, because it's cleared
         // before the TLS error callback is called, exactly when we want to read it.
         initialRemoteAddress?: string;
+
+        // Marker used to detect whether client errors should be reported as TLS issues
+        // (RST during handshake) or as subsequent client issues (RST during request)
+        initialSetupCompleted?: true;
     }
 }
 
@@ -61,7 +65,13 @@ function ifTlsDropped(socket: tls.TLSSocket, errorCallback: () => void) {
         socket.once('data', resolve);
         socket.once('close', reject);
         socket.once('end', reject);
-    }).catch(() => {
+    })
+    .then(() => {
+        // Mark the socket as having completed TLS setup - this ensures that future
+        // errors fire as client errors, not TLS setup errors.
+        socket.initialSetupCompleted = true;
+    })
+    .catch(() => {
         // To get here, the socket must have connected & done the TLS handshake, but then
         // closed/ended without ever sending any data. We can fairly confidently assume
         // in that case that it's rejected our certificate.

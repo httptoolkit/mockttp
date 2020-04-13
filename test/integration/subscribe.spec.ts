@@ -12,7 +12,20 @@ import {
     CompletedResponse,
     Mockttp
 } from "../..";
-import { expect, fetch, nodeOnly, getDeferred, delay, isNode, sendRawRequest } from "../test-utils";
+import {
+    expect,
+    fetch,
+    nodeOnly,
+    isNode,
+    getDeferred,
+    Deferred,
+    delay,
+    sendRawRequest,
+    openRawSocket,
+    openRawTlsSocket,
+    writeAndReset,
+    AssertionError
+} from "../test-utils";
 import { TimingEvents, TlsRequest, ClientError } from "../../dist/types";
 
 function makeAbortableRequest(server: Mockttp, path: string) {
@@ -476,10 +489,30 @@ describe("TLS error subscriptions", () => {
         }
     });
 
+    // We reject this if any unexpected client errors appear, and check
+    // that it's not rejected after each test.
+    let anyClientErrors: Deferred<any>;
+
     beforeEach(async () => {
         await badServer.start();
         await goodServer.start();
+
+        anyClientErrors = getDeferred();
+        const failWithClientError = (e: any) => anyClientErrors.resolve(e);
+        await badServer.on('client-error', failWithClientError);
+        await goodServer.on('client-error', failWithClientError);
     });
+
+    async function expectNoClientErrors() {
+        await delay(100)
+        anyClientErrors.resolve(false); // Ignored if we saw an error already
+
+        const clientErrorResult = await anyClientErrors;
+        if (clientErrorResult !== false) {
+            console.log(clientErrorResult);
+            throw new AssertionError('Unexpected client error');
+        }
+    }
 
     afterEach(() => Promise.all([
         badServer.stop(),
@@ -496,6 +529,8 @@ describe("TLS error subscriptions", () => {
             seenTlsErrorPromise,
             delay(100).then(() => { throw new Error('timeout') })
         ])).to.be.rejectedWith('timeout');
+
+        await expectNoClientErrors();
     });
 
     it("should be sent for requests from clients that reject the certificate initially", async () => {
@@ -524,6 +559,8 @@ describe("TLS error subscriptions", () => {
             '::1' // IPv6 localhost
         ]);
         expect(tlsError.tags).to.deep.equal([]);
+
+        await expectNoClientErrors();
     });
 
     it("should be sent for requests that reject the cert, using the deprecated alias", async () => {
@@ -546,6 +583,8 @@ describe("TLS error subscriptions", () => {
             'closed', // Node 10
             'cert-rejected' // Chrome
         ]);
+
+        await expectNoClientErrors();
     });
 
     nodeOnly(() => {
@@ -568,6 +607,44 @@ describe("TLS error subscriptions", () => {
             expect(tlsError.failureCause).to.equal('closed');
             expect(tlsError.hostname).to.equal('localhost');
             expect(tlsError.remoteIpAddress).to.equal('::ffff:127.0.0.1');
+
+            await expectNoClientErrors();
+        });
+
+        it("should not be sent for requests from TLS clients that reset later in the connection", async () => {
+            let seenTlsErrorPromise = getDeferred<TlsRequest>();
+            await goodServer.on('tls-client-error', (r) => seenTlsErrorPromise.resolve(r));
+
+            let seenClientErrorPromise = getDeferred<ClientError>();
+            await goodServer.on('client-error', (e) => seenClientErrorPromise.resolve(e));
+
+            const tlsSocket = await openRawTlsSocket(goodServer);
+            writeAndReset(tlsSocket, "GET / HTTP/1.1\r\n\r\n");
+
+            const seenTlsError = await Promise.race([
+                delay(100).then(() => false),
+                seenTlsErrorPromise
+            ]);
+            expect(seenTlsError).to.equal(false);
+
+            // No TLS error, but we do expect a client reset error:
+            expect((await seenClientErrorPromise).errorCode).to.equal('ECONNRESET');
+        });
+
+        it("should not be sent for requests from non-TLS clients that reset before sending anything", async () => {
+            let seenTlsErrorPromise = getDeferred<TlsRequest>();
+            await goodServer.on('tls-client-error', (r) => seenTlsErrorPromise.resolve(r));
+
+            const tlsSocket = await openRawSocket(goodServer);
+            writeAndReset(tlsSocket, "\u0000"); // Send nothing, just connect & RESET
+
+            const seenTlsError = await Promise.race([
+                delay(100).then(() => false),
+                seenTlsErrorPromise
+            ]);
+            expect(seenTlsError).to.equal(false);
+
+            await expectNoClientErrors();
         });
     });
 });

@@ -4,7 +4,7 @@
 
 import net = require("net");
 import url = require("url");
-import { TLSSocket } from "tls";
+import tls = require("tls");
 import { EventEmitter } from "events";
 import portfinder = require("portfinder");
 import express = require("express");
@@ -433,10 +433,15 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
     // request data, or sends totally invalid gibberish
     private async handleInvalidRequest(error: Error & { code?: string, rawPacket?: Buffer }, socket: net.Socket) {
         if (
-            error.code === 'ECONNRESET' &&
-            socket instanceof TLSSocket &&
-            !error.rawPacket
-        ) return; // This case is handled separately as a TLS client error.
+            socket instanceof tls.TLSSocket &&
+            !socket.initialSetupCompleted && // TLS still TBC
+            !error.rawPacket?.byteLength // No data received yet
+        ) {
+            // This will be reported independently as a TLS error, so we don't need to
+            // report it separately here, and we can't respond. Just do minimal cleanup:
+            socket.destroy(error);
+            return;
+        }
 
         const errorCode = error.code;
         const isHeaderOverflow = errorCode === "HPE_HEADER_OVERFLOW";
