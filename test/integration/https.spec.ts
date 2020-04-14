@@ -1,9 +1,8 @@
 import { getLocal } from "../..";
-import { expect, fetch, nodeOnly } from "../test-utils";
+import { expect, fetch } from "../test-utils";
 
 describe("An HTTPS server", () => {
     describe("passed key & cert paths", () => {
-
         let server = getLocal({
             https: {
                 keyPath: './test/fixtures/test-ca.key',

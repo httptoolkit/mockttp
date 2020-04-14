@@ -633,117 +633,221 @@ describe("TLS error subscriptions", () => {
 });
 
 describe("Client error subscription", () => {
-    let server = getLocal();
+    describe("with a local HTTP server", () => {
+        let server = getLocal();
 
-    beforeEach(() => server.start());
-    afterEach(() => server.stop());
+        beforeEach(() => server.start());
 
-    it("should report error responses from header overflows", async () => {
-        let errorPromise = getDeferred<ClientError>();
-        await server.on('client-error', (e) => errorPromise.resolve(e));
+        const expectNoTlsErrors = watchForEvent('tls-client-error', server);
 
-        fetch(server.urlFor("/mocked-endpoint"), {
-            headers: {
-                // 10KB of 'X':
-                "long-value": _.range(10 * 1024).map(() => "X").join("")
+        afterEach(async () => {
+            await expectNoTlsErrors();
+            await server.stop();
+        });
+
+        it("should report error responses from header overflows", async () => {
+            let errorPromise = getDeferred<ClientError>();
+            await server.on('client-error', (e) => errorPromise.resolve(e));
+
+            fetch(server.urlFor("/mocked-endpoint"), {
+                headers: {
+                    // 10KB of 'X':
+                    "long-value": _.range(10 * 1024).map(() => "X").join("")
+                }
+            }).catch(() => {});
+
+            let clientError = await errorPromise;
+
+            expect(clientError.errorCode).to.equal("HPE_HEADER_OVERFLOW");
+            expect(clientError.request.method).to.equal("GET");
+            expect(clientError.request.url).to.equal(server.urlFor("/mocked-endpoint"));
+            expect(clientError.request.headers).to.deep.equal({ 'host': `localhost:${server.port}` });
+
+            const response = clientError.response as CompletedResponse;
+            expect(response.statusCode).to.equal(431);
+            expect(response.statusMessage).to.equal("Request Header Fields Too Large");
+            expect(response.tags).to.deep.equal(['client-error', 'header-overflow']);
+        });
+
+        nodeOnly(() => {
+            it("should report error responses from invalid HTTP versions", async () => {
+                let errorPromise = getDeferred<ClientError>();
+                await server.on('client-error', (e) => errorPromise.resolve(e));
+
+                sendRawRequest(server, 'GET https://example.com HTTP/0\r\n\r\n');
+
+                let clientError = await errorPromise;
+
+                expect(clientError.errorCode).to.equal("HPE_INVALID_VERSION");
+                expect(clientError.request.method).to.equal("GET");
+                expect(clientError.request.httpVersion).to.equal("0");
+                expect(clientError.request.url).to.equal("https://example.com");
+
+                const response = clientError.response as CompletedResponse;
+                expect(response.statusCode).to.equal(400);
+                expect(response.statusMessage).to.equal("Bad Request");
+                expect(response.body.text).to.equal("");
+                expect(response.tags).to.deep.equal(['client-error']);
+            });
+
+            it("should report error responses from unparseable requests", async () => {
+                let errorPromise = getDeferred<ClientError>();
+                await server.on('client-error', (e) => errorPromise.resolve(e));
+
+                sendRawRequest(server, '?? ?? ?? ??\r\n\r\n');
+
+                let clientError = await errorPromise;
+
+                expect(clientError.errorCode).to.equal("HPE_INVALID_METHOD");
+                expect(clientError.request.method).to.equal("??");
+                expect(clientError.request.url).to.equal("??");
+
+                const response = clientError.response as CompletedResponse;
+                expect(response.statusCode).to.equal(400);
+                expect(response.statusMessage).to.equal("Bad Request");
+                expect(response.tags).to.deep.equal(['client-error']);
+            });
+
+            it("should report error responses from unexpected HTTP/2 requests", async () => {
+                let errorPromise = getDeferred<ClientError>();
+                await server.on('client-error', (e) => errorPromise.resolve(e));
+
+                const client = (await import('http2')).connect(server.url);
+                const req = client.request({ ':path': '/' });
+                req.end();
+
+                // This will fail, but that's ok for now:
+                client.on('error', _.noop);
+                req.on('error', _.noop);
+
+                let clientError = await errorPromise;
+
+                expect(clientError.errorCode).to.equal("HPE_INVALID_METHOD");
+                expect(clientError.request.method).to.equal("PRI");
+                expect(clientError.request.url).to.equal("*");
+                expect(clientError.request.httpVersion).to.equal("2.0");
+
+                const response = clientError.response as CompletedResponse;
+                expect(response.statusCode).to.equal(505);
+                expect(response.statusMessage).to.equal("HTTP Version Not Supported");
+                expect(response.tags).to.deep.equal(['client-error', 'http-2']);
+            });
+
+            it("should notify for incomplete requests", async () => {
+                let errorPromise = getDeferred<ClientError>();
+                await server.on('client-error', (e) => errorPromise.resolve(e));
+
+                await sendRawRequest(server, 'GET /');
+
+                let clientError = await errorPromise;
+
+                expect(clientError.errorCode).to.equal("HPE_INVALID_EOF_STATE");
+
+                expect(clientError.request.method).to.equal(undefined);
+                expect(clientError.request.url).to.equal(undefined);
+
+                const response = clientError.response as CompletedResponse;
+
+                expect(response.statusCode).to.equal(400);
+                expect(response.statusMessage).to.equal("Bad Request");
+                expect(response.tags).to.deep.equal(['client-error']);
+            });
+        });
+    });
+
+    describe("with a local HTTPS server", () => {
+        let server = getLocal({
+            https: {
+                keyPath: './test/fixtures/test-ca.key',
+                certPath: './test/fixtures/test-ca.pem'
             }
         });
 
-        let clientError = await errorPromise;
+        beforeEach(() => server.start());
+        afterEach(() => server.stop());
 
-        expect(clientError.errorCode).to.equal("HPE_HEADER_OVERFLOW");
-        expect(clientError.request.method).to.equal("GET");
-        expect(clientError.request.url).to.equal(server.urlFor("/mocked-endpoint"));
-        expect(clientError.request.headers).to.deep.equal({ 'host': `localhost:${server.port}` });
+        const expectNoTlsErrors = watchForEvent('tls-client-error', server);
 
-        const response = clientError.response as CompletedResponse;
-        expect(response.statusCode).to.equal(431);
-        expect(response.statusMessage).to.equal("Request Header Fields Too Large");
-        expect(response.tags).to.deep.equal(['client-error', 'header-overflow']);
-    });
-
-    nodeOnly(() => {
-        it("should report error responses from invalid HTTP versions", async () => {
+        it("should report error responses from header overflows", async () => {
             let errorPromise = getDeferred<ClientError>();
             await server.on('client-error', (e) => errorPromise.resolve(e));
 
-            sendRawRequest(server, 'GET https://example.com HTTP/0\r\n\r\n');
+            fetch(server.urlFor("/mocked-endpoint"), {
+                headers: {
+                    // 10KB of 'X':
+                    "long-value": _.range(10 * 1024).map(() => "X").join("")
+                }
+            }).catch(() => {});
 
             let clientError = await errorPromise;
 
-            expect(clientError.errorCode).to.equal("HPE_INVALID_VERSION");
+            expect(clientError.errorCode).to.equal("HPE_HEADER_OVERFLOW");
             expect(clientError.request.method).to.equal("GET");
-            expect(clientError.request.httpVersion).to.equal("0");
-            expect(clientError.request.url).to.equal("https://example.com");
+            expect(clientError.request.url).to.equal(server.urlFor("/mocked-endpoint"));
+            expect(clientError.request.headers).to.deep.equal({ 'host': `localhost:${server.port}` });
 
             const response = clientError.response as CompletedResponse;
-            expect(response.statusCode).to.equal(400);
-            expect(response.statusMessage).to.equal("Bad Request");
-            expect(response.body.text).to.equal("");
-            expect(response.tags).to.deep.equal(['client-error']);
+            expect(response.statusCode).to.equal(431);
+            expect(response.statusMessage).to.equal("Request Header Fields Too Large");
+            expect(response.tags).to.deep.equal(['client-error', 'header-overflow']);
+
+            await expectNoTlsErrors();
         });
 
-        it("should report error responses from unparseable requests", async () => {
+        it("should report error responses from header overflows with plain HTTP", async () => {
             let errorPromise = getDeferred<ClientError>();
             await server.on('client-error', (e) => errorPromise.resolve(e));
 
-            sendRawRequest(server, '?? ?? ?? ??\r\n\r\n');
+            const plainHttpUrl = server.urlFor("/mocked-endpoint").replace(/^https/, 'http');
+            await fetch(plainHttpUrl, {
+                headers: {
+                    // 10KB of 'X':
+                    "long-value": _.range(10 * 1024).map(() => "X").join("")
+                }
+            }).catch(() => {});
 
             let clientError = await errorPromise;
 
-            expect(clientError.errorCode).to.equal("HPE_INVALID_METHOD");
-            expect(clientError.request.method).to.equal("??");
-            expect(clientError.request.url).to.equal("??");
+            expect(clientError.errorCode).to.equal("HPE_HEADER_OVERFLOW");
+            expect(clientError.request.method).to.equal("GET");
+            expect(clientError.request.url).to.equal(plainHttpUrl);
+            expect(clientError.request.headers).to.deep.equal({ 'host': `localhost:${server.port}` });
 
             const response = clientError.response as CompletedResponse;
-            expect(response.statusCode).to.equal(400);
-            expect(response.statusMessage).to.equal("Bad Request");
-            expect(response.tags).to.deep.equal(['client-error']);
+            expect(response.statusCode).to.equal(431);
+            expect(response.statusMessage).to.equal("Request Header Fields Too Large");
+            expect(response.tags).to.deep.equal(['client-error', 'header-overflow']);
+
+            await expectNoTlsErrors();
         });
 
-        it("should report error responses from unexpected HTTP/2 requests", async () => {
-            let errorPromise = getDeferred<ClientError>();
-            await server.on('client-error', (e) => errorPromise.resolve(e));
+        nodeOnly(() => {
+            it("should report error responses from unexpected HTTP/2 requests", async () => {
+                let errorPromise = getDeferred<ClientError>();
+                await server.on('client-error', (e) => errorPromise.resolve(e));
 
-            const client = (await import('http2')).connect(server.url);
-            const req = client.request({ ':path': '/' });
-            req.end();
+                const client = (await import('http2')).connect(server.url);
+                const req = client.request({ ':path': '/' });
+                req.end();
 
-            // This will fail, but that's ok for now:
-            client.on('error', _.noop);
-            req.on('error', _.noop);
+                // The above will fail, but that's ok for now:
+                client.on('error', _.noop);
+                req.on('error', _.noop);
 
-            let clientError = await errorPromise;
+                let clientError = await errorPromise;
 
-            expect(clientError.errorCode).to.equal("HPE_INVALID_METHOD");
-            expect(clientError.request.method).to.equal("PRI");
-            expect(clientError.request.url).to.equal("*");
-            expect(clientError.request.httpVersion).to.equal("2.0");
+                expect(clientError.errorCode).to.equal("HPE_INVALID_METHOD");
+                expect(clientError.request.method).to.equal("PRI");
+                expect(clientError.request.url).to.equal("*");
+                expect(clientError.request.httpVersion).to.equal("2.0");
 
-            const response = clientError.response as CompletedResponse;
-            expect(response.statusCode).to.equal(505);
-            expect(response.statusMessage).to.equal("HTTP Version Not Supported");
-            expect(response.tags).to.deep.equal(['client-error', 'http-2']);
-        });
+                const response = clientError.response as CompletedResponse;
+                expect(response.statusCode).to.equal(505);
+                expect(response.statusMessage).to.equal("HTTP Version Not Supported");
+                expect(response.tags).to.deep.equal(['client-error', 'http-2']);
 
-        it("should notify for incomplete requests", async () => {
-            let errorPromise = getDeferred<ClientError>();
-            await server.on('client-error', (e) => errorPromise.resolve(e));
-
-            await sendRawRequest(server, 'GET /');
-
-            let clientError = await errorPromise;
-
-            expect(clientError.errorCode).to.equal("HPE_INVALID_EOF_STATE");
-
-            expect(clientError.request.method).to.equal(undefined);
-            expect(clientError.request.url).to.equal(undefined);
-
-            const response = clientError.response as CompletedResponse;
-
-            expect(response.statusCode).to.equal(400);
-            expect(response.statusMessage).to.equal("Bad Request");
-            expect(response.tags).to.deep.equal(['client-error']);
+                await expectNoTlsErrors();
+            });
         });
     });
 

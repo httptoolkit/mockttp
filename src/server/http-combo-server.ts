@@ -19,6 +19,8 @@ declare module "net" {
         // Normally only defined on TLSSocket, but useful to explicitly include here
         // Undefined on plain HTTP, 'true' on TLSSocket.
         encrypted?: boolean;
+
+        __httpPeekedData?: Buffer;
     }
 }
 

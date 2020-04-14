@@ -452,8 +452,14 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
             timingEvents: { startTime: Date.now(), startTimestamp: now() } as TimingEvents
         };
 
-        const parsedRequest = error.rawPacket instanceof Buffer
-            ? tryToParseHttp(error.rawPacket, socket)
+        // HTTPolyglot's byte-peeking can sometimes lose the initial byte from the parser's
+        // exposed buffer. If that's happened, we need to get it back:
+        const rawPacket = Buffer.concat(
+            [socket.__httpPeekedData, error.rawPacket].filter((data) => !!data) as Buffer[]
+        );
+
+        const parsedRequest = rawPacket.byteLength
+            ? tryToParseHttp(rawPacket, socket)
             : undefined;
 
         const isHTTP2 = parsedRequest?.httpVersion?.startsWith("2.");
