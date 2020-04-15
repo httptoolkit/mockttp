@@ -496,11 +496,14 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
                 body: buildBodyReader(Buffer.from([]), {})
             };
 
-            socket.write(Buffer.from(
+            const responseBuffer = Buffer.from(
                 `HTTP/1.1 ${response.statusCode} ${response.statusMessage}\r\n` +
                 "Connection: close\r\n\r\n",
                 'ascii'
-            ));
+            );
+
+            // Wait for the write to complete before we destroy() below
+            await new Promise((resolve) => socket.write(responseBuffer, resolve));
 
             commonParams.timingEvents.headersSentTimestamp = now();
             commonParams.timingEvents.responseSentTimestamp = now();
