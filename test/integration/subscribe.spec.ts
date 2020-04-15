@@ -580,6 +580,7 @@ describe("TLS error subscriptions", () => {
                 fetch(goodServer.urlFor("/"), <any> {
                     // Ignores proxy cert issues by using the proxy via plain HTTP
                     agent: new HttpsProxyAgent({
+                        protocol: 'http',
                         host: 'localhost',
                         port: badServer.port
                     })
@@ -876,6 +877,7 @@ describe("Client error subscription", () => {
 
                     const response = await fetch("http://example.com/endpoint", <any> {
                         agent: new HttpsProxyAgent({
+                            protocol: 'http',
                             host: 'localhost',
                             port: server.port
                         }),
@@ -906,6 +908,7 @@ describe("Client error subscription", () => {
 
                     const response = await fetch("https://example.com/endpoint", <any> {
                         agent: new HttpsProxyAgent({
+                            protocol: 'https',
                             host: 'localhost',
                             port: server.port
                         }),
