@@ -3,6 +3,7 @@ sourceMapSupport.install({ handleUncaughtExceptions: false });
 
 import * as net from 'net';
 import * as tls from 'tls';
+import * as semver from 'semver';
 import getFetchPonyfill = require("fetch-ponyfill");
 
 import chai = require("chai");
@@ -73,6 +74,8 @@ export function getDeferred<T>(): Deferred<T> {
 
     return result;
 }
+
+export const TOO_LONG_HEADER_SIZE = 1024 * 16 + 1;
 
 export async function openRawSocket(server: Mockttp) {
     const client = new net.Socket();

@@ -1,6 +1,8 @@
 const tmp = require('tmp');
 tmp.setGracefulCleanup();
 
+const webpack = require('webpack');
+
 module.exports = function(config) {
     config.set({
         frameworks: ['mocha', 'chai'],
@@ -23,6 +25,11 @@ module.exports = function(config) {
                 tls: 'empty',
                 __dirname: true
             },
+            plugins: [
+                new webpack.DefinePlugin({
+                    "process.version": '"' + process.version + '"'
+                })
+            ],
             output: {
                 path: tmp.dirSync()
             }

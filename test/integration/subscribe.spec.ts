@@ -2,6 +2,7 @@ import * as _ from 'lodash';
 import * as http from 'http';
 import HttpsProxyAgent = require('https-proxy-agent');
 import * as zlib from 'zlib';
+import * as semver from 'semver';
 
 import {
     getLocal,
@@ -18,13 +19,13 @@ import {
     nodeOnly,
     isNode,
     getDeferred,
-    Deferred,
     delay,
     sendRawRequest,
     openRawSocket,
     openRawTlsSocket,
     writeAndReset,
-    watchForEvent
+    watchForEvent,
+    TOO_LONG_HEADER_SIZE
 } from "../test-utils";
 import { TimingEvents, TlsRequest, ClientError } from "../../dist/types";
 
@@ -650,8 +651,7 @@ describe("Client error subscription", () => {
 
             fetch(server.urlFor("/mocked-endpoint"), {
                 headers: {
-                    // 10KB of 'X':
-                    "long-value": _.range(10 * 1024).map(() => "X").join("")
+                    "long-value": _.range(TOO_LONG_HEADER_SIZE).map(() => "X").join("")
                 }
             }).catch(() => {});
 
@@ -773,17 +773,26 @@ describe("Client error subscription", () => {
 
             fetch(server.urlFor("/mocked-endpoint"), {
                 headers: {
-                    // 10KB of 'X':
-                    "long-value": _.range(10 * 1024).map(() => "X").join("")
+                    // Order here matters - if the host header appears after long-value, then we miss it
+                    // in the packet buffer, and request.url is relative, not absolute
+                    'host': `localhost:${server.port}`,
+                    "long-value": _.range(TOO_LONG_HEADER_SIZE).map(() => "X").join("")
                 }
             }).catch(() => {});
 
             let clientError = await errorPromise;
 
             expect(clientError.errorCode).to.equal("HPE_HEADER_OVERFLOW");
-            expect(clientError.request.method).to.equal("GET");
-            expect(clientError.request.url).to.equal(server.urlFor("/mocked-endpoint"));
-            expect(clientError.request.headers).to.deep.equal({ 'host': `localhost:${server.port}` });
+
+            if (semver.satisfies(process.version, '^13')) {
+                expect(clientError.request.method).to.equal(undefined);
+                expect(clientError.request.url).to.equal(undefined);
+                expect(clientError.request.headers).to.deep.equal({});
+            } else {
+                expect(clientError.request.method).to.equal("GET");
+                expect(clientError.request.url).to.equal(server.urlFor("/mocked-endpoint"));
+                expect(clientError.request.headers).to.deep.equal({ 'host': `localhost:${server.port}` });
+            }
 
             const response = clientError.response as CompletedResponse;
             expect(response.statusCode).to.equal(431);
@@ -801,7 +810,7 @@ describe("Client error subscription", () => {
             await fetch(plainHttpUrl, {
                 headers: {
                     // 10KB of 'X':
-                    "long-value": _.range(10 * 1024).map(() => "X").join("")
+                    "long-value": _.range(TOO_LONG_HEADER_SIZE).map(() => "X").join("")
                 }
             }).catch(() => {});
 
@@ -871,8 +880,7 @@ describe("Client error subscription", () => {
                             port: server.port
                         }),
                         headers: {
-                            // 10KB of 'X':
-                            "long-value": _.range(10 * 1024).map(() => "X").join("")
+                            "long-value": _.range(TOO_LONG_HEADER_SIZE).map(() => "X").join("")
                         }
                     });
 
@@ -902,8 +910,10 @@ describe("Client error subscription", () => {
                             port: server.port
                         }),
                         headers: {
-                            // 10KB of 'X':
-                            "long-value": _.range(10 * 1024).map(() => "X").join("")
+                            // Order here matters - if the host header appears after long-value, then we miss it
+                            // in the packet buffer, and request.url is relative, not absolute
+                            'host': 'example.com',
+                            "long-value": _.range(TOO_LONG_HEADER_SIZE).map(() => "X").join("")
                         }
                     });
 
@@ -912,9 +922,16 @@ describe("Client error subscription", () => {
                     let clientError = await errorPromise;
 
                     expect(clientError.errorCode).to.equal("HPE_HEADER_OVERFLOW");
-                    expect(clientError.request.method).to.equal("GET");
-                    expect(clientError.request.url).to.equal("https://example.com/endpoint");
-                    expect(clientError.request.headers).to.deep.equal({ 'host': "example.com" });
+
+                    if (semver.satisfies(process.version, '^13')) {
+                        expect(clientError.request.method).to.equal(undefined);
+                        expect(clientError.request.url).to.equal(undefined);
+                        expect(clientError.request.headers).to.deep.equal({});
+                    } else {
+                        expect(clientError.request.method).to.equal("GET");
+                        expect(clientError.request.url).to.equal("https://example.com/endpoint");
+                        expect(clientError.request.headers).to.deep.equal({ 'host': "example.com" });
+                    }
 
                     const reportResponse = clientError.response as CompletedResponse;
                     expect(reportResponse.statusCode).to.equal(431);
