@@ -238,6 +238,8 @@ export async function createComboServer(
         });
         innerServer.addListener('connect', (req, res) => server.emit('connect', req, res));
 
+        innerServer.on('clientError', (...args) => server.emit('clientError', ...args));
+
         innerServer.emit('connection', tlsSocket);
         tlsSocket.resume(); // Socket was paused by peekFirstByte() above
     }
