@@ -261,7 +261,10 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         });
     }
 
-    private async announceTlsErrorAsync(request: TlsRequest) {
+    private async announceTlsErrorAsync(socket: net.Socket, request: TlsRequest) {
+        // Ignore errors after TLS is setup, those are client errors
+        if (socket instanceof tls.TLSSocket && socket.tlsSetupCompleted) return;
+
         setImmediate(() => {
             // We can get falsey but set hostname values - drop them
             if (!request.hostname) delete request.hostname;
@@ -271,7 +274,10 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         });
     }
 
-    private async announceClientErrorAsync(error: ClientError) {
+    private async announceClientErrorAsync(socket: net.Socket, error: ClientError) {
+        // Ignore errors before TLS is setup, those are TLS errors
+        if (socket instanceof tls.TLSSocket && !socket.tlsSetupCompleted) return;
+
         setImmediate(() => {
             if (this.debug) console.warn(`Client error: ${JSON.stringify(error)}`);
             this.eventEmitter.emit('client-error', error);
@@ -432,17 +438,6 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
     // Called on server clientError, e.g. if the client disconnects during initial
     // request data, or sends totally invalid gibberish
     private async handleInvalidRequest(error: Error & { code?: string, rawPacket?: Buffer }, socket: net.Socket) {
-        if (
-            socket instanceof tls.TLSSocket &&
-            !socket.initialSetupCompleted && // TLS still TBC
-            !error.rawPacket?.byteLength // No data received yet
-        ) {
-            // This will be reported independently as a TLS error, so we don't need to
-            // report it separately here, and we can't respond. Just do minimal cleanup:
-            socket.destroy(error);
-            return;
-        }
-
         const errorCode = error.code;
         const isHeaderOverflow = errorCode === "HPE_HEADER_OVERFLOW";
 
@@ -477,8 +472,10 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
             headers: parsedRequest?.hostname ? { host: parsedRequest.hostname } : {}
         };
 
+        let response: ClientError['response'];
+
         if (socket.writable) {
-            const response: ClientError['response'] = {
+            response = {
                 ...commonParams,
                 headers: { 'Connection': 'close' },
                 statusCode:
@@ -507,11 +504,13 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
             commonParams.timingEvents.headersSentTimestamp = now();
             commonParams.timingEvents.responseSentTimestamp = now();
-            this.announceClientErrorAsync({ errorCode, request, response });
+            this.announceClientErrorAsync(socket, { errorCode, request, response });
         } else {
+            response = 'aborted';
             commonParams.timingEvents.abortedTimestamp = now();
-            this.announceClientErrorAsync({ errorCode, request, response: 'aborted' });
         }
+
+        this.announceClientErrorAsync(socket, { errorCode, request, response });
 
         socket.destroy(error);
     }

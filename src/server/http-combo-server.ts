@@ -36,7 +36,7 @@ declare module "tls" {
 
         // Marker used to detect whether client errors should be reported as TLS issues
         // (RST during handshake) or as subsequent client issues (RST during request)
-        initialSetupCompleted?: true;
+        tlsSetupCompleted?: true;
     }
 }
 
@@ -68,7 +68,7 @@ function ifTlsDropped(socket: tls.TLSSocket, errorCallback: () => void) {
     .then(() => {
         // Mark the socket as having completed TLS setup - this ensures that future
         // errors fire as client errors, not TLS setup errors.
-        socket.initialSetupCompleted = true;
+        socket.tlsSetupCompleted = true;
     })
     .catch(() => {
         // To get here, the socket must have connected & done the TLS handshake, but then
@@ -102,7 +102,7 @@ function getCauseFromError(error: Error & { code?: string }) {
 export async function createComboServer(
     options: ComboServerOptions,
     requestListener: (req: http.IncomingMessage, res: http.ServerResponse) => void,
-    tlsClientErrorListener: (req: TlsRequest) => void
+    tlsClientErrorListener: (socket: tls.TLSSocket, req: TlsRequest) => void
 ): Promise<DestroyableServer> {
     if (!options.https) {
         return destroyable(http.createServer(requestListener));
@@ -134,19 +134,19 @@ export async function createComboServer(
 
     server.on('tlsClientError', (error: Error, socket: tls.TLSSocket) => {
         // These only work because of oncertcb monkeypatch above
-        tlsClientErrorListener({
+        tlsClientErrorListener(socket, {
             failureCause: getCauseFromError(error),
             hostname: socket.servername,
             remoteIpAddress: socket.initialRemoteAddress!,
             tags: []
         });
     });
-    server.on('secureConnection', (tlsSocket: tls.TLSSocket) =>
-        ifTlsDropped(tlsSocket, () => {
-            tlsClientErrorListener({
+    server.on('secureConnection', (socket: tls.TLSSocket) =>
+        ifTlsDropped(socket, () => {
+            tlsClientErrorListener(socket, {
                 failureCause: 'closed',
-                hostname: tlsSocket.servername,
-                remoteIpAddress: tlsSocket.remoteAddress!,
+                hostname: socket.servername,
+                remoteIpAddress: socket.remoteAddress!,
                 tags: []
             });
         })
@@ -177,10 +177,10 @@ export async function createComboServer(
         });
     });
 
-    function unwrapTLS(targetHost: string, port: string, socket: net.Socket) {
+    async function unwrapTLS(targetHost: string, port: string, rawSocket: net.Socket) {
         const generatedCert = ca.generateCertificate(targetHost);
 
-        let tlsSocket = new tls.TLSSocket(socket, {
+        let tlsSocket = new tls.TLSSocket(rawSocket, {
             isServer: true,
             server: server,
             secureContext: tls.createSecureContext({
@@ -194,17 +194,18 @@ export async function createComboServer(
         // * connect, not dropped -> all good
         // * _tlsError before connect -> cert rejected
         // * sudden end before connect -> cert rejected
-        new Promise((resolve, reject) => {
-            tlsSocket.on('secure', () => {
-                resolve();
+        await new Promise((resolve, reject) => {
+            tlsSocket.on('secure', async () => {
                 ifTlsDropped(tlsSocket, () => {
-                    tlsClientErrorListener({
+                    tlsClientErrorListener(tlsSocket, {
                         failureCause: 'closed',
                         hostname: targetHost,
-                        remoteIpAddress: socket.remoteAddress!,
+                        remoteIpAddress: rawSocket.remoteAddress!,
                         tags: []
                     });
                 });
+
+                peekFirstByte(tlsSocket).then(resolve);
             });
             tlsSocket.on('_tlsError', (error) => {
                 reject(getCauseFromError(error));
@@ -213,10 +214,10 @@ export async function createComboServer(
                 // Delay, so that simultaneous specific errors reject first
                 setTimeout(() => reject('closed'), 1);
             });
-        }).catch((cause) => tlsClientErrorListener({
+        }).catch((cause) => tlsClientErrorListener(tlsSocket, {
             failureCause: cause,
             hostname: targetHost,
-            remoteIpAddress: socket.remoteAddress!,
+            remoteIpAddress: rawSocket.remoteAddress!,
             tags: []
         }));
 
@@ -238,6 +239,7 @@ export async function createComboServer(
         innerServer.addListener('connect', (req, res) => server.emit('connect', req, res));
 
         innerServer.emit('connection', tlsSocket);
+        tlsSocket.resume(); // Socket was paused by peekFirstByte() above
     }
 
     return destroyable(server);

@@ -1,6 +1,6 @@
 import * as _ from 'lodash';
 import * as http from 'http';
-import HttpProxyAgent = require('https-proxy-agent');
+import HttpsProxyAgent = require('https-proxy-agent');
 import * as zlib from 'zlib';
 
 import {
@@ -24,7 +24,6 @@ import {
     openRawSocket,
     openRawTlsSocket,
     writeAndReset,
-    AssertionError,
     watchForEvent
 } from "../test-utils";
 import { TimingEvents, TlsRequest, ClientError } from "../../dist/types";
@@ -579,7 +578,7 @@ describe("TLS error subscriptions", () => {
             await expect(
                 fetch(goodServer.urlFor("/"), <any> {
                     // Ignores proxy cert issues by using the proxy via plain HTTP
-                    agent: new HttpProxyAgent({
+                    agent: new HttpsProxyAgent({
                         host: 'localhost',
                         port: badServer.port
                     })
@@ -619,7 +618,7 @@ describe("TLS error subscriptions", () => {
             await goodServer.on('tls-client-error', (r) => seenTlsErrorPromise.resolve(r));
 
             const tlsSocket = await openRawSocket(goodServer);
-            writeAndReset(tlsSocket, "\u0000"); // Send nothing, just connect & RESET
+            writeAndReset(tlsSocket, ""); // Send nothing, just connect & RESET
 
             const seenTlsError = await Promise.race([
                 delay(100).then(() => false),
@@ -847,6 +846,83 @@ describe("Client error subscription", () => {
                 expect(response.tags).to.deep.equal(['client-error', 'http-2']);
 
                 await expectNoTlsErrors();
+            });
+
+            describe("when proxying", () => {
+                const INITIAL_ENV = _.cloneDeep(process.env);
+
+                beforeEach(async () => {
+                    process.env = _.merge({}, process.env, server.proxyEnv);
+                });
+
+                afterEach(async () => {
+                    await expectNoTlsErrors();
+                    process.env = INITIAL_ENV;
+                });
+
+                it("should report error responses from HTTP-proxied header overflows", async () => {
+                    let errorPromise = getDeferred<ClientError>();
+                    await server.on('client-error', (e) => errorPromise.resolve(e));
+                    await server.get("http://example.com/endpoint").thenReply(200, "Mock data");
+
+                    const response = await fetch("http://example.com/endpoint", <any> {
+                        agent: new HttpsProxyAgent({
+                            host: 'localhost',
+                            port: server.port
+                        }),
+                        headers: {
+                            // 10KB of 'X':
+                            "long-value": _.range(10 * 1024).map(() => "X").join("")
+                        }
+                    });
+
+                    expect(response.status).to.equal(431);
+
+                    let clientError = await errorPromise;
+
+                    expect(clientError.errorCode).to.equal("HPE_HEADER_OVERFLOW");
+                    expect(clientError.request.method).to.equal("GET");
+                    expect(clientError.request.url).to.equal("http://example.com/endpoint");
+                    expect(clientError.request.headers).to.deep.equal({ 'host': "example.com" });
+
+                    const reportedResponse = clientError.response as CompletedResponse;
+                    expect(reportedResponse.statusCode).to.equal(431);
+                    expect(reportedResponse.statusMessage).to.equal("Request Header Fields Too Large");
+                    expect(reportedResponse.tags).to.deep.equal(['client-error', 'header-overflow']);
+                });
+
+                it("should report error responses from HTTPS-proxied header overflows", async () => {
+                    let errorPromise = getDeferred<ClientError>();
+                    await server.on('client-error', (e) => errorPromise.resolve(e));
+                    await server.get("https://example.com/endpoint").thenReply(200, "Mock data");
+
+                    const response = await fetch("https://example.com/endpoint", <any> {
+                        agent: new HttpsProxyAgent({
+                            host: 'localhost',
+                            port: server.port
+                        }),
+                        headers: {
+                            // 10KB of 'X':
+                            "long-value": _.range(10 * 1024).map(() => "X").join("")
+                        }
+                    });
+
+                    expect(response.status).to.equal(431);
+
+                    let clientError = await errorPromise;
+
+                    expect(clientError.errorCode).to.equal("HPE_HEADER_OVERFLOW");
+                    expect(clientError.request.method).to.equal("GET");
+                    expect(clientError.request.url).to.equal("https://example.com/endpoint");
+                    expect(clientError.request.headers).to.deep.equal({ 'host': "example.com" });
+
+                    const reportResponse = clientError.response as CompletedResponse;
+                    expect(reportResponse.statusCode).to.equal(431);
+                    expect(reportResponse.statusMessage).to.equal("Request Header Fields Too Large");
+                    expect(reportResponse.tags).to.deep.equal(['client-error', 'header-overflow']);
+
+                    await expectNoTlsErrors();
+                });
             });
         });
     });

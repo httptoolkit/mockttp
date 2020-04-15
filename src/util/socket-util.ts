@@ -4,9 +4,10 @@ import * as net from 'net';
 
 import { isNode } from './util';
 
-// Grab the first byte of a stream
-// Note that this isn't a great abstraction: you might
-// need to manually resume() the stream afterwards.
+// Grab the first byte of a stream to examine it.
+// Note that this isn't a great abstraction: you might need to manually resume() the stream afterwards.
+// This is intended for use *BEFORE* anything else is consuming the stream. If used later on, you'll
+// see the peeked data duplicated, as it's reinserted into the stream by the unshift() here.
 export async function peekFirstByte(socket: net.Socket): Promise<number> {
     return new Promise<number>((resolve) => {
         socket.once('data', (data) => {
