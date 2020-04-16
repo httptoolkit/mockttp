@@ -443,7 +443,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
         const commonParams = {
             id: uuid(),
-            tags: ['client-error'],
+            tags: [`client-error:${error.code || 'UNKNOWN'}`],
             timingEvents: { startTime: Date.now(), startTimestamp: now() } as TimingEvents
         };
 

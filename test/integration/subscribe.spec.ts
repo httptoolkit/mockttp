@@ -666,7 +666,10 @@ describe("Client error subscription", () => {
             const response = clientError.response as CompletedResponse;
             expect(response.statusCode).to.equal(431);
             expect(response.statusMessage).to.equal("Request Header Fields Too Large");
-            expect(response.tags).to.deep.equal(['client-error', 'header-overflow']);
+            expect(response.tags).to.deep.equal([
+                'client-error:HPE_HEADER_OVERFLOW',
+                'header-overflow'
+            ]);
         });
 
         nodeOnly(() => {
@@ -687,7 +690,7 @@ describe("Client error subscription", () => {
                 expect(response.statusCode).to.equal(400);
                 expect(response.statusMessage).to.equal("Bad Request");
                 expect(response.body.text).to.equal("");
-                expect(response.tags).to.deep.equal(['client-error']);
+                expect(response.tags).to.deep.equal(['client-error:HPE_INVALID_VERSION']);
             });
 
             it("should report error responses from unparseable requests", async () => {
@@ -705,7 +708,7 @@ describe("Client error subscription", () => {
                 const response = clientError.response as CompletedResponse;
                 expect(response.statusCode).to.equal(400);
                 expect(response.statusMessage).to.equal("Bad Request");
-                expect(response.tags).to.deep.equal(['client-error']);
+                expect(response.tags).to.deep.equal(['client-error:HPE_INVALID_METHOD']);
             });
 
             it("should report error responses from unexpected HTTP/2 requests", async () => {
@@ -730,7 +733,7 @@ describe("Client error subscription", () => {
                 const response = clientError.response as CompletedResponse;
                 expect(response.statusCode).to.equal(505);
                 expect(response.statusMessage).to.equal("HTTP Version Not Supported");
-                expect(response.tags).to.deep.equal(['client-error', 'http-2']);
+                expect(response.tags).to.deep.equal(['client-error:HPE_INVALID_METHOD', 'http-2']);
             });
 
             it("should notify for incomplete requests", async () => {
@@ -750,7 +753,7 @@ describe("Client error subscription", () => {
 
                 expect(response.statusCode).to.equal(400);
                 expect(response.statusMessage).to.equal("Bad Request");
-                expect(response.tags).to.deep.equal(['client-error']);
+                expect(response.tags).to.deep.equal(['client-error:HPE_INVALID_EOF_STATE']);
             });
         });
     });
@@ -798,7 +801,10 @@ describe("Client error subscription", () => {
             const response = clientError.response as CompletedResponse;
             expect(response.statusCode).to.equal(431);
             expect(response.statusMessage).to.equal("Request Header Fields Too Large");
-            expect(response.tags).to.deep.equal(['client-error', 'header-overflow']);
+            expect(response.tags).to.deep.equal([
+                'client-error:HPE_HEADER_OVERFLOW',
+                'header-overflow'
+            ]);
 
             await expectNoTlsErrors();
         });
@@ -825,7 +831,10 @@ describe("Client error subscription", () => {
             const response = clientError.response as CompletedResponse;
             expect(response.statusCode).to.equal(431);
             expect(response.statusMessage).to.equal("Request Header Fields Too Large");
-            expect(response.tags).to.deep.equal(['client-error', 'header-overflow']);
+            expect(response.tags).to.deep.equal([
+                'client-error:HPE_HEADER_OVERFLOW',
+                'header-overflow'
+            ]);
 
             await expectNoTlsErrors();
         });
@@ -853,7 +862,10 @@ describe("Client error subscription", () => {
                 const response = clientError.response as CompletedResponse;
                 expect(response.statusCode).to.equal(505);
                 expect(response.statusMessage).to.equal("HTTP Version Not Supported");
-                expect(response.tags).to.deep.equal(['client-error', 'http-2']);
+                expect(response.tags).to.deep.equal([
+                    'client-error:HPE_INVALID_METHOD',
+                    'http-2'
+                ]);
 
                 await expectNoTlsErrors();
             });
@@ -898,7 +910,10 @@ describe("Client error subscription", () => {
                     const reportedResponse = clientError.response as CompletedResponse;
                     expect(reportedResponse.statusCode).to.equal(431);
                     expect(reportedResponse.statusMessage).to.equal("Request Header Fields Too Large");
-                    expect(reportedResponse.tags).to.deep.equal(['client-error', 'header-overflow']);
+                    expect(reportedResponse.tags).to.deep.equal([
+                        'client-error:HPE_HEADER_OVERFLOW',
+                        'header-overflow'
+                    ]);
                 });
 
                 it("should report error responses from HTTPS-proxied header overflows", async () => {
@@ -939,7 +954,10 @@ describe("Client error subscription", () => {
                     const reportResponse = clientError.response as CompletedResponse;
                     expect(reportResponse.statusCode).to.equal(431);
                     expect(reportResponse.statusMessage).to.equal("Request Header Fields Too Large");
-                    expect(reportResponse.tags).to.deep.equal(['client-error', 'header-overflow']);
+                    expect(reportResponse.tags).to.deep.equal([
+                        'client-error:HPE_HEADER_OVERFLOW',
+                        'header-overflow'
+                    ]);
 
                     await expectNoTlsErrors();
                 });
