@@ -504,7 +504,6 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
             commonParams.timingEvents.headersSentTimestamp = now();
             commonParams.timingEvents.responseSentTimestamp = now();
-            this.announceClientErrorAsync(socket, { errorCode, request, response });
         } else {
             response = 'aborted';
             commonParams.timingEvents.abortedTimestamp = now();
