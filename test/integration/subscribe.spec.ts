@@ -788,7 +788,7 @@ describe("Client error subscription", () => {
 
             expect(clientError.errorCode).to.equal("HPE_HEADER_OVERFLOW");
 
-            if (semver.satisfies(process.version, '^13')) {
+            if (semver.satisfies(process.version, '>=13')) {
                 expect(clientError.request.method).to.equal(undefined);
                 expect(clientError.request.url).to.equal(undefined);
                 expect(clientError.request.headers).to.deep.equal({});
@@ -941,7 +941,7 @@ describe("Client error subscription", () => {
 
                     expect(clientError.errorCode).to.equal("HPE_HEADER_OVERFLOW");
 
-                    if (semver.satisfies(process.version, '^13')) {
+                    if (semver.satisfies(process.version, '>=13')) {
                         expect(clientError.request.method).to.equal(undefined);
                         expect(clientError.request.url).to.equal(undefined);
                         expect(clientError.request.headers).to.deep.equal({});
