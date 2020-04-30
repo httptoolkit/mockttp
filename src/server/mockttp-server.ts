@@ -437,80 +437,113 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
     // Called on server clientError, e.g. if the client disconnects during initial
     // request data, or sends totally invalid gibberish
-    private async handleInvalidRequest(error: Error & { code?: string, rawPacket?: Buffer }, socket: net.Socket) {
-        const errorCode = error.code;
-        const isHeaderOverflow = errorCode === "HPE_HEADER_OVERFLOW";
+    private handleInvalidRequest(error: Error & { code?: string, rawPacket?: Buffer }, socket: net.Socket) {
+        if (socket.clientErrorInProgress) {
+            // For subsequent errors on the same socket, accumulate packet data (linked to the socket)
+            // so that the error (probably delayed until next tick) has it all to work with
+            const previousPacket = socket.clientErrorInProgress.rawPacket;
+            const newPacket = error.rawPacket;
+            if (!newPacket || newPacket === previousPacket) return;
 
-        const commonParams = {
-            id: uuid(),
-            tags: [`client-error:${error.code || 'UNKNOWN'}`],
-            timingEvents: { startTime: Date.now(), startTimestamp: now() } as TimingEvents
-        };
-
-        // HTTPolyglot's byte-peeking can sometimes lose the initial byte from the parser's
-        // exposed buffer. If that's happened, we need to get it back:
-        const rawPacket = Buffer.concat(
-            [socket.__httpPeekedData, error.rawPacket].filter((data) => !!data) as Buffer[]
-        );
-
-        const parsedRequest = rawPacket.byteLength
-            ? tryToParseHttp(rawPacket, socket)
-            : {};
-
-        const isHTTP2 = parsedRequest.httpVersion?.startsWith("2.");
-
-        if (isHeaderOverflow) commonParams.tags.push('header-overflow');
-        if (isHTTP2) commonParams.tags.push('http-2');
-
-        const request: ClientError['request'] = {
-            ...commonParams,
-            httpVersion: parsedRequest.httpVersion,
-            method: parsedRequest.method,
-            protocol: parsedRequest.protocol,
-            url: parsedRequest.url,
-            path: parsedRequest.path,
-            headers: parsedRequest.headers || {}
-        };
-
-        let response: ClientError['response'];
-
-        if (socket.writable) {
-            response = {
-                ...commonParams,
-                headers: { 'Connection': 'close' },
-                statusCode:
-                    isHeaderOverflow
-                        ? 431
-                    : isHTTP2
-                        ? 505
-                    : 400,
-                statusMessage:
-                    isHeaderOverflow
-                        ? "Request Header Fields Too Large"
-                    : isHTTP2
-                        ? "HTTP Version Not Supported"
-                    : "Bad Request",
-                body: buildBodyReader(Buffer.from([]), {})
-            };
-
-            const responseBuffer = Buffer.from(
-                `HTTP/1.1 ${response.statusCode} ${response.statusMessage}\r\n` +
-                "Connection: close\r\n\r\n",
-                'ascii'
-            );
-
-            // Wait for the write to complete before we destroy() below
-            await new Promise((resolve) => socket.write(responseBuffer, resolve));
-
-            commonParams.timingEvents.headersSentTimestamp = now();
-            commonParams.timingEvents.responseSentTimestamp = now();
-        } else {
-            response = 'aborted';
-            commonParams.timingEvents.abortedTimestamp = now();
+            if (previousPacket && previousPacket.length > 0) {
+                if (previousPacket.equals(newPacket.slice(0, previousPacket.length))) {
+                    // This is the same data, but more - update the client error data
+                    socket.clientErrorInProgress.rawPacket = newPacket;
+                } else {
+                    // This is different data for the same socket, probably an overflow, append it
+                    socket.clientErrorInProgress.rawPacket = Buffer.concat([
+                        previousPacket,
+                        newPacket
+                    ]);
+                }
+            } else {
+                // The first error had no data, we have data - use our data
+                socket.clientErrorInProgress!.rawPacket = newPacket;
+            }
+            return;
         }
 
-        this.announceClientErrorAsync(socket, { errorCode, request, response });
+        // We can get multiple errors for the same socket in rapid succession as the parser works,
+        // so we store the initial buffer, wait a tick, and then reply/report the accumulated
+        // buffer from all errors together.
+        socket.clientErrorInProgress = { rawPacket: error.rawPacket };
 
-        socket.destroy(error);
+        setImmediate(async () => {
+            const errorCode = error.code;
+            const isHeaderOverflow = errorCode === "HPE_HEADER_OVERFLOW";
+
+            const commonParams = {
+                id: uuid(),
+                tags: [`client-error:${error.code || 'UNKNOWN'}`],
+                timingEvents: { startTime: Date.now(), startTimestamp: now() } as TimingEvents
+            };
+
+            // HTTPolyglot's byte-peeking can sometimes lose the initial byte from the parser's
+            // exposed buffer. If that's happened, we need to get it back:
+            const rawPacket = Buffer.concat(
+                [socket.__httpPeekedData, socket.clientErrorInProgress?.rawPacket]
+                .filter((data) => !!data) as Buffer[]
+            );
+
+            const parsedRequest = rawPacket.byteLength
+                ? tryToParseHttp(rawPacket, socket)
+                : {};
+
+            const isHTTP2 = parsedRequest.httpVersion?.startsWith("2.");
+
+            if (isHeaderOverflow) commonParams.tags.push('header-overflow');
+            if (isHTTP2) commonParams.tags.push('http-2');
+
+            const request: ClientError['request'] = {
+                ...commonParams,
+                httpVersion: parsedRequest.httpVersion,
+                method: parsedRequest.method,
+                protocol: parsedRequest.protocol,
+                url: parsedRequest.url,
+                path: parsedRequest.path,
+                headers: parsedRequest.headers || {}
+            };
+
+            let response: ClientError['response'];
+
+            if (socket.writable) {
+                response = {
+                    ...commonParams,
+                    headers: { 'Connection': 'close' },
+                    statusCode:
+                        isHeaderOverflow
+                            ? 431
+                        : isHTTP2
+                            ? 505
+                        : 400,
+                    statusMessage:
+                        isHeaderOverflow
+                            ? "Request Header Fields Too Large"
+                        : isHTTP2
+                            ? "HTTP Version Not Supported"
+                        : "Bad Request",
+                    body: buildBodyReader(Buffer.from([]), {})
+                };
+
+                const responseBuffer = Buffer.from(
+                    `HTTP/1.1 ${response.statusCode} ${response.statusMessage}\r\n` +
+                    "Connection: close\r\n\r\n",
+                    'ascii'
+                );
+
+                // Wait for the write to complete before we destroy() below
+                await new Promise((resolve) => socket.write(responseBuffer, resolve));
+
+                commonParams.timingEvents.headersSentTimestamp = now();
+                commonParams.timingEvents.responseSentTimestamp = now();
+            } else {
+                response = 'aborted';
+                commonParams.timingEvents.abortedTimestamp = now();
+            }
+
+            this.announceClientErrorAsync(socket, { errorCode, request, response });
+
+            socket.destroy(error);
+        });
     }
 }

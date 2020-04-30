@@ -367,7 +367,7 @@ export function tryToParseHttp(input: Buffer, socket: net.Socket): PartiallyPars
         const requestLine = lines[0].slice(0, lines[0].length).toString('ascii');
         const [method, rawUri, httpProtocol] = requestLine.split(" ");
 
-        if (method) req.method = method;
+        if (method) req.method = method.slice(0, 15); // With overflows this could be *anything*. Limit it slightly.
 
         try {
             const headerLines = lines.slice(1);

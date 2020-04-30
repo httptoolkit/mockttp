@@ -874,6 +874,20 @@ describe("Client error subscription", () => {
                 await expectNoTlsErrors();
             });
 
+            it("should report error responses from unparseable requests only once", async () => {
+                const clientErrors: ClientError[] = [];
+                await server.on('client-error', (e) => clientErrors.push(e));
+
+                sendRawRequest(server, '?? ??\r\n\r\n');
+                await delay(500);
+
+                // Because of httpolyglot first-byte peeking, parser errors can fire twice, for a
+                // first invalid byte, and for the whole packet. We want the latter error only:
+                expect(clientErrors.length).to.equal(1);
+                expect(clientErrors[0].request.method).to.equal("??");
+                expect(clientErrors[0].request.url).to.equal("??");
+            });
+
             describe("when proxying", () => {
                 const INITIAL_ENV = _.cloneDeep(process.env);
 

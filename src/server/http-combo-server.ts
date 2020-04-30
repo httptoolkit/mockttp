@@ -20,6 +20,13 @@ declare module "net" {
         // Undefined on plain HTTP, 'true' on TLSSocket.
         encrypted?: boolean;
 
+        // If there's a client error being sent, we track the corresponding packet
+        // data on the socket, so that when it fires repeatedly we can combine them
+        // into a single response & error event.
+        clientErrorInProgress?: { rawPacket?: Buffer; }
+
+        // Data that was peeked by httpolyglot, and thereby probably lost from the
+        // HTTP parser errors, but which might be useful for debugging later
         __httpPeekedData?: Buffer;
     }
 }
