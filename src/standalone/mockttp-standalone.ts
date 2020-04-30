@@ -61,7 +61,7 @@ export class MockttpStandalone {
             if (this.debug) console.log('Standalone starting mock server on port', req.query.port);
 
             try {
-                const port: number | PortRange | undefined = req.query.port
+                const port: number | PortRange | undefined = (typeof req.query.port === 'string')
                     ? JSON.parse(req.query.port)
                     : undefined;
                 const mockServerOptions: MockttpOptions = _.defaults(
