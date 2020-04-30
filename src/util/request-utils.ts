@@ -358,54 +358,100 @@ export async function waitForCompletedResponse(response: OngoingResponse): Promi
 
 // Take raw HTTP bytes recieved, have a go at parsing something useful out of them.
 // Very lax - this is a method to use when normal parsing has failed, not as standard
-export function tryToParseHttp(input: Buffer, socket: net.Socket) {
+export function tryToParseHttp(input: Buffer, socket: net.Socket): PartiallyParsedHttpRequest {
+    const req: PartiallyParsedHttpRequest = {};
     try {
-        const endOfFirstLine = input.indexOf('\r');
-        if (endOfFirstLine === -1) return; // Didn't even get a whole line, give up.
+        req.protocol = socket instanceof TLSSocket ? "https" : "http"; // Wild guess really
 
-        const requestLine = input.slice(0, endOfFirstLine).toString('ascii');
-
-        const protocol = socket instanceof TLSSocket ? "https" : "http"; // Wild guess really
-
+        const lines = splitBuffer(input, '\r\n');
+        const requestLine = lines[0].slice(0, lines[0].length).toString('ascii');
         const [method, rawUri, httpProtocol] = requestLine.split(" ");
 
-        const parsedUrl = url.parse(rawUri);
-        const httpVersion = httpProtocol.split('/')[1];
+        if (method) req.method = method;
 
-        const hostLine = searchLines(input, (line) =>
-            line.slice(0, 5).toString().toLowerCase() === 'host:'
-        );
+        try {
+            const headerLines = lines.slice(1);
+            const headers = headerLines
+                .map((line) => splitBuffer(line, ':', 2))
+                .filter((line) => line.length > 1)
+                .map((headerParts) =>
+                    headerParts.map(p => p.toString('utf8')) as [string, string]
+                )
+                .reduce((headers: Headers, headerPair) => {
+                    const headerName = headerPair[0];
+                    const headerValue = headerPair[1].trim();
+                    const existingKey = _.findKey(headers, (_v, key) => key.toLowerCase() === headerName);
+                    if (existingKey) {
+                        const existingValue = headers[existingKey]!;
+                        if (Array.isArray(existingValue)) {
+                            headers[existingKey] = existingValue.concat(headerValue);
+                        } else {
+                            headers[existingKey] = [existingValue, headerValue];
+                        }
+                    } else {
+                        headers[headerName] = headerValue;
+                    }
+                    return headers;
+                }, {});
+            req.headers = headers;
+        } catch (e) {}
 
-        const host = hostLine?.slice(5).toString().trimLeft();
+        try {
+            const parsedUrl = url.parse(rawUri);
+            req.path = parsedUrl.path;
 
-        return {
-            protocol,
-            httpVersion,
-            method,
-            url: rawUri.includes('://') || !host
-                ? rawUri // URI is absolute, or we have no way to guess the host
-                : `${protocol}://${host}${rawUri}`, // URI is relative - add the host
-            hostname: host || parsedUrl.hostname || "",
-            path: parsedUrl.path
-        };
-    } catch (e) {
-        return undefined;
-    }
+            const hostHeader = _.find(req.headers, (_value, key) => key.toLowerCase() === 'host');
+
+            if (hostHeader) {
+                req.hostname = Array.isArray(hostHeader) ? hostHeader[0] : hostHeader;
+            } else {
+                req.hostname = parsedUrl.hostname;
+            }
+
+            if (rawUri.includes('://') || !req.hostname) {
+                // URI is absolute, or we have no way to guess the host at all
+                req.url = rawUri;
+            } else {
+                // URI is relative - add the host
+                req.url = `${req.protocol}://${req.hostname}${rawUri}`;
+            }
+        } catch (e) {}
+
+        try {
+            const httpVersion = httpProtocol.split('/')[1];
+            req.httpVersion = httpVersion;
+        } catch (e) {}
+    } catch (e) {}
+
+    return req;
 }
 
-function searchLines(input: Buffer, linePredicate: (line: Buffer) => boolean) {
+type PartiallyParsedHttpRequest = {
+    protocol?: string;
+    httpVersion?: string;
+    method?: string;
+    url?: string;
+    headers?: Headers;
+    hostname?: string;
+    path?: string;
+}
+
+function splitBuffer(input: Buffer, splitter: string, maxParts = Infinity) {
+    const parts: Buffer[] = [];
+
     let remainingBuffer = input;
-
     while (remainingBuffer.length) {
-        let endOfLine = remainingBuffer.indexOf('\r');
+        let endOfPart = remainingBuffer.indexOf(splitter);
+        if (endOfPart === -1) endOfPart = remainingBuffer.length;
 
-        if (endOfLine === -1) endOfLine = remainingBuffer.length;
+        parts.push(remainingBuffer.slice(0, endOfPart));
+        remainingBuffer = remainingBuffer.slice(endOfPart + splitter.length);
 
-        const line = remainingBuffer.slice(0, endOfLine);
-        if (linePredicate(line)) {
-            return line;
-        } else {
-            remainingBuffer = remainingBuffer.slice(endOfLine + 2); // Skip /r/n
+        if (parts.length === maxParts - 1) {
+            parts.push(remainingBuffer);
+            break;
         }
     }
+
+    return parts;
 }

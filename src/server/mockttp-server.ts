@@ -455,21 +455,21 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
         const parsedRequest = rawPacket.byteLength
             ? tryToParseHttp(rawPacket, socket)
-            : undefined;
+            : {};
 
-        const isHTTP2 = parsedRequest?.httpVersion?.startsWith("2.");
+        const isHTTP2 = parsedRequest.httpVersion?.startsWith("2.");
 
         if (isHeaderOverflow) commonParams.tags.push('header-overflow');
         if (isHTTP2) commonParams.tags.push('http-2');
 
         const request: ClientError['request'] = {
             ...commonParams,
-            httpVersion: parsedRequest?.httpVersion,
-            method: parsedRequest?.method,
-            protocol: parsedRequest?.protocol,
-            url: parsedRequest?.url,
-            path: parsedRequest?.path,
-            headers: parsedRequest?.hostname ? { host: parsedRequest.hostname } : {}
+            httpVersion: parsedRequest.httpVersion,
+            method: parsedRequest.method,
+            protocol: parsedRequest.protocol,
+            url: parsedRequest.url,
+            path: parsedRequest.path,
+            headers: parsedRequest.headers || {}
         };
 
         let response: ClientError['response'];

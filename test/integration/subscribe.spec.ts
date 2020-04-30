@@ -661,7 +661,7 @@ describe("Client error subscription", () => {
             expect(clientError.errorCode).to.equal("HPE_HEADER_OVERFLOW");
             expect(clientError.request.method).to.equal("GET");
             expect(clientError.request.url).to.equal(server.urlFor("/mocked-endpoint"));
-            expect(clientError.request.headers).to.deep.equal({ 'host': `localhost:${server.port}` });
+            expect(clientError.request.headers['Host']).to.equal(`localhost:${server.port}`);
 
             const response = clientError.response as CompletedResponse;
             expect(response.statusCode).to.equal(431);
@@ -697,7 +697,7 @@ describe("Client error subscription", () => {
                 let errorPromise = getDeferred<ClientError>();
                 await server.on('client-error', (e) => errorPromise.resolve(e));
 
-                sendRawRequest(server, '?? ?? ?? ??\r\n\r\n');
+                sendRawRequest(server, '?? ??\r\n\r\n');
 
                 let clientError = await errorPromise;
 
@@ -780,7 +780,7 @@ describe("Client error subscription", () => {
                     // Order here matters - if the host header appears after long-value, then we miss it
                     // in the packet buffer, and request.url is relative, not absolute
                     'host': `localhost:${server.port}`,
-                    "long-value": _.range(TOO_LONG_HEADER_SIZE).map(() => "X").join("")
+                    'long-value': _.range(TOO_LONG_HEADER_SIZE).map(() => "X").join("")
                 }
             }).catch(() => {});
 
@@ -789,13 +789,15 @@ describe("Client error subscription", () => {
             expect(clientError.errorCode).to.equal("HPE_HEADER_OVERFLOW");
 
             if (semver.satisfies(process.version, '>=13')) {
-                expect(clientError.request.method).to.equal(undefined);
+                // Buffer overflows completely here, so parsing sees overwritten data as the start:
+                expect(clientError.request.method?.slice(0, 10)).to.equal('XXXXXXXXXX');
                 expect(clientError.request.url).to.equal(undefined);
-                expect(clientError.request.headers).to.deep.equal({});
             } else {
                 expect(clientError.request.method).to.equal("GET");
                 expect(clientError.request.url).to.equal(server.urlFor("/mocked-endpoint"));
-                expect(clientError.request.headers).to.deep.equal({ 'host': `localhost:${server.port}` });
+                expect(_.find(clientError.request.headers,
+                    (_v, key) => key.toLowerCase() === 'host')
+                ).to.equal(`localhost:${server.port}`);
             }
 
             const response = clientError.response as CompletedResponse;
@@ -826,7 +828,9 @@ describe("Client error subscription", () => {
             expect(clientError.errorCode).to.equal("HPE_HEADER_OVERFLOW");
             expect(clientError.request.method).to.equal("GET");
             expect(clientError.request.url).to.equal(plainHttpUrl);
-            expect(clientError.request.headers).to.deep.equal({ 'host': `localhost:${server.port}` });
+
+            expect(clientError.request.headers['Host']).to.equal(`localhost:${server.port}`);
+            expect(clientError.request.headers['long-value']?.slice(0, 10)).to.equal('XXXXXXXXXX');
 
             const response = clientError.response as CompletedResponse;
             expect(response.statusCode).to.equal(431);
@@ -905,7 +909,7 @@ describe("Client error subscription", () => {
                     expect(clientError.errorCode).to.equal("HPE_HEADER_OVERFLOW");
                     expect(clientError.request.method).to.equal("GET");
                     expect(clientError.request.url).to.equal("http://example.com/endpoint");
-                    expect(clientError.request.headers).to.deep.equal({ 'host': "example.com" });
+                    expect(clientError.request.headers['Host']).to.equal('example.com');
 
                     const reportedResponse = clientError.response as CompletedResponse;
                     expect(reportedResponse.statusCode).to.equal(431);
@@ -942,13 +946,16 @@ describe("Client error subscription", () => {
                     expect(clientError.errorCode).to.equal("HPE_HEADER_OVERFLOW");
 
                     if (semver.satisfies(process.version, '>=13')) {
-                        expect(clientError.request.method).to.equal(undefined);
+                        // Buffer overflows completely here, so parsing sees overwritten data as the start:
+                        expect(clientError.request.method?.slice(0, 10)).to.equal('XXXXXXXXXX');
                         expect(clientError.request.url).to.equal(undefined);
-                        expect(clientError.request.headers).to.deep.equal({});
                     } else {
                         expect(clientError.request.method).to.equal("GET");
                         expect(clientError.request.url).to.equal("https://example.com/endpoint");
-                        expect(clientError.request.headers).to.deep.equal({ 'host': "example.com" });
+                        expect(_.find(clientError.request.headers,
+                            (_v, key) => key.toLowerCase() === 'host')
+                        ).to.equal('example.com');
+                        expect(clientError.request.headers['long-value']?.slice(0, 10)).to.equal('XXXXXXXXXX');
                     }
 
                     const reportResponse = clientError.response as CompletedResponse;
