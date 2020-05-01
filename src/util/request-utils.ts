@@ -369,8 +369,11 @@ export function tryToParseHttp(input: Buffer, socket: net.Socket): PartiallyPars
 
         if (method) req.method = method.slice(0, 15); // With overflows this could be *anything*. Limit it slightly.
 
+        // An empty line delineates the headers from the body
+        const emptyLineIndex = _.findIndex(lines, (line) => line.length === 0);
+
         try {
-            const headerLines = lines.slice(1);
+            const headerLines = lines.slice(1, emptyLineIndex === -1 ? undefined : emptyLineIndex);
             const headers = headerLines
                 .map((line) => splitBuffer(line, ':', 2))
                 .filter((line) => line.length > 1)
