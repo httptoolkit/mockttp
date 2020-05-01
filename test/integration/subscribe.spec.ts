@@ -595,7 +595,9 @@ describe("TLS error subscriptions", () => {
             await expectNoClientErrors();
         });
 
-        it("should not be sent for requests from TLS clients that reset later in the connection", async () => {
+        it("should not be sent for requests from TLS clients that reset later in the connection", async function () {
+            this.retries(3); // Can be slightly unstable, due to the race for RESET
+
             let seenTlsErrorPromise = getDeferred<TlsRequest>();
             await goodServer.on('tls-client-error', (r) => seenTlsErrorPromise.resolve(r));
 
