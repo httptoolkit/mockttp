@@ -890,6 +890,26 @@ describe("Client error subscription", () => {
                 expect(clientErrors[0].request.url).to.equal("??");
             });
 
+            it("should report error responses from invalid HTTP methods", async () => {
+                let errorPromise = getDeferred<ClientError>();
+                await server.on('client-error', (e) => errorPromise.resolve(e));
+
+                sendRawRequest(server, 'QWE https://example.com HTTP/1.1\r\n\r\n');
+
+                let clientError = await errorPromise;
+
+                expect(clientError.errorCode).to.equal("HPE_INVALID_METHOD");
+                expect(clientError.request.method).to.equal("QWE");
+                expect(clientError.request.httpVersion).to.equal("1.1");
+                expect(clientError.request.url).to.equal("https://example.com");
+
+                const response = clientError.response as CompletedResponse;
+                expect(response.statusCode).to.equal(400);
+                expect(response.statusMessage).to.equal("Bad Request");
+                expect(response.body.text).to.equal("");
+                expect(response.tags).to.deep.equal(['client-error:HPE_INVALID_METHOD']);
+            });
+
             describe("when proxying", () => {
                 const INITIAL_ENV = _.cloneDeep(process.env);
 

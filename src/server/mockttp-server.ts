@@ -466,7 +466,15 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         // We can get multiple errors for the same socket in rapid succession as the parser works,
         // so we store the initial buffer, wait a tick, and then reply/report the accumulated
         // buffer from all errors together.
-        socket.clientErrorInProgress = { rawPacket: error.rawPacket };
+        socket.clientErrorInProgress = {
+            // We use HTTP peeked data to catch extra data the parser sees due to httpolyglot peeking,
+            // but which gets lost from the raw packet. If that data alone causes an error though
+            // (e.g. Q as first char) then this packet data does get thrown! Eugh. In that case,
+            // we need to avoid using both by accident, so we use just the non-peeked data instead.
+            rawPacket: error.rawPacket === socket.__httpPeekedData
+                ? undefined
+                : error.rawPacket
+        };
 
         setImmediate(async () => {
             const errorCode = error.code;
