@@ -16,11 +16,13 @@ before_script:
     - sudo chmod 4755 /opt/google/chrome/chrome-sandbox
 script:
     - npm run ci
+after_success:
+    - touch ./typedoc/.nojekyll # Ensure doc files starting with _ get published
 addons:
     chrome: stable
 jobs:
     include:
-        - stage: Deploy Docs 
+        - stage: Deploy Docs
           deploy:
             provider: pages
             skip-cleanup: true
