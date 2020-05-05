@@ -311,6 +311,8 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
     }
 
     private _addRules = async (rules: MockRuleData[], reset: boolean = false): Promise<MockedEndpoint[]> => {
+        if (!this.mockServerConfig) throw new Error('Cannot add rules before the server is started');
+
         // Backward compat: make Add/SetRules work with servers that only define reset & addRule (singular).
         // Adds a small risk of odd behaviour in the gap between reset & all the rules being added, but it
         // should be extremely brief, and no worse than existing behaviour for those server versions.
