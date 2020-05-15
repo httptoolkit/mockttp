@@ -862,7 +862,7 @@ describe("Client error subscription", () => {
 
                 expect(clientError.errorCode).to.equal("HPE_INVALID_METHOD");
                 expect(clientError.request.method).to.equal("PRI");
-                expect(clientError.request.url).to.equal("*");
+                expect(clientError.request.url).to.equal("https://localhost/*");
                 expect(clientError.request.httpVersion).to.equal("2.0");
 
                 const response = clientError.response as CompletedResponse;

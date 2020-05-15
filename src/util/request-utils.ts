@@ -363,6 +363,10 @@ export function tryToParseHttp(input: Buffer, socket: net.Socket): PartiallyPars
     try {
         req.protocol = socket instanceof TLSSocket ? "https" : "http"; // Wild guess really
 
+        // For TLS sockets, we default the hostname to the name given by SNI. Might be overridden
+        // by the URL or Host header later, if available.
+        if (socket instanceof TLSSocket) req.hostname = socket.servername;
+
         const lines = splitBuffer(input, '\r\n');
         const requestLine = lines[0].slice(0, lines[0].length).toString('ascii');
         const [method, rawUri, httpProtocol] = requestLine.split(" ");
@@ -407,7 +411,7 @@ export function tryToParseHttp(input: Buffer, socket: net.Socket): PartiallyPars
 
             if (hostHeader) {
                 req.hostname = Array.isArray(hostHeader) ? hostHeader[0] : hostHeader;
-            } else {
+            } else if (parsedUrl.hostname) {
                 req.hostname = parsedUrl.hostname;
             }
 
@@ -415,8 +419,10 @@ export function tryToParseHttp(input: Buffer, socket: net.Socket): PartiallyPars
                 // URI is absolute, or we have no way to guess the host at all
                 req.url = rawUri;
             } else {
-                // URI is relative - add the host
-                req.url = `${req.protocol}://${req.hostname}${rawUri}`;
+                // URI is relative (or invalid) and we have a host: use it
+                req.url = `${req.protocol}://${req.hostname}${
+                    rawUri.startsWith('/') ? '' : '/' // Add a slash if the URI is garbage
+                }${rawUri}`;
             }
         } catch (e) {}
 
