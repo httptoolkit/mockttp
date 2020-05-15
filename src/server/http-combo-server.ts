@@ -194,7 +194,8 @@ export async function createComboServer(
                 key: generatedCert.key,
                 cert: generatedCert.cert,
                 ca: generatedCert.ca
-            })
+            }),
+            ALPNProtocols: ['http/1.1']
         });
 
         // Wait for:
