@@ -388,12 +388,12 @@ export interface MockttpOptions {
      *
      * Defaults to true. It can be useful to set this to false if lots of data will
      * be sent to/via the server, to avoid storing all traffic in memory unnecessarily,
-     * if getSeenRequests will not be used. Traffic can still be captured live using
-     * .on('request') & .on('response'), this only disables the built-in persistence
-     * of that data.
+     * if getSeenRequests will not be used.
      *
-     * Note that if this is set to true then getSeenRequests() will always return
-     * an empty array.
+     * If this is set to false then getSeenRequests() will always return
+     * an empty array. This only disables the built-in persistence of request data,
+     * so traffic can still be captured live or stored elsewhere using
+     * .on('request') & .on('response').
      */
     recordTraffic?: boolean;
 
