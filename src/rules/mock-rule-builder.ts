@@ -47,6 +47,7 @@ import {
     FileHandler,
 } from "./handlers";
 import { MaybePromise } from "../util/type-utils";
+import { byteLength } from "../util/util";
 
 /**
  * @class MockRuleBuilder
@@ -300,7 +301,7 @@ export default class MockRuleBuilder {
 
         headers = merge({
             'Content-Type': 'application/json',
-            'Content-Length': jsonData.length.toString()
+            'Content-Length': byteLength(jsonData).toString()
         }, headers);
 
         const rule: MockRuleData = {
