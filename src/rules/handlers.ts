@@ -45,6 +45,7 @@ import {
     CompletedBody,
     Explainable
 } from "../types";
+import { byteLength } from '../util/util';
 
 // An error that indicates that the handler is aborting the request.
 // This could be intentional, or an upstream server aborting the request.
@@ -482,7 +483,7 @@ function getCorrectContentLength(
         // There was a length set, and you've provided a body but not changed it.
         // You probably just want to send this body and have it work correctly,
         // so we should fix the content length for you automatically.
-        return body.length.toString();
+        return byteLength(body).toString();
     }
 
     // There was a content length before, and you're replacing the headers entirely
@@ -496,13 +497,13 @@ function getCorrectContentLength(
     // We use invalid content-length as instructed, but print a warning just in case.
     if (
         lengthOverride === originalHeaders['content-length'] &&
-        lengthOverride !== body.length.toString() &&
+        lengthOverride !== byteLength(body).toString() &&
         !mismatchAllowed // Set for HEAD responses
     ) {
         console.warn(oneLine`
             Passthrough callback overrode the body and the content-length header
             with mismatched values, which may be a mistake. The body contains
-            ${body.length} bytes, whilst the header was set to ${lengthOverride}.
+            ${byteLength(body)} bytes, whilst the header was set to ${lengthOverride}.
         `);
     }
 
