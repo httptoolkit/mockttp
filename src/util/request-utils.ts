@@ -204,7 +204,7 @@ export const handleContentEncoding = (body: Buffer, encoding?: string | string[]
             return zlib.inflateRawSync(body);
         }
     } else if (encoding === 'br') {
-        return new Buffer(brotliDecompress(body));
+        return Buffer.from(brotliDecompress(body));
     } else if (encoding === 'amz-1.0') {
         // Weird encoding used by some AWS requests, actually just unencoded JSON:
         // https://docs.aws.amazon.com/en_us/AmazonCloudWatch/latest/APIReference/making-api-requests.html

@@ -77,7 +77,7 @@ describe("HTTP mock rule handling", function () {
     });
 
     it("should allow mocking a binary body with a buffer", async () => {
-        await server.get("/mocked-endpoint").thenReply(200, new Buffer([72, 105]));
+        await server.get("/mocked-endpoint").thenReply(200, Buffer.from([72, 105]));
 
         let response = await fetch(server.urlFor("/mocked-endpoint"));
 

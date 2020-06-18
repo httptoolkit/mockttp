@@ -110,7 +110,7 @@ export class SimpleHandler extends Serializable implements RequestHandler {
         response.writeHead(this.status, this.statusMessage);
 
         if (isSerializedBuffer(this.data)) {
-            this.data = new Buffer(<any> this.data);
+            this.data = Buffer.from(<any> this.data);
         }
 
         response.end(this.data || "");
