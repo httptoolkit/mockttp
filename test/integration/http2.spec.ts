@@ -1,7 +1,7 @@
 import * as http2 from 'http2';
 
 import { getLocal } from "../..";
-import { expect } from "../test-utils";
+import { expect, nodeOnly } from "../test-utils";
 
 type Http2ResponseHeaders = http2.IncomingHttpHeaders & http2.IncomingHttpStatusHeader;
 
@@ -23,29 +23,31 @@ function getBody(req: http2.ClientHttp2Stream) {
     });
 }
 
-describe.skip("Using Mockttp with HTTP/2", () => {
+nodeOnly(() => {
+    describe.skip("Using Mockttp with HTTP/2", () => {
 
-    const server = getLocal({ debug: true });
+        const server = getLocal({ debug: true });
 
-    beforeEach(() => server.start());
-    afterEach(() => server.stop());
+        beforeEach(() => server.start());
+        afterEach(() => server.stop());
 
-    describe("without TLS", () => {
+        describe("without TLS", () => {
 
-        it("can respond to direct HTTP/2 requests", async () => {
-            server.get('/').thenReply(200, "HTTP2 response!");
+            it("can respond to direct HTTP/2 requests", async () => {
+                server.get('/').thenReply(200, "HTTP2 response!");
 
-            const client = http2.connect(server.url);
+                const client = http2.connect(server.url);
 
-            const req = client.request();
+                const req = client.request();
 
-            const responseHeaders = await getResponse(req);
-            expect(responseHeaders[':status']).to.equal(200);
+                const responseHeaders = await getResponse(req);
+                expect(responseHeaders[':status']).to.equal(200);
 
-            const responseBody = await getBody(req);
-            expect(responseBody.toString('utf8')).to.equal("HTTP2 response!");
-            client.close();
+                const responseBody = await getBody(req);
+                expect(responseBody.toString('utf8')).to.equal("HTTP2 response!");
+                client.close();
+            });
+
         });
-
     });
 });

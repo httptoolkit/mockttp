@@ -15,7 +15,7 @@ module.exports = function(config) {
             resolve: { extensions: ['.ts', '.js'] },
             module: {
                 loaders: [
-                    { test: /fs-extra/, loader: 'null-loader' },
+                    { test: /fs-extra|http2/, loader: 'null-loader' },
                     { test: /\.ts$/, loader: 'ts-loader', exclude: /node_modules/ }
                 ]
             },
