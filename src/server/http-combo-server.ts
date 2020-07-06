@@ -2,6 +2,7 @@ import _ = require('lodash');
 import net = require('net');
 import tls = require('tls');
 import http = require('http');
+import spdy = require('spdy');
 import httpolyglot = require('@httptoolkit/httpolyglot');
 
 import { TlsRequest } from '../types';
@@ -74,7 +75,13 @@ export async function createComboServer(
     tlsClientErrorListener: (socket: tls.TLSSocket, req: TlsRequest) => void
 ): Promise<DestroyableServer> {
     if (!options.https) {
-        return destroyable(http.createServer(requestListener));
+        return destroyable(
+            spdy.createServer({
+                spdy: {
+                    plain: true
+                }
+            }, requestListener)
+        );
     }
 
     const ca = await getCA(options.https!);

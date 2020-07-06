@@ -24,7 +24,7 @@ function getBody(req: http2.ClientHttp2Stream) {
 }
 
 nodeOnly(() => {
-    describe.skip("Using Mockttp with HTTP/2", () => {
+    describe("Using Mockttp with HTTP/2", () => {
 
         const server = getLocal({ debug: true });
 
