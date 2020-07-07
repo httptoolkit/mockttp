@@ -486,11 +486,19 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
                 timingEvents: { startTime: Date.now(), startTimestamp: now() } as TimingEvents
             };
 
+            // Initially _httpMessage is undefined, until at least one request has been parsed.
+            // Later it's set to the current ServerResponse, and then null when the socket is
+            // detached, but never back to undefined. Avoids issues with using old peeked data
+            // on subsequent requests within keep-alive connections.
+            const isFirstRequest = (socket as any)._httpMessage === undefined;
+
             // HTTPolyglot's byte-peeking can sometimes lose the initial byte from the parser's
             // exposed buffer. If that's happened, we need to get it back:
             const rawPacket = Buffer.concat(
-                [socket.__httpPeekedData, socket.clientErrorInProgress?.rawPacket]
-                .filter((data) => !!data) as Buffer[]
+                [
+                    isFirstRequest && socket.__httpPeekedData,
+                    socket.clientErrorInProgress?.rawPacket
+                ].filter((data) => !!data) as Buffer[]
             );
 
             // For packets where we get more than just httpolyglot-peeked data, guess-parse them:
