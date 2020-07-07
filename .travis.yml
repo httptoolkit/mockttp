@@ -7,8 +7,7 @@ node_js:
     - '10'
     - '8'
 install:
-    - npm install --global npm@4
-    - npm install
+    - npm install --no-package-lock
 services:
     - xvfb
 before_script:
