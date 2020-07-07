@@ -493,14 +493,12 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
                 .filter((data) => !!data) as Buffer[]
             );
 
-            const parsedRequest = rawPacket.byteLength
+            // For packets where we get more than just httpolyglot-peeked data, guess-parse them:
+            const parsedRequest = rawPacket.byteLength > 1
                 ? tryToParseHttp(rawPacket, socket)
                 : {};
 
-            const isHTTP2 = parsedRequest.httpVersion?.startsWith("2.");
-
             if (isHeaderOverflow) commonParams.tags.push('header-overflow');
-            if (isHTTP2) commonParams.tags.push('http-2');
 
             const request: ClientError['request'] = {
                 ...commonParams,
@@ -521,14 +519,10 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
                     statusCode:
                         isHeaderOverflow
                             ? 431
-                        : isHTTP2
-                            ? 505
                         : 400,
                     statusMessage:
                         isHeaderOverflow
                             ? "Request Header Fields Too Large"
-                        : isHTTP2
-                            ? "HTTP Version Not Supported"
                         : "Bad Request",
                     body: buildBodyReader(Buffer.from([]), {})
                 };

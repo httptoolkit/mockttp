@@ -679,12 +679,12 @@ describe("Client error subscription", () => {
                 let errorPromise = getDeferred<ClientError>();
                 await server.on('client-error', (e) => errorPromise.resolve(e));
 
-                sendRawRequest(server, 'GET https://example.com HTTP/0\r\n\r\n');
+                sendRawRequest(server, 'POST https://example.com HTTP/0\r\n\r\n');
 
                 let clientError = await errorPromise;
 
                 expect(clientError.errorCode).to.equal("HPE_INVALID_VERSION");
-                expect(clientError.request.method).to.equal("GET");
+                expect(clientError.request.method).to.equal("POST");
                 expect(clientError.request.httpVersion).to.equal("0");
                 expect(clientError.request.url).to.equal("https://example.com");
 
@@ -713,36 +713,11 @@ describe("Client error subscription", () => {
                 expect(response.tags).to.deep.equal(['client-error:HPE_INVALID_METHOD']);
             });
 
-            it("should report error responses from unexpected HTTP/2 requests", async () => {
-                let errorPromise = getDeferred<ClientError>();
-                await server.on('client-error', (e) => errorPromise.resolve(e));
-
-                const client = (await import('http2')).connect(server.url);
-                const req = client.request({ ':path': '/' });
-                req.end();
-
-                // This will fail, but that's ok for now:
-                client.on('error', _.noop);
-                req.on('error', _.noop);
-
-                let clientError = await errorPromise;
-
-                expect(clientError.errorCode).to.equal("HPE_INVALID_METHOD");
-                expect(clientError.request.method).to.equal("PRI");
-                expect(clientError.request.url).to.equal("*");
-                expect(clientError.request.httpVersion).to.equal("2.0");
-
-                const response = clientError.response as CompletedResponse;
-                expect(response.statusCode).to.equal(505);
-                expect(response.statusMessage).to.equal("HTTP Version Not Supported");
-                expect(response.tags).to.deep.equal(['client-error:HPE_INVALID_METHOD', 'http-2']);
-            });
-
             it("should notify for incomplete requests", async () => {
                 let errorPromise = getDeferred<ClientError>();
                 await server.on('client-error', (e) => errorPromise.resolve(e));
 
-                await sendRawRequest(server, 'GET /');
+                sendRawRequest(server, 'GET /');
 
                 let clientError = await errorPromise;
 
@@ -750,12 +725,12 @@ describe("Client error subscription", () => {
 
                 expect(clientError.request.method).to.equal(undefined);
                 expect(clientError.request.url).to.equal(undefined);
+                expect(clientError.request.tags).to.deep.equal(['client-error:HPE_INVALID_EOF_STATE']);
 
                 const response = clientError.response as CompletedResponse;
 
-                expect(response.statusCode).to.equal(400);
-                expect(response.statusMessage).to.equal("Bad Request");
-                expect(response.tags).to.deep.equal(['client-error:HPE_INVALID_EOF_STATE']);
+                expect(response.statusCode).to.equal(undefined);
+                expect(response.statusMessage).to.equal(undefined);
             });
         });
     });
@@ -846,36 +821,6 @@ describe("Client error subscription", () => {
         });
 
         nodeOnly(() => {
-            it("should report error responses from unexpected HTTP/2 requests", async () => {
-                let errorPromise = getDeferred<ClientError>();
-                await server.on('client-error', (e) => errorPromise.resolve(e));
-
-                const client = (await import('http2')).connect(server.url);
-                const req = client.request({ ':path': '/' });
-                req.end();
-
-                // The above will fail, but that's ok for now:
-                client.on('error', _.noop);
-                req.on('error', _.noop);
-
-                let clientError = await errorPromise;
-
-                expect(clientError.errorCode).to.equal("HPE_INVALID_METHOD");
-                expect(clientError.request.method).to.equal("PRI");
-                expect(clientError.request.url).to.equal("https://localhost/*");
-                expect(clientError.request.httpVersion).to.equal("2.0");
-
-                const response = clientError.response as CompletedResponse;
-                expect(response.statusCode).to.equal(505);
-                expect(response.statusMessage).to.equal("HTTP Version Not Supported");
-                expect(response.tags).to.deep.equal([
-                    'client-error:HPE_INVALID_METHOD',
-                    'http-2'
-                ]);
-
-                await expectNoTlsErrors();
-            });
-
             it("should report error responses from unparseable requests only once", async () => {
                 const clientErrors: ClientError[] = [];
                 await server.on('client-error', (e) => clientErrors.push(e));
