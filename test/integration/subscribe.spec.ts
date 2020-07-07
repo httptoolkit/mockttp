@@ -25,7 +25,7 @@ import {
     openRawTlsSocket,
     writeAndReset,
     watchForEvent,
-    TOO_LONG_HEADER_SIZE
+    TOO_LONG_HEADER_VALUE
 } from "../test-utils";
 import { TimingEvents, TlsRequest, ClientError } from "../../dist/types";
 
@@ -654,7 +654,7 @@ describe("Client error subscription", () => {
 
             fetch(server.urlFor("/mocked-endpoint"), {
                 headers: {
-                    "long-value": _.range(TOO_LONG_HEADER_SIZE).map(() => "X").join("")
+                    "long-value": TOO_LONG_HEADER_VALUE
                 }
             }).catch(() => {});
 
@@ -757,33 +757,56 @@ describe("Client error subscription", () => {
                     // Order here matters - if the host header appears after long-value, then we miss it
                     // in the packet buffer, and request.url is relative, not absolute
                     'host': `localhost:${server.port}`,
-                    'long-value': _.range(TOO_LONG_HEADER_SIZE).map(() => "X").join("")
+                    'long-value': TOO_LONG_HEADER_VALUE
                 }
             }).catch(() => {});
 
             let clientError = await errorPromise;
 
-            expect(clientError.errorCode).to.equal("HPE_HEADER_OVERFLOW");
+            if (isNode) {
+                expect(clientError.errorCode).to.equal("HPE_HEADER_OVERFLOW");
+                expect(clientError.request.protocol).to.equal('https');
 
-            if (semver.satisfies(process.version, '>=13')) {
-                // Buffer overflows completely here, so parsing sees overwritten data as the start:
-                expect(clientError.request.method?.slice(0, 10)).to.equal('XXXXXXXXXX');
-                expect(clientError.request.url).to.equal(undefined);
+                // What the parser exposes when it fails is different depending on the Node version:
+                if (semver.satisfies(process.version, '>=13')) {
+                    // Buffer overflows completely here, so parsing sees overwritten data as the start:
+                    expect(clientError.request.method?.slice(0, 10)).to.equal('XXXXXXXXXX');
+                    expect(clientError.request.url).to.equal(undefined);
+                } else {
+                    expect(clientError.request.method).to.equal("GET");
+                    expect(clientError.request.url).to.equal(server.urlFor("/mocked-endpoint"));
+                    expect(_.find(clientError.request.headers,
+                        (_v, key) => key.toLowerCase() === 'host')
+                    ).to.equal(`localhost:${server.port}`);
+                }
+
+                const response = clientError.response as CompletedResponse;
+                expect(response.statusCode).to.equal(431);
+                expect(response.statusMessage).to.equal("Request Header Fields Too Large");
+                expect(response.tags).to.deep.equal([
+                    'client-error:HPE_HEADER_OVERFLOW',
+                    'header-overflow'
+                ]);
             } else {
-                expect(clientError.request.method).to.equal("GET");
-                expect(clientError.request.url).to.equal(server.urlFor("/mocked-endpoint"));
-                expect(_.find(clientError.request.headers,
-                    (_v, key) => key.toLowerCase() === 'host')
-                ).to.equal(`localhost:${server.port}`);
-            }
+                // Browsers upgrade to HTTP/2 automatically, so get different error reporting,
+                // and different results - we get no error response, and we can't access or
+                // easily parse the partial request data, so it's just a generic protocol error.
+                // Hoping to be able to add more detail here later, watch this space.
+                expect(clientError.errorCode).to.equal('PROTOCOL_ERROR');
+                expect(clientError.request.httpVersion).to.equal('2');
+                expect(clientError.request.protocol).to.equal('https');
+                expect(clientError.request.url).to.equal('https://localhost/'); // No port or path available
+                expect(clientError.request.tags).to.deep.equal([
+                    'client-error:PROTOCOL_ERROR'
+                ]);
 
-            const response = clientError.response as CompletedResponse;
-            expect(response.statusCode).to.equal(431);
-            expect(response.statusMessage).to.equal("Request Header Fields Too Large");
-            expect(response.tags).to.deep.equal([
-                'client-error:HPE_HEADER_OVERFLOW',
-                'header-overflow'
-            ]);
+                // Not available:
+                expect(clientError.request.method).to.equal(undefined);
+                expect(clientError.request.path).to.equal(undefined);
+                expect(clientError.request.headers).to.deep.equal({});
+
+                expect(clientError.response).to.equal('aborted');
+            }
 
             await expectNoTlsErrors();
         });
@@ -796,7 +819,7 @@ describe("Client error subscription", () => {
             await fetch(plainHttpUrl, {
                 headers: {
                     // 10KB of 'X':
-                    "long-value": _.range(TOO_LONG_HEADER_SIZE).map(() => "X").join("")
+                    "long-value": TOO_LONG_HEADER_VALUE
                 }
             }).catch(() => {});
 
@@ -879,7 +902,7 @@ describe("Client error subscription", () => {
                             port: server.port
                         }),
                         headers: {
-                            "long-value": _.range(TOO_LONG_HEADER_SIZE).map(() => "X").join("")
+                            "long-value": TOO_LONG_HEADER_VALUE
                         }
                     });
 
@@ -916,7 +939,7 @@ describe("Client error subscription", () => {
                             // Order here matters - if the host header appears after long-value, then we miss it
                             // in the packet buffer, and request.url is relative, not absolute
                             'host': 'example.com',
-                            "long-value": _.range(TOO_LONG_HEADER_SIZE).map(() => "X").join("")
+                            "long-value": TOO_LONG_HEADER_VALUE
                         }
                     });
 

@@ -1,9 +1,9 @@
 import * as sourceMapSupport from 'source-map-support'
 sourceMapSupport.install({ handleUncaughtExceptions: false });
 
+import * as _ from 'lodash';
 import * as net from 'net';
 import * as tls from 'tls';
-import * as semver from 'semver';
 import getFetchPonyfill = require("fetch-ponyfill");
 
 import chai = require("chai");
@@ -75,7 +75,8 @@ export function getDeferred<T>(): Deferred<T> {
     return result;
 }
 
-export const TOO_LONG_HEADER_SIZE = 1024 * 16 + 1;
+const TOO_LONG_HEADER_SIZE = 1024 * (isNode ? 16 : 160) + 1;
+export const TOO_LONG_HEADER_VALUE = _.range(TOO_LONG_HEADER_SIZE).map(() => "X").join("");
 
 export async function openRawSocket(server: Mockttp) {
     const client = new net.Socket();

@@ -64,7 +64,7 @@ nodeOnly(() => {
             beforeEach(() => server.start());
             afterEach(() => server.stop());
 
-            it.skip("can respond to direct HTTP/2 requests", async () => {
+            it("can respond to direct HTTP/2 requests", async () => {
                 server.get('/').thenReply(200, "HTTP2 response!");
 
                 const client = http2.connect(server.url);

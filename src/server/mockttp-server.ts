@@ -115,7 +115,8 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         this.server!.listen(port);
 
         // Handle & report client request errors
-        this.server!.on('clientError', this.handleInvalidRequest.bind(this));
+        this.server!.on('clientError', this.handleInvalidHttp1Request.bind(this));
+        this.server!.on('sessionError', this.handleInvalidHttp2Request.bind(this));
 
         // Handle websocket connections too (ignore for now, just forward on)
         const webSocketHander = new WebSocketHandler(this.debug);
@@ -436,8 +437,11 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
     }
 
     // Called on server clientError, e.g. if the client disconnects during initial
-    // request data, or sends totally invalid gibberish
-    private handleInvalidRequest(error: Error & { code?: string, rawPacket?: Buffer }, socket: net.Socket) {
+    // request data, or sends totally invalid gibberish. Only called for HTTP/1.1 errors.
+    private handleInvalidHttp1Request(
+        error: Error & { code?: string, rawPacket?: Buffer },
+        socket: net.Socket
+    ) {
         if (socket.clientErrorInProgress) {
             // For subsequent errors on the same socket, accumulate packet data (linked to the socket)
             // so that the error (probably delayed until next tick) has it all to work with
@@ -554,6 +558,50 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
             this.announceClientErrorAsync(socket, { errorCode, request, response });
 
             socket.destroy(error);
+        });
+    }
+
+    // Handle HTTP/2 client errors. This is a work in progress, but usefully reports
+    // some of the most obvious cases.
+    private handleInvalidHttp2Request(
+        error: Error & { code?: number },
+        socket: net.Socket
+    ) {
+        // Unlike with HTTP/1.1, we have no control of the actual handling of
+        // the error here, so this is just a matter of announcing the error to subscribers.
+
+        // We only fire one error per socket, and we use the first we hear about.
+        // Later errors are often "write after close" etc, not so useful.
+        if (socket.clientErrorInProgress) return;
+        socket.clientErrorInProgress = {};
+
+        // Some hacky code to convert error codes into nicer names, which ignores any
+        // SPDY/HTTP2 distinctions. We can improve this when we build error handling for real.
+        const errorName = require(
+            'spdy-transport/lib/spdy-transport/protocol/http2/constants'
+        ).errorByCode[error.code!] || error.code;
+
+        const isTLS = socket instanceof tls.TLSSocket;
+
+        this.announceClientErrorAsync(socket, {
+            errorCode: errorName,
+            request: {
+                id: uuid(),
+                tags: [`client-error:${errorName || 'UNKNOWN'}`],
+                httpVersion: '2',
+
+                // Best guesses:
+                timingEvents: { startTime: Date.now(), startTimestamp: now() } as TimingEvents,
+                protocol: isTLS ? "https" : "http",
+                url: isTLS ? `https://${
+                    (socket as tls.TLSSocket).servername // Use the hostname from SNI
+                }/` : undefined,
+
+                // Unknowable:
+                path: undefined,
+                headers: {}
+            },
+            response: 'aborted' // These h2 errors get no app-level response, just a shutdown.
         });
     }
 }
