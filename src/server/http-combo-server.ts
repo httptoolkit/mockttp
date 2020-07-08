@@ -18,7 +18,7 @@ const originalSocketInit = (<any>tls.TLSSocket.prototype)._init;
     const tlsSocket = this;
     const loadSNI = tlsSocket._handle.oncertcb;
     tlsSocket._handle.oncertcb = function (info: any) {
-        tlsSocket.initialRemoteAddress = tlsSocket._parent.remoteAddress;
+        tlsSocket.initialRemoteAddress = tlsSocket._parent?.remoteAddress;
         tlsSocket.servername = info.servername;
         return loadSNI.apply(this, arguments);
     };
@@ -135,11 +135,37 @@ export async function createComboServer(
         // nothing else is listening, so we need to catch errors on the socket:
         socket.once('error', (e) => console.log('Error on client socket', e));
 
-        if (options.debug) console.log(`Proxying CONNECT to ${req.url!}`);
+        const http2Stream = req.connection?._handle?.getStream?.();
+        if (http2Stream) {
+            const connectUrl = req.url || req.headers['host'];
+            if (!connectUrl) {
+                // If we can't work out where to go, send an error.
+                http2Stream.respond(400, {});
+                return;
+            }
 
-        socket.write('HTTP/' + req.httpVersion + ' 200 OK\r\n\r\n', 'utf-8', () => {
-            server.emit('connection', socket);
-        });
+            if (options.debug) console.log(`Proxying HTTP/2 CONNECT to ${connectUrl}`);
+
+            // Send a 200 OK response, and start the tunnel:
+            http2Stream.respond(200, {}, () => {
+                server.emit('connection', Object.assign(http2Stream, {
+                    setNoDelay: () => {} // The only non-stream Socket method used by SPDY, it seems
+                }));
+            });
+        } else {
+            const connectUrl = req.url || req.headers['host'];
+            if (!connectUrl) {
+                // If we can't work out where to go, send an error.
+                socket.write('HTTP/' + req.httpVersion + ' 400 Bad Request\r\n\r\n', 'utf-8');
+                return;
+            }
+
+            if (options.debug) console.log(`Proxying HTTP/1 CONNECT to ${connectUrl}`);
+
+            socket.write('HTTP/' + req.httpVersion + ' 200 OK\r\n\r\n', 'utf-8', () => {
+                server.emit('connection', socket);
+            });
+        }
     });
 
     return destroyable(server);

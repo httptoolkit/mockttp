@@ -56,7 +56,7 @@ nodeOnly(() => {
                 client.close();
             });
 
-            it.skip("can respond to proxied HTTP/2 requests", async () => {
+            it("can respond to proxied HTTP/2 requests", async () => {
                 await server.get('http://example.com/mocked-endpoint')
                     .thenReply(200, "Proxied HTTP2 response!");
 
