@@ -588,7 +588,12 @@ describe("TLS error subscriptions", () => {
             ).to.be.rejectedWith(/certificate/);
 
             const tlsError = await seenTlsErrorPromise;
-            expect(tlsError.failureCause).to.equal('closed');
+
+            expect(tlsError.failureCause).to.be.oneOf([
+                // Depends on specific client behaviour:
+                'reset', // Node 12+
+                'closed', // Node 10-
+            ]);
             expect(tlsError.hostname).to.equal('localhost');
             expect(tlsError.remoteIpAddress).to.equal('::ffff:127.0.0.1');
 

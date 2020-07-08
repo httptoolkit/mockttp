@@ -7,7 +7,6 @@ import httpolyglot = require('@httptoolkit/httpolyglot');
 import { TlsRequest } from '../types';
 import { destroyable, DestroyableServer } from '../util/destroyable-server';
 import { getCA, CAOptions } from '../util/tls';
-import { peekFirstByte, mightBeTLSHandshake } from '../util/socket-util';
 
 // Hardcore monkey-patching: force TLSSocket to link servername & remoteAddress to
 // sockets as soon as they're available, without waiting for the handshake to fully
@@ -73,35 +72,52 @@ export async function createComboServer(
     requestListener: (req: http.IncomingMessage, res: http.ServerResponse) => void,
     tlsClientErrorListener: (socket: tls.TLSSocket, req: TlsRequest) => void
 ): Promise<DestroyableServer> {
+    let server: net.Server;
     if (!options.https) {
-        return destroyable(
-            httpolyglot.createServer(requestListener)
-        );
+        server = httpolyglot.createServer(requestListener);
+    } else {
+        const ca = await getCA(options.https!);
+        const defaultCert = ca.generateCertificate('localhost');
+
+        server = httpolyglot.createServer({
+            key: defaultCert.key,
+            cert: defaultCert.cert,
+            ca: [defaultCert.ca],
+            SNICallback: (domain: string, cb: Function) => {
+                if (options.debug) console.log(`Generating certificate for ${domain}`);
+
+                try {
+                    const generatedCert = ca.generateCertificate(domain);
+                    cb(null, tls.createSecureContext({
+                        key: generatedCert.key,
+                        cert: generatedCert.cert,
+                        ca: generatedCert.ca
+                    }));
+                } catch (e) {
+                    console.error('Cert generation error', e);
+                    cb(e);
+                }
+            }
+        }, requestListener);
     }
 
-    const ca = await getCA(options.https!);
-    const defaultCert = ca.generateCertificate('localhost');
+    server.on('connection', (socket: net.Socket) => {
+        // All sockets are initially marked for unencrypted upstream connections, this is
+        // upgraded on secureConnection above.
+        socket.upstreamEncryption = false;
+    });
 
-    const server = httpolyglot.createServer({
-        key: defaultCert.key,
-        cert: defaultCert.cert,
-        ca: [defaultCert.ca],
-        SNICallback: (domain: string, cb: Function) => {
-            if (options.debug) console.log(`Generating certificate for ${domain}`);
-
-            try {
-                const generatedCert = ca.generateCertificate(domain);
-                cb(null, tls.createSecureContext({
-                    key: generatedCert.key,
-                    cert: generatedCert.cert,
-                    ca: generatedCert.ca
-                }));
-            } catch (e) {
-                console.error('Cert generation error', e);
-                cb(e);
-            }
-        }
-    }, requestListener);
+    server.on('secureConnection', (socket: tls.TLSSocket) => {
+        socket.upstreamEncryption = true;
+        ifTlsDropped(socket, () => {
+            tlsClientErrorListener(socket, {
+                failureCause: 'closed',
+                hostname: socket.servername,
+                remoteIpAddress: socket.remoteAddress!,
+                tags: []
+            });
+        });
+    });
 
     server.on('tlsClientError', (error: Error, socket: tls.TLSSocket) => {
         // These only work because of oncertcb monkeypatch above
@@ -112,109 +128,19 @@ export async function createComboServer(
             tags: []
         });
     });
-    server.on('secureConnection', (socket: tls.TLSSocket) =>
-        ifTlsDropped(socket, () => {
-            tlsClientErrorListener(socket, {
-                failureCause: 'closed',
-                hostname: socket.servername,
-                remoteIpAddress: socket.remoteAddress!,
-                tags: []
-            });
-        })
-    );
 
-    // If the server receives a HTTP/HTTPS CONNECT request, do some magic to proxy & intercept it
-    server.addListener('connect', (req: http.IncomingMessage, socket: net.Socket) => {
-        const [ targetHost, port ] = req.url!.split(':');
-        if (options.debug) console.log(`Proxying CONNECT to ${targetHost}`);
-
+    // If the server receives a HTTP/HTTPS CONNECT request, Pretend to tunnel, then just re-handle:
+    server.addListener('connect', function (req: http.IncomingMessage, socket: net.Socket) {
+        // Clients may disconnect at this point (for all sorts of reasons), but here
+        // nothing else is listening, so we need to catch errors on the socket:
         socket.once('error', (e) => console.log('Error on client socket', e));
 
-        socket.write('HTTP/' + req.httpVersion + ' 200 OK\r\n\r\n', 'utf-8', async () => {
-            const firstByte = await peekFirstByte(socket);
+        if (options.debug) console.log(`Proxying CONNECT to ${req.url!}`);
 
-            // Tell later handlers whether the socket wants an insecure upstream
-            socket.upstreamEncryption = mightBeTLSHandshake(firstByte);
-
-            if (socket.upstreamEncryption) {
-                if (options.debug) console.log(`Unwrapping TLS connection to ${targetHost}`);
-                unwrapTLS(targetHost, port, socket);
-            } else {
-                // Non-TLS CONNECT, probably a plain HTTP websocket. Pass it through untouched.
-                if (options.debug) console.log(`Passing through connection to ${targetHost}`);
-                server.emit('connection', socket);
-                socket.resume();
-            }
+        socket.write('HTTP/' + req.httpVersion + ' 200 OK\r\n\r\n', 'utf-8', () => {
+            server.emit('connection', socket);
         });
     });
-
-    async function unwrapTLS(targetHost: string, port: string, rawSocket: net.Socket) {
-        const generatedCert = ca.generateCertificate(targetHost);
-
-        let tlsSocket = new tls.TLSSocket(rawSocket, {
-            isServer: true,
-            server: server,
-            secureContext: tls.createSecureContext({
-                key: generatedCert.key,
-                cert: generatedCert.cert,
-                ca: generatedCert.ca
-            }),
-            ALPNProtocols: ['http/1.1']
-        });
-
-        // Wait for:
-        // * connect, not dropped -> all good
-        // * _tlsError before connect -> cert rejected
-        // * sudden end before connect -> cert rejected
-        await new Promise((resolve, reject) => {
-            tlsSocket.on('secure', async () => {
-                ifTlsDropped(tlsSocket, () => {
-                    tlsClientErrorListener(tlsSocket, {
-                        failureCause: 'closed',
-                        hostname: targetHost,
-                        remoteIpAddress: rawSocket.remoteAddress!,
-                        tags: []
-                    });
-                });
-
-                peekFirstByte(tlsSocket).then(resolve);
-            });
-            tlsSocket.on('_tlsError', (error) => {
-                reject(getCauseFromError(error));
-            });
-            tlsSocket.on('end', () => {
-                // Delay, so that simultaneous specific errors reject first
-                setTimeout(() => reject('closed'), 1);
-            });
-        }).catch((cause) => tlsClientErrorListener(tlsSocket, {
-            failureCause: cause,
-            hostname: targetHost,
-            remoteIpAddress: rawSocket.remoteAddress!,
-            tags: []
-        }));
-
-        // This is a little crazy, but only a little. We create a one-off server to handle HTTP parsing, but
-        // never listen on any ports or anything, we just hand it a live socket. Setup is pretty cheap here
-        // (instantiate, sets up as event emitter, registers some events & properties, that's it), and
-        // this is the easiest way I can see to put targetHost into the URL, without reimplementing HTTP.
-        const innerServer = http.createServer((req: http.IncomingMessage, res: http.ServerResponse) => {
-            // Request URIs are usually relative here, but can be * (OPTIONS) or absolute (odd people) in theory
-            if (req.url !== '*' && req.url![0] === '/') {
-                req.url = `https://${targetHost}:${port}${req.url}`;
-            }
-            return requestListener(req, res);
-        });
-        innerServer.addListener('upgrade', (req, socket, head) => {
-            req.url = `https://${targetHost}:${port}${req.url}`;
-            server.emit('upgrade', req, socket, head);
-        });
-        innerServer.addListener('connect', (req, res) => server.emit('connect', req, res));
-
-        innerServer.on('clientError', (...args) => server.emit('clientError', ...args));
-
-        innerServer.emit('connection', tlsSocket);
-        tlsSocket.resume(); // Socket was paused by peekFirstByte() above
-    }
 
     return destroyable(server);
 }
