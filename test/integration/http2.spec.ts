@@ -26,6 +26,12 @@ function getBody(req: http2.ClientHttp2Stream) {
 nodeOnly(() => {
     describe("Using Mockttp with HTTP/2", function () {
 
+        let client: http2.ClientHttp2Session;
+
+        afterEach(() => {
+            if (client) client.close();
+        });
+
         describe("without TLS", () => {
 
             const server = getLocal();
@@ -34,9 +40,9 @@ nodeOnly(() => {
             afterEach(() => server.stop());
 
             it("can respond to direct HTTP/2 requests", async () => {
-                server.get('/').thenReply(200, "HTTP2 response!");
+                await server.get('/').thenReply(200, "HTTP2 response!");
 
-                const client = http2.connect(server.url);
+                client = http2.connect(server.url);
 
                 const req = client.request();
 
@@ -51,10 +57,10 @@ nodeOnly(() => {
             });
 
             it.skip("can respond to proxied HTTP/2 requests", async () => {
-                server.get('http://example.com/mocked-endpoint')
+                await server.get('http://example.com/mocked-endpoint')
                     .thenReply(200, "Proxied HTTP2 response!");
 
-                const client = http2.connect(server.url);
+                client = http2.connect(server.url);
 
                 const req = client.request({
                     ':method': 'CONNECT',
@@ -80,8 +86,7 @@ nodeOnly(() => {
                 const responseBody = await getBody(proxiedRequest);
                 expect(responseBody.toString('utf8')).to.equal("Proxied HTTP2 response!");
 
-                client.close();
-                proxiedClient.close();
+                proxiedClient.close(() => client.close());
             });
 
         });
@@ -101,7 +106,7 @@ nodeOnly(() => {
             it("can respond to direct HTTP/2 requests", async () => {
                 server.get('/').thenReply(200, "HTTP2 response!");
 
-                const client = http2.connect(server.url);
+                client = http2.connect(server.url);
 
                 const req = client.request();
 
