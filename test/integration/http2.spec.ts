@@ -1,7 +1,8 @@
+import * as streams from 'stream';
 import * as http2 from 'http2';
 
 import { getLocal } from "../..";
-import { expect, nodeOnly } from "../test-utils";
+import { expect, nodeOnly, delay } from "../test-utils";
 
 type Http2ResponseHeaders = http2.IncomingHttpHeaders & http2.IncomingHttpStatusHeader;
 
@@ -18,19 +19,29 @@ function getBody(req: http2.ClientHttp2Stream) {
         req.on('data', (d: Buffer | string) => {
             body.push(Buffer.from(d));
         });
-        req.on('end', () => resolve(Buffer.concat(body)));
+        req.on('end', () => req.close());
+        req.on('close', () => resolve(Buffer.concat(body)));
         req.on('error', reject);
     });
 }
 
+async function cleanup(...streams: (streams.Duplex | http2.Http2Session)[]) {
+    for (let stream of streams) {
+        if ('close' in stream) {
+            let session = stream;
+            await new Promise((resolve) => {
+                session.close(resolve);
+            });
+            await delay(10); // Close isn't instant, there can be races here
+        }
+        else {
+            stream.destroy();
+        }
+    }
+}
+
 nodeOnly(() => {
     describe("Using Mockttp with HTTP/2", function () {
-
-        let client: http2.ClientHttp2Session;
-
-        afterEach(() => {
-            if (client) client.close();
-        });
 
         describe("without TLS", () => {
 
@@ -42,7 +53,7 @@ nodeOnly(() => {
             it("can respond to direct HTTP/2 requests", async () => {
                 await server.get('/').thenReply(200, "HTTP2 response!");
 
-                client = http2.connect(server.url);
+                const client = http2.connect(server.url);
 
                 const req = client.request();
 
@@ -53,14 +64,15 @@ nodeOnly(() => {
 
                 const responseBody = await getBody(req);
                 expect(responseBody.toString('utf8')).to.equal("HTTP2 response!");
-                client.close();
+
+                await cleanup(client);
             });
 
             it("can respond to proxied HTTP/2 requests", async () => {
                 await server.get('http://example.com/mocked-endpoint')
                     .thenReply(200, "Proxied HTTP2 response!");
 
-                client = http2.connect(server.url);
+                const client = http2.connect(server.url);
 
                 const req = client.request({
                     ':method': 'CONNECT',
@@ -86,7 +98,7 @@ nodeOnly(() => {
                 const responseBody = await getBody(proxiedRequest);
                 expect(responseBody.toString('utf8')).to.equal("Proxied HTTP2 response!");
 
-                proxiedClient.close(() => client.close());
+                await cleanup(proxiedClient, client);
             });
 
         });
@@ -106,7 +118,7 @@ nodeOnly(() => {
             it("can respond to direct HTTP/2 requests", async () => {
                 server.get('/').thenReply(200, "HTTP2 response!");
 
-                client = http2.connect(server.url);
+                const client = http2.connect(server.url);
 
                 const req = client.request();
 
@@ -117,7 +129,8 @@ nodeOnly(() => {
 
                 const responseBody = await getBody(req);
                 expect(responseBody.toString('utf8')).to.equal("HTTP2 response!");
-                client.close();
+
+                await cleanup(client);
             });
 
         });
