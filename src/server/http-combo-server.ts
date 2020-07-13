@@ -2,6 +2,7 @@ import _ = require('lodash');
 import net = require('net');
 import tls = require('tls');
 import http = require('http');
+import http2 = require('http2');
 import SocketWrapper = require('_stream_wrap');
 import httpolyglot = require('@httptoolkit/httpolyglot');
 
@@ -131,41 +132,53 @@ export async function createComboServer(
     });
 
     // If the server receives a HTTP/HTTPS CONNECT request, Pretend to tunnel, then just re-handle:
-    server.addListener('connect', function (req: http.IncomingMessage, socket: net.Socket) {
+    server.addListener('connect', function (
+        req: http.IncomingMessage | http2.Http2ServerRequest,
+        resOrSocket: net.Socket | http2.Http2ServerResponse
+    ) {
+        if (resOrSocket instanceof net.Socket) {
+            handleH1Connect(req as http.IncomingMessage, resOrSocket);
+        } else {
+            handleH2Connect(req as http2.Http2ServerRequest, resOrSocket);
+        }
+    });
+
+    function handleH1Connect(req: http.IncomingMessage, socket: net.Socket) {
         // Clients may disconnect at this point (for all sorts of reasons), but here
         // nothing else is listening, so we need to catch errors on the socket:
         socket.once('error', (e) => console.log('Error on client socket', e));
 
-        const http2Stream = req.connection?._handle?.getStream?.();
-        if (http2Stream) {
-            const connectUrl = req.url || req.headers['host'];
-            if (!connectUrl) {
-                // If we can't work out where to go, send an error.
-                http2Stream.respond(400, {});
-                return;
-            }
-
-            if (options.debug) console.log(`Proxying HTTP/2 CONNECT to ${connectUrl}`);
-
-            // Send a 200 OK response, and start the tunnel:
-            http2Stream.respond(200, {}, () => {
-                server.emit('connection', new SocketWrapper(http2Stream));
-            });
-        } else {
-            const connectUrl = req.url || req.headers['host'];
-            if (!connectUrl) {
-                // If we can't work out where to go, send an error.
-                socket.write('HTTP/' + req.httpVersion + ' 400 Bad Request\r\n\r\n', 'utf-8');
-                return;
-            }
-
-            if (options.debug) console.log(`Proxying HTTP/1 CONNECT to ${connectUrl}`);
-
-            socket.write('HTTP/' + req.httpVersion + ' 200 OK\r\n\r\n', 'utf-8', () => {
-                server.emit('connection', socket);
-            });
+        const connectUrl = req.url || req.headers['host'];
+        if (!connectUrl) {
+            // If we can't work out where to go, send an error.
+            socket.write('HTTP/' + req.httpVersion + ' 400 Bad Request\r\n\r\n', 'utf-8');
+            return;
         }
-    });
+
+        if (options.debug) console.log(`Proxying HTTP/1 CONNECT to ${connectUrl}`);
+
+        socket.write('HTTP/' + req.httpVersion + ' 200 OK\r\n\r\n', 'utf-8', () => {
+            server.emit('connection', socket);
+        });
+    }
+
+    function handleH2Connect(req: http2.Http2ServerRequest, res: http2.Http2ServerResponse) {
+        const connectUrl = req.headers[':authority'];
+
+        if (!connectUrl) {
+             // If we can't work out where to go, send an error.
+             res.writeHead(400, {});
+             res.end();
+             return;
+        }
+
+        if (options.debug) console.log(`Proxying HTTP/2 CONNECT to ${connectUrl}`);
+
+        // Send a 200 OK response, and start the tunnel:
+        res.writeHead(200, {});
+        const tunnelledSocket = new SocketWrapper(res.stream);
+        server.emit('connection', tunnelledSocket);
+    }
 
     return destroyable(server);
 }

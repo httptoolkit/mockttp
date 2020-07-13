@@ -6,6 +6,7 @@ import net = require("net");
 import url = require("url");
 import tls = require("tls");
 import http = require("http");
+import http2 = require("http2");
 import { EventEmitter } from "events";
 import portfinder = require("portfinder");
 import connect = require("connect");
@@ -48,11 +49,11 @@ import {
 import { WebSocketHandler } from "./websocket-handler";
 import { AbortError } from "../rules/handlers";
 
-interface ExtendedRawRequest extends http.IncomingMessage {
+type ExtendedRawRequest = (http.IncomingMessage | http2.Http2ServerRequest) & {
     protocol?: string;
     body?: ParsedBody;
     path?: string;
-}
+};
 
 /**
  * A in-process Mockttp implementation. This starts servers on the local machine in the
@@ -101,9 +102,11 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
             // Make req.url always absolute, if it isn't already, using the host header.
             // It might not be if this is a direct request, or if it's being transparently proxied.
             if (!isAbsoluteUrl(req.url!)) {
-                req.protocol = (req.socket instanceof tls.TLSSocket) ? 'https' : 'http';
+                req.protocol = req.headers[':scheme'] as string ||
+                    (req.socket.lastHopEncrypted ? 'https' : 'http');
                 req.path = req.url;
-                req.url = new url.URL(req.url!, `${req.protocol}://${req.headers['host']}`).toString();
+                const host = req.headers[':authority'] || req.headers['host'];
+                req.url = new url.URL(req.url!, `${req.protocol}://${host}`).toString();
             } else {
                 req.protocol = req.url!.split('://', 1)[0];
                 req.path = getPathFromAbsoluteUrl(req.url!);
@@ -134,6 +137,13 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         // Handle & report client request errors
         this.server!.on('clientError', this.handleInvalidHttp1Request.bind(this));
         this.server!.on('sessionError', this.handleInvalidHttp2Request.bind(this));
+
+        // Track the socket of HTTP/2 sessions, for error reporting later:
+        this.server!.on('session', (session) => {
+            session.on('connect', (session: http2.Http2Session, socket: net.Socket) => {
+                session.initialSocket = socket;
+            });
+        });
 
         // Handle websocket connections too (ignore for now, just forward on)
         const webSocketHander = new WebSocketHandler(this.debug);
@@ -292,7 +302,10 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         });
     }
 
-    private async announceClientErrorAsync(socket: net.Socket, error: ClientError) {
+    private async announceClientErrorAsync(
+        socket: net.Socket | http2.Http2Session,
+        error: ClientError
+    ) {
         // Ignore errors before TLS is setup, those are TLS errors
         if (socket instanceof tls.TLSSocket && !socket.tlsSetupCompleted) return;
 
@@ -405,7 +418,12 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         if (this.debug) console.warn(`Unmatched request received: ${requestExplanation}`);
 
         response.setHeader('Content-Type', 'text/plain');
-        response.writeHead(503, "Request for unmocked endpoint");
+        response.writeHead(
+            503,
+            request.httpVersion?.startsWith('2')
+                ? "Request for unmocked endpoint"
+                : undefined
+        );
 
         response.write("No rules were found matching this request.\n");
         response.write(`This request was: ${requestExplanation}\n\n`);
@@ -581,30 +599,25 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
     // Handle HTTP/2 client errors. This is a work in progress, but usefully reports
     // some of the most obvious cases.
     private handleInvalidHttp2Request(
-        error: Error & { code?: number },
-        socket: net.Socket
+        error: Error & { code?: string, errno?: number },
+        session: http2.Http2Session
     ) {
         // Unlike with HTTP/1.1, we have no control of the actual handling of
         // the error here, so this is just a matter of announcing the error to subscribers.
 
-        // We only fire one error per socket, and we use the first we hear about.
-        // Later errors are often "write after close" etc, not so useful.
-        if (socket.clientErrorInProgress) return;
-        socket.clientErrorInProgress = {};
-
-        // Some hacky code to convert error codes into nicer names, which ignores any
-        // SPDY/HTTP2 distinctions. We can improve this when we build error handling for real.
-        const errorName = require(
-            'spdy-transport/lib/spdy-transport/protocol/http2/constants'
-        ).errorByCode[error.code!] || error.code;
-
+        const socket = session.initialSocket;
         const isTLS = socket instanceof tls.TLSSocket;
 
-        this.announceClientErrorAsync(socket, {
-            errorCode: errorName,
+        const isBadPreface = (error.errno === -903);
+
+        this.announceClientErrorAsync(session, {
+            errorCode: error.code,
             request: {
                 id: uuid(),
-                tags: [`client-error:${errorName || 'UNKNOWN'}`],
+                tags: [
+                    `client-error:${error.code || 'UNKNOWN'}`,
+                    ...(isBadPreface ? ['client-error:bad-preface'] : [])
+                ],
                 httpVersion: '2',
 
                 // Best guesses:

@@ -24,17 +24,7 @@ declare module "net" {
         // Data that was peeked by httpolyglot, and thereby probably lost from the
         // HTTP parser errors, but which might be useful for debugging later
         __httpPeekedData?: Buffer;
-
-        // Internal socket management state that may be set by HTTP servers. In the
-        // case of SPDY, this is how we get the raw HTTP/2 stream.
-        _handle?: {
-            getStream?: () => SpdyStream
-        }
     }
-
-    type SpdyStream = stream.Duplex & {
-        respond: (status: number, headers: {}, callback?: () => void) => void
-    };
 }
 
 declare module "tls" {
@@ -65,4 +55,14 @@ declare module "_stream_wrap" {
     }
 
     export = SocketWrapper;
+}
+
+declare module "http2" {
+    import * as net from 'net';
+
+    class Http2Session {
+        // session.socket is cleared before error handling kicks in. That's annoying,
+        // so we manually preserve the socket elsewhere to work around it.
+        initialSocket?: net.Socket;
+    }
 }

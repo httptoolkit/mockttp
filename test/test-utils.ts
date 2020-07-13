@@ -100,11 +100,21 @@ export async function sendRawRequest(server: Mockttp, requestContent: string): P
     return dataPromise;
 }
 
-export async function openRawTlsSocket(server: Mockttp): Promise<tls.TLSSocket> {
+export async function openRawTlsSocket(
+    server: Mockttp,
+    options: {
+        servername?: string
+        alpn?: string[]
+    } = {}
+): Promise<tls.TLSSocket> {
+    if (!options.alpn) options.alpn = ['http/1.1']
+
     return await new Promise<tls.TLSSocket>((resolve) => {
         const socket: tls.TLSSocket = tls.connect({
             host: 'localhost',
-            port: server.port
+            port: server.port,
+            servername: options.servername,
+            ALPNProtocols: options.alpn
         }, () => resolve(socket));
     });
 }

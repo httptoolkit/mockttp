@@ -101,7 +101,7 @@
     "node": ">=10.0.0"
   },
   "dependencies": {
-    "@httptoolkit/httpolyglot": "httptoolkit/httpolyglot#e1a11a2",
+    "@httptoolkit/httpolyglot": "httptoolkit/httpolyglot#5170f3d",
     "@types/cors": "^2.8.6",
     "@types/express": "^4.0.33",
     "@types/node": "^10.12.9",
@@ -125,7 +125,6 @@
     "normalize-url": "^1.9.1",
     "performance-now": "^2.1.0",
     "portfinder": "^1.0.23",
-    "spdy": "httptoolkit/node-spdy#expose-session-errors",
     "subscriptions-transport-ws": "^0.9.4",
     "typed-error": "^3.0.2",
     "universal-websocket-client": "^1.0.2",

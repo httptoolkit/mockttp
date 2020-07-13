@@ -12,7 +12,8 @@ import {
     sendRawRequest,
     watchForEvent,
     TOO_LONG_HEADER_VALUE,
-    isNode
+    isNode,
+    openRawTlsSocket
 } from "../../test-utils";
 import { ClientError } from "../../../dist/types";
 
@@ -129,69 +130,6 @@ describe("Client error subscription", () => {
 
         const expectNoTlsErrors = watchForEvent('tls-client-error', server);
 
-        it("should report error responses from header overflows", async () => {
-            let errorPromise = getDeferred<ClientError>();
-            await server.on('client-error', (e) => errorPromise.resolve(e));
-
-            fetch(server.urlFor("/mocked-endpoint"), {
-                headers: {
-                    // Order here matters - if the host header appears after long-value, then we miss it
-                    // in the packet buffer, and request.url is relative, not absolute
-                    'host': `localhost:${server.port}`,
-                    'long-value': TOO_LONG_HEADER_VALUE
-                }
-            }).catch(() => {});
-
-            let clientError = await errorPromise;
-
-            if (isNode) {
-                expect(clientError.errorCode).to.equal("HPE_HEADER_OVERFLOW");
-                expect(clientError.request.protocol).to.equal('https');
-
-                // What the parser exposes when it fails is different depending on the Node version:
-                if (semver.satisfies(process.version, '>=13')) {
-                    // Buffer overflows completely here, so parsing sees overwritten data as the start:
-                    expect(clientError.request.method?.slice(0, 10)).to.equal('XXXXXXXXXX');
-                    expect(clientError.request.url).to.equal(undefined);
-                } else {
-                    expect(clientError.request.method).to.equal("GET");
-                    expect(clientError.request.url).to.equal(server.urlFor("/mocked-endpoint"));
-                    expect(_.find(clientError.request.headers,
-                        (_v, key) => key.toLowerCase() === 'host')
-                    ).to.equal(`localhost:${server.port}`);
-                }
-
-                const response = clientError.response as CompletedResponse;
-                expect(response.statusCode).to.equal(431);
-                expect(response.statusMessage).to.equal("Request Header Fields Too Large");
-                expect(response.tags).to.deep.equal([
-                    'client-error:HPE_HEADER_OVERFLOW',
-                    'header-overflow'
-                ]);
-            } else {
-                // Browsers upgrade to HTTP/2 automatically, so get different error reporting,
-                // and different results - we get no error response, and we can't access or
-                // easily parse the partial request data, so it's just a generic protocol error.
-                // Hoping to be able to add more detail here later, watch this space.
-                expect(clientError.errorCode).to.equal('PROTOCOL_ERROR');
-                expect(clientError.request.httpVersion).to.equal('2');
-                expect(clientError.request.protocol).to.equal('https');
-                expect(clientError.request.url).to.equal('https://localhost/'); // No port or path available
-                expect(clientError.request.tags).to.deep.equal([
-                    'client-error:PROTOCOL_ERROR'
-                ]);
-
-                // Not available:
-                expect(clientError.request.method).to.equal(undefined);
-                expect(clientError.request.path).to.equal(undefined);
-                expect(clientError.request.headers).to.deep.equal({});
-
-                expect(clientError.response).to.equal('aborted');
-            }
-
-            await expectNoTlsErrors();
-        });
-
         it("should report error responses from header overflows with plain HTTP", async () => {
             let errorPromise = getDeferred<ClientError>();
             await server.on('client-error', (e) => errorPromise.resolve(e));
@@ -225,6 +163,49 @@ describe("Client error subscription", () => {
         });
 
         nodeOnly(() => {
+            it("should report error responses from header overflows", async () => {
+                // Skipped in browsers, as they upgrade to HTTP/2, and header overflows seems unsupported
+                let errorPromise = getDeferred<ClientError>();
+                await server.on('client-error', (e) => errorPromise.resolve(e));
+
+                fetch(server.urlFor("/mocked-endpoint"), {
+                    headers: {
+                        // Order here matters - if the host header appears after long-value, then we miss it
+                        // in the packet buffer, and request.url is relative, not absolute
+                        'host': `localhost:${server.port}`,
+                        'long-value': TOO_LONG_HEADER_VALUE
+                    }
+                }).catch(() => {});
+
+                let clientError = await errorPromise;
+
+                expect(clientError.errorCode).to.equal("HPE_HEADER_OVERFLOW");
+                expect(clientError.request.protocol).to.equal('https');
+
+                // What the parser exposes when it fails is different depending on the Node version:
+                if (semver.satisfies(process.version, '>=13')) {
+                    // Buffer overflows completely here, so parsing sees overwritten data as the start:
+                    expect(clientError.request.method?.slice(0, 10)).to.equal('XXXXXXXXXX');
+                    expect(clientError.request.url).to.equal(undefined);
+                } else {
+                    expect(clientError.request.method).to.equal("GET");
+                    expect(clientError.request.url).to.equal(server.urlFor("/mocked-endpoint"));
+                    expect(_.find(clientError.request.headers,
+                        (_v, key) => key.toLowerCase() === 'host')
+                    ).to.equal(`localhost:${server.port}`);
+                }
+
+                const response = clientError.response as CompletedResponse;
+                expect(response.statusCode).to.equal(431);
+                expect(response.statusMessage).to.equal("Request Header Fields Too Large");
+                expect(response.tags).to.deep.equal([
+                    'client-error:HPE_HEADER_OVERFLOW',
+                    'header-overflow'
+                ]);
+
+                await expectNoTlsErrors();
+            });
+
             it("should report error responses from unparseable requests only once", async () => {
                 const clientErrors: ClientError[] = [];
                 await server.on('client-error', (e) => clientErrors.push(e));
@@ -257,6 +238,54 @@ describe("Client error subscription", () => {
                 expect(response.statusMessage).to.equal("Bad Request");
                 expect(response.body.text).to.equal("");
                 expect(response.tags).to.deep.equal(['client-error:HPE_INVALID_METHOD']);
+            });
+
+            it("should report HTTP/2 requests that start with a broken preface", async () => {
+                await server.get('/').thenReply(200, "HTTP2 response!");
+
+                const errorPromise = getDeferred<ClientError>();
+                await server.on('client-error', (e) => errorPromise.resolve(e));
+
+                const socket = await openRawTlsSocket(server, {
+                    servername: `localhost:${server.port}`,
+                    alpn: ['h2']
+                });
+
+                socket.write("GET / HTTP/1.1\r\n\r\n"); // Send H1 on H2 connection
+                const error = await errorPromise;
+                socket.end();
+
+                expect(error.errorCode).to.equal("ERR_HTTP2_ERROR");
+                expect(error.request.tags).to.deep.equal([
+                    'client-error:ERR_HTTP2_ERROR',
+                    'client-error:bad-preface'
+                ]);
+                expect(error.request.url).to.equal(server.url + '/');
+                expect(error.response).to.equal('aborted');
+            });
+
+            it("should report HTTP/2 requests that fail after the preface", async () => {
+                await server.get('/').thenReply(200, "HTTP2 response!");
+
+                const errorPromise = getDeferred<ClientError>();
+                await server.on('client-error', (e) => errorPromise.resolve(e));
+
+                const socket = await openRawTlsSocket(server, {
+                    servername: `localhost:${server.port}`,
+                    alpn: ['h2']
+                });
+
+                socket.write("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"); // Send the HTTP/2 preface
+                socket.write("GET / HTTP/1.1\r\n\r\n"); // Send raw H1 afterwards
+                const error = await errorPromise;
+                socket.end();
+
+                expect(error.errorCode).to.equal("ERR_HTTP2_ERROR");
+                expect(error.request.tags).to.deep.equal([
+                    'client-error:ERR_HTTP2_ERROR'
+                ]);
+                expect(error.request.url).to.equal(server.url + '/');
+                expect(error.response).to.equal('aborted');
             });
 
             describe("when proxying", () => {
