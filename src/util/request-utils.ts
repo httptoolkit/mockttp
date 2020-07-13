@@ -5,9 +5,9 @@
 import * as _ from 'lodash';
 import * as net from 'net';
 import { TLSSocket } from 'tls';
+import * as http from 'http';
 import * as stream from 'stream';
 import * as querystring from 'querystring';
-import * as express from 'express';
 import * as zlib from 'zlib';
 import * as brotliDecompress from 'brotli/decompress';
 import now = require("performance-now");
@@ -56,7 +56,7 @@ export const shouldKeepAlive = (req: OngoingRequest): boolean =>
     req.headers['connection'] !== 'close' &&
     req.headers['proxy-connection'] !== 'close';
 
-export const setHeaders = (response: express.Response, headers: Headers) => {
+export const setHeaders = (response: http.ServerResponse, headers: Headers) => {
     Object.keys(headers).forEach((header) => {
         let value = headers[header];
         if (!value) return;
@@ -245,9 +245,9 @@ export const buildBodyReader = (body: Buffer, headers: Headers): CompletedBody =
 };
 
 export const parseBody = (
-    req: express.Request,
-    _res: express.Response,
-    next: express.NextFunction
+    req: http.IncomingMessage,
+    _res: http.ServerResponse,
+    next: () => void
 ) => {
     let transformedRequest = <OngoingRequest> <any> req;
     transformedRequest.body = parseBodyStream(req);
@@ -288,7 +288,7 @@ export async function waitForCompletedRequest(request: OngoingRequest): Promise<
     return Object.assign(requestData, { body });
 }
 
-export function trackResponse(response: express.Response, timingEvents: TimingEvents, tags: string[]): OngoingResponse {
+export function trackResponse(response: http.ServerResponse, timingEvents: TimingEvents, tags: string[]): OngoingResponse {
     let trackedResponse = <OngoingResponse> response;
     if (!trackedResponse.getHeaders) {
         // getHeaders was added in 7.7. - if it's not available, polyfill it

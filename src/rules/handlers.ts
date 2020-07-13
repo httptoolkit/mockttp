@@ -7,7 +7,6 @@ import url = require('url');
 import net = require('net');
 import http = require('http');
 import https = require('https');
-import express = require("express");
 import { encode as encodeBase64, decode as decodeBase64 } from 'base64-arraybuffer';
 import { Readable, Transform } from 'stream';
 import { stripIndent, oneLine } from 'common-tags';
@@ -769,8 +768,10 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                     }
                 });
 
-                clientRes.statusMessage = serverStatusMessage || clientRes.statusMessage;
-                clientRes.status(serverStatusCode);
+                clientRes.writeHead(
+                    serverStatusCode,
+                    serverStatusMessage || clientRes.statusMessage
+                );
 
                 if (resBodyOverride) {
                     clientRes.end(resBodyOverride);

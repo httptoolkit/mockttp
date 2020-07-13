@@ -5,9 +5,10 @@
 import net = require("net");
 import url = require("url");
 import tls = require("tls");
+import http = require("http");
 import { EventEmitter } from "events";
 import portfinder = require("portfinder");
-import express = require("express");
+import connect = require("connect");
 import uuid = require('uuid/v4');
 import cors = require("cors");
 import now = require("performance-now");
@@ -21,7 +22,8 @@ import {
     CompletedResponse,
     TlsRequest,
     ClientError,
-    TimingEvents
+    TimingEvents,
+    ParsedBody
 } from "../types";
 import { CAOptions } from '../util/tls';
 import { DestroyableServer } from "../util/destroyable-server";
@@ -40,10 +42,17 @@ import {
     buildInitiatedRequest,
     buildAbortedRequest,
     tryToParseHttp,
-    buildBodyReader
+    buildBodyReader,
+    getPathFromAbsoluteUrl
 } from "../util/request-utils";
 import { WebSocketHandler } from "./websocket-handler";
 import { AbortError } from "../rules/handlers";
+
+interface ExtendedRawRequest extends http.IncomingMessage {
+    protocol?: string;
+    body?: ParsedBody;
+    path?: string;
+}
 
 /**
  * A in-process Mockttp implementation. This starts servers on the local machine in the
@@ -56,7 +65,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
     private httpsOptions: CAOptions | undefined;
 
-    private app: express.Application;
+    private app: connect.Server;
     private server: DestroyableServer | undefined;
 
     private eventEmitter: EventEmitter;
@@ -71,8 +80,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         this.httpsOptions = options.https;
         this.eventEmitter = new EventEmitter();
 
-        this.app = express();
-        this.app.disable('x-powered-by');
+        this.app = connect();
 
         if (this.corsOptions) {
             if (this.debug) console.log('Enabling CORS');
@@ -81,17 +89,26 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
                 ? { methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'] }
                 : this.corsOptions;
 
-            this.app.use(cors(corsOptions));
+            this.app.use(cors(corsOptions) as connect.HandleFunction);
         }
 
         this.app.use(parseBody);
-        this.app.use((req, res, next) => {
+        this.app.use((
+            req: ExtendedRawRequest,
+            _res: http.ServerResponse,
+            next: () => void
+        ) => {
             // Make req.url always absolute, if it isn't already, using the host header.
             // It might not be if this is a direct request, or if it's being transparently proxied.
-            // The 2nd argument is ignored if req.url is already absolute.
-            if (!isAbsoluteUrl(req.url)) {
-                req.url = new url.URL(req.url, `${req.protocol}://${req.headers['host']}`).toString();
+            if (!isAbsoluteUrl(req.url!)) {
+                req.protocol = (req.socket instanceof tls.TLSSocket) ? 'https' : 'http';
+                req.path = req.url;
+                req.url = new url.URL(req.url!, `${req.protocol}://${req.headers['host']}`).toString();
+            } else {
+                req.protocol = req.url!.split('://', 1)[0];
+                req.path = getPathFromAbsoluteUrl(req.url!);
             }
+
             next();
         });
         this.app.use(this.handleRequest.bind(this));
@@ -285,7 +302,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         });
     }
 
-    private async handleRequest(rawRequest: express.Request, rawResponse: express.Response) {
+    private async handleRequest(rawRequest: ExtendedRawRequest, rawResponse: http.ServerResponse) {
         if (this.debug) console.log(`Handling request for ${rawRequest.url}`);
 
         const timingEvents = { startTime: Date.now(), startTimestamp: now() };
@@ -383,7 +400,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         }
     }
 
-    private async sendUnmatchedRequestError(request: OngoingRequest, response: express.Response) {
+    private async sendUnmatchedRequestError(request: OngoingRequest, response: http.ServerResponse) {
         let requestExplanation = await this.explainRequest(request);
         if (this.debug) console.warn(`Unmatched request received: ${requestExplanation}`);
 
