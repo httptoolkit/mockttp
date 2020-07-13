@@ -2,6 +2,7 @@ import _ = require('lodash');
 import net = require('net');
 import tls = require('tls');
 import http = require('http');
+import SocketWrapper = require('_stream_wrap');
 import httpolyglot = require('@httptoolkit/httpolyglot');
 
 import { TlsRequest } from '../types';
@@ -148,9 +149,7 @@ export async function createComboServer(
 
             // Send a 200 OK response, and start the tunnel:
             http2Stream.respond(200, {}, () => {
-                server.emit('connection', Object.assign(http2Stream, {
-                    setNoDelay: () => {} // The only non-stream Socket method used by SPDY, it seems
-                }));
+                server.emit('connection', new SocketWrapper(http2Stream));
             });
         } else {
             const connectUrl = req.url || req.headers['host'];
