@@ -361,7 +361,7 @@ export async function waitForCompletedResponse(response: OngoingResponse): Promi
 export function tryToParseHttp(input: Buffer, socket: net.Socket): PartiallyParsedHttpRequest {
     const req: PartiallyParsedHttpRequest = {};
     try {
-        req.protocol = socket instanceof TLSSocket ? "https" : "http"; // Wild guess really
+        req.protocol = socket.lastHopEncrypted ? "https" : "http"; // Wild guess really
 
         // For TLS sockets, we default the hostname to the name given by SNI. Might be overridden
         // by the URL or Host header later, if available.

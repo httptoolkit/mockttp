@@ -10,7 +10,7 @@ declare module "net" {
         // this always matches socket.encrypted. For CONNECT-proxied connections (where
         // the initial connection could be HTTPS and the upstream connection HTTP, or
         // vice versa) all on one socket, this is the value for the final hop.
-        upstreamEncryption?: boolean;
+        lastHopEncrypted?: boolean;
 
         // Normally only defined on TLSSocket, but useful to explicitly include here
         // Undefined on plain HTTP, 'true' on TLSSocket.

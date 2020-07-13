@@ -103,13 +103,13 @@ export async function createComboServer(
     }
 
     server.on('connection', (socket: net.Socket) => {
-        // All sockets are initially marked for unencrypted upstream connections, this is
-        // upgraded on secureConnection above.
-        socket.upstreamEncryption = false;
+        // All sockets are initially marked as using unencrypted upstream connections.
+        // If TLS is used, this is upgraded to 'true' by secureConnection below.
+        socket.lastHopEncrypted = false;
     });
 
     server.on('secureConnection', (socket: tls.TLSSocket) => {
-        socket.upstreamEncryption = true;
+        socket.lastHopEncrypted = true;
         ifTlsDropped(socket, () => {
             tlsClientErrorListener(socket, {
                 failureCause: 'closed',

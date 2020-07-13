@@ -35,8 +35,8 @@ export class WebSocketHandler {
             // upstreamEncryption is set in http-combo-server, for requests that have explicitly
             // CONNECTed upstream (which may then up/downgrade from the current encryption).
             let protocol: string;
-            if (socket.upstreamEncryption !== undefined) {
-                protocol = socket.upstreamEncryption ? 'wss' : 'ws';
+            if (socket.lastHopEncrypted !== undefined) {
+                protocol = socket.lastHopEncrypted ? 'wss' : 'ws';
             } else {
                 protocol = req.connection.encrypted ? 'wss' : 'ws';
             }
