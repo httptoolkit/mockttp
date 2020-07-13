@@ -98,7 +98,7 @@
     "webpack": "^3.7.1"
   },
   "engines": {
-    "node": ">=8.0.0"
+    "node": ">=10.0.0"
   },
   "dependencies": {
     "@httptoolkit/httpolyglot": "httptoolkit/httpolyglot#e1a11a2",
