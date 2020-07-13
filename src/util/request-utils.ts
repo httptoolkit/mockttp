@@ -351,7 +351,11 @@ export async function waitForCompletedResponse(response: OngoingResponse): Promi
         'timingEvents',
         'tags'
     ]).assign({
-        headers: response.getHeaders(),
+        headers: _.mapValues(response.getHeaders(), (headerValue) => {
+            return _.isNumber(headerValue)
+                ? headerValue.toString() // HTTP :status sneaks in as a number
+                : headerValue;
+        }) as Headers,
         body: body
     }).valueOf();
 }

@@ -40,116 +40,170 @@ function makeAbortableRequest(server: Mockttp, path: string) {
 }
 
 describe("Response subscriptions", () => {
-    let server = getLocal();
 
-    beforeEach(() => server.start());
-    afterEach(() => server.stop());
+    describe("with an HTTP server", () => {
 
-    it("should notify with response details & body when a response is completed", async () => {
-        server.get('/mocked-endpoint').thenReply(200, 'Mock response', {
-            'x-extra-header': 'present'
+        let server = getLocal();
+
+        beforeEach(() => server.start());
+        afterEach(() => server.stop());
+
+        it("should notify with response details & body when a response is completed", async () => {
+            server.get('/mocked-endpoint').thenReply(200, 'Mock response', {
+                'x-extra-header': 'present'
+            });
+
+            let seenResponsePromise = getDeferred<CompletedResponse>();
+            await server.on('response', (r) => seenResponsePromise.resolve(r));
+
+            fetch(server.urlFor("/mocked-endpoint"));
+
+            let seenResponse = await seenResponsePromise;
+            expect(seenResponse.statusCode).to.equal(200);
+            expect(seenResponse.body.text).to.equal('Mock response');
+            expect(seenResponse.tags).to.deep.equal([]);
+
+            expect(seenResponse.headers).to.deep.equal(isNode
+                ? {
+                    'x-extra-header': 'present'
+                }
+                : {
+                    'x-extra-header': 'present',
+                    'access-control-allow-origin': '*'
+                }
+            );
         });
 
-        let seenResponsePromise = getDeferred<CompletedResponse>();
-        await server.on('response', (r) => seenResponsePromise.resolve(r));
+        it("should expose ungzipped bodies as .text", async () => {
+            const body = zlib.gzipSync('Mock response');
 
-        fetch(server.urlFor("/mocked-endpoint"));
+            server.get('/mocked-endpoint').thenReply(200, body, {
+                'content-encoding': 'gzip'
+            });
 
-        let seenResponse = await seenResponsePromise;
-        expect(seenResponse.statusCode).to.equal(200);
-        expect(seenResponse.headers['x-extra-header']).to.equal('present');
-        expect(seenResponse.body.text).to.equal('Mock response');
-        expect(seenResponse.tags).to.deep.equal([]);
-    });
+            let seenResponsePromise = getDeferred<CompletedResponse>();
+            await server.on('response', (r) => seenResponsePromise.resolve(r));
 
-    it("should expose ungzipped bodies as .text", async () => {
-        const body = zlib.gzipSync('Mock response');
+            fetch(server.urlFor("/mocked-endpoint"));
 
-        server.get('/mocked-endpoint').thenReply(200, body, {
-            'content-encoding': 'gzip'
+            let seenResponse = await seenResponsePromise;
+            expect(seenResponse.statusCode).to.equal(200);
+            expect(seenResponse.body.text).to.equal('Mock response');
         });
 
-        let seenResponsePromise = getDeferred<CompletedResponse>();
-        await server.on('response', (r) => seenResponsePromise.resolve(r));
+        it("should expose un-deflated bodies as .text", async () => {
+            const body = zlib.deflateSync('Mock response');
 
-        fetch(server.urlFor("/mocked-endpoint"));
+            server.get('/mocked-endpoint').thenReply(200, body, {
+                'content-encoding': 'deflate'
+            });
 
-        let seenResponse = await seenResponsePromise;
-        expect(seenResponse.statusCode).to.equal(200);
-        expect(seenResponse.body.text).to.equal('Mock response');
-    });
+            let seenResponsePromise = getDeferred<CompletedResponse>();
+            await server.on('response', (r) => seenResponsePromise.resolve(r));
 
-    it("should expose un-deflated bodies as .text", async () => {
-        const body = zlib.deflateSync('Mock response');
+            fetch(server.urlFor("/mocked-endpoint"));
 
-        server.get('/mocked-endpoint').thenReply(200, body, {
-            'content-encoding': 'deflate'
+            let seenResponse = await seenResponsePromise;
+            expect(seenResponse.statusCode).to.equal(200);
+            expect(seenResponse.body.text).to.equal('Mock response');
         });
 
-        let seenResponsePromise = getDeferred<CompletedResponse>();
-        await server.on('response', (r) => seenResponsePromise.resolve(r));
+        it("should expose un-raw-deflated bodies as .text", async () => {
+            const body = zlib.deflateRawSync('Mock response');
 
-        fetch(server.urlFor("/mocked-endpoint"));
+            server.get('/mocked-endpoint').thenReply(200, body, {
+                'content-encoding': 'deflate'
+            });
 
-        let seenResponse = await seenResponsePromise;
-        expect(seenResponse.statusCode).to.equal(200);
-        expect(seenResponse.body.text).to.equal('Mock response');
-    });
+            let seenResponsePromise = getDeferred<CompletedResponse>();
+            await server.on('response', (r) => seenResponsePromise.resolve(r));
 
-    it("should expose un-raw-deflated bodies as .text", async () => {
-        const body = zlib.deflateRawSync('Mock response');
+            fetch(server.urlFor("/mocked-endpoint"));
 
-        server.get('/mocked-endpoint').thenReply(200, body, {
-            'content-encoding': 'deflate'
+            let seenResponse = await seenResponsePromise;
+            expect(seenResponse.statusCode).to.equal(200);
+            expect(seenResponse.body.text).to.equal('Mock response');
         });
 
-        let seenResponsePromise = getDeferred<CompletedResponse>();
-        await server.on('response', (r) => seenResponsePromise.resolve(r));
+        it("should include an id that matches the request event", async () => {
+            server.get('/mocked-endpoint').thenReply(200);
 
-        fetch(server.urlFor("/mocked-endpoint"));
+            let seenRequestPromise = getDeferred<CompletedRequest>();
+            let seenResponsePromise = getDeferred<CompletedResponse>();
 
-        let seenResponse = await seenResponsePromise;
-        expect(seenResponse.statusCode).to.equal(200);
-        expect(seenResponse.body.text).to.equal('Mock response');
+            await Promise.all([
+                server.on('request', (r) => seenRequestPromise.resolve(r)),
+                server.on('response', (r) => seenResponsePromise.resolve(r))
+            ]);
+
+            fetch(server.urlFor("/mocked-endpoint"));
+
+            let seenResponse = await seenResponsePromise;
+            let seenRequest = await seenRequestPromise;
+
+            expect(seenRequest.id).to.be.a('string');
+            expect(seenRequest.id).to.equal(seenResponse.id);
+        });
+
+        it("should include timing information", async () => {
+            let seenResponsePromise = getDeferred<CompletedResponse>();
+            await server.on('response', (r) => seenResponsePromise.resolve(r));
+
+            fetch(server.urlFor("/mocked-endpoint"), { method: 'POST', body: 'body-text' });
+
+            let { timingEvents } = <{ timingEvents: TimingEvents }> await seenResponsePromise;
+            expect(timingEvents.startTimestamp).to.be.a('number');
+            expect(timingEvents.bodyReceivedTimestamp).to.be.a('number');
+            expect(timingEvents.headersSentTimestamp).to.be.a('number');
+            expect(timingEvents.responseSentTimestamp).to.be.a('number');
+
+            expect(timingEvents.bodyReceivedTimestamp).to.be.greaterThan(timingEvents.startTimestamp);
+            expect(timingEvents.headersSentTimestamp).to.be.greaterThan(timingEvents.startTimestamp);
+            expect(timingEvents.responseSentTimestamp).to.be.greaterThan(timingEvents.headersSentTimestamp!);
+
+            expect(timingEvents.abortedTimestamp).to.equal(undefined);
+        });
     });
 
-    it("should include an id that matches the request event", async () => {
-        server.get('/mocked-endpoint').thenReply(200);
+    describe("with an HTTPS server", () => {
 
-        let seenRequestPromise = getDeferred<CompletedRequest>();
-        let seenResponsePromise = getDeferred<CompletedResponse>();
+        let server = getLocal({
+            https: {
+                keyPath: './test/fixtures/test-ca.key',
+                certPath: './test/fixtures/test-ca.pem'
+            }
+        });
 
-        await Promise.all([
-            server.on('request', (r) => seenRequestPromise.resolve(r)),
-            server.on('response', (r) => seenResponsePromise.resolve(r))
-        ]);
+        beforeEach(() => server.start());
+        afterEach(() => server.stop());
 
-        fetch(server.urlFor("/mocked-endpoint"));
+        it("should notify with response details & body when a response is completed", async () => {
+            server.get('/mocked-endpoint').thenReply(200, 'Mock response', {
+                'x-extra-header': 'present'
+            });
 
-        let seenResponse = await seenResponsePromise;
-        let seenRequest = await seenRequestPromise;
+            let seenResponsePromise = getDeferred<CompletedResponse>();
+            await server.on('response', (r) => seenResponsePromise.resolve(r));
 
-        expect(seenRequest.id).to.be.a('string');
-        expect(seenRequest.id).to.equal(seenResponse.id);
-    });
+            fetch(server.urlFor("/mocked-endpoint"));
 
-    it("should include timing information", async () => {
-        let seenResponsePromise = getDeferred<CompletedResponse>();
-        await server.on('response', (r) => seenResponsePromise.resolve(r));
+            let seenResponse = await seenResponsePromise;
+            expect(seenResponse.statusCode).to.equal(200);
+            expect(seenResponse.body.text).to.equal('Mock response');
+            expect(seenResponse.tags).to.deep.equal([]);
 
-        fetch(server.urlFor("/mocked-endpoint"), { method: 'POST', body: 'body-text' });
-
-        let { timingEvents } = <{ timingEvents: TimingEvents }> await seenResponsePromise;
-        expect(timingEvents.startTimestamp).to.be.a('number');
-        expect(timingEvents.bodyReceivedTimestamp).to.be.a('number');
-        expect(timingEvents.headersSentTimestamp).to.be.a('number');
-        expect(timingEvents.responseSentTimestamp).to.be.a('number');
-
-        expect(timingEvents.bodyReceivedTimestamp).to.be.greaterThan(timingEvents.startTimestamp);
-        expect(timingEvents.headersSentTimestamp).to.be.greaterThan(timingEvents.startTimestamp);
-        expect(timingEvents.responseSentTimestamp).to.be.greaterThan(timingEvents.headersSentTimestamp!);
-
-        expect(timingEvents.abortedTimestamp).to.equal(undefined);
+            const matchableHeaders = _.omit(seenResponse.headers);
+            expect(matchableHeaders).to.deep.equal(isNode
+                ? {
+                    'x-extra-header': 'present'
+                }
+                : {
+                    ':status': '200',
+                    'x-extra-header': 'present',
+                    'access-control-allow-origin': '*'
+                }
+            );
+        });
     });
 });
 

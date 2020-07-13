@@ -13,12 +13,13 @@ import {
     fetch,
     nodeOnly,
     getDeferred,
-    sendRawRequest
+    sendRawRequest,
+    isNode
 } from "../../test-utils";
 import { TimingEvents } from "../../../dist/types";
 
 describe("Request initiated subscriptions", () => {
-    describe("with a local server", () => {
+    describe("with a local HTTP server", () => {
         let server = getLocal();
 
         beforeEach(() => server.start());
@@ -36,6 +37,33 @@ describe("Request initiated subscriptions", () => {
             expect(seenRequest.httpVersion).to.equal('1.1');
             expect(seenRequest.url).to.equal(server.urlFor("/mocked-endpoint"));
             expect((seenRequest as any).body).to.equal(undefined); // No body included yet
+
+            const matchableHeaders = _.omit(seenRequest.headers, [
+                'user-agent',
+                'origin',
+                'referer',
+                'accept-language'
+            ]);
+            expect(matchableHeaders).to.deep.equal(isNode
+                ? {
+                    'accept-encoding': 'gzip,deflate',
+                    'connection': 'close',
+                    'accept': '*/*',
+                    'content-length': '9',
+                    'host': `localhost:${server.port}`
+                }
+                : {
+                    'accept': '*/*',
+                    'accept-encoding': 'gzip, deflate, br',
+                    'connection': 'keep-alive',
+                    'content-length': '9',
+                    'content-type': 'text/plain;charset=UTF-8',
+                    'host': `localhost:${server.port}`,
+                    'sec-fetch-dest': 'empty',
+                    'sec-fetch-mode': 'cors',
+                    'sec-fetch-site': 'same-site'
+                }
+            );
         });
 
         nodeOnly(() => {
@@ -65,6 +93,64 @@ describe("Request initiated subscriptions", () => {
                 let seenCompletedRequest = await seenCompletedRequestPromise;
                 expect(seenCompletedRequest.body.text).to.equal('start body\nend body');
             });
+        });
+    });
+
+    describe("with a local HTTPS server", () => {
+        let server = getLocal({
+            https: {
+                keyPath: './test/fixtures/test-ca.key',
+                certPath: './test/fixtures/test-ca.pem'
+            }
+        });
+
+        beforeEach(() => server.start());
+        afterEach(() => server.stop());
+
+        it("should notify with request details as soon as they're ready", async () => {
+            let seenRequestPromise = getDeferred<InitiatedRequest>();
+            await server.on('request-initiated', (r) => seenRequestPromise.resolve(r));
+
+            fetch(server.urlFor("/mocked-endpoint"), { method: 'POST', body: 'body-text' });
+
+            let seenRequest = await seenRequestPromise;
+            expect(seenRequest.method).to.equal('POST');
+            expect(seenRequest.protocol).to.equal('https');
+            expect(seenRequest.httpVersion).to.equal(isNode
+                ? '1.1'
+                : '2.0'
+            );
+            expect(seenRequest.url).to.equal(server.urlFor("/mocked-endpoint"));
+            expect((seenRequest as any).body).to.equal(undefined); // No body included yet
+
+            const matchableHeaders = _.omit(seenRequest.headers, [
+                'user-agent',
+                'origin',
+                'referer',
+                'accept-language'
+            ]);
+            expect(matchableHeaders).to.deep.equal(isNode
+                ? {
+                    'accept-encoding': 'gzip,deflate',
+                    'connection': 'close',
+                    'accept': '*/*',
+                    'content-length': '9',
+                    'host': `localhost:${server.port}`
+                }
+                : { // Browsers uses HTTP/2 with HTTPS, so we get the pseudo-headers too:
+                    ':authority': 'localhost:8000',
+                    ':method': 'POST',
+                    ':path': server.urlFor('/mocked-endpoint'),
+                    ':scheme': 'https',
+                    'accept': '*/*',
+                    'accept-encoding': 'gzip, deflate, br',
+                    'content-length': '9',
+                    'content-type': 'text/plain;charset=UTF-8',
+                    'sec-fetch-dest': 'empty',
+                    'sec-fetch-mode': 'cors',
+                    'sec-fetch-site': 'cross-site'
+                }
+            );
         });
     });
 
