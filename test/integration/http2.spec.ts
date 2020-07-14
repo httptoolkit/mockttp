@@ -4,6 +4,7 @@ import * as streams from 'stream';
 import * as http from 'http';
 import * as https from 'https';
 import * as http2 from 'http2';
+import * as semver from 'semver';
 
 import { getLocal } from "../..";
 import { expect, nodeOnly, delay } from "../test-utils";
@@ -172,7 +173,14 @@ nodeOnly(() => {
                 await cleanup(client);
             });
 
-            it("can respond to proxied HTTP/2 requests", async () => {
+            it("can respond to proxied HTTP/2 requests", async function() {
+                if (!semver.satisfies(process.version, '>=12')) {
+                    // Due to a bug in Node 10 (from 10.16.3+), TLS sockets on top of
+                    // TLS sockets don't work. Mockttp works fine, it's just that
+                    // the tests fail to complete the TLS client connection.
+                    this.skip();
+                }
+
                 await server.get('https://example.com/mocked-endpoint')
                     .thenReply(200, "Proxied HTTP2 response!");
 
@@ -208,7 +216,14 @@ nodeOnly(() => {
                 await cleanup(proxiedClient, client);
             });
 
-            it("can respond to HTTP1-proxied HTTP/2 requests", async () => {
+            it("can respond to HTTP1-proxied HTTP/2 requests", async function() {
+                if (!semver.satisfies(process.version, '>=12')) {
+                    // Due to a bug in Node 10 (from 10.16.3+), TLS sockets on top of
+                    // TLS sockets don't work. Mockttp works fine, it's just that
+                    // the tests fail to complete the TLS client connection.
+                    this.skip();
+                }
+
                 await server.get('https://example.com/mocked-endpoint')
                     .thenReply(200, "Proxied HTTP2 response!");
 
