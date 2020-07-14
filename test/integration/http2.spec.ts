@@ -30,18 +30,9 @@ function getBody(req: http2.ClientHttp2Stream) {
     });
 }
 
-async function cleanup(...streams: (streams.Duplex | http2.Http2Session)[]) {
+async function cleanup(...streams: (streams.Duplex | http2.Http2Session | http2.Http2Stream)[]) {
     for (let stream of streams) {
-        if ('close' in stream) {
-            let session = stream;
-            await new Promise((resolve) => {
-                session.close(resolve);
-            });
-            await delay(10); // Close isn't instant, there can be races here
-        }
-        else {
-            stream.destroy();
-        }
+        stream.destroy();
     }
 }
 
