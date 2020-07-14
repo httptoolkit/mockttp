@@ -18,7 +18,10 @@ import {
     buildBodyReader,
     streamToBuffer,
     shouldKeepAlive,
-    dropDefaultHeaders
+    dropDefaultHeaders,
+    isHttp2,
+    h1HeadersToH2,
+    h2HeadersToH1
 } from '../util/request-utils';
 import { isLocalPortActive } from '../util/socket-util';
 import {
@@ -571,6 +574,10 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
         let { method, url: reqUrl, headers } = clientReq;
         let { protocol, hostname, port, path } = url.parse(reqUrl);
 
+        if (isHttp2(clientReq)) {
+            headers = h2HeadersToH1(headers);
+        }
+
         if (this.forwarding) {
             const { targetHost, updateHostHeader } = this.forwarding;
             if (!targetHost.includes('/')) {
@@ -752,6 +759,10 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                     }
 
                     serverHeaders = dropUndefinedValues(serverHeaders);
+                }
+
+                if (isHttp2(clientReq)) {
+                    serverHeaders = h1HeadersToH2(serverHeaders);
                 }
 
                 Object.keys(serverHeaders).forEach((header) => {

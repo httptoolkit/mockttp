@@ -6,6 +6,8 @@ import * as _ from 'lodash';
 import * as net from 'net';
 import { TLSSocket } from 'tls';
 import * as http from 'http';
+import * as http2 from 'http2';
+import { EventEmitter } from 'events';
 import * as stream from 'stream';
 import * as querystring from 'querystring';
 import * as zlib from 'zlib';
@@ -22,7 +24,8 @@ import {
     ParsedBody,
     CompletedBody,
     TimingEvents,
-    InitiatedRequest
+    InitiatedRequest,
+    RequestHeaders
 } from "../types";
 import { nthIndexOf } from '../util/util';
 
@@ -77,6 +80,50 @@ export function dropDefaultHeaders(response: OngoingResponse) {
     ].forEach((defaultHeader) =>
         response.removeHeader(defaultHeader)
     );
+}
+
+export function isHttp2(
+    message: | http.IncomingMessage
+             | http2.Http2ServerRequest
+             | http2.Http2ServerResponse
+             | OngoingRequest
+             | OngoingResponse
+): message is http2.Http2ServerRequest | http2.Http2ServerResponse {
+    return ('httpVersion' in message && !!message.httpVersion?.startsWith('2')) || // H2 request
+        ('stream' in message && 'createPushResponse' in message); // H2 response
+}
+
+export function h2HeadersToH1(h2Headers: Headers) {
+    const h1Headers = _.omitBy(h2Headers, (_value, key) => {
+        return key.startsWith(':')
+    });
+
+    if (!h1Headers['host'] && h2Headers[':authority']) {
+        h1Headers['host'] = h2Headers[':authority'];
+    }
+
+    if (_.isArray(h1Headers['cookie'])) {
+        h1Headers['cookie'] = h1Headers['cookie'].join('; ');
+    }
+
+    return h1Headers as RequestHeaders;
+}
+
+// Take from http2/util.js in Node itself
+const HTTP2_ILLEGAL_HEADERS = [
+    'connection',
+    'upgrade',
+    'host',
+    'http2-settings',
+    'keep-alive',
+    'proxy-connection',
+    'transfer-encoding'
+];
+
+export function h1HeadersToH2(headers: Headers) {
+    return _.omitBy(headers, (_value, key) => {
+        return HTTP2_ILLEGAL_HEADERS.includes(key);
+    });
 }
 
 // Takes a buffer and a stream, returns a simple stream that outputs the buffer then the stream.
@@ -310,6 +357,12 @@ export function trackResponse(response: http.ServerResponse, timingEvents: Timin
         if (!timingEvents.headersSentTimestamp) {
             timingEvents.headersSentTimestamp = now();
         }
+
+        // HTTP/2 responses shouldn't have a status message:
+        if (isHttp2(trackedResponse) && typeof args[1] === 'string') {
+            args[1] = undefined;
+        }
+
         return originalWriteHeader.apply(this, args);
     }
 

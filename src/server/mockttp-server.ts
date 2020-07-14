@@ -387,7 +387,10 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
                 response.on('error', (e) => {});
 
                 // Do whatever we can to tell the client we broke
-                try { response.writeHead(e.statusCode || 500, e.statusMessage || 'Server error'); } catch (e) {}
+                try {
+                    response.writeHead(e.statusCode || 500, e.statusMessage || 'Server error');
+                } catch (e) {}
+
                 try {
                     response.end(e.toString());
                     result = result || 'responded';
@@ -418,12 +421,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         if (this.debug) console.warn(`Unmatched request received: ${requestExplanation}`);
 
         response.setHeader('Content-Type', 'text/plain');
-        response.writeHead(
-            503,
-            request.httpVersion?.startsWith('2')
-                ? "Request for unmocked endpoint"
-                : undefined
-        );
+        response.writeHead(503, "Request for unmocked endpoint");
 
         response.write("No rules were found matching this request.\n");
         response.write(`This request was: ${requestExplanation}\n\n`);

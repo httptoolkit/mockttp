@@ -1,3 +1,4 @@
+import * as _ from 'lodash';
 import * as net from 'net';
 import * as tls from 'tls';
 import * as streams from 'stream';
@@ -130,6 +131,135 @@ nodeOnly(() => {
                 expect(responseBody.toString('utf8')).to.equal("Proxied HTTP2 response!");
 
                 await cleanup(client, tunnelledSocket);
+            });
+
+            describe("with a remote server", () => {
+                const remoteServer = getLocal({
+                    https: {
+                        keyPath: './test/fixtures/test-ca.key',
+                        certPath: './test/fixtures/test-ca.pem'
+                    }
+                });
+
+                beforeEach(() => remoteServer.start());
+                afterEach(() => remoteServer.stop());
+
+                it("can forward requests upstream", async () => {
+                    await remoteServer.get('/mocked-endpoint')
+                        .thenReply(200, "Remote HTTP2 response!");
+                    await server.get(remoteServer.urlFor('/mocked-endpoint'))
+                        .thenPassThrough();
+
+                    const client = http2.connect(server.url);
+
+                    const req = client.request({
+                        ':method': 'CONNECT',
+                        ':authority': `localhost:${remoteServer.port}`
+                    });
+
+                    // Initial response, so the proxy has set up our tunnel:
+                    const responseHeaders = await getResponse(req);
+                    expect(responseHeaders[':status']).to.equal(200);
+
+                    // We can now read/write to req as a raw TCP socket to remoteServer:
+                    const proxiedClient = http2.connect(remoteServer.url, {
+                        // Tunnel this request through the proxy stream
+                        createConnection: () => req
+                    });
+
+                    const proxiedRequest = proxiedClient.request({
+                        ':path': '/mocked-endpoint'
+                    });
+                    const proxiedResponse = await getResponse(proxiedRequest);
+                    expect(proxiedResponse[':status']).to.equal(200);
+
+                    const responseBody = await getBody(proxiedRequest);
+                    expect(responseBody.toString('utf8')).to.equal("Remote HTTP2 response!");
+
+                    await cleanup(proxiedClient, client);
+                });
+
+                it("reformats forwarded request headers for HTTP/1.1", async () => {
+                    const mockedEndpoint = await remoteServer.get('/mocked-endpoint')
+                        .thenReply(200, "Remote HTTP2 response!");
+                    await server.get(remoteServer.urlFor('/mocked-endpoint'))
+                        .thenPassThrough();
+
+                    const client = http2.connect(server.url);
+
+                    const req = client.request({
+                        ':method': 'CONNECT',
+                        ':authority': `localhost:${remoteServer.port}`
+                    });
+
+                    // Initial response, so the proxy has set up our tunnel:
+                    const responseHeaders = await getResponse(req);
+                    expect(responseHeaders[':status']).to.equal(200);
+
+                    // We can now read/write to req as a raw TCP socket to remoteServer:
+                    const proxiedClient = http2.connect(remoteServer.url, {
+                        // Tunnel this request through the proxy stream
+                        createConnection: () => req
+                    });
+
+                    await getResponse(proxiedClient.request({
+                        ':path': '/mocked-endpoint',
+                        'Cookie': 'a=b',
+                        'cookie': 'b=c'
+                    }));
+
+                    const seenRequests = await mockedEndpoint.getSeenRequests();
+                    expect(seenRequests.length).to.equal(1);
+
+                    expect(seenRequests[0].headers).to.deep.equal({
+                        'host': `localhost:${remoteServer.port}`, // Host replaces :authority
+                        'connection': 'keep-alive', // We add this for upstream, as all H2 are keep-alive
+                        'cookie': 'a=b; b=c' // Concatenated automatically
+                    });
+
+                    await cleanup(proxiedClient, client);
+                });
+
+                it("reformats forwarded response headers for HTTP/1.1", async () => {
+                    await remoteServer.get('/mocked-endpoint')
+                        .thenReply(200, "Remote HTTP2 response!", {
+                            'HEADER-KEY': 'HEADER-VALUE',
+                            'Connection': 'close'
+                        });
+                    await server.get(remoteServer.urlFor('/mocked-endpoint'))
+                        .thenPassThrough();
+
+                    const client = http2.connect(server.url);
+
+                    const req = client.request({
+                        ':method': 'CONNECT',
+                        ':authority': `localhost:${remoteServer.port}`
+                    });
+
+                    // Initial response, so the proxy has set up our tunnel:
+                    const responseHeaders = await getResponse(req);
+                    expect(responseHeaders[':status']).to.equal(200);
+
+                    // We can now read/write to req as a raw TCP socket to remoteServer:
+                    const proxiedClient = http2.connect(remoteServer.url, {
+                        // Tunnel this request through the proxy stream
+                        createConnection: () => req
+                    });
+
+                    const proxiedResponseHeaders = await getResponse(
+                        proxiedClient.request({
+                            ':path': '/mocked-endpoint',
+                        })
+                    );
+
+                    expect(_.omit(proxiedResponseHeaders, 'date')).to.deep.equal({
+                        ':status': 200,
+                        'header-key': 'HEADER-VALUE' // We lowercase all header keys
+                        // Connection: close is omitted
+                    });
+
+                    await cleanup(proxiedClient, client);
+                });
             });
 
         });
