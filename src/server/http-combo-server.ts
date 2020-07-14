@@ -3,7 +3,8 @@ import net = require('net');
 import tls = require('tls');
 import http = require('http');
 import http2 = require('http2');
-import SocketWrapper = require('_stream_wrap');
+import streams = require('stream');
+import StreamWrap = require('_stream_wrap');
 import httpolyglot = require('@httptoolkit/httpolyglot');
 
 import { TlsRequest } from '../types';
@@ -176,9 +177,24 @@ export async function createComboServer(
 
         // Send a 200 OK response, and start the tunnel:
         res.writeHead(200, {});
-        const tunnelledSocket = new SocketWrapper(res.stream);
+        const tunnelledSocket = new SocketWrapper(res.stream, req.socket);
         server.emit('connection', tunnelledSocket);
     }
 
     return destroyable(server);
+}
+
+class SocketWrapper extends StreamWrap {
+
+    remoteAddress: string;
+
+    constructor(
+        stream: streams.Duplex,
+        socket: net.Socket
+    ) {
+        super(stream);
+        Object.defineProperty(this, 'remoteAddress', { writable: true });
+        this.remoteAddress = socket.remoteAddress!;
+    }
+
 }
