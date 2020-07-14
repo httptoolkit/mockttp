@@ -1,3 +1,4 @@
+import * as tls from 'tls';
 import * as streams from 'stream';
 import * as http2 from 'http2';
 
@@ -131,6 +132,42 @@ nodeOnly(() => {
                 expect(responseBody.toString('utf8')).to.equal("HTTP2 response!");
 
                 await cleanup(client);
+            });
+
+            it("can respond to proxied HTTP/2 requests", async () => {
+                await server.get('https://example.com/mocked-endpoint')
+                    .thenReply(200, "Proxied HTTP2 response!");
+
+                const client = http2.connect(server.url);
+
+                const req = client.request({
+                    ':method': 'CONNECT',
+                    ':authority': 'example.com:443'
+                });
+
+                // Initial response, the proxy has set up our tunnel:
+                const responseHeaders = await getResponse(req);
+                expect(responseHeaders[':status']).to.equal(200);
+
+                // We can now read/write to req as a raw TCP socket to example.com:
+                const proxiedClient = http2.connect('https://example.com', {
+                     // Tunnel this request through the proxy stream
+                    createConnection: () => tls.connect({
+                        socket: req as any,
+                        ALPNProtocols: ['h2']
+                    })
+                });
+
+                const proxiedRequest = proxiedClient.request({
+                    ':path': '/mocked-endpoint'
+                });
+                const proxiedResponse = await getResponse(proxiedRequest);
+                expect(proxiedResponse[':status']).to.equal(200);
+
+                const responseBody = await getBody(proxiedRequest);
+                expect(responseBody.toString('utf8')).to.equal("Proxied HTTP2 response!");
+
+                await cleanup(proxiedClient, client);
             });
 
         });
