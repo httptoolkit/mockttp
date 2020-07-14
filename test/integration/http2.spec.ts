@@ -1,5 +1,8 @@
+import * as net from 'net';
 import * as tls from 'tls';
 import * as streams from 'stream';
+import * as http from 'http';
+import * as https from 'https';
 import * as http2 from 'http2';
 
 import { getLocal } from "../..";
@@ -102,6 +105,41 @@ nodeOnly(() => {
                 await cleanup(proxiedClient, client);
             });
 
+            it("can respond to HTTP1-proxied HTTP/2 requests", async () => {
+                await server.get('http://example.com/mocked-endpoint')
+                    .thenReply(200, "Proxied HTTP2 response!");
+
+                // Get an HTTP/1.1 tunnel:
+                const req = http.request({
+                    method: 'CONNECT',
+                    host: 'localhost',
+                    port: server.port,
+                    path: 'example.com'
+                });
+                req.end();
+
+                const tunnelledSocket = await new Promise<net.Socket>((resolve) => {
+                    req.on('connect', (_res, socket) => resolve(socket));
+                });
+
+                // We can now read/write to our raw TCP socket to example.com:
+                const client = http2.connect('http://example.com', {
+                    // Tunnel this request through the HTTP/1.1 tunnel:
+                    createConnection: () => tunnelledSocket
+                });
+
+                const proxiedRequest = client.request({
+                    ':path': '/mocked-endpoint'
+                });
+                const proxiedResponse = await getResponse(proxiedRequest);
+                expect(proxiedResponse[':status']).to.equal(200);
+
+                const responseBody = await getBody(proxiedRequest);
+                expect(responseBody.toString('utf8')).to.equal("Proxied HTTP2 response!");
+
+                await cleanup(client, tunnelledSocket);
+            });
+
         });
 
         describe("with TLS", () => {
@@ -168,6 +206,44 @@ nodeOnly(() => {
                 expect(responseBody.toString('utf8')).to.equal("Proxied HTTP2 response!");
 
                 await cleanup(proxiedClient, client);
+            });
+
+            it("can respond to HTTP1-proxied HTTP/2 requests", async () => {
+                await server.get('https://example.com/mocked-endpoint')
+                    .thenReply(200, "Proxied HTTP2 response!");
+
+                // Get an HTTP/1.1 tunnel:
+                const req = https.request({
+                    method: 'CONNECT',
+                    host: 'localhost',
+                    port: server.port,
+                    path: 'example.com'
+                });
+                req.end();
+
+                const tunnelledSocket = await new Promise<net.Socket>((resolve) => {
+                    req.on('connect', (_res, socket) => resolve(socket));
+                });
+
+                // We can now read/write to our raw TCP socket to example.com:
+                const client = http2.connect('https://example.com', {
+                    // Tunnel this request through the HTTP/1.1 tunnel, via TLS:
+                    createConnection: () => tls.connect({
+                        socket: tunnelledSocket,
+                        ALPNProtocols: ['h2']
+                    })
+                });
+
+                const proxiedRequest = client.request({
+                    ':path': '/mocked-endpoint'
+                });
+                const proxiedResponse = await getResponse(proxiedRequest);
+                expect(proxiedResponse[':status']).to.equal(200);
+
+                const responseBody = await getBody(proxiedRequest);
+                expect(responseBody.toString('utf8')).to.equal("Proxied HTTP2 response!");
+
+                await cleanup(tunnelledSocket, client);
             });
 
         });
