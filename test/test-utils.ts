@@ -4,6 +4,9 @@ sourceMapSupport.install({ handleUncaughtExceptions: false });
 import * as _ from 'lodash';
 import * as net from 'net';
 import * as tls from 'tls';
+import * as http2 from 'http2';
+import * as streams from 'stream';
+import * as URL from 'url';
 import getFetchPonyfill = require("fetch-ponyfill");
 
 import chai = require("chai");
@@ -141,5 +144,34 @@ export function watchForEvent(event: string, ...servers: Mockttp[]) {
     return async () => {
         await delay(100);
         expect(eventResult).to.equal(undefined, `Unexpected ${event} event`);
+    }
+}
+
+type Http2ResponseHeaders = http2.IncomingHttpHeaders & http2.IncomingHttpStatusHeader;
+
+export function getHttp2Response(req: http2.ClientHttp2Stream) {
+    return new Promise<Http2ResponseHeaders>((resolve, reject) => {
+        req.on('response', resolve);
+        req.on('error', reject);
+    });
+}
+
+export function getHttp2Body(req: http2.ClientHttp2Stream) {
+    return new Promise<Buffer>((resolve, reject) => {
+        const body: Buffer[] = [];
+        req.on('data', (d: Buffer | string) => {
+            body.push(Buffer.from(d));
+        });
+        req.on('end', () => req.close());
+        req.on('close', () => resolve(Buffer.concat(body)));
+        req.on('error', reject);
+    });
+}
+
+export async function destroy(
+    ...streams: (streams.Duplex | http2.Http2Session | http2.Http2Stream)[]
+) {
+    for (let stream of streams) {
+        stream.destroy();
     }
 }

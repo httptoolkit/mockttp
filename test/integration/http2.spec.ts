@@ -1,41 +1,13 @@
 import * as _ from 'lodash';
 import * as net from 'net';
 import * as tls from 'tls';
-import * as streams from 'stream';
 import * as http from 'http';
 import * as https from 'https';
 import * as http2 from 'http2';
 import * as semver from 'semver';
 
 import { getLocal } from "../..";
-import { expect, nodeOnly, delay } from "../test-utils";
-
-type Http2ResponseHeaders = http2.IncomingHttpHeaders & http2.IncomingHttpStatusHeader;
-
-function getResponse(req: http2.ClientHttp2Stream) {
-    return new Promise<Http2ResponseHeaders>((resolve, reject) => {
-        req.on('response', resolve);
-        req.on('error', reject);
-    });
-}
-
-function getBody(req: http2.ClientHttp2Stream) {
-    return new Promise<Buffer>((resolve, reject) => {
-        const body: Buffer[] = [];
-        req.on('data', (d: Buffer | string) => {
-            body.push(Buffer.from(d));
-        });
-        req.on('end', () => req.close());
-        req.on('close', () => resolve(Buffer.concat(body)));
-        req.on('error', reject);
-    });
-}
-
-async function cleanup(...streams: (streams.Duplex | http2.Http2Session | http2.Http2Stream)[]) {
-    for (let stream of streams) {
-        stream.destroy();
-    }
-}
+import { expect, nodeOnly, getHttp2Response, getHttp2Body, destroy } from "../test-utils";
 
 nodeOnly(() => {
     describe("Using Mockttp with HTTP/2", function () {
@@ -54,15 +26,15 @@ nodeOnly(() => {
 
                 const req = client.request();
 
-                const responseHeaders = await getResponse(req);
+                const responseHeaders = await getHttp2Response(req);
                 expect(responseHeaders[':status']).to.equal(200);
 
                 expect(client.alpnProtocol).to.equal('h2c'); // Plaintext HTTP/2
 
-                const responseBody = await getBody(req);
+                const responseBody = await getHttp2Body(req);
                 expect(responseBody.toString('utf8')).to.equal("HTTP2 response!");
 
-                await cleanup(client);
+                destroy(client);
             });
 
             it("can respond to proxied HTTP/2 requests", async () => {
@@ -77,7 +49,7 @@ nodeOnly(() => {
                 });
 
                 // Initial response, the proxy has set up our tunnel:
-                const responseHeaders = await getResponse(req);
+                const responseHeaders = await getHttp2Response(req);
                 expect(responseHeaders[':status']).to.equal(200);
 
                 // We can now read/write to req as a raw TCP socket to example.com:
@@ -89,13 +61,13 @@ nodeOnly(() => {
                 const proxiedRequest = proxiedClient.request({
                     ':path': '/mocked-endpoint'
                 });
-                const proxiedResponse = await getResponse(proxiedRequest);
+                const proxiedResponse = await getHttp2Response(proxiedRequest);
                 expect(proxiedResponse[':status']).to.equal(200);
 
-                const responseBody = await getBody(proxiedRequest);
+                const responseBody = await getHttp2Body(proxiedRequest);
                 expect(responseBody.toString('utf8')).to.equal("Proxied HTTP2 response!");
 
-                await cleanup(proxiedClient, client);
+                destroy(proxiedClient, client);
             });
 
             it("can respond to HTTP1-proxied HTTP/2 requests", async () => {
@@ -124,13 +96,13 @@ nodeOnly(() => {
                 const proxiedRequest = client.request({
                     ':path': '/mocked-endpoint'
                 });
-                const proxiedResponse = await getResponse(proxiedRequest);
+                const proxiedResponse = await getHttp2Response(proxiedRequest);
                 expect(proxiedResponse[':status']).to.equal(200);
 
-                const responseBody = await getBody(proxiedRequest);
+                const responseBody = await getHttp2Body(proxiedRequest);
                 expect(responseBody.toString('utf8')).to.equal("Proxied HTTP2 response!");
 
-                await cleanup(client, tunnelledSocket);
+                destroy(client, tunnelledSocket);
             });
 
             describe("with a remote server", () => {
@@ -158,7 +130,7 @@ nodeOnly(() => {
                     });
 
                     // Initial response, so the proxy has set up our tunnel:
-                    const responseHeaders = await getResponse(req);
+                    const responseHeaders = await getHttp2Response(req);
                     expect(responseHeaders[':status']).to.equal(200);
 
                     // We can now read/write to req as a raw TCP socket to remoteServer:
@@ -170,13 +142,13 @@ nodeOnly(() => {
                     const proxiedRequest = proxiedClient.request({
                         ':path': '/mocked-endpoint'
                     });
-                    const proxiedResponse = await getResponse(proxiedRequest);
+                    const proxiedResponse = await getHttp2Response(proxiedRequest);
                     expect(proxiedResponse[':status']).to.equal(200);
 
-                    const responseBody = await getBody(proxiedRequest);
+                    const responseBody = await getHttp2Body(proxiedRequest);
                     expect(responseBody.toString('utf8')).to.equal("Remote HTTP2 response!");
 
-                    await cleanup(proxiedClient, client);
+                    destroy(proxiedClient, client);
                 });
 
                 it("reformats forwarded request headers for HTTP/1.1", async () => {
@@ -193,7 +165,7 @@ nodeOnly(() => {
                     });
 
                     // Initial response, so the proxy has set up our tunnel:
-                    const responseHeaders = await getResponse(req);
+                    const responseHeaders = await getHttp2Response(req);
                     expect(responseHeaders[':status']).to.equal(200);
 
                     // We can now read/write to req as a raw TCP socket to remoteServer:
@@ -202,7 +174,7 @@ nodeOnly(() => {
                         createConnection: () => req
                     });
 
-                    await getResponse(proxiedClient.request({
+                    await getHttp2Response(proxiedClient.request({
                         ':path': '/mocked-endpoint',
                         'Cookie': 'a=b',
                         'cookie': 'b=c'
@@ -217,7 +189,7 @@ nodeOnly(() => {
                         'cookie': 'a=b; b=c' // Concatenated automatically
                     });
 
-                    await cleanup(proxiedClient, client);
+                    destroy(proxiedClient, client);
                 });
 
                 it("reformats forwarded response headers for HTTP/1.1", async () => {
@@ -237,7 +209,7 @@ nodeOnly(() => {
                     });
 
                     // Initial response, so the proxy has set up our tunnel:
-                    const responseHeaders = await getResponse(req);
+                    const responseHeaders = await getHttp2Response(req);
                     expect(responseHeaders[':status']).to.equal(200);
 
                     // We can now read/write to req as a raw TCP socket to remoteServer:
@@ -246,7 +218,7 @@ nodeOnly(() => {
                         createConnection: () => req
                     });
 
-                    const proxiedResponseHeaders = await getResponse(
+                    const proxiedResponseHeaders = await getHttp2Response(
                         proxiedClient.request({
                             ':path': '/mocked-endpoint',
                         })
@@ -258,7 +230,7 @@ nodeOnly(() => {
                         // Connection: close is omitted
                     });
 
-                    await cleanup(proxiedClient, client);
+                    destroy(proxiedClient, client);
                 });
             });
 
@@ -277,21 +249,21 @@ nodeOnly(() => {
             afterEach(() => server.stop());
 
             it("can respond to direct HTTP/2 requests", async () => {
-                server.get('/').thenReply(200, "HTTP2 response!");
+                await server.get('/').thenReply(200, "HTTP2 response!");
 
                 const client = http2.connect(server.url);
 
                 const req = client.request();
 
-                const responseHeaders = await getResponse(req);
+                const responseHeaders = await getHttp2Response(req);
                 expect(responseHeaders[':status']).to.equal(200);
 
                 expect(client.alpnProtocol).to.equal('h2'); // HTTP/2 over TLS
 
-                const responseBody = await getBody(req);
+                const responseBody = await getHttp2Body(req);
                 expect(responseBody.toString('utf8')).to.equal("HTTP2 response!");
 
-                await cleanup(client);
+                destroy(client);
             });
 
             it("can respond to proxied HTTP/2 requests", async function() {
@@ -313,7 +285,7 @@ nodeOnly(() => {
                 });
 
                 // Initial response, the proxy has set up our tunnel:
-                const responseHeaders = await getResponse(req);
+                const responseHeaders = await getHttp2Response(req);
                 expect(responseHeaders[':status']).to.equal(200);
 
                 // We can now read/write to req as a raw TCP socket to example.com:
@@ -328,13 +300,13 @@ nodeOnly(() => {
                 const proxiedRequest = proxiedClient.request({
                     ':path': '/mocked-endpoint'
                 });
-                const proxiedResponse = await getResponse(proxiedRequest);
+                const proxiedResponse = await getHttp2Response(proxiedRequest);
                 expect(proxiedResponse[':status']).to.equal(200);
 
-                const responseBody = await getBody(proxiedRequest);
+                const responseBody = await getHttp2Body(proxiedRequest);
                 expect(responseBody.toString('utf8')).to.equal("Proxied HTTP2 response!");
 
-                await cleanup(proxiedClient, client);
+                destroy(proxiedClient, client);
             });
 
             it("can respond to HTTP1-proxied HTTP/2 requests", async function() {
@@ -373,13 +345,13 @@ nodeOnly(() => {
                 const proxiedRequest = client.request({
                     ':path': '/mocked-endpoint'
                 });
-                const proxiedResponse = await getResponse(proxiedRequest);
+                const proxiedResponse = await getHttp2Response(proxiedRequest);
                 expect(proxiedResponse[':status']).to.equal(200);
 
-                const responseBody = await getBody(proxiedRequest);
+                const responseBody = await getHttp2Body(proxiedRequest);
                 expect(responseBody.toString('utf8')).to.equal("Proxied HTTP2 response!");
 
-                await cleanup(tunnelledSocket, client);
+                destroy(tunnelledSocket, client);
             });
 
         });
