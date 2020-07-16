@@ -42,6 +42,9 @@ function ifTlsDropped(socket: tls.TLSSocket, errorCallback: () => void) {
         socket.tlsSetupCompleted = true;
     })
     .catch(() => {
+        // If TLS setup was confirmed in any way, we know we don't have a TLS error.
+        if (socket.tlsSetupCompleted) return;
+
         // To get here, the socket must have connected & done the TLS handshake, but then
         // closed/ended without ever sending any data. We can fairly confidently assume
         // in that case that it's rejected our certificate.
@@ -119,6 +122,14 @@ export async function createComboServer(
                 remoteIpAddress: socket.remoteAddress!,
                 tags: []
             });
+        });
+    });
+
+    // Mark HTTP/2 sockets as set up once we receive a first settings frame. This always
+    // happens immediately after the connection preface, as long as the connection is OK.
+    server!.on('session', (session) => {
+        session.once('remoteSettings', () => {
+            session.socket.tlsSetupCompleted = true;
         });
     });
 

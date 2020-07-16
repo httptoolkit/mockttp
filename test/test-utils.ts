@@ -168,6 +168,38 @@ export function getHttp2Body(req: http2.ClientHttp2Stream) {
     });
 }
 
+async function http2Request(
+    url: string,
+    headers: {},
+    createConnection?: (() => streams.Duplex) | undefined
+) {
+    const client = http2.connect(url, { createConnection });
+    const req = client.request(headers);
+
+    const responseHeaders = await getHttp2Response(req);
+    const responseBody = await getHttp2Body(req);
+    const alpnProtocol = client.alpnProtocol;
+
+    destroy(client);
+
+    return {
+        alpnProtocol,
+        headers: responseHeaders,
+        body: responseBody
+    };
+}
+
+export function http2DirectRequest(
+    server: Mockttp,
+    path: string,
+    headers: {} = {}
+) {
+    return http2Request(server.url, {
+        ':path': path,
+        ...headers
+    });
+}
+
 export async function destroy(
     ...streams: (streams.Duplex | http2.Http2Session | http2.Http2Stream)[]
 ) {

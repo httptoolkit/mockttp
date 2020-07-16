@@ -1,4 +1,5 @@
 import * as _ from 'lodash';
+import * as http2 from 'http2';
 import HttpsProxyAgent = require('https-proxy-agent');
 
 import { getLocal } from "../../..";
@@ -12,7 +13,8 @@ import {
     openRawSocket,
     openRawTlsSocket,
     writeAndReset,
-    watchForEvent
+    watchForEvent,
+    http2DirectRequest
 } from "../../test-utils";
 import { TlsRequest, ClientError } from "../../../dist/types";
 
@@ -55,6 +57,22 @@ describe("TLS error subscriptions", () => {
         ])).to.be.rejectedWith('timeout');
 
         await expectNoClientErrors();
+    });
+
+    nodeOnly(() => {
+        it("should not be sent for successful HTTP/2 requests", async () => {
+            let seenTlsErrorPromise = getDeferred<TlsRequest>();
+            await goodServer.on('tls-client-error', (r) => seenTlsErrorPromise.resolve(r));
+
+            await http2DirectRequest(goodServer, '/');
+
+            await expect(Promise.race([
+                seenTlsErrorPromise,
+                delay(100).then(() => { throw new Error('timeout') })
+            ])).to.be.rejectedWith('timeout');
+
+            await expectNoClientErrors();
+        });
     });
 
     it("should be sent for requests from clients that reject the certificate initially", async () => {
