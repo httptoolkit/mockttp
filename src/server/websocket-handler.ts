@@ -1,8 +1,10 @@
+import * as _ from 'lodash';
 import * as net from 'net';
 import * as http from 'http';
 import * as WebSocket from 'ws';
 
 import * as url from 'url';
+import { streamToBuffer } from '../util/request-utils';
 
 interface InterceptedWebSocket extends WebSocket {
     upstreamSocket: WebSocket;
@@ -61,7 +63,16 @@ export class WebSocketHandler {
             });
         });
 
-        upstreamSocket.once('error', (e) => console.warn(e));
+        // If the upstream says no, we say no too.
+        upstreamSocket.on('unexpected-response', (req, res) => {
+            this.mirrorRejection(socket, res);
+        });
+
+        // If there's some other error, we just kill the socket:
+        upstreamSocket.once('error', (e) => {
+            console.warn(e);
+            socket.end();
+        });
     }
 
     private pipeWebSocket(inSocket: WebSocket, outSocket: WebSocket) {
@@ -85,5 +96,24 @@ export class WebSocketHandler {
 
         inSocket.on('ping', (data) => outSocket.ping(data, undefined, onPipeFailed('ping')));
         inSocket.on('pong', (data) => outSocket.pong(data, undefined, onPipeFailed('pong')));
+    }
+
+    private async mirrorRejection(socket: net.Socket, rejectionResponse: http.IncomingMessage) {
+        if (socket.writable) {
+            const { statusCode, statusMessage, headers } = rejectionResponse;
+
+            socket.write(
+                `HTTP/1.1 ${statusCode} ${statusMessage}\r\n` +
+                _.map(headers, (value, key) =>
+                    `${key}: ${value}`
+                ).join('\r\n') +
+                '\r\n\r\n'
+            );
+
+            const body = await streamToBuffer(rejectionResponse);
+            if (socket.writable) socket.write(body);
+        }
+
+        socket.destroy();
     }
 }

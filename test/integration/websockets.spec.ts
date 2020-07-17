@@ -151,5 +151,56 @@ nodeOnly(() => {
             });
         });
 
+        describe("when the websocket server is unavailable", () => {
+
+            it('should immediately close the socket', async () => {
+                const ws = new WebSocket('ws://localhost:1001', { // <- not the correct port
+                    agent: new HttpProxyAgent(`http://localhost:${mockServer.port}`)
+                });
+
+                ws.on('open', () => ws.send('test echo'));
+
+                const error = await new Promise<Error>((resolve, reject) => {
+                    ws.on('message', reject);
+                    ws.on('error', (e) => resolve(e));
+                });
+                ws.close(1000);
+
+                expect(error.message).to.equal('socket hang up');
+            });
+
+        });
+
+        describe("when the websocket server rejects the request", () => {
+
+            let wsServer: WebSocket.Server;
+
+            beforeEach(async () => {
+                wsServer = new WebSocket.Server({
+                    port: 9001,
+                    verifyClient: () => false // Reject all clients
+                });
+            });
+
+            afterEach(() => wsServer.close());
+
+            it('should mirror the request rejection', async () => {
+                const ws = new WebSocket(`ws://localhost:9001`, {
+                    agent: new HttpProxyAgent(`http://localhost:${mockServer.port}`)
+                });
+
+                ws.on('open', () => ws.send('test echo'));
+
+                const error = await new Promise<Error>((resolve, reject) => {
+                    ws.on('message', reject);
+                    ws.on('error', (e) => resolve(e));
+                });
+                ws.close(1000);
+
+                expect(error.message).to.equal('Unexpected server response: 401');
+            });
+
+        });
+
     });
 });
