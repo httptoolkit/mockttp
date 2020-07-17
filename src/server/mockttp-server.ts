@@ -118,7 +118,10 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         this.server!.on('clientError', this.handleInvalidRequest.bind(this));
 
         // Handle websocket connections too (ignore for now, just forward on)
-        const webSocketHander = new WebSocketHandler(this.debug);
+        const webSocketHander = new WebSocketHandler(
+            this.debug,
+            this.ignoreWebsocketHostCertificateErrors
+        );
         this.server!.on('upgrade', webSocketHander.handleUpgrade.bind(webSocketHander));
 
         return new Promise<void>((resolve, reject) => {

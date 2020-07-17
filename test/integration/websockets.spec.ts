@@ -2,7 +2,7 @@ import * as WebSocket from 'ws';
 import * as https from 'https';
 import HttpProxyAgent = require('http-proxy-agent');
 import HttpsProxyAgent = require('https-proxy-agent');
-import { getLocal } from '../..';
+import { getLocal, generateCACertificate } from '../..';
 
 import { expect, nodeOnly } from '../test-utils';
 import { getCA } from '../../src/util/tls';
@@ -149,6 +149,103 @@ nodeOnly(() => {
 
                 expect(response).to.equal('test echo');
             });
+        });
+
+        describe("over HTTPS with an untrusted upstream certificate", () => {
+
+            let wsBadHttpsServer: https.Server;
+            const untrustedCACert = generateCACertificate({ bits: 1024 });
+
+            beforeEach(async () => {
+                const ca = await getCA(await untrustedCACert);
+                const cert = ca.generateCertificate('localhost');
+                wsBadHttpsServer = https.createServer({
+                    key: cert.key,
+                    cert: cert.cert
+                });
+
+                const wsServer = new WebSocket.Server({ server: wsBadHttpsServer });
+
+                // Echo every message
+                wsServer.on('connection', (ws) => {
+                    ws.on('message', (message) => {
+                        ws.send(message);
+                        ws.close();
+                    });
+                });
+
+                await new Promise((resolve) => wsBadHttpsServer.listen(9090, resolve));
+            });
+
+            afterEach(() => new Promise((resolve) => wsBadHttpsServer.close(resolve)));
+
+            it('should kill the request by default', async () => {
+                const ws = new WebSocket(`wss://localhost:9090`, {
+                    agent: new HttpsProxyAgent(`https://localhost:${mockServer.port}`)
+                });
+
+                ws.on('open', () => ws.send('test echo'));
+
+                const error = await new Promise<Error>((resolve, reject) => {
+                    ws.on('message', reject);
+                    ws.on('error', (e) => resolve(e));
+                });
+                ws.close(1000);
+
+                expect(error.message).to.equal('socket hang up');
+            });
+
+            describe("given a trusted websocket host", () => {
+                const serverWithWhitelist = getLocal({
+                    https: {
+                        keyPath: './test/fixtures/test-ca.key',
+                        certPath: './test/fixtures/test-ca.pem'
+                    },
+                    ignoreWebsocketHostCertificateErrors: [
+                        'localhost:9090'
+                    ]
+                });
+
+                beforeEach(() => serverWithWhitelist.start());
+                afterEach(() => serverWithWhitelist.start());
+
+                it('should allow the request, if the host matches', async () => {
+                    const ws = new WebSocket(`wss://localhost:9090`, {
+                        agent: new HttpsProxyAgent(`https://localhost:${serverWithWhitelist.port}`)
+                    });
+
+                    ws.on('open', () => ws.send('test echo'));
+
+                    const response = await new Promise<Error>((resolve, reject) => {
+                        ws.on('message', resolve);
+                        ws.on('error', reject);
+                    });
+                    ws.close(1000);
+
+                    expect(response).to.equal('test echo');
+                });
+
+                it('should still block requests to other hosts', async () => {
+                    // Change the WSS server port
+                    await new Promise((resolve) => wsBadHttpsServer.close(resolve));
+                    await new Promise((resolve) => wsBadHttpsServer.listen(9091, resolve));
+
+                    const ws = new WebSocket(`wss://localhost:9091`, {
+                        agent: new HttpsProxyAgent(`https://localhost:${serverWithWhitelist.port}`)
+                    });
+
+                    ws.on('open', () => ws.send('test echo'));
+
+                    const error = await new Promise<Error>((resolve, reject) => {
+                        ws.on('message', reject);
+                        ws.on('error', (e) => resolve(e));
+                    });
+                    ws.close(1000);
+
+                    expect(error.message).to.equal('socket hang up');
+                });
+            });
+
         });
 
         describe("when the websocket server is unavailable", () => {

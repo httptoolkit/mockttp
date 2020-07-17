@@ -406,6 +406,17 @@ export interface MockttpOptions {
      * suggestions are just confusing. Set `suggestChanges` to false to disable it.
      */
     suggestChanges?: boolean;
+
+    /**
+     * Specify a list of hostnames and/or specific host:port addresses, for which
+     * certificate errors should be ignored, allowing the use of self-signed or
+     * otherwise invalid WSS certificates.
+     *
+     * This is a temporary API, and will be removed in future, once full websocket
+     * interception and mocking support is available so that this option can be
+     * configured on individual rules instead.
+     */
+    ignoreWebsocketHostCertificateErrors?: string[];
 }
 
 /**
@@ -416,6 +427,7 @@ export abstract class AbstractMockttp {
     protected debug: boolean;
     protected recordTraffic: boolean;
     protected suggestChanges: boolean;
+    protected ignoreWebsocketHostCertificateErrors: string[];
 
     abstract get url(): string;
     abstract on(event: 'request', callback: (req: CompletedRequest) => void): Promise<void>;
@@ -429,6 +441,8 @@ export abstract class AbstractMockttp {
         this.suggestChanges = options.suggestChanges !== undefined
             ? options.suggestChanges
             : true;
+        this.ignoreWebsocketHostCertificateErrors =
+            options.ignoreWebsocketHostCertificateErrors || [];
     }
 
     get proxyEnv(): ProxyConfig {

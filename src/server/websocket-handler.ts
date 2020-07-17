@@ -14,7 +14,10 @@ interface InterceptedWebSocket extends WebSocket {
 export class WebSocketHandler {
     private wsServer = new WebSocket.Server({ noServer: true });
 
-    constructor(private debug: boolean) {
+    constructor(
+        private debug: boolean,
+        private ignoreHostCertificateErrors: string[]
+    ) {
         this.wsServer.on('connection', (ws: InterceptedWebSocket) => {
             if (this.debug) console.log('Successfully proxying websocket streams');
 
@@ -51,10 +54,17 @@ export class WebSocketHandler {
         }
     }
 
-    private connectUpstream(url: string, req: http.IncomingMessage, socket: net.Socket, head: Buffer) {
+    private connectUpstream(wsUrl: string, req: http.IncomingMessage, socket: net.Socket, head: Buffer) {
         if (this.debug) console.log(`Connecting to upstream websocket at ${url}`);
 
-        const upstreamSocket = new WebSocket(url);
+        // Skip cert checks if the host or host+port are whitelisted
+        const parsedUrl = url.parse(wsUrl);
+        const checkServerCertificate = !_.includes(this.ignoreHostCertificateErrors, parsedUrl.hostname) &&
+            !_.includes(this.ignoreHostCertificateErrors, parsedUrl.host);
+
+        const upstreamSocket = new WebSocket(wsUrl, {
+            rejectUnauthorized: checkServerCertificate
+        });
 
         upstreamSocket.once('open', () => {
             this.wsServer.handleUpgrade(req, socket, head, (ws) => {
