@@ -3,8 +3,7 @@ import net = require('net');
 import tls = require('tls');
 import http = require('http');
 import http2 = require('http2');
-import streams = require('stream');
-import StreamWrap = require('_stream_wrap');
+import SocketWrapper = require('_stream_wrap');
 import httpolyglot = require('@httptoolkit/httpolyglot');
 
 import { TlsRequest } from '../types';
@@ -114,6 +113,12 @@ export async function createComboServer(
     });
 
     server.on('secureConnection', (socket: tls.TLSSocket) => {
+        if ((socket as { _parent?: net.Socket })._parent) {
+            // Sometimes wrapper TLS sockets created by the HTTP/2 server don't include the
+            // underlying port details, so it's better to make sure we copy them up.
+            copyAddressDetails((socket as any)._parent, socket);
+        }
+
         socket.lastHopEncrypted = true;
         ifTlsDropped(socket, () => {
             tlsClientErrorListener(socket, {
@@ -188,24 +193,24 @@ export async function createComboServer(
 
         // Send a 200 OK response, and start the tunnel:
         res.writeHead(200, {});
-        const tunnelledSocket = new SocketWrapper(res.stream, req.socket);
+        const tunnelledSocket = new SocketWrapper(res.stream);
+        copyAddressDetails(res.socket, tunnelledSocket);
         server.emit('connection', tunnelledSocket);
     }
 
     return destroyable(server);
 }
 
-class SocketWrapper extends StreamWrap {
-
-    remoteAddress: string;
-
-    constructor(
-        stream: streams.Duplex,
-        socket: net.Socket
-    ) {
-        super(stream);
-        Object.defineProperty(this, 'remoteAddress', { writable: true });
-        this.remoteAddress = socket.remoteAddress!;
-    }
-
+// Update the target socket with the address details from the source socket,
+// if the target has no details of its own,
+function copyAddressDetails(source: net.Socket, target: net.Socket) {
+    const fields = ['localAddress', 'localPort', 'remoteAddress', 'remotePort'] as const;
+    Object.defineProperties(target, _.zipObject(fields,
+        _.range(fields.length).map(() => ({ writable: true }))
+    ));
+    fields.forEach((fieldName) => {
+        if (target[fieldName] === undefined) {
+            (target as any)[fieldName] = source[fieldName];
+        }
+    });
 }

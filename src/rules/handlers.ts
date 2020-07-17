@@ -995,7 +995,13 @@ const normalizeIp = (ip: string | undefined) =>
 // and on another interface somebody else has ip X, and the send a request with the same incoming port as an
 // outgoing request we have on the other interface, we'll assume it's a loop. Extremely unlikely imo.
 const isRequestLoop = (incomingSocket: net.Socket) =>
-    _.some([...currentlyForwardingSockets], (outgoingSocket) =>
-        normalizeIp(outgoingSocket.localAddress) === normalizeIp(incomingSocket.remoteAddress) &&
-        outgoingSocket.remotePort === incomingSocket.localPort
-    );
+    _.some([...currentlyForwardingSockets], (outgoingSocket) => {
+        if (!outgoingSocket.localAddress || !outgoingSocket.localPort) {
+            // It's possible for sockets in currentlyForwardingSockets to be closed, in which case these
+            // properties will be undefined. If so, we know they're not relevant to loops, so skip entirely.
+            return false;
+        } else {
+            return normalizeIp(outgoingSocket.localAddress) === normalizeIp(incomingSocket.remoteAddress) &&
+            outgoingSocket.remotePort === incomingSocket.localPort;
+        }
+    });
