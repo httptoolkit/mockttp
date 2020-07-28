@@ -10,6 +10,7 @@ import httpolyglot = require('@httptoolkit/httpolyglot');
 import { TlsRequest } from '../types';
 import { destroyable, DestroyableServer } from '../util/destroyable-server';
 import { getCA, CAOptions } from '../util/tls';
+import { delay } from '../util/util';
 
 // Hardcore monkey-patching: force TLSSocket to link servername & remoteAddress to
 // sockets as soon as they're available, without waiting for the handshake to fully
@@ -38,7 +39,14 @@ export type ComboServerOptions = { debug: boolean, https?: CAOptions };
 // Takes an established TLS socket, calls the error listener if it's silently closed
 function ifTlsDropped(socket: tls.TLSSocket, errorCallback: () => void) {
     new Promise((resolve, reject) => {
+        // If you send data, you trust the TLS connection
         socket.once('data', resolve);
+
+        // If you keep it open, you probably trust the TLS connection
+        // (some clients open unused connections for connection pools etc)
+        delay(5000).then(resolve);
+
+        // If you silently close it very quicky, you probably don't trust us
         socket.once('close', reject);
         socket.once('end', reject);
     })

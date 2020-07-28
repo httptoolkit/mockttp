@@ -23,6 +23,9 @@ export function byteLength(input: string | Buffer) {
     }
 }
 
+export function delay(t: number): Promise<void> {
+    return new Promise((r) => setTimeout(r, t));
+}
 
 declare const WorkerGlobalScope: Function | undefined;
 export const isWorker = typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope;
