@@ -302,12 +302,13 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         });
     }
 
-    private async announceClientErrorAsync(
-        socket: net.Socket | http2.Http2Session,
-        error: ClientError
-    ) {
+    private async announceClientErrorAsync(socket: net.Socket | undefined, error: ClientError) {
         // Ignore errors before TLS is setup, those are TLS errors
-        if (socket instanceof tls.TLSSocket && !socket.tlsSetupCompleted) return;
+        if (
+            socket instanceof tls.TLSSocket &&
+            !socket.tlsSetupCompleted &&
+            error.errorCode !== 'ERR_HTTP2_ERROR' // Initial HTTP/2 errors are considered post-TLS
+        ) return;
 
         setImmediate(() => {
             if (this.debug) console.warn(`Client error: ${JSON.stringify(error)}`);
@@ -608,7 +609,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
         const isBadPreface = (error.errno === -903);
 
-        this.announceClientErrorAsync(session, {
+        this.announceClientErrorAsync(session.initialSocket, {
             errorCode: error.code,
             request: {
                 id: uuid(),
