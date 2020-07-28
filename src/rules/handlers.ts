@@ -830,8 +830,9 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 clientRes.tags.push('passthrough-error:' + e.code);
 
                 if (e.code === 'ECONNRESET') {
-                    // The upstream socket closed: forcibly close the downstream too, to match
-                    (clientReq as any).socket.end();
+                    // The upstream socket closed: forcibly close the downstream stream to match
+                    const socket: net.Socket = (clientReq as any).socket;
+                    socket.destroy();
                     reject(new AbortError('Upstream connection was reset'));
                 } else {
                     e.statusCode = 502;
