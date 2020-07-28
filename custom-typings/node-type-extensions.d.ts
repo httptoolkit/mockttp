@@ -24,10 +24,15 @@ declare module "net" {
         // Data that was peeked by httpolyglot, and thereby probably lost from the
         // HTTP parser errors, but which might be useful for debugging later
         __httpPeekedData?: Buffer;
+
+        // Internal reference to a parent socket, e.g. for TLS wrappers
+        _parent?: Socket;
     }
 }
 
 declare module "tls" {
+    import SocketWrapper = require('_stream_wrap');
+
     interface TLSSocket {
         // This is a real field that actually exists - unclear why it's not
         // in the type definitions.
@@ -40,6 +45,11 @@ declare module "tls" {
         // Marker used to detect whether client errors should be reported as TLS issues
         // (RST during handshake) or as subsequent client issues (RST during request)
         tlsSetupCompleted?: true;
+
+        _handle?: { // Internal, used for monkeypatching & error tracking
+            oncertcb?: (info: any) => any;
+            _parentWrap?: SocketWrapper;
+        }
     }
 }
 
@@ -52,6 +62,7 @@ declare module "_stream_wrap" {
 
     class SocketWrapper extends net.Socket {
         constructor(stream: streams.Duplex);
+        stream?: streams.Duplex & Partial<net.Socket>;
     }
 
     export = SocketWrapper;

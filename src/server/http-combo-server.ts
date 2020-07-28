@@ -3,6 +3,7 @@ import net = require('net');
 import tls = require('tls');
 import http = require('http');
 import http2 = require('http2');
+import * as streams from 'stream';
 import SocketWrapper = require('_stream_wrap');
 import httpolyglot = require('@httptoolkit/httpolyglot');
 
@@ -17,12 +18,18 @@ const originalSocketInit = (<any>tls.TLSSocket.prototype)._init;
 (<any>tls.TLSSocket.prototype)._init = function () {
     originalSocketInit.apply(this, arguments);
 
-    const tlsSocket = this;
-    const loadSNI = tlsSocket._handle.oncertcb;
-    tlsSocket._handle.oncertcb = function (info: any) {
-        tlsSocket.initialRemoteAddress = tlsSocket._parent?.remoteAddress;
+    const tlsSocket: tls.TLSSocket = this;
+    const { _handle } = tlsSocket;
+    if (!_handle) return;
+
+    const loadSNI = _handle.oncertcb;
+    _handle.oncertcb = function (info: any) {
         tlsSocket.servername = info.servername;
-        return loadSNI.apply(this, arguments);
+        tlsSocket.initialRemoteAddress = tlsSocket.remoteAddress || // Normal case
+            tlsSocket._parent?.remoteAddress || // For early failing sockets
+            tlsSocket._handle?._parentWrap?.stream?.remoteAddress; // For HTTP/2 CONNECT
+
+        return loadSNI?.apply(this, arguments as any);
     };
 };
 
@@ -124,7 +131,7 @@ export async function createComboServer(
             tlsClientErrorListener(socket, {
                 failureCause: 'closed',
                 hostname: socket.servername,
-                remoteIpAddress: socket.remoteAddress!,
+                remoteIpAddress: socket.remoteAddress || socket.initialRemoteAddress!,
                 tags: []
             });
         });
@@ -143,7 +150,9 @@ export async function createComboServer(
         tlsClientErrorListener(socket, {
             failureCause: getCauseFromError(error),
             hostname: socket.servername,
-            remoteIpAddress: socket.initialRemoteAddress!,
+            remoteIpAddress: socket.remoteAddress || // Normal case
+                socket._parent?.remoteAddress || // Pre-certCB error, e.g. timeout
+                socket.initialRemoteAddress!, // Recorded by certCB monkeypatch
             tags: []
         });
     });
@@ -193,17 +202,20 @@ export async function createComboServer(
 
         // Send a 200 OK response, and start the tunnel:
         res.writeHead(200, {});
-        const tunnelledSocket = new SocketWrapper(res.stream);
-        copyAddressDetails(res.socket, tunnelledSocket);
-        server.emit('connection', tunnelledSocket);
+        copyAddressDetails(res.socket, res.stream);
+        server.emit('connection', res.stream);
     }
 
     return destroyable(server);
 }
 
-// Update the target socket with the address details from the source socket,
-// if the target has no details of its own,
-function copyAddressDetails(source: net.Socket, target: net.Socket) {
+// Update the target socket(-ish) with the address details from the source socket,
+// iff the target has no details of its own.
+function copyAddressDetails(
+    source: net.Socket,
+    target: streams.Duplex &
+        Partial<Pick<net.Socket, 'localAddress' | 'localPort' | 'remoteAddress' | 'remotePort'>>
+) {
     const fields = ['localAddress', 'localPort', 'remoteAddress', 'remotePort'] as const;
     Object.defineProperties(target, _.zipObject(fields,
         _.range(fields.length).map(() => ({ writable: true }))
