@@ -7,7 +7,7 @@ import * as http2 from 'http2';
 import * as semver from 'semver';
 
 import { getLocal } from "../..";
-import { expect, nodeOnly, getHttp2Response, getHttp2Body, destroy } from "../test-utils";
+import { expect, nodeOnly, getHttp2Response, getHttp2Body, cleanup } from "../test-utils";
 
 nodeOnly(() => {
     describe("Using Mockttp with HTTP/2", function () {
@@ -34,7 +34,7 @@ nodeOnly(() => {
                 const responseBody = await getHttp2Body(req);
                 expect(responseBody.toString('utf8')).to.equal("HTTP2 response!");
 
-                destroy(client);
+                await cleanup(client);
             });
 
             it("can respond to proxied HTTP/2 requests", async () => {
@@ -67,7 +67,7 @@ nodeOnly(() => {
                 const responseBody = await getHttp2Body(proxiedRequest);
                 expect(responseBody.toString('utf8')).to.equal("Proxied HTTP2 response!");
 
-                destroy(proxiedClient, client);
+                await cleanup(proxiedClient, client);
             });
 
             it("can respond to HTTP1-proxied HTTP/2 requests", async () => {
@@ -102,7 +102,7 @@ nodeOnly(() => {
                 const responseBody = await getHttp2Body(proxiedRequest);
                 expect(responseBody.toString('utf8')).to.equal("Proxied HTTP2 response!");
 
-                destroy(client, tunnelledSocket);
+                await cleanup(client, tunnelledSocket);
             });
 
             describe("with a remote server", () => {
@@ -148,7 +148,7 @@ nodeOnly(() => {
                     const responseBody = await getHttp2Body(proxiedRequest);
                     expect(responseBody.toString('utf8')).to.equal("Remote HTTP2 response!");
 
-                    destroy(proxiedClient, client);
+                    await cleanup(proxiedClient, client);
                 });
 
                 it("reformats forwarded request headers for HTTP/1.1", async () => {
@@ -174,11 +174,12 @@ nodeOnly(() => {
                         createConnection: () => req
                     });
 
-                    await getHttp2Response(proxiedClient.request({
+                    const proxiedReq = proxiedClient.request({
                         ':path': '/mocked-endpoint',
                         'Cookie': 'a=b',
                         'cookie': 'b=c'
-                    }));
+                    });
+                    await getHttp2Response(proxiedReq);
 
                     const seenRequests = await mockedEndpoint.getSeenRequests();
                     expect(seenRequests.length).to.equal(1);
@@ -189,7 +190,7 @@ nodeOnly(() => {
                         'cookie': 'a=b; b=c' // Concatenated automatically
                     });
 
-                    destroy(proxiedClient, client);
+                    await cleanup(proxiedReq, proxiedClient, client);
                 });
 
                 it("reformats forwarded response headers for HTTP/1.1", async () => {
@@ -218,11 +219,11 @@ nodeOnly(() => {
                         createConnection: () => req
                     });
 
-                    const proxiedResponseHeaders = await getHttp2Response(
-                        proxiedClient.request({
-                            ':path': '/mocked-endpoint',
-                        })
-                    );
+                    const proxiedRequest = proxiedClient.request({
+                        ':path': '/mocked-endpoint',
+                    });
+
+                    const proxiedResponseHeaders = await getHttp2Response(proxiedRequest);
 
                     expect(_.omit(proxiedResponseHeaders, 'date')).to.deep.equal({
                         ':status': 200,
@@ -230,7 +231,7 @@ nodeOnly(() => {
                         // Connection: close is omitted
                     });
 
-                    destroy(proxiedClient, client);
+                    await cleanup(proxiedRequest, proxiedClient, client);
                 });
             });
 
@@ -263,7 +264,7 @@ nodeOnly(() => {
                 const responseBody = await getHttp2Body(req);
                 expect(responseBody.toString('utf8')).to.equal("HTTP2 response!");
 
-                destroy(client);
+                await cleanup(client);
             });
 
             it("can respond to proxied HTTP/2 requests", async function() {
@@ -306,7 +307,7 @@ nodeOnly(() => {
                 const responseBody = await getHttp2Body(proxiedRequest);
                 expect(responseBody.toString('utf8')).to.equal("Proxied HTTP2 response!");
 
-                destroy(proxiedClient, client);
+                await cleanup(proxiedClient, client);
             });
 
             it("can respond to HTTP1-proxied HTTP/2 requests", async function() {
@@ -351,7 +352,7 @@ nodeOnly(() => {
                 const responseBody = await getHttp2Body(proxiedRequest);
                 expect(responseBody.toString('utf8')).to.equal("Proxied HTTP2 response!");
 
-                destroy(tunnelledSocket, client);
+                await cleanup(tunnelledSocket, client);
             });
 
         });

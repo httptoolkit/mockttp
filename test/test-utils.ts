@@ -180,7 +180,7 @@ async function http2Request(
     const responseBody = await getHttp2Body(req);
     const alpnProtocol = client.alpnProtocol;
 
-    destroy(client);
+    await cleanup(client);
 
     return {
         alpnProtocol,
@@ -200,10 +200,31 @@ export function http2DirectRequest(
     });
 }
 
-export async function destroy(
+export async function cleanup(
     ...streams: (streams.Duplex | http2.Http2Session | http2.Http2Stream)[]
 ) {
-    for (let stream of streams) {
-        stream.destroy();
-    }
+    return new Promise((resolve, reject) => {
+        if (streams.length === 0) resolve();
+        else {
+            const nextStream = streams[0];
+
+            nextStream.on('error', reject);
+            if ('resume' in nextStream) {
+                // Drain the stream, to ensure it closes OK
+                nextStream.resume();
+            }
+
+            if ('close' in nextStream) {
+                nextStream.close();
+                nextStream.on('close', () => {
+                    cleanup(...streams.slice(1))
+                        .then(resolve).catch(reject);
+                });
+            } else {
+                nextStream.destroy();
+                cleanup(...streams.slice(1))
+                    .then(resolve).catch(reject);
+            }
+        }
+    });
 }
