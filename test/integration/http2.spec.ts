@@ -7,7 +7,67 @@ import * as http2 from 'http2';
 import * as semver from 'semver';
 
 import { getLocal } from "../..";
-import { expect, nodeOnly, getHttp2Response, getHttp2Body, cleanup } from "../test-utils";
+import {
+    expect,
+    nodeOnly,
+    browserOnly,
+    getHttp2Response,
+    getHttp2Body,
+    cleanup,
+    fetch
+} from "../test-utils";
+
+browserOnly(() => {
+    function checkHttp2Usage(config: { tls: boolean, serverHttp2: true | false | 'fallback', usesHttp2: boolean }) {
+        describe(`${
+            config.tls ? "with TLS" : "without TLS"
+        } and HTTP/2 ${
+            config.serverHttp2 === true
+                ? "enabled"
+            : config.serverHttp2 === 'fallback'
+                ? "as a fallback"
+            : "disabled"
+        }`, () => {
+
+            const server = getLocal({
+                http2: config.serverHttp2,
+                https: config.tls ? {
+                    keyPath: './test/fixtures/test-ca.key',
+                    certPath: './test/fixtures/test-ca.pem'
+                } : undefined
+            });
+
+            beforeEach(() => server.start());
+            afterEach(() => server.stop());
+
+            const expectedProtocol = config.usesHttp2 ? '2.0' : '1.1';
+
+            it(`responds to browser requests with HTTP/${expectedProtocol}`, async () => {
+                const mockRule = await server.get('/').thenReply(200);
+
+                const response = await fetch(server.url);
+
+                expect(response.status).to.equal(200);
+
+                const seenRequests = await mockRule.getSeenRequests();
+                expect(seenRequests.length).to.equal(1);
+                expect(seenRequests[0].httpVersion).to.equal(expectedProtocol);
+            });
+        });
+    }
+
+    describe("Using Mockttp with HTTP/2", () => {
+
+        checkHttp2Usage({ tls: true, serverHttp2: true, usesHttp2: true });
+        checkHttp2Usage({ tls: true, serverHttp2: 'fallback', usesHttp2: false });
+        checkHttp2Usage({ tls: true, serverHttp2: false, usesHttp2: false });
+
+        checkHttp2Usage({ tls: false, serverHttp2: true, usesHttp2: false });
+        checkHttp2Usage({ tls: false, serverHttp2: 'fallback', usesHttp2: false });
+        checkHttp2Usage({ tls: false, serverHttp2: false, usesHttp2: false });
+
+    });
+});
 
 nodeOnly(() => {
     describe("Using Mockttp with HTTP/2", function () {

@@ -65,6 +65,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
     private rules: MockRule[] = [];
 
     private httpsOptions: CAOptions | undefined;
+    private isHttp2Enabled: true | false | 'fallback';
 
     private app: connect.Server;
     private server: DestroyableServer | undefined;
@@ -79,6 +80,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         this.initialDebugSetting = this.debug;
 
         this.httpsOptions = options.https;
+        this.isHttp2Enabled = options.http2 ?? 'fallback';
         this.eventEmitter = new EventEmitter();
 
         this.app = connect();
@@ -129,7 +131,8 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
         this.server = await createComboServer({
             debug: this.debug,
-            https: this.httpsOptions
+            https: this.httpsOptions,
+            http2: this.isHttp2Enabled,
         }, this.app, this.announceTlsErrorAsync.bind(this));
 
         this.server!.listen(port);

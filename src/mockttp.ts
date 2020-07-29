@@ -377,6 +377,19 @@ export interface MockttpOptions {
     https?: CAOptions;
 
     /**
+     * Should HTTP/2 be enabled? Can be true, false, or 'fallback'. If true,
+     * HTTP/2 is used for all clients supporting it. If false, HTTP/2 is never
+     * used. If 'fallback' HTTP/2 is used only for clients that do not advertise
+     * support for HTTP/1.1, but HTTP/1.1 is used by preference in all other
+     * cases.
+     *
+     * Client HTTP/2 support is only advertised as part of the TLS options.
+     * When no HTTPS configuration is provided, 'fallback' is equivalent to
+     * false.
+     */
+    http2?: true | 'fallback' | false;
+
+    /**
      * The full URL to use for a standalone server with remote (or local but browser) client.
      * When using a local server, this parameter is ignored.
      */

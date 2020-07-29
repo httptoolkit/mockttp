@@ -34,7 +34,11 @@ const originalSocketInit = (<any>tls.TLSSocket.prototype)._init;
     };
 };
 
-export type ComboServerOptions = { debug: boolean, https?: CAOptions };
+export type ComboServerOptions = {
+    debug: boolean,
+    https: CAOptions | undefined,
+    http2: true | false | 'fallback'
+};
 
 // Takes an established TLS socket, calls the error listener if it's silently closed
 function ifTlsDropped(socket: tls.TLSSocket, errorCallback: () => void) {
@@ -103,7 +107,12 @@ export async function createComboServer(
             key: defaultCert.key,
             cert: defaultCert.cert,
             ca: [defaultCert.ca],
-            ALPNProtocols: ['http/1.1', 'h2'],
+            ALPNProtocols: options.http2 === true
+                ? ['h2', 'http/1.1']
+                    : options.http2 === 'fallback'
+                ? ['http/1.1', 'h2']
+                    // false
+                : ['http/1.1'],
             SNICallback: (domain: string, cb: Function) => {
                 if (options.debug) console.log(`Generating certificate for ${domain}`);
 
