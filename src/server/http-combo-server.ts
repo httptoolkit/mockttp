@@ -2,12 +2,15 @@ import _ = require('lodash');
 import net = require('net');
 import tls = require('tls');
 import http = require('http');
+import http2 = require('http2');
+import * as streams from 'stream';
+import SocketWrapper = require('_stream_wrap');
 import httpolyglot = require('@httptoolkit/httpolyglot');
 
 import { TlsRequest } from '../types';
 import { destroyable, DestroyableServer } from '../util/destroyable-server';
 import { getCA, CAOptions } from '../util/tls';
-import { peekFirstByte, mightBeTLSHandshake } from '../util/socket-util';
+import { delay } from '../util/util';
 
 // Hardcore monkey-patching: force TLSSocket to link servername & remoteAddress to
 // sockets as soon as they're available, without waiting for the handshake to fully
@@ -16,21 +19,38 @@ const originalSocketInit = (<any>tls.TLSSocket.prototype)._init;
 (<any>tls.TLSSocket.prototype)._init = function () {
     originalSocketInit.apply(this, arguments);
 
-    const tlsSocket = this;
-    const loadSNI = tlsSocket._handle.oncertcb;
-    tlsSocket._handle.oncertcb = function (info: any) {
-        tlsSocket.initialRemoteAddress = tlsSocket._parent.remoteAddress;
+    const tlsSocket: tls.TLSSocket = this;
+    const { _handle } = tlsSocket;
+    if (!_handle) return;
+
+    const loadSNI = _handle.oncertcb;
+    _handle.oncertcb = function (info: any) {
         tlsSocket.servername = info.servername;
-        return loadSNI.apply(this, arguments);
+        tlsSocket.initialRemoteAddress = tlsSocket.remoteAddress || // Normal case
+            tlsSocket._parent?.remoteAddress || // For early failing sockets
+            tlsSocket._handle?._parentWrap?.stream?.remoteAddress; // For HTTP/2 CONNECT
+
+        return loadSNI?.apply(this, arguments as any);
     };
 };
 
-export type ComboServerOptions = { debug: boolean, https?: CAOptions };
+export type ComboServerOptions = {
+    debug: boolean,
+    https: CAOptions | undefined,
+    http2: true | false | 'fallback'
+};
 
 // Takes an established TLS socket, calls the error listener if it's silently closed
 function ifTlsDropped(socket: tls.TLSSocket, errorCallback: () => void) {
     new Promise((resolve, reject) => {
+        // If you send data, you trust the TLS connection
         socket.once('data', resolve);
+
+        // If you keep it open, you probably trust the TLS connection
+        // (some clients open unused connections for connection pools etc)
+        delay(5000).then(resolve);
+
+        // If you silently close it very quicky, you probably don't trust us
         socket.once('close', reject);
         socket.once('end', reject);
     })
@@ -40,6 +60,9 @@ function ifTlsDropped(socket: tls.TLSSocket, errorCallback: () => void) {
         socket.tlsSetupCompleted = true;
     })
     .catch(() => {
+        // If TLS setup was confirmed in any way, we know we don't have a TLS error.
+        if (socket.tlsSetupCompleted) return;
+
         // To get here, the socket must have connected & done the TLS handshake, but then
         // closed/ended without ever sending any data. We can fairly confidently assume
         // in that case that it's rejected our certificate.
@@ -73,146 +96,154 @@ export async function createComboServer(
     requestListener: (req: http.IncomingMessage, res: http.ServerResponse) => void,
     tlsClientErrorListener: (socket: tls.TLSSocket, req: TlsRequest) => void
 ): Promise<DestroyableServer> {
+    let server: net.Server;
     if (!options.https) {
-        return destroyable(http.createServer(requestListener));
+        server = httpolyglot.createServer(requestListener);
+    } else {
+        const ca = await getCA(options.https!);
+        const defaultCert = ca.generateCertificate('localhost');
+
+        server = httpolyglot.createServer({
+            key: defaultCert.key,
+            cert: defaultCert.cert,
+            ca: [defaultCert.ca],
+            ALPNProtocols: options.http2 === true
+                ? ['h2', 'http/1.1']
+                    : options.http2 === 'fallback'
+                ? ['http/1.1', 'h2']
+                    // false
+                : ['http/1.1'],
+            SNICallback: (domain: string, cb: Function) => {
+                if (options.debug) console.log(`Generating certificate for ${domain}`);
+
+                try {
+                    const generatedCert = ca.generateCertificate(domain);
+                    cb(null, tls.createSecureContext({
+                        key: generatedCert.key,
+                        cert: generatedCert.cert,
+                        ca: generatedCert.ca
+                    }));
+                } catch (e) {
+                    console.error('Cert generation error', e);
+                    cb(e);
+                }
+            }
+        }, requestListener);
     }
 
-    const ca = await getCA(options.https!);
-    const defaultCert = ca.generateCertificate('localhost');
+    server.on('connection', (socket: net.Socket) => {
+        // All sockets are initially marked as using unencrypted upstream connections.
+        // If TLS is used, this is upgraded to 'true' by secureConnection below.
+        socket.lastHopEncrypted = false;
+    });
 
-    const server = httpolyglot.createServer({
-        key: defaultCert.key,
-        cert: defaultCert.cert,
-        ca: [defaultCert.ca],
-        SNICallback: (domain: string, cb: Function) => {
-            if (options.debug) console.log(`Generating certificate for ${domain}`);
-
-            try {
-                const generatedCert = ca.generateCertificate(domain);
-                cb(null, tls.createSecureContext({
-                    key: generatedCert.key,
-                    cert: generatedCert.cert,
-                    ca: generatedCert.ca
-                }));
-            } catch (e) {
-                console.error('Cert generation error', e);
-                cb(e);
-            }
+    server.on('secureConnection', (socket: tls.TLSSocket) => {
+        if ((socket as { _parent?: net.Socket })._parent) {
+            // Sometimes wrapper TLS sockets created by the HTTP/2 server don't include the
+            // underlying port details, so it's better to make sure we copy them up.
+            copyAddressDetails((socket as any)._parent, socket);
         }
-    }, requestListener);
+
+        socket.lastHopEncrypted = true;
+        ifTlsDropped(socket, () => {
+            tlsClientErrorListener(socket, {
+                failureCause: 'closed',
+                hostname: socket.servername,
+                remoteIpAddress: socket.remoteAddress || socket.initialRemoteAddress!,
+                tags: []
+            });
+        });
+    });
+
+    // Mark HTTP/2 sockets as set up once we receive a first settings frame. This always
+    // happens immediately after the connection preface, as long as the connection is OK.
+    server!.on('session', (session) => {
+        session.once('remoteSettings', () => {
+            session.socket.tlsSetupCompleted = true;
+        });
+    });
 
     server.on('tlsClientError', (error: Error, socket: tls.TLSSocket) => {
         // These only work because of oncertcb monkeypatch above
         tlsClientErrorListener(socket, {
             failureCause: getCauseFromError(error),
             hostname: socket.servername,
-            remoteIpAddress: socket.initialRemoteAddress!,
+            remoteIpAddress: socket.remoteAddress || // Normal case
+                socket._parent?.remoteAddress || // Pre-certCB error, e.g. timeout
+                socket.initialRemoteAddress!, // Recorded by certCB monkeypatch
             tags: []
         });
     });
-    server.on('secureConnection', (socket: tls.TLSSocket) =>
-        ifTlsDropped(socket, () => {
-            tlsClientErrorListener(socket, {
-                failureCause: 'closed',
-                hostname: socket.servername,
-                remoteIpAddress: socket.remoteAddress!,
-                tags: []
-            });
-        })
-    );
 
-    // If the server receives a HTTP/HTTPS CONNECT request, do some magic to proxy & intercept it
-    server.addListener('connect', (req: http.IncomingMessage, socket: net.Socket) => {
-        const [ targetHost, port ] = req.url!.split(':');
-        if (options.debug) console.log(`Proxying CONNECT to ${targetHost}`);
+    // If the server receives a HTTP/HTTPS CONNECT request, Pretend to tunnel, then just re-handle:
+    server.addListener('connect', function (
+        req: http.IncomingMessage | http2.Http2ServerRequest,
+        resOrSocket: net.Socket | http2.Http2ServerResponse
+    ) {
+        if (resOrSocket instanceof net.Socket) {
+            handleH1Connect(req as http.IncomingMessage, resOrSocket);
+        } else {
+            handleH2Connect(req as http2.Http2ServerRequest, resOrSocket);
+        }
+    });
 
+    function handleH1Connect(req: http.IncomingMessage, socket: net.Socket) {
+        // Clients may disconnect at this point (for all sorts of reasons), but here
+        // nothing else is listening, so we need to catch errors on the socket:
         socket.once('error', (e) => console.log('Error on client socket', e));
 
-        socket.write('HTTP/' + req.httpVersion + ' 200 OK\r\n\r\n', 'utf-8', async () => {
-            const firstByte = await peekFirstByte(socket);
+        const connectUrl = req.url || req.headers['host'];
+        if (!connectUrl) {
+            // If we can't work out where to go, send an error.
+            socket.write('HTTP/' + req.httpVersion + ' 400 Bad Request\r\n\r\n', 'utf-8');
+            return;
+        }
 
-            // Tell later handlers whether the socket wants an insecure upstream
-            socket.upstreamEncryption = mightBeTLSHandshake(firstByte);
+        if (options.debug) console.log(`Proxying HTTP/1 CONNECT to ${connectUrl}`);
 
-            if (socket.upstreamEncryption) {
-                if (options.debug) console.log(`Unwrapping TLS connection to ${targetHost}`);
-                unwrapTLS(targetHost, port, socket);
-            } else {
-                // Non-TLS CONNECT, probably a plain HTTP websocket. Pass it through untouched.
-                if (options.debug) console.log(`Passing through connection to ${targetHost}`);
-                server.emit('connection', socket);
-                socket.resume();
-            }
+        socket.write('HTTP/' + req.httpVersion + ' 200 OK\r\n\r\n', 'utf-8', () => {
+            // Required here to avoid https://github.com/nodejs/node/issues/29902
+            const socketWrapper = new SocketWrapper(socket);
+            copyAddressDetails(socket, socketWrapper);
+            server.emit('connection', socketWrapper);
         });
-    });
+    }
 
-    async function unwrapTLS(targetHost: string, port: string, rawSocket: net.Socket) {
-        const generatedCert = ca.generateCertificate(targetHost);
+    function handleH2Connect(req: http2.Http2ServerRequest, res: http2.Http2ServerResponse) {
+        const connectUrl = req.headers[':authority'];
 
-        let tlsSocket = new tls.TLSSocket(rawSocket, {
-            isServer: true,
-            server: server,
-            secureContext: tls.createSecureContext({
-                key: generatedCert.key,
-                cert: generatedCert.cert,
-                ca: generatedCert.ca
-            }),
-            ALPNProtocols: ['http/1.1']
-        });
+        if (!connectUrl) {
+             // If we can't work out where to go, send an error.
+             res.writeHead(400, {});
+             res.end();
+             return;
+        }
 
-        // Wait for:
-        // * connect, not dropped -> all good
-        // * _tlsError before connect -> cert rejected
-        // * sudden end before connect -> cert rejected
-        await new Promise((resolve, reject) => {
-            tlsSocket.on('secure', async () => {
-                ifTlsDropped(tlsSocket, () => {
-                    tlsClientErrorListener(tlsSocket, {
-                        failureCause: 'closed',
-                        hostname: targetHost,
-                        remoteIpAddress: rawSocket.remoteAddress!,
-                        tags: []
-                    });
-                });
+        if (options.debug) console.log(`Proxying HTTP/2 CONNECT to ${connectUrl}`);
 
-                peekFirstByte(tlsSocket).then(resolve);
-            });
-            tlsSocket.on('_tlsError', (error) => {
-                reject(getCauseFromError(error));
-            });
-            tlsSocket.on('end', () => {
-                // Delay, so that simultaneous specific errors reject first
-                setTimeout(() => reject('closed'), 1);
-            });
-        }).catch((cause) => tlsClientErrorListener(tlsSocket, {
-            failureCause: cause,
-            hostname: targetHost,
-            remoteIpAddress: rawSocket.remoteAddress!,
-            tags: []
-        }));
-
-        // This is a little crazy, but only a little. We create a one-off server to handle HTTP parsing, but
-        // never listen on any ports or anything, we just hand it a live socket. Setup is pretty cheap here
-        // (instantiate, sets up as event emitter, registers some events & properties, that's it), and
-        // this is the easiest way I can see to put targetHost into the URL, without reimplementing HTTP.
-        const innerServer = http.createServer((req: http.IncomingMessage, res: http.ServerResponse) => {
-            // Request URIs are usually relative here, but can be * (OPTIONS) or absolute (odd people) in theory
-            if (req.url !== '*' && req.url![0] === '/') {
-                req.url = `https://${targetHost}:${port}${req.url}`;
-            }
-            return requestListener(req, res);
-        });
-        innerServer.addListener('upgrade', (req, socket, head) => {
-            req.url = `https://${targetHost}:${port}${req.url}`;
-            server.emit('upgrade', req, socket, head);
-        });
-        innerServer.addListener('connect', (req, res) => server.emit('connect', req, res));
-
-        innerServer.on('clientError', (...args) => server.emit('clientError', ...args));
-
-        innerServer.emit('connection', tlsSocket);
-        tlsSocket.resume(); // Socket was paused by peekFirstByte() above
+        // Send a 200 OK response, and start the tunnel:
+        res.writeHead(200, {});
+        copyAddressDetails(res.socket, res.stream);
+        server.emit('connection', res.stream);
     }
 
     return destroyable(server);
+}
+
+// Update the target socket(-ish) with the address details from the source socket,
+// iff the target has no details of its own.
+function copyAddressDetails(
+    source: net.Socket,
+    target: streams.Duplex &
+        Partial<Pick<net.Socket, 'localAddress' | 'localPort' | 'remoteAddress' | 'remotePort'>>
+) {
+    const fields = ['localAddress', 'localPort', 'remoteAddress', 'remotePort'] as const;
+    Object.defineProperties(target, _.zipObject(fields,
+        _.range(fields.length).map(() => ({ writable: true }))
+    ));
+    fields.forEach((fieldName) => {
+        if (target[fieldName] === undefined) {
+            (target as any)[fieldName] = source[fieldName];
+        }
+    });
 }

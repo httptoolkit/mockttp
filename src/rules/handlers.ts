@@ -7,7 +7,6 @@ import url = require('url');
 import net = require('net');
 import http = require('http');
 import https = require('https');
-import express = require("express");
 import { encode as encodeBase64, decode as decodeBase64 } from 'base64-arraybuffer';
 import { Readable, Transform } from 'stream';
 import { stripIndent, oneLine } from 'common-tags';
@@ -19,7 +18,10 @@ import {
     buildBodyReader,
     streamToBuffer,
     shouldKeepAlive,
-    dropDefaultHeaders
+    dropDefaultHeaders,
+    isHttp2,
+    h1HeadersToH2,
+    h2HeadersToH1
 } from '../util/request-utils';
 import { isLocalPortActive } from '../util/socket-util';
 import {
@@ -572,6 +574,10 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
         let { method, url: reqUrl, headers } = clientReq;
         let { protocol, hostname, port, path } = url.parse(reqUrl);
 
+        if (isHttp2(clientReq)) {
+            headers = h2HeadersToH1(headers);
+        }
+
         if (this.forwarding) {
             const { targetHost, updateHostHeader } = this.forwarding;
             if (!targetHost.includes('/')) {
@@ -755,6 +761,10 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                     serverHeaders = dropUndefinedValues(serverHeaders);
                 }
 
+                if (isHttp2(clientReq)) {
+                    serverHeaders = h1HeadersToH2(serverHeaders);
+                }
+
                 Object.keys(serverHeaders).forEach((header) => {
                     const headerValue = serverHeaders[header];
                     if (headerValue === undefined) return;
@@ -769,8 +779,10 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                     }
                 });
 
-                clientRes.statusMessage = serverStatusMessage || clientRes.statusMessage;
-                clientRes.status(serverStatusCode);
+                clientRes.writeHead(
+                    serverStatusCode,
+                    serverStatusMessage || clientRes.statusMessage
+                );
 
                 if (resBodyOverride) {
                     clientRes.end(resBodyOverride);
@@ -818,8 +830,9 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 clientRes.tags.push('passthrough-error:' + e.code);
 
                 if (e.code === 'ECONNRESET') {
-                    // The upstream socket closed: forcibly close the downstream too, to match
-                    (clientReq as any).socket.end();
+                    // The upstream socket closed: forcibly close the downstream stream to match
+                    const socket: net.Socket = (clientReq as any).socket;
+                    socket.destroy();
                     reject(new AbortError('Upstream connection was reset'));
                 } else {
                     e.statusCode = 502;
@@ -983,7 +996,13 @@ const normalizeIp = (ip: string | undefined) =>
 // and on another interface somebody else has ip X, and the send a request with the same incoming port as an
 // outgoing request we have on the other interface, we'll assume it's a loop. Extremely unlikely imo.
 const isRequestLoop = (incomingSocket: net.Socket) =>
-    _.some([...currentlyForwardingSockets], (outgoingSocket) =>
-        normalizeIp(outgoingSocket.localAddress) === normalizeIp(incomingSocket.remoteAddress) &&
-        outgoingSocket.remotePort === incomingSocket.localPort
-    );
+    _.some([...currentlyForwardingSockets], (outgoingSocket) => {
+        if (!outgoingSocket.localAddress || !outgoingSocket.localPort) {
+            // It's possible for sockets in currentlyForwardingSockets to be closed, in which case these
+            // properties will be undefined. If so, we know they're not relevant to loops, so skip entirely.
+            return false;
+        } else {
+            return normalizeIp(outgoingSocket.localAddress) === normalizeIp(incomingSocket.remoteAddress) &&
+            outgoingSocket.remotePort === incomingSocket.localPort;
+        }
+    });

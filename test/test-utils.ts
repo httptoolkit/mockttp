@@ -1,9 +1,12 @@
 import * as sourceMapSupport from 'source-map-support'
 sourceMapSupport.install({ handleUncaughtExceptions: false });
 
+import * as _ from 'lodash';
 import * as net from 'net';
 import * as tls from 'tls';
-import * as semver from 'semver';
+import * as http2 from 'http2';
+import * as streams from 'stream';
+import * as URL from 'url';
 import getFetchPonyfill = require("fetch-ponyfill");
 
 import chai = require("chai");
@@ -75,7 +78,8 @@ export function getDeferred<T>(): Deferred<T> {
     return result;
 }
 
-export const TOO_LONG_HEADER_SIZE = 1024 * 16 + 1;
+const TOO_LONG_HEADER_SIZE = 1024 * (isNode ? 16 : 160) + 1;
+export const TOO_LONG_HEADER_VALUE = _.range(TOO_LONG_HEADER_SIZE).map(() => "X").join("");
 
 export async function openRawSocket(server: Mockttp) {
     const client = new net.Socket();
@@ -99,11 +103,21 @@ export async function sendRawRequest(server: Mockttp, requestContent: string): P
     return dataPromise;
 }
 
-export async function openRawTlsSocket(server: Mockttp): Promise<tls.TLSSocket> {
+export async function openRawTlsSocket(
+    server: Mockttp,
+    options: {
+        servername?: string
+        alpn?: string[]
+    } = {}
+): Promise<tls.TLSSocket> {
+    if (!options.alpn) options.alpn = ['http/1.1']
+
     return await new Promise<tls.TLSSocket>((resolve) => {
         const socket: tls.TLSSocket = tls.connect({
             host: 'localhost',
-            port: server.port
+            port: server.port,
+            servername: options.servername,
+            ALPNProtocols: options.alpn
         }, () => resolve(socket));
     });
 }
@@ -131,4 +145,86 @@ export function watchForEvent(event: string, ...servers: Mockttp[]) {
         await delay(100);
         expect(eventResult).to.equal(undefined, `Unexpected ${event} event`);
     }
+}
+
+type Http2ResponseHeaders = http2.IncomingHttpHeaders & http2.IncomingHttpStatusHeader;
+
+export function getHttp2Response(req: http2.ClientHttp2Stream) {
+    return new Promise<Http2ResponseHeaders>((resolve, reject) => {
+        req.on('response', resolve);
+        req.on('error', reject);
+    });
+}
+
+export function getHttp2Body(req: http2.ClientHttp2Stream) {
+    return new Promise<Buffer>((resolve, reject) => {
+        const body: Buffer[] = [];
+        req.on('data', (d: Buffer | string) => {
+            body.push(Buffer.from(d));
+        });
+        req.on('end', () => req.close());
+        req.on('close', () => resolve(Buffer.concat(body)));
+        req.on('error', reject);
+    });
+}
+
+async function http2Request(
+    url: string,
+    headers: {},
+    createConnection?: (() => streams.Duplex) | undefined
+) {
+    const client = http2.connect(url, { createConnection });
+    const req = client.request(headers);
+
+    const responseHeaders = await getHttp2Response(req);
+    const responseBody = await getHttp2Body(req);
+    const alpnProtocol = client.alpnProtocol;
+
+    await cleanup(client);
+
+    return {
+        alpnProtocol,
+        headers: responseHeaders,
+        body: responseBody
+    };
+}
+
+export function http2DirectRequest(
+    server: Mockttp,
+    path: string,
+    headers: {} = {}
+) {
+    return http2Request(server.url, {
+        ':path': path,
+        ...headers
+    });
+}
+
+export async function cleanup(
+    ...streams: (streams.Duplex | http2.Http2Session | http2.Http2Stream)[]
+) {
+    return new Promise((resolve, reject) => {
+        if (streams.length === 0) resolve();
+        else {
+            const nextStream = streams[0];
+
+            nextStream.on('error', reject);
+            if ('resume' in nextStream) {
+                // Drain the stream, to ensure it closes OK
+                nextStream.resume();
+            }
+
+            if ('close' in nextStream) {
+                nextStream.close();
+                nextStream.on('close', () => {
+                    cleanup(...streams.slice(1))
+                        .then(resolve).catch(reject);
+                });
+            } else {
+                nextStream.destroy();
+                cleanup(...streams.slice(1))
+                    .then(resolve).catch(reject);
+            }
+        }
+    });
 }

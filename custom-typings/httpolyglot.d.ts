@@ -4,7 +4,10 @@ declare module '@httptoolkit/httpolyglot' {
     import * as https from "https";
 
     export function createServer(
+        callback: (req: http.IncomingMessage, res: http.ServerResponse) => void
+    ): net.Server;
+    export function createServer(
         options: https.ServerOptions,
-        callback?: (req: http.IncomingMessage, res: http.ServerResponse) => void
+        callback: (req: http.IncomingMessage, res: http.ServerResponse) => void
     ): net.Server;
 }

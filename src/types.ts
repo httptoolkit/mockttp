@@ -3,7 +3,7 @@
  */
 
 import stream = require('stream');
-import express = require("express");
+import http = require('http');
 import { EventEmitter } from 'events';
 
 export const DEFAULT_STANDALONE_PORT = 45456;
@@ -110,7 +110,7 @@ export interface TimingEvents {
     abortedTimestamp?: number; // When the request was aborted
 }
 
-export interface OngoingResponse extends express.Response {
+export interface OngoingResponse extends http.ServerResponse {
     id: string;
     getHeaders(): Headers;
     body: ParsedBody;

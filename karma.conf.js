@@ -12,7 +12,10 @@ module.exports = function(config) {
         mime: { 'text/x-typescript': ['ts'] },
         webpack: {
             devtool: 'source-map',
-            resolve: { extensions: ['.ts', '.js'] },
+            resolve: {
+                extensions: ['.ts', '.js'],
+                alias: { http2$: require.resolve('./test/empty-stub.js') }
+            },
             module: {
                 loaders: [
                     { test: /fs-extra/, loader: 'null-loader' },

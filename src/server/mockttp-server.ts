@@ -5,9 +5,11 @@
 import net = require("net");
 import url = require("url");
 import tls = require("tls");
+import http = require("http");
+import http2 = require("http2");
 import { EventEmitter } from "events";
 import portfinder = require("portfinder");
-import express = require("express");
+import connect = require("connect");
 import uuid = require('uuid/v4');
 import cors = require("cors");
 import now = require("performance-now");
@@ -21,7 +23,8 @@ import {
     CompletedResponse,
     TlsRequest,
     ClientError,
-    TimingEvents
+    TimingEvents,
+    ParsedBody
 } from "../types";
 import { CAOptions } from '../util/tls';
 import { DestroyableServer } from "../util/destroyable-server";
@@ -40,10 +43,17 @@ import {
     buildInitiatedRequest,
     buildAbortedRequest,
     tryToParseHttp,
-    buildBodyReader
+    buildBodyReader,
+    getPathFromAbsoluteUrl
 } from "../util/request-utils";
 import { WebSocketHandler } from "./websocket-handler";
 import { AbortError } from "../rules/handlers";
+
+type ExtendedRawRequest = (http.IncomingMessage | http2.Http2ServerRequest) & {
+    protocol?: string;
+    body?: ParsedBody;
+    path?: string;
+};
 
 /**
  * A in-process Mockttp implementation. This starts servers on the local machine in the
@@ -55,8 +65,9 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
     private rules: MockRule[] = [];
 
     private httpsOptions: CAOptions | undefined;
+    private isHttp2Enabled: true | false | 'fallback';
 
-    private app: express.Application;
+    private app: connect.Server;
     private server: DestroyableServer | undefined;
 
     private eventEmitter: EventEmitter;
@@ -69,10 +80,10 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         this.initialDebugSetting = this.debug;
 
         this.httpsOptions = options.https;
+        this.isHttp2Enabled = options.http2 ?? 'fallback';
         this.eventEmitter = new EventEmitter();
 
-        this.app = express();
-        this.app.disable('x-powered-by');
+        this.app = connect();
 
         if (this.corsOptions) {
             if (this.debug) console.log('Enabling CORS');
@@ -81,17 +92,28 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
                 ? { methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'] }
                 : this.corsOptions;
 
-            this.app.use(cors(corsOptions));
+            this.app.use(cors(corsOptions) as connect.HandleFunction);
         }
 
         this.app.use(parseBody);
-        this.app.use((req, res, next) => {
+        this.app.use((
+            req: ExtendedRawRequest,
+            _res: http.ServerResponse,
+            next: () => void
+        ) => {
             // Make req.url always absolute, if it isn't already, using the host header.
             // It might not be if this is a direct request, or if it's being transparently proxied.
-            // The 2nd argument is ignored if req.url is already absolute.
-            if (!isAbsoluteUrl(req.url)) {
-                req.url = new url.URL(req.url, `${req.protocol}://${req.headers['host']}`).toString();
+            if (!isAbsoluteUrl(req.url!)) {
+                req.protocol = req.headers[':scheme'] as string ||
+                    (req.socket.lastHopEncrypted ? 'https' : 'http');
+                req.path = req.url;
+                const host = req.headers[':authority'] || req.headers['host'];
+                req.url = new url.URL(req.url!, `${req.protocol}://${host}`).toString();
+            } else {
+                req.protocol = req.url!.split('://', 1)[0];
+                req.path = getPathFromAbsoluteUrl(req.url!);
             }
+
             next();
         });
         this.app.use(this.handleRequest.bind(this));
@@ -109,13 +131,22 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
         this.server = await createComboServer({
             debug: this.debug,
-            https: this.httpsOptions
+            https: this.httpsOptions,
+            http2: this.isHttp2Enabled,
         }, this.app, this.announceTlsErrorAsync.bind(this));
 
         this.server!.listen(port);
 
         // Handle & report client request errors
-        this.server!.on('clientError', this.handleInvalidRequest.bind(this));
+        this.server!.on('clientError', this.handleInvalidHttp1Request.bind(this));
+        this.server!.on('sessionError', this.handleInvalidHttp2Request.bind(this));
+
+        // Track the socket of HTTP/2 sessions, for error reporting later:
+        this.server!.on('session', (session) => {
+            session.on('connect', (session: http2.Http2Session, socket: net.Socket) => {
+                session.initialSocket = socket;
+            });
+        });
 
         // Handle websocket connections too (ignore for now, just forward on)
         const webSocketHander = new WebSocketHandler(
@@ -277,9 +308,13 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         });
     }
 
-    private async announceClientErrorAsync(socket: net.Socket, error: ClientError) {
+    private async announceClientErrorAsync(socket: net.Socket | undefined, error: ClientError) {
         // Ignore errors before TLS is setup, those are TLS errors
-        if (socket instanceof tls.TLSSocket && !socket.tlsSetupCompleted) return;
+        if (
+            socket instanceof tls.TLSSocket &&
+            !socket.tlsSetupCompleted &&
+            error.errorCode !== 'ERR_HTTP2_ERROR' // Initial HTTP/2 errors are considered post-TLS
+        ) return;
 
         setImmediate(() => {
             if (this.debug) console.warn(`Client error: ${JSON.stringify(error)}`);
@@ -287,7 +322,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         });
     }
 
-    private async handleRequest(rawRequest: express.Request, rawResponse: express.Response) {
+    private async handleRequest(rawRequest: ExtendedRawRequest, rawResponse: http.ServerResponse) {
         if (this.debug) console.log(`Handling request for ${rawRequest.url}`);
 
         const timingEvents = { startTime: Date.now(), startTimestamp: now() };
@@ -359,7 +394,10 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
                 response.on('error', (e) => {});
 
                 // Do whatever we can to tell the client we broke
-                try { response.writeHead(e.statusCode || 500, e.statusMessage || 'Server error'); } catch (e) {}
+                try {
+                    response.writeHead(e.statusCode || 500, e.statusMessage || 'Server error');
+                } catch (e) {}
+
                 try {
                     response.end(e.toString());
                     result = result || 'responded';
@@ -385,7 +423,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         }
     }
 
-    private async sendUnmatchedRequestError(request: OngoingRequest, response: express.Response) {
+    private async sendUnmatchedRequestError(request: OngoingRequest, response: http.ServerResponse) {
         let requestExplanation = await this.explainRequest(request);
         if (this.debug) console.warn(`Unmatched request received: ${requestExplanation}`);
 
@@ -439,8 +477,11 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
     }
 
     // Called on server clientError, e.g. if the client disconnects during initial
-    // request data, or sends totally invalid gibberish
-    private handleInvalidRequest(error: Error & { code?: string, rawPacket?: Buffer }, socket: net.Socket) {
+    // request data, or sends totally invalid gibberish. Only called for HTTP/1.1 errors.
+    private handleInvalidHttp1Request(
+        error: Error & { code?: string, rawPacket?: Buffer },
+        socket: net.Socket
+    ) {
         if (socket.clientErrorInProgress) {
             // For subsequent errors on the same socket, accumulate packet data (linked to the socket)
             // so that the error (probably delayed until next tick) has it all to work with
@@ -489,21 +530,27 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
                 timingEvents: { startTime: Date.now(), startTimestamp: now() } as TimingEvents
             };
 
+            // Initially _httpMessage is undefined, until at least one request has been parsed.
+            // Later it's set to the current ServerResponse, and then null when the socket is
+            // detached, but never back to undefined. Avoids issues with using old peeked data
+            // on subsequent requests within keep-alive connections.
+            const isFirstRequest = (socket as any)._httpMessage === undefined;
+
             // HTTPolyglot's byte-peeking can sometimes lose the initial byte from the parser's
             // exposed buffer. If that's happened, we need to get it back:
             const rawPacket = Buffer.concat(
-                [socket.__httpPeekedData, socket.clientErrorInProgress?.rawPacket]
-                .filter((data) => !!data) as Buffer[]
+                [
+                    isFirstRequest && socket.__httpPeekedData,
+                    socket.clientErrorInProgress?.rawPacket
+                ].filter((data) => !!data) as Buffer[]
             );
 
-            const parsedRequest = rawPacket.byteLength
+            // For packets where we get more than just httpolyglot-peeked data, guess-parse them:
+            const parsedRequest = rawPacket.byteLength > 1
                 ? tryToParseHttp(rawPacket, socket)
                 : {};
 
-            const isHTTP2 = parsedRequest.httpVersion?.startsWith("2.");
-
             if (isHeaderOverflow) commonParams.tags.push('header-overflow');
-            if (isHTTP2) commonParams.tags.push('http-2');
 
             const request: ClientError['request'] = {
                 ...commonParams,
@@ -524,14 +571,10 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
                     statusCode:
                         isHeaderOverflow
                             ? 431
-                        : isHTTP2
-                            ? 505
                         : 400,
                     statusMessage:
                         isHeaderOverflow
                             ? "Request Header Fields Too Large"
-                        : isHTTP2
-                            ? "HTTP Version Not Supported"
                         : "Bad Request",
                     body: buildBodyReader(Buffer.from([]), {})
                 };
@@ -555,6 +598,45 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
             this.announceClientErrorAsync(socket, { errorCode, request, response });
 
             socket.destroy(error);
+        });
+    }
+
+    // Handle HTTP/2 client errors. This is a work in progress, but usefully reports
+    // some of the most obvious cases.
+    private handleInvalidHttp2Request(
+        error: Error & { code?: string, errno?: number },
+        session: http2.Http2Session
+    ) {
+        // Unlike with HTTP/1.1, we have no control of the actual handling of
+        // the error here, so this is just a matter of announcing the error to subscribers.
+
+        const socket = session.initialSocket;
+        const isTLS = socket instanceof tls.TLSSocket;
+
+        const isBadPreface = (error.errno === -903);
+
+        this.announceClientErrorAsync(session.initialSocket, {
+            errorCode: error.code,
+            request: {
+                id: uuid(),
+                tags: [
+                    `client-error:${error.code || 'UNKNOWN'}`,
+                    ...(isBadPreface ? ['client-error:bad-preface'] : [])
+                ],
+                httpVersion: '2',
+
+                // Best guesses:
+                timingEvents: { startTime: Date.now(), startTimestamp: now() } as TimingEvents,
+                protocol: isTLS ? "https" : "http",
+                url: isTLS ? `https://${
+                    (socket as tls.TLSSocket).servername // Use the hostname from SNI
+                }/` : undefined,
+
+                // Unknowable:
+                path: undefined,
+                headers: {}
+            },
+            response: 'aborted' // These h2 errors get no app-level response, just a shutdown.
         });
     }
 }

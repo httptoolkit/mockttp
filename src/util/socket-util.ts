@@ -4,24 +4,6 @@ import * as net from 'net';
 
 import { isNode } from './util';
 
-// Grab the first byte of a stream to examine it.
-// Note that this isn't a great abstraction: you might need to manually resume() the stream afterwards.
-// This is intended for use *BEFORE* anything else is consuming the stream. If used later on, you'll
-// see the peeked data duplicated, as it's reinserted into the stream by the unshift() here.
-export async function peekFirstByte(socket: net.Socket): Promise<number> {
-    return new Promise<number>((resolve) => {
-        socket.once('data', (data) => {
-            socket.pause();
-            socket.unshift(data);
-            resolve(data[0]);
-        });
-    });
-}
-
-export function mightBeTLSHandshake(byte: number) {
-    return byte === 22;
-}
-
 // Test if a local port for a given interface (IPv4/6) is currently in use
 export async function isLocalPortActive(interfaceIp: '::1' | '127.0.0.1', port: number) {
     if (interfaceIp === '::1' && !isLocalIPv6Available) return false;

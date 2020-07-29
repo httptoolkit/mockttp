@@ -5,9 +5,11 @@
 import * as _ from 'lodash';
 import * as net from 'net';
 import { TLSSocket } from 'tls';
+import * as http from 'http';
+import * as http2 from 'http2';
+import { EventEmitter } from 'events';
 import * as stream from 'stream';
 import * as querystring from 'querystring';
-import * as express from 'express';
 import * as zlib from 'zlib';
 import * as brotliDecompress from 'brotli/decompress';
 import now = require("performance-now");
@@ -22,7 +24,8 @@ import {
     ParsedBody,
     CompletedBody,
     TimingEvents,
-    InitiatedRequest
+    InitiatedRequest,
+    RequestHeaders
 } from "../types";
 import { nthIndexOf } from '../util/util';
 
@@ -56,7 +59,7 @@ export const shouldKeepAlive = (req: OngoingRequest): boolean =>
     req.headers['connection'] !== 'close' &&
     req.headers['proxy-connection'] !== 'close';
 
-export const setHeaders = (response: express.Response, headers: Headers) => {
+export const setHeaders = (response: http.ServerResponse, headers: Headers) => {
     Object.keys(headers).forEach((header) => {
         let value = headers[header];
         if (!value) return;
@@ -77,6 +80,50 @@ export function dropDefaultHeaders(response: OngoingResponse) {
     ].forEach((defaultHeader) =>
         response.removeHeader(defaultHeader)
     );
+}
+
+export function isHttp2(
+    message: | http.IncomingMessage
+             | http2.Http2ServerRequest
+             | http2.Http2ServerResponse
+             | OngoingRequest
+             | OngoingResponse
+): message is http2.Http2ServerRequest | http2.Http2ServerResponse {
+    return ('httpVersion' in message && !!message.httpVersion?.startsWith('2')) || // H2 request
+        ('stream' in message && 'createPushResponse' in message); // H2 response
+}
+
+export function h2HeadersToH1(h2Headers: Headers) {
+    const h1Headers = _.omitBy(h2Headers, (_value, key) => {
+        return key.startsWith(':')
+    });
+
+    if (!h1Headers['host'] && h2Headers[':authority']) {
+        h1Headers['host'] = h2Headers[':authority'];
+    }
+
+    if (_.isArray(h1Headers['cookie'])) {
+        h1Headers['cookie'] = h1Headers['cookie'].join('; ');
+    }
+
+    return h1Headers as RequestHeaders;
+}
+
+// Take from http2/util.js in Node itself
+const HTTP2_ILLEGAL_HEADERS = [
+    'connection',
+    'upgrade',
+    'host',
+    'http2-settings',
+    'keep-alive',
+    'proxy-connection',
+    'transfer-encoding'
+];
+
+export function h1HeadersToH2(headers: Headers) {
+    return _.omitBy(headers, (_value, key) => {
+        return HTTP2_ILLEGAL_HEADERS.includes(key);
+    });
 }
 
 // Takes a buffer and a stream, returns a simple stream that outputs the buffer then the stream.
@@ -245,9 +292,9 @@ export const buildBodyReader = (body: Buffer, headers: Headers): CompletedBody =
 };
 
 export const parseBody = (
-    req: express.Request,
-    _res: express.Response,
-    next: express.NextFunction
+    req: http.IncomingMessage,
+    _res: http.ServerResponse,
+    next: () => void
 ) => {
     let transformedRequest = <OngoingRequest> <any> req;
     transformedRequest.body = parseBodyStream(req);
@@ -288,7 +335,7 @@ export async function waitForCompletedRequest(request: OngoingRequest): Promise<
     return Object.assign(requestData, { body });
 }
 
-export function trackResponse(response: express.Response, timingEvents: TimingEvents, tags: string[]): OngoingResponse {
+export function trackResponse(response: http.ServerResponse, timingEvents: TimingEvents, tags: string[]): OngoingResponse {
     let trackedResponse = <OngoingResponse> response;
     if (!trackedResponse.getHeaders) {
         // getHeaders was added in 7.7. - if it's not available, polyfill it
@@ -310,6 +357,12 @@ export function trackResponse(response: express.Response, timingEvents: TimingEv
         if (!timingEvents.headersSentTimestamp) {
             timingEvents.headersSentTimestamp = now();
         }
+
+        // HTTP/2 responses shouldn't have a status message:
+        if (isHttp2(trackedResponse) && typeof args[1] === 'string') {
+            args[1] = undefined;
+        }
+
         return originalWriteHeader.apply(this, args);
     }
 
@@ -351,7 +404,11 @@ export async function waitForCompletedResponse(response: OngoingResponse): Promi
         'timingEvents',
         'tags'
     ]).assign({
-        headers: response.getHeaders(),
+        headers: _.mapValues(response.getHeaders(), (headerValue) => {
+            return _.isNumber(headerValue)
+                ? headerValue.toString() // HTTP :status sneaks in as a number
+                : headerValue;
+        }) as Headers,
         body: body
     }).valueOf();
 }
@@ -361,7 +418,7 @@ export async function waitForCompletedResponse(response: OngoingResponse): Promi
 export function tryToParseHttp(input: Buffer, socket: net.Socket): PartiallyParsedHttpRequest {
     const req: PartiallyParsedHttpRequest = {};
     try {
-        req.protocol = socket instanceof TLSSocket ? "https" : "http"; // Wild guess really
+        req.protocol = socket.lastHopEncrypted ? "https" : "http"; // Wild guess really
 
         // For TLS sockets, we default the hostname to the name given by SNI. Might be overridden
         // by the URL or Host header later, if available.
