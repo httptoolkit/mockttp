@@ -198,7 +198,6 @@ describe("Response subscriptions", () => {
                     'x-extra-header': 'present'
                 }
                 : {
-                    ':status': '200',
                     'x-extra-header': 'present',
                     'access-control-allow-origin': '*'
                 }

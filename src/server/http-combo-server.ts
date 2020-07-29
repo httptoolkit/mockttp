@@ -103,6 +103,7 @@ export async function createComboServer(
             key: defaultCert.key,
             cert: defaultCert.cert,
             ca: [defaultCert.ca],
+            ALPNProtocols: ['http/1.1', 'h2'],
             SNICallback: (domain: string, cb: Function) => {
                 if (options.debug) console.log(`Generating certificate for ${domain}`);
 

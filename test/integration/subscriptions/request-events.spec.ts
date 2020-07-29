@@ -116,10 +116,7 @@ describe("Request initiated subscriptions", () => {
             let seenRequest = await seenRequestPromise;
             expect(seenRequest.method).to.equal('POST');
             expect(seenRequest.protocol).to.equal('https');
-            expect(seenRequest.httpVersion).to.equal(isNode
-                ? '1.1'
-                : '2.0'
-            );
+            expect(seenRequest.httpVersion).to.equal('1.1');
             expect(seenRequest.url).to.equal(server.urlFor("/mocked-endpoint"));
             expect((seenRequest as any).body).to.equal(undefined); // No body included yet
 
@@ -137,15 +134,13 @@ describe("Request initiated subscriptions", () => {
                     'content-length': '9',
                     'host': `localhost:${server.port}`
                 }
-                : { // Browsers uses HTTP/2 with HTTPS, so we get the pseudo-headers too:
-                    ':authority': 'localhost:8000',
-                    ':method': 'POST',
-                    ':path': server.urlFor('/mocked-endpoint'),
-                    ':scheme': 'https',
+                : {
                     'accept': '*/*',
                     'accept-encoding': 'gzip, deflate, br',
+                    'connection': 'keep-alive',
                     'content-length': '9',
                     'content-type': 'text/plain;charset=UTF-8',
+                    'host': `localhost:${server.port}`,
                     'sec-fetch-dest': 'empty',
                     'sec-fetch-mode': 'cors',
                     'sec-fetch-site': 'cross-site'
