@@ -55,7 +55,7 @@ export class WebSocketHandler {
     }
 
     private connectUpstream(wsUrl: string, req: http.IncomingMessage, socket: net.Socket, head: Buffer) {
-        if (this.debug) console.log(`Connecting to upstream websocket at ${url}`);
+        if (this.debug) console.log(`Connecting to upstream websocket at ${wsUrl}`);
 
         // Skip cert checks if the host or host+port are whitelisted
         const parsedUrl = url.parse(wsUrl);
@@ -63,10 +63,12 @@ export class WebSocketHandler {
             !_.includes(this.ignoreHostCertificateErrors, parsedUrl.host);
 
         const upstreamSocket = new WebSocket(wsUrl, {
-            rejectUnauthorized: checkServerCertificate
+            rejectUnauthorized: checkServerCertificate,
+            maxPayload: 0
         });
 
         upstreamSocket.once('open', () => {
+            if (this.debug) console.log(`Websocket connected to ${wsUrl}`);
             this.wsServer.handleUpgrade(req, socket, head, (ws) => {
                 (<InterceptedWebSocket> ws).upstreamSocket = upstreamSocket;
                 this.wsServer.emit('connection', ws);
@@ -75,6 +77,7 @@ export class WebSocketHandler {
 
         // If the upstream says no, we say no too.
         upstreamSocket.on('unexpected-response', (req, res) => {
+            console.log(`Unexpected websocket response from ${wsUrl}: ${res.statusCode}`);
             this.mirrorRejection(socket, res);
         });
 
@@ -93,19 +96,28 @@ export class WebSocketHandler {
             console.error(`Websocket ${op} failed`, err);
         };
 
-        inSocket.on('message', (msg) => outSocket.send(msg, onPipeFailed('message')));
+        inSocket.on('message', (msg) => {
+            if (isOpen(outSocket)) {
+                outSocket.send(msg, onPipeFailed('message'))
+            }
+        });
         inSocket.on('close', (num, reason) => {
             if (num >= 1000 && num <= 1004) {
-                if (this.debug) console.log('Successfully proxying websocket streams');
+                if (this.debug) console.log('Cleanly closing websocket stream');
                 outSocket.close(num, reason);
             } else {
+                console.log(`Unhappily closing websocket ${num}: ${reason}`);
                 // Unspecified or invalid error
                 outSocket.close();
             }
         });
 
-        inSocket.on('ping', (data) => outSocket.ping(data, undefined, onPipeFailed('ping')));
-        inSocket.on('pong', (data) => outSocket.pong(data, undefined, onPipeFailed('pong')));
+        inSocket.on('ping', (data) => {
+            if (isOpen(outSocket)) outSocket.ping(data, undefined, onPipeFailed('ping'))
+        });
+        inSocket.on('pong', (data) => {
+            if (isOpen(outSocket)) outSocket.pong(data, undefined, onPipeFailed('pong'))
+        });
     }
 
     private async mirrorRejection(socket: net.Socket, rejectionResponse: http.IncomingMessage) {
@@ -126,4 +138,8 @@ export class WebSocketHandler {
 
         socket.destroy();
     }
+}
+
+function isOpen(socket: WebSocket) {
+    return socket.readyState === WebSocket.OPEN;
 }

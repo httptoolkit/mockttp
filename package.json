@@ -66,7 +66,7 @@
     "@types/shelljs": "0.8.0",
     "@types/source-map-support": "0.4.2",
     "@types/uuid": "3.4.5",
-    "@types/ws": "5.1.2",
+    "@types/ws": "7.2.0",
     "agent-base": "^4.2.1",
     "catch-uncommitted": "^1.0.0",
     "chai": "^3.5.0",
@@ -129,7 +129,7 @@
     "typed-error": "^3.0.2",
     "universal-websocket-client": "^1.0.2",
     "uuid": "^3.1.0",
-    "websocket-stream": "^5.1.2",
-    "ws": "^5.2.0"
+    "websocket-stream": "^5.5.2",
+    "ws": "^7.3.1"
   }
 }
