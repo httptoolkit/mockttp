@@ -667,8 +667,8 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
         const checkServerCertificate = !_.includes(this.ignoreHostCertificateErrors, hostname) &&
             !_.includes(this.ignoreHostCertificateErrors, hostWithPort);
 
-        // Use a client cert if it's listed for the  host+port or whole hostname
-        const clientCert =this.clientCertificateHostMap[hostWithPort] ||
+        // Use a client cert if it's listed for the host+port or whole hostname
+        const clientCert = this.clientCertificateHostMap[hostWithPort] ||
             this.clientCertificateHostMap[hostname!] ||
             {};
 
@@ -815,8 +815,14 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 reqBodyStream.once('error', () => serverReq.abort());
             }
 
-            clientReq.once('abort', () => serverReq.abort());
-            clientRes.once('close', () => serverReq.abort());
+            // If the downstream connection aborts, before the response has been completed,
+            // we also abort the upstream connection. Important to avoid unnecessary connections,
+            // and to correctly proxy client connection behaviour to the upstream server.
+            function abortUpstream() {
+                serverReq.abort();
+            }
+            clientReq.on('aborted', abortUpstream);
+            clientRes.once('finish', () => clientReq.removeListener('aborted', abortUpstream));
 
             serverReq.once('error', (e: any) => {
                 if ((<any>serverReq).aborted) return;
