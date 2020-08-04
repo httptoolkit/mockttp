@@ -785,7 +785,11 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 );
 
                 if (resBodyOverride) {
+                    // Return the override data to the client:
                     clientRes.end(resBodyOverride);
+                    // Dump the real response data:
+                    serverRes.resume();
+
                     resolve();
                 } else {
                     serverRes.pipe(clientRes);
