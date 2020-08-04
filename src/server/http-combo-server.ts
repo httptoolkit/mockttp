@@ -46,13 +46,20 @@ function ifTlsDropped(socket: tls.TLSSocket, errorCallback: () => void) {
         // If you send data, you trust the TLS connection
         socket.once('data', resolve);
 
-        // If you keep it open, you probably trust the TLS connection
-        // (some clients open unused connections for connection pools etc)
-        delay(5000).then(resolve);
-
         // If you silently close it very quicky, you probably don't trust us
         socket.once('close', reject);
         socket.once('end', reject);
+
+        // Some clients open later-unused TLS connections for connection pools, preconnect, etc.
+        // Even if these are shut later on, that doesn't mean they're are rejected connections.
+        // To differentiate the two cases, we consider connections OK after waiting 10x longer
+        // than the initial TLS handshake for an unhappy disconnection.
+        const timing = socket.__timingInfo || {};
+        const tlsSetupDuration = timing.tlsConnected! - (timing.tunnelSetup! || timing.initialSocket!);
+        const maxTlsRejectionTime = (tlsSetupDuration !== NaN && tlsSetupDuration !== 0)
+            ? tlsSetupDuration * 10
+            : 5000;
+        delay(maxTlsRejectionTime).then(resolve);
     })
     .then(() => {
         // Mark the socket as having completed TLS setup - this ensures that future
@@ -132,17 +139,25 @@ export async function createComboServer(
     }
 
     server.on('connection', (socket: net.Socket) => {
+        socket.__timingInfo = socket.__timingInfo || { initialSocket: Date.now() };
+
         // All sockets are initially marked as using unencrypted upstream connections.
         // If TLS is used, this is upgraded to 'true' by secureConnection below.
         socket.lastHopEncrypted = false;
     });
 
     server.on('secureConnection', (socket: tls.TLSSocket) => {
-        if ((socket as { _parent?: net.Socket })._parent) {
+        const parentSocket = getParentSocket(socket);
+        if (parentSocket) {
             // Sometimes wrapper TLS sockets created by the HTTP/2 server don't include the
-            // underlying port details, so it's better to make sure we copy them up.
-            copyAddressDetails((socket as any)._parent, socket);
+            // underlying socket details, so it's better to make sure we copy them up.
+            copyAddressDetails(parentSocket, socket);
+            copyTimingDetails(parentSocket, socket);
+        } else if (!socket.__timingInfo) {
+            socket.__timingInfo = { initialSocket: Date.now() };
         }
+
+        socket.__timingInfo!.tlsConnected = Date.now();
 
         socket.lastHopEncrypted = true;
         ifTlsDropped(socket, () => {
@@ -205,6 +220,9 @@ export async function createComboServer(
             // Required here to avoid https://github.com/nodejs/node/issues/29902
             const socketWrapper = new SocketWrapper(socket);
             copyAddressDetails(socket, socketWrapper);
+            copyTimingDetails(socket, socketWrapper);
+
+            socketWrapper.__timingInfo.tunnelSetup = Date.now();
             server.emit('connection', socketWrapper);
         });
     }
@@ -224,18 +242,27 @@ export async function createComboServer(
         // Send a 200 OK response, and start the tunnel:
         res.writeHead(200, {});
         copyAddressDetails(res.socket, res.stream);
+        copyTimingDetails(res.socket, res.stream);
+
         server.emit('connection', res.stream);
     }
 
     return destroyable(server);
 }
 
+function getParentSocket(socket: net.Socket) {
+    if (socket._parent) return socket._parent; // TLS wrapper
+    else return socket.stream; // SocketWrapper
+}
+
+type SocketIsh<MinProps extends keyof net.Socket> =
+    streams.Duplex & Partial<Pick<net.Socket, MinProps>>;
+
 // Update the target socket(-ish) with the address details from the source socket,
 // iff the target has no details of its own.
 function copyAddressDetails(
-    source: net.Socket,
-    target: streams.Duplex &
-        Partial<Pick<net.Socket, 'localAddress' | 'localPort' | 'remoteAddress' | 'remotePort'>>
+    source: SocketIsh<'localAddress' | 'localPort' | 'remoteAddress' | 'remotePort'>,
+    target: SocketIsh<'localAddress' | 'localPort' | 'remoteAddress' | 'remotePort'>
 ) {
     const fields = ['localAddress', 'localPort', 'remoteAddress', 'remotePort'] as const;
     Object.defineProperties(target, _.zipObject(fields,
@@ -246,4 +273,14 @@ function copyAddressDetails(
             (target as any)[fieldName] = source[fieldName];
         }
     });
+}
+
+function copyTimingDetails<T extends SocketIsh<'__timingInfo'>>(
+    source: SocketIsh<'__timingInfo'>,
+    target: T
+): asserts target is T & { __timingInfo: Required<net.Socket>['__timingInfo'] } {
+    if (!target.__timingInfo) {
+        // Clone timing info, don't copy it - child sockets get their own independent timing stats
+        target.__timingInfo = Object.assign({}, source.__timingInfo);
+    }
 }

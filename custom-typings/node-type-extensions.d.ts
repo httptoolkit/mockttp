@@ -3,7 +3,7 @@
 
 declare module "net" {
     import * as net from 'net';
-    import * as stream from 'stream';
+    import * as streams from 'stream';
 
     interface Socket {
         // Is this socket trying to send encrypted data upstream? For direct connections
@@ -25,8 +25,19 @@ declare module "net" {
         // HTTP parser errors, but which might be useful for debugging later
         __httpPeekedData?: Buffer;
 
-        // Internal reference to a parent socket, e.g. for TLS wrappers
+        // Our recordings of various timestamps, used for monitoring &
+        // performance analysis later on
+        __timingInfo?: {
+            initialSocket?: number; // Initial raw socket time
+            tunnelSetup?: number; // Latest CONNECT completion, if any
+            tlsConnected?: number; // Latest TLS handshake completion, if any
+        };
+
+        // Internal reference to the parent socket, available on TLS sockets
         _parent?: Socket;
+
+        // Internal reference to the underlying stream, available on _stream_wrap
+        stream?: streams.Duplex & Partial<net.Socket>;
     }
 }
 
