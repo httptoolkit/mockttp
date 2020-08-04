@@ -779,10 +779,15 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                     }
                 });
 
-                clientRes.writeHead(
-                    serverStatusCode,
-                    serverStatusMessage || clientRes.statusMessage
-                );
+                try {
+                    clientRes.writeHead(
+                        serverStatusCode,
+                        serverStatusMessage || clientRes.statusMessage
+                    );
+                } catch (e) {
+                    serverReq.abort();
+                    reject(e);
+                }
 
                 if (resBodyOverride) {
                     // Return the override data to the client:
