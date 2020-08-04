@@ -26,7 +26,7 @@ export class WebSocketHandler {
         });
     }
 
-    async handleUpgrade(req: http.IncomingMessage, socket: net.Socket, head: Buffer) {
+    handleUpgrade(req: http.IncomingMessage, socket: net.Socket, head: Buffer) {
         let { protocol: requestedProtocol, hostname, port, path } = url.parse(req.url!);
 
         if (this.debug) console.log(`Handling upgrade for ${req.url}`);
@@ -54,7 +54,7 @@ export class WebSocketHandler {
         }
     }
 
-    private connectUpstream(wsUrl: string, req: http.IncomingMessage, socket: net.Socket, head: Buffer) {
+    private connectUpstream(wsUrl: string, req: http.IncomingMessage, incomingSocket: net.Socket, head: Buffer) {
         if (this.debug) console.log(`Connecting to upstream websocket at ${wsUrl}`);
 
         // Skip cert checks if the host or host+port are whitelisted
@@ -69,7 +69,8 @@ export class WebSocketHandler {
 
         upstreamSocket.once('open', () => {
             if (this.debug) console.log(`Websocket connected to ${wsUrl}`);
-            this.wsServer.handleUpgrade(req, socket, head, (ws) => {
+            // Presumably the below adds an error handler. But what about before we get here?
+            this.wsServer.handleUpgrade(req, incomingSocket, head, (ws) => {
                 (<InterceptedWebSocket> ws).upstreamSocket = upstreamSocket;
                 this.wsServer.emit('connection', ws);
             });
@@ -78,14 +79,16 @@ export class WebSocketHandler {
         // If the upstream says no, we say no too.
         upstreamSocket.on('unexpected-response', (req, res) => {
             console.log(`Unexpected websocket response from ${wsUrl}: ${res.statusCode}`);
-            this.mirrorRejection(socket, res);
+            this.mirrorRejection(incomingSocket, res);
         });
 
         // If there's some other error, we just kill the socket:
         upstreamSocket.once('error', (e) => {
             console.warn(e);
-            socket.end();
+            incomingSocket.end();
         });
+
+        incomingSocket.once('error', () => upstreamSocket.close(1011)); // Internal error
     }
 
     private pipeWebSocket(inSocket: WebSocket, outSocket: WebSocket) {
