@@ -64,7 +64,11 @@ export class WebSocketHandler {
 
         const upstreamSocket = new WebSocket(wsUrl, {
             rejectUnauthorized: checkServerCertificate,
-            maxPayload: 0
+            maxPayload: 0,
+            headers: _.omitBy(req.headers, (_v, headerName) =>
+                headerName.toLowerCase().startsWith('sec-websocket') ||
+                headerName.toLowerCase() === 'connection'
+            ) as { [key: string]: string } // Simplify to string - doesn't matter though, only used by http module anyway
         });
 
         upstreamSocket.once('open', () => {

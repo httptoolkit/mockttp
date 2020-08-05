@@ -33,7 +33,11 @@ nodeOnly(() => {
                 wsServer = new WebSocket.Server({ port: 9090 });
 
                 // Echo every message
-                wsServer.on('connection', (ws) => {
+                wsServer.on('connection', (ws, request) => {
+                    if (request.headers['echo-header']) {
+                        ws.send("echo-header: " + request.headers['echo-header']);
+                    }
+
                     ws.on('message', (message) => {
                         ws.send(message);
                         ws.close();
@@ -57,6 +61,23 @@ nodeOnly(() => {
                 ws.close(1000);
 
                 expect(response).to.equal('test echo');
+            });
+
+            it("forwards the incoming requests's headers", async () => {
+                const ws = new WebSocket('ws://localhost:9090', {
+                    agent: new HttpProxyAgent(`http://localhost:${mockServer.port}`),
+                    headers: {
+                        'echo-header': 'a=b'
+                    }
+                });
+
+                const response = await new Promise((resolve, reject) => {
+                    ws.on('message', resolve);
+                    ws.on('error', (e) => reject(e));
+                });
+                ws.close(1000);
+
+                expect(response).to.equal('echo-header: a=b');
             });
 
             it('can be passed through successfully over HTTPS', async () => {
