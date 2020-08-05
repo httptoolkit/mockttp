@@ -217,13 +217,8 @@ export async function createComboServer(
         if (options.debug) console.log(`Proxying HTTP/1 CONNECT to ${connectUrl}`);
 
         socket.write('HTTP/' + req.httpVersion + ' 200 OK\r\n\r\n', 'utf-8', () => {
-            // Required here to avoid https://github.com/nodejs/node/issues/29902
-            const socketWrapper = new SocketWrapper(socket);
-            copyAddressDetails(socket, socketWrapper);
-            copyTimingDetails(socket, socketWrapper);
-
-            socketWrapper.__timingInfo.tunnelSetup = Date.now();
-            server.emit('connection', socketWrapper);
+            socket.__timingInfo!.tunnelSetup = Date.now();
+            server.emit('connection', socket);
         });
     }
 
