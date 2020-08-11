@@ -3,6 +3,7 @@ sudo: required
 language: node_js
 node_js:
     - 'node'
+    - '14.6.0' # Main version used by HTK server
     - '12'
     - '10'
 install:
