@@ -1,5 +1,4 @@
 import * as _ from 'lodash';
-import portfinder = require('portfinder');
 import { getLocal } from "../..";
 import { expect } from '../test-utils';
 

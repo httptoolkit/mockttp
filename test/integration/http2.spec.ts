@@ -5,6 +5,8 @@ import * as http from 'http';
 import * as https from 'https';
 import * as http2 from 'http2';
 import * as semver from 'semver';
+import * as fs from 'fs';
+import * as portfinder from 'portfinder';
 
 import { getLocal } from "../..";
 import {
@@ -413,6 +415,75 @@ nodeOnly(() => {
                 expect(responseBody.toString('utf8')).to.equal("Proxied HTTP2 response!");
 
                 await cleanup(tunnelledSocket, client);
+            });
+
+            describe("to an HTTP/2-only target", () => {
+
+                const http2Server = http2.createSecureServer({
+                    allowHTTP1: false,
+                    key: fs.readFileSync('./test/fixtures/test-ca.key'),
+                    cert: fs.readFileSync('./test/fixtures/test-ca.pem')
+                }, (req, res) => {
+                    res.writeHead(200);
+                    res.end("Real HTTP/2 response");
+                });
+
+                let targetPort: number;
+
+                beforeEach(async () => {
+                    targetPort = await portfinder.getPortPromise();
+
+                    await new Promise(async (resolve, reject) => {
+                        http2Server.on('error', reject);
+                        http2Server.listen(targetPort, resolve);
+                    });
+                });
+
+                afterEach(() => http2Server.close());
+
+                it("can pass through end-to-end HTTP/2", async function () {
+                    if (!semver.satisfies(process.version, '>=12')) {
+                        // Due to a bug in Node 10 (from 10.16.3+), TLS sockets on top of
+                        // TLS sockets don't work. Mockttp works fine, it's just that
+                        // the tests fail to complete the TLS client connection.
+                        this.skip();
+                    }
+
+                    await server.get(`https://localhost:${targetPort}/`)
+                        .thenPassThrough({ ignoreHostCertificateErrors: ['localhost'] });
+
+                    const client = http2.connect(server.url);
+
+                    const req = client.request({
+                        ':method': 'CONNECT',
+                        ':authority': `localhost:${targetPort}`
+                    });
+
+                    // Initial response, the proxy has set up our tunnel:
+                    const responseHeaders = await getHttp2Response(req);
+                    expect(responseHeaders[':status']).to.equal(200);
+
+                    // We can now read/write to req as a raw TCP socket to our target server
+                    const proxiedClient = http2.connect(`https://localhost:${targetPort}`, {
+                         // Tunnel this request through the proxy stream
+                        createConnection: () => tls.connect({
+                            socket: req as any,
+                            ALPNProtocols: ['h2']
+                        })
+                    });
+
+                    const proxiedRequest = proxiedClient.request({
+                        ':path': '/'
+                    });
+                    const proxiedResponse = await getHttp2Response(proxiedRequest);
+                    expect(proxiedResponse[':status']).to.equal(200);
+
+                    const responseBody = await getHttp2Body(proxiedRequest);
+                    expect(responseBody.toString('utf8')).to.equal("Real HTTP/2 response");
+
+                    await cleanup(proxiedClient, client);
+                });
+
             });
 
         });

@@ -7,7 +7,6 @@ import * as net from 'net';
 import { TLSSocket } from 'tls';
 import * as http from 'http';
 import * as http2 from 'http2';
-import { EventEmitter } from 'events';
 import * as stream from 'stream';
 import * as querystring from 'querystring';
 import * as zlib from 'zlib';

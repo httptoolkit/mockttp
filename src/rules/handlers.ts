@@ -7,6 +7,7 @@ import url = require('url');
 import net = require('net');
 import http = require('http');
 import https = require('https');
+import * as h2Client from 'http2-client';
 import { encode as encodeBase64, decode as decodeBase64 } from 'base64-arraybuffer';
 import { Readable, Transform } from 'stream';
 import { stripIndent, oneLine } from 'common-tags';
@@ -673,7 +674,13 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
             this.clientCertificateHostMap[hostname!] ||
             {};
 
-        let makeRequest = protocol === 'https:' ? https.request : http.request;
+        let makeRequest =
+            protocol === 'https:' && isHttp2(clientReq)
+                ? h2Client.request // Only used for HTTPS, as it falls back to H1 with HTTP anyway
+            : protocol === 'https:' // HTTP/1
+                ? https.request
+            // Protocol is http:
+                : http.request;
 
         let family: undefined | 4 | 6;
         if (hostname === 'localhost') {

@@ -10,7 +10,8 @@
     "tls": false,
     "http": false,
     "https": false,
-    "http2": false
+    "http2": false,
+    "http2-client": false
   },
   "types": "dist/main.d.ts",
   "bin": {
