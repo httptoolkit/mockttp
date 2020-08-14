@@ -3,7 +3,15 @@
   "version": "0.21.2",
   "description": "Mock HTTP server for testing HTTP clients and stubbing webservices",
   "main": "dist/main.js",
-  "browser": "dist/main-browser.js",
+  "browser": {
+    "dist/main.js": "./dist/main-browser.js",
+    "fs": false,
+    "net": false,
+    "tls": false,
+    "http": false,
+    "https": false,
+    "http2": false
+  },
   "types": "dist/main.d.ts",
   "bin": {
     "mockttp": "./dist/standalone/standalone-bin.js"
