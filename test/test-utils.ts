@@ -6,7 +6,6 @@ import * as net from 'net';
 import * as tls from 'tls';
 import * as http2 from 'http2';
 import * as streams from 'stream';
-import * as URL from 'url';
 import getFetchPonyfill = require("fetch-ponyfill");
 
 import chai = require("chai");

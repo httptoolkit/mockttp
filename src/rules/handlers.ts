@@ -47,7 +47,7 @@ import {
     CompletedBody,
     Explainable
 } from "../types";
-import { byteLength } from '../util/util';
+import { byteLength, isNode } from '../util/util';
 
 // An error that indicates that the handler is aborting the request.
 // This could be intentional, or an upstream server aborting the request.
@@ -512,14 +512,15 @@ function getCorrectContentLength(
     return lengthOverride;
 }
 
-const KeepAliveAgents = {
-    'http:': new http.Agent({
-        keepAlive: true
-    }),
-    'https:': new https.Agent({
-        keepAlive: true
-    })
-};
+const KeepAliveAgents = isNode
+    ? { // These are only used (and only available) on the node server side
+        'http:': new http.Agent({
+            keepAlive: true
+        }),
+        'https:': new https.Agent({
+            keepAlive: true
+        })
+    } : {};
 
 export class PassThroughHandler extends Serializable implements RequestHandler {
     readonly type = 'passthrough';
