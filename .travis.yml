@@ -4,7 +4,7 @@ language: node_js
 node_js:
     - 'node'
     - '14.6.0' # Main version used by HTK server
-    - '12'
+    - '12.16' # Pinned, because node's H2 is buggy in 12.17+
     - '10'
 install:
     - npm install --no-package-lock
