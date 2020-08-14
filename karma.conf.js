@@ -11,13 +11,14 @@ module.exports = function(config) {
         ],
         mime: { 'text/x-typescript': ['ts'] },
         webpack: {
+            mode: 'development',
             devtool: 'source-map',
             resolve: {
                 extensions: ['.ts', '.js'],
                 alias: { http2$: require.resolve('./test/empty-stub.js') }
             },
             module: {
-                loaders: [
+                rules: [
                     { test: /fs-extra/, loader: 'null-loader' },
                     { test: /\.ts$/, loader: 'ts-loader', exclude: /node_modules/ }
                 ]
