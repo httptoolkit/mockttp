@@ -181,6 +181,7 @@ export interface MockedEndpoint {
 
 export interface MockedEndpointData {
     id: string;
+    explanation?: string;
     seenRequests: CompletedRequest[];
     isPending: boolean;
 }

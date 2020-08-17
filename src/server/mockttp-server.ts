@@ -30,7 +30,7 @@ import { CAOptions } from '../util/tls';
 import { DestroyableServer } from "../util/destroyable-server";
 import { Mockttp, AbstractMockttp, MockttpOptions, PortRange } from "../mockttp";
 import { MockRule, MockRuleData } from "../rules/mock-rule";
-import { MockedEndpoint } from "./mocked-endpoint";
+import { ServerMockedEndpoint } from "./mocked-endpoint";
 import { createComboServer } from "./http-combo-server";
 import { filter } from "../util/promise";
 
@@ -213,22 +213,22 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         return this.address.port;
     }
 
-    public setRules = (...ruleData: MockRuleData[]): Promise<MockedEndpoint[]> => {
+    public setRules = (...ruleData: MockRuleData[]): Promise<ServerMockedEndpoint[]> => {
         this.rules.forEach(r => r.dispose());
         this.rules = ruleData.map((ruleDatum) => new MockRule(ruleDatum));
-        return Promise.resolve(this.rules.map(r => new MockedEndpoint(r)));
+        return Promise.resolve(this.rules.map(r => new ServerMockedEndpoint(r)));
     }
 
-    public addRules = (...ruleData: MockRuleData[]): Promise<MockedEndpoint[]> => {
+    public addRules = (...ruleData: MockRuleData[]): Promise<ServerMockedEndpoint[]> => {
         return Promise.resolve(ruleData.map((ruleDatum) => {
             const rule = new MockRule(ruleDatum);
             this.rules.push(rule);
-            return new MockedEndpoint(rule);
+            return new ServerMockedEndpoint(rule);
         }));
     }
 
-    public async getMockedEndpoints() {
-        return this.rules.map(r => new MockedEndpoint(r));
+    public async getMockedEndpoints(): Promise<ServerMockedEndpoint[]> {
+        return this.rules.map(r => new ServerMockedEndpoint(r));
     }
 
     public async getPendingEndpoints() {

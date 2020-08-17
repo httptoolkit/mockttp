@@ -7,7 +7,7 @@ import { Serializable } from '../util/serialization';
 export interface RuleCompletionChecker extends Serializable {
     type: keyof typeof CompletionCheckerLookup;
     isComplete(seenRequestCount: number): boolean;
-    explain(seenRequestCount: number): string;
+    explain(seenRequestCount: number | undefined): string;
 }
 
 export class Always extends Serializable implements RuleCompletionChecker {
@@ -17,7 +17,7 @@ export class Always extends Serializable implements RuleCompletionChecker {
         return false;
     }
 
-    explain(seenRequestCount: number) {
+    explain(seenRequestCount: number | undefined) {
         return explainUntil(seenRequestCount, Infinity, 'always');
     }
 }
@@ -29,7 +29,7 @@ export class Once extends Serializable implements RuleCompletionChecker {
         return seenRequestCount >= 1;
     }
 
-    explain(seenRequestCount: number) {
+    explain(seenRequestCount: number | undefined) {
         return explainUntil(seenRequestCount, 1, 'once');
     }
 }
@@ -41,7 +41,7 @@ export class Twice extends Serializable implements RuleCompletionChecker {
         return seenRequestCount >= 2;
     }
 
-    explain(seenRequestCount: number) {
+    explain(seenRequestCount: number | undefined) {
         return explainUntil(seenRequestCount, 2, 'twice');
     }
 }
@@ -53,7 +53,7 @@ export class Thrice extends Serializable implements RuleCompletionChecker {
         return seenRequestCount >= 3;
     }
 
-    explain(seenRequestCount: number) {
+    explain(seenRequestCount: number | undefined) {
         return explainUntil(seenRequestCount, 3, 'thrice');
     }
 }
@@ -71,7 +71,7 @@ export class NTimes extends Serializable implements RuleCompletionChecker {
         return seenRequestCount >= this.count;
     }
 
-    explain(seenRequestCount: number) {
+    explain(seenRequestCount: number | undefined) {
         return explainUntil(seenRequestCount, this.count, `${this.count} times`);
     }
 }
@@ -84,6 +84,11 @@ export const CompletionCheckerLookup = {
     'times': NTimes
 }
 
-function explainUntil(seen: number, n: number, name: string): string {
-    return name + " " + (seen < n ? `(seen ${seen})` : "(done)");
+function explainUntil(seen: number | undefined, n: number, name: string): string {
+    if (seen === undefined) {
+        // Generic explainer, without the specific count
+        return name;
+    } else {
+        return name + " " + (seen < n ? `(seen ${seen})` : "(done)");
+    }
 }

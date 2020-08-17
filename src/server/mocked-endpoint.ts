@@ -2,10 +2,11 @@
  * @module Mockttp
  */
 
-import { CompletedRequest, MockedEndpoint as MockedEndpointInterface } from '../types';
+import * as util from 'util';
+import { CompletedRequest, MockedEndpoint } from '../types';
 import { MockRule } from '../rules/mock-rule';
 
-export class MockedEndpoint implements MockedEndpointInterface {
+export class ServerMockedEndpoint implements MockedEndpoint {
 
     constructor (private rule: MockRule) {
         this.getSeenRequests.bind(this);
@@ -33,5 +34,13 @@ export class MockedEndpoint implements MockedEndpointInterface {
             // If not, then it's default "at least one" completion:
             return this.rule.requestCount === 0;
         }
+    }
+
+    [util.inspect.custom]() {
+        return this.toString();
+    }
+
+    toString(withoutExactCompletion = false) {
+        return this.rule.explain(withoutExactCompletion);
     }
 }

@@ -4,6 +4,7 @@
 
 import * as _ from "lodash";
 import { Duplex } from "stream";
+import * as util from 'util';
 
 import {
   GraphQLScalarType,
@@ -15,6 +16,7 @@ import { IResolvers } from "graphql-tools/dist/Interfaces";
 import { PubSub } from "graphql-subscriptions";
 
 import MockttpServer from "../server/mockttp-server";
+import { ServerMockedEndpoint } from "../server/mocked-endpoint";
 import { MockedEndpoint, MockedEndpointData, CompletedRequest, CompletedResponse, ClientError } from "../types";
 import { Serialized } from "../util/serialization";
 import { MockRuleData, deserializeRuleData } from "../rules/mock-rule";
@@ -55,9 +57,10 @@ function parseAnyAst(ast: ValueNode): any {
     }
 }
 
-async function buildMockedEndpointData(endpoint: MockedEndpoint): Promise<MockedEndpointData> {
+async function buildMockedEndpointData(endpoint: ServerMockedEndpoint): Promise<MockedEndpointData> {
     return {
         id: endpoint.id,
+        explanation: endpoint.toString(true),
         seenRequests: await endpoint.getSeenRequests(),
         isPending: await endpoint.isPending()
     };

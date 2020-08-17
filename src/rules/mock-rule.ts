@@ -117,12 +117,14 @@ export class MockRule implements MockRule {
         }
     }
 
-    explain(): string {
+    explain(withoutExactCompletion = false): string {
         let explanation = `Match requests ${matchers.explainMatchers(this.matchers)}, ` +
         `and then ${this.handler.explain()}`;
 
         if (this.completionChecker) {
-            explanation += `, ${this.completionChecker.explain(this.requestCount)}.`;
+            explanation += `, ${this.completionChecker.explain(
+                withoutExactCompletion ? undefined : this.requestCount
+            )}.`;
         } else {
             explanation += '.';
         }

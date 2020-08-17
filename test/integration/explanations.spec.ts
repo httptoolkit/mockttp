@@ -1,5 +1,5 @@
 import { getLocal } from "../..";
-import { expect, fetch, URLSearchParams, Headers } from "../test-utils";
+import { expect, fetch, URLSearchParams, Headers, isNode } from "../test-utils";
 import * as _ from "lodash";
 import { Readable } from "stream";
 
@@ -161,5 +161,31 @@ URL, which is a passthrough endpoint...
 
 You should either explicitly mock a response for this URL (http://localhost:${server.port}/endpoint), or use the server \
 as a proxy, instead of making requests to it directly`);
+    });
+
+    it("should be available when inspecting endpoints", async () => {
+        await server.get("/endpoint").twice().thenReply(200, "first response");
+        await server.get("/endpoint").thenReply(200, "second response");
+
+        await fetch(server.urlFor("/endpoint"));
+
+        const endpoints = await server.getMockedEndpoints();
+        if (isNode) {
+            // util.inspect is used by console.log under the hood, so should be standard console.log output:
+            const util = require('util');
+            const explanation = util.inspect(endpoints);
+            expect(explanation).to.include(
+                'Match requests making GETs for /endpoint, and then respond with status 200 and body "first response", twice (seen 1).'
+            );
+            expect(explanation).to.include(
+                'Match requests making GETs for /endpoint, and then respond with status 200 and body "second response".'
+            );
+        } else {
+            const explanations = endpoints.map(p => (p as any).explanation);
+            expect(explanations).to.deep.equal([
+                'Match requests making GETs for /endpoint, and then respond with status 200 and body "first response", twice.',
+                'Match requests making GETs for /endpoint, and then respond with status 200 and body "second response".'
+            ]);
+        }
     });
 });

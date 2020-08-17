@@ -331,10 +331,11 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
         const requestName = reset ? 'SetRules' : 'AddRules';
         const mutationName = reset ? 'setRules' : 'addRules';
 
-        let ruleIds = (await this.queryMockServer<{ rules: Array<{ id: string }> }>(
+        let endpoints = (await this.queryMockServer<{ endpoints: Array<{ id: string, explanation?: string }> }>(
             `mutation ${requestName}($newRules: [MockRule!]!) {
-                rules: ${mutationName}(input: $newRules) {
-                    id
+                endpoints: ${mutationName}(input: $newRules) {
+                    id,
+                    ${this.typeHasField('MockedEndpoint', 'explanation') ? 'explanation' : ''}
                 }
             }`, {
                 newRules: rules.map((rule) => {
@@ -345,10 +346,10 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                     return serializedData;
                 })
             }
-        )).rules.map(r => r.id);
+        )).endpoints;
 
-        return ruleIds.map(ruleId =>
-            new MockedEndpointClient(ruleId, this.getEndpointDataGetter(ruleId))
+        return endpoints.map(({ id, explanation }) =>
+            new MockedEndpointClient(id, explanation, this.getEndpointDataGetter(id))
         );
     }
 
@@ -358,7 +359,8 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
         }>(
             `query GetAllEndpointData {
                 mockedEndpoints {
-                    id
+                    id,
+                    ${this.typeHasField('MockedEndpoint', 'explanation') ? 'explanation' : ''}
                 }
             }`
         );
@@ -366,7 +368,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
         const mockedEndpoints = result.mockedEndpoints;
 
         return mockedEndpoints.map(e =>
-            new MockedEndpointClient(e.id, this.getEndpointDataGetter(e.id))
+            new MockedEndpointClient(e.id, e.explanation, this.getEndpointDataGetter(e.id))
         );
     }
 
@@ -376,7 +378,8 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
         }>(
             `query GetPendingEndpointData {
                 pendingEndpoints {
-                    id
+                    id,
+                    explanation
                 }
             }`
         );
@@ -384,7 +387,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
         const pendingEndpoints = result.pendingEndpoints;
 
         return pendingEndpoints.map(e =>
-            new MockedEndpointClient(e.id, this.getEndpointDataGetter(e.id))
+            new MockedEndpointClient(e.id, e.explanation, this.getEndpointDataGetter(e.id))
         );
     }
 
@@ -394,19 +397,24 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
         delete ruleData.id; // Old servers don't support sending ids.
 
         const response = await this.queryMockServer<{
-            addRule: { id: string }
+            addRule: { id: string, explanation?: string }
         }>(
             `mutation AddRule($newRule: MockRule!) {
                 addRule(input: $newRule) {
-                    id
+                    id,
+                    ${this.typeHasField('MockedEndpoint', 'explanation') ? 'explanation' : ''}
                 }
             }`, {
                 newRule: ruleData
             }
         );
 
-        const ruleId = response.addRule.id;
-        return new MockedEndpointClient(ruleId, this.getEndpointDataGetter(ruleId));
+        const mockedEndpoint = response.addRule;
+        return new MockedEndpointClient(
+            mockedEndpoint.id,
+            mockedEndpoint.explanation,
+            this.getEndpointDataGetter(mockedEndpoint.id)
+        );
     }
 
     public on(event: SubscribableEvent, callback: (data: any) => void): Promise<void> {

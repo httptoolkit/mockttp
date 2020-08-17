@@ -8,6 +8,7 @@ export class MockedEndpointClient implements MockedEndpoint {
 
     public constructor(
         public readonly id: string,
+        private explanation: string | undefined,
         private endpointDataGetter: () => Promise<MockedEndpointData | null>
     ) { }
 
@@ -23,5 +24,13 @@ export class MockedEndpointClient implements MockedEndpoint {
 
     public async isPending(): Promise<boolean> {
         return (await this.getMockedEndpointData()).isPending;
+    }
+
+    toString() {
+        if (this.explanation) {
+            return this.explanation;
+        } else {
+            return Object.toString.call(this);
+        }
     }
 }

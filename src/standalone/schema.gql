@@ -22,6 +22,7 @@ type Subscription {
 
 type MockedEndpoint {
     id: ID!
+    explanation: String
     seenRequests: [Request!]!
     isPending: Boolean!
 }
