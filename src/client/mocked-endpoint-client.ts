@@ -28,7 +28,7 @@ export class MockedEndpointClient implements MockedEndpoint {
 
     toString() {
         if (this.explanation) {
-            return this.explanation;
+            return "Mocked endpoint: " + this.explanation;
         } else {
             return Object.toString.call(this);
         }

@@ -37,7 +37,7 @@ export class ServerMockedEndpoint implements MockedEndpoint {
     }
 
     [util.inspect.custom]() {
-        return this.toString();
+        return "Mocked endpoint: " + this.toString();
     }
 
     toString(withoutExactCompletion = false) {
