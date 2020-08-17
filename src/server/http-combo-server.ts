@@ -56,7 +56,7 @@ function ifTlsDropped(socket: tls.TLSSocket, errorCallback: () => void) {
         // than the initial TLS handshake for an unhappy disconnection.
         const timing = socket.__timingInfo || {};
         const tlsSetupDuration = timing.tlsConnected! - (timing.tunnelSetup! || timing.initialSocket!);
-        const maxTlsRejectionTime = (tlsSetupDuration !== NaN && tlsSetupDuration !== 0)
+        const maxTlsRejectionTime = (!Object.is(tlsSetupDuration, NaN) && tlsSetupDuration !== 0)
             ? tlsSetupDuration * 10
             : 5000;
         delay(maxTlsRejectionTime).then(resolve);
