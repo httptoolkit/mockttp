@@ -348,7 +348,43 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
         )).rules.map(r => r.id);
 
         return ruleIds.map(ruleId =>
-            new MockedEndpointClient(ruleId, this.getEndpointData(ruleId))
+            new MockedEndpointClient(ruleId, this.getEndpointDataGetter(ruleId))
+        );
+    }
+
+    public async getMockedEndpoints() {
+        let result = await this.queryMockServer<{
+            mockedEndpoints: MockedEndpointData[]
+        }>(
+            `query GetAllEndpointData {
+                mockedEndpoints {
+                    id
+                }
+            }`
+        );
+
+        const mockedEndpoints = result.mockedEndpoints;
+
+        return mockedEndpoints.map(e =>
+            new MockedEndpointClient(e.id, this.getEndpointDataGetter(e.id))
+        );
+    }
+
+    public async getPendingEndpoints() {
+        let result = await this.queryMockServer<{
+            pendingEndpoints: MockedEndpointData[]
+        }>(
+            `query GetPendingEndpointData {
+                pendingEndpoints {
+                    id
+                }
+            }`
+        );
+
+        const pendingEndpoints = result.pendingEndpoints;
+
+        return pendingEndpoints.map(e =>
+            new MockedEndpointClient(e.id, this.getEndpointDataGetter(e.id))
         );
     }
 
@@ -370,7 +406,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
         );
 
         const ruleId = response.addRule.id;
-        return new MockedEndpointClient(ruleId, this.getEndpointData(ruleId));
+        return new MockedEndpointClient(ruleId, this.getEndpointDataGetter(ruleId));
     }
 
     public on(event: SubscribableEvent, callback: (data: any) => void): Promise<void> {
@@ -558,7 +594,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
         });
     }
 
-    private getEndpointData = (ruleId: string) => async (): Promise<MockedEndpointData | null> => {
+    private getEndpointDataGetter = (ruleId: string) => async (): Promise<MockedEndpointData | null> => {
         let result = await this.queryMockServer<{
             mockedEndpoint: MockedEndpointData | null
         }>(
@@ -575,6 +611,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                         ${this.typeHasField('Request', 'timingEvents') ? 'timingEvents' : ''}
                         ${this.typeHasField('Request', 'httpVersion') ? 'httpVersion' : ''}
                     }
+                    ${this.typeHasField('MockedEndpoint', 'isPending') ? 'isPending' : ''}
                 }
             }`, {
                 id: ruleId

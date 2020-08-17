@@ -58,7 +58,8 @@ function parseAnyAst(ast: ValueNode): any {
 async function buildMockedEndpointData(endpoint: MockedEndpoint): Promise<MockedEndpointData> {
     return {
         id: endpoint.id,
-        seenRequests: await endpoint.getSeenRequests()
+        seenRequests: await endpoint.getSeenRequests(),
+        isPending: await endpoint.isPending()
     };
 }
 
@@ -175,12 +176,16 @@ export function buildStandaloneModel(mockServer: MockttpServer, stream: Duplex):
 
     return <any> {
         Query: {
-            mockedEndpoints: (): Promise<MockedEndpointData[]> => {
-                return Promise.all(mockServer.mockedEndpoints.map(buildMockedEndpointData));
+            mockedEndpoints: async (): Promise<MockedEndpointData[]> => {
+                return Promise.all((await mockServer.getMockedEndpoints()).map(buildMockedEndpointData));
             },
 
-            mockedEndpoint: (__: any, { id }: { id: string }): Promise<MockedEndpointData> | null => {
-                let endpoint = _.find(mockServer.mockedEndpoints, (endpoint: MockedEndpoint) => {
+            pendingEndpoints: async (): Promise<MockedEndpointData[]> => {
+                return Promise.all((await mockServer.getPendingEndpoints()).map(buildMockedEndpointData));
+            },
+
+            mockedEndpoint: async (__: any, { id }: { id: string }): Promise<MockedEndpointData | null> => {
+                let endpoint = _.find(await mockServer.getMockedEndpoints(), (endpoint: MockedEndpoint) => {
                     return endpoint.id === id;
                 });
 

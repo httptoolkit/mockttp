@@ -157,20 +157,32 @@ export interface ClientError {
  */
 export interface MockedEndpoint {
     id: string;
+
     /**
      * Get the requests that this endpoint has seen so far.
      *
      * This method returns a promise, which resolves with the requests seen
-     * up until now. The returned lists are immutable, so won't change if more
-     * requests rrive in future. Call `getSeenRequests` again later to get
-     * an updated list.
+     * up until now, once all ongoing requests have terminated. The returned
+     * lists are immutable, so won't change if more requests arrive in future.
+     * Call `getSeenRequests` again later to get an updated list.
      */
     getSeenRequests(): Promise<CompletedRequest[]>;
+
+    /**
+     * Reports whether this endpoint is still pending: if it either hasn't seen the
+     * specified number of requests (if one was specified e.g. with .twice())
+     * or if it hasn't seen at least one request, by default.
+     *
+     * This method returns a promise, which resolves with the result once all
+     * ongoing requests have terminated.
+     */
+    isPending(): Promise<boolean>;
 }
 
 export interface MockedEndpointData {
     id: string;
     seenRequests: CompletedRequest[];
+    isPending: boolean;
 }
 
 export interface Explainable {

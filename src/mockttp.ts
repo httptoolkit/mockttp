@@ -350,6 +350,18 @@ export interface Mockttp {
      * enable them elsewhere/later.
      */
     setRules(...ruleData: MockRuleData[]): Promise<MockedEndpoint[]>;
+
+    /**
+     * Returns the set of currently registered mock endpoints.
+     */
+    getMockedEndpoints(): Promise<MockedEndpoint[]>;
+
+    /**
+     * Returns the set of registered but pending mock endpoints: endpoints which either
+     * haven't seen the specified number of requests (if one was specified
+     * e.g. with .twice()) or which haven't seen at least one request, by default.
+     */
+    getPendingEndpoints(): Promise<MockedEndpoint[]>;
 }
 
 export interface MockttpOptions {
@@ -358,7 +370,7 @@ export interface MockttpOptions {
      * response?
      *
      * Defaults to true for remote clients (e.g. in the browser), and false otherwise.
-     * If this is set to false, browser requests will typically fail unless you 
+     * If this is set to false, browser requests will typically fail unless you
      * stub OPTIONS responses by hand.
      */
     cors?: boolean | cors.CorsOptions;

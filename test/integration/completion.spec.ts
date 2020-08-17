@@ -62,4 +62,61 @@ describe("HTTP mock rule completion", function () {
         await expect(fourthResult).to.have.responseText(/No rules were found matching this request/);
     });
 
+    it("should show endpoints as pending initially", async () => {
+        const endpointMock = await server.get("/mocked-endpoint").thenReply(200, "mocked data");
+
+        const isPending = await endpointMock.isPending();
+        expect(isPending).to.equal(true);
+    });
+
+    it("should show endpoints with no completion specified as not pending after the first request", async () => {
+        const endpointMock = await server.get("/mocked-endpoint").thenReply(200, "mocked data");
+
+        await fetch(server.urlFor("/mocked-endpoint"));
+
+        const isPending = await endpointMock.isPending();
+        expect(isPending).to.equal(false);
+    });
+
+    it("should show twice() endpoints as pending after the first request", async () => {
+        const endpointMock = await server.get("/mocked-endpoint").twice().thenReply(200, "mocked data");
+
+        await fetch(server.urlFor("/mocked-endpoint"));
+
+        const isPending = await endpointMock.isPending();
+        expect(isPending).to.equal(true);
+    });
+
+    it("should show twice() endpoints as not pending after the second request", async () => {
+        const endpointMock = await server.get("/mocked-endpoint").twice().thenReply(200, "mocked data");
+
+        await fetch(server.urlFor("/mocked-endpoint"));
+        await fetch(server.urlFor("/mocked-endpoint"));
+
+        const isPending = await endpointMock.isPending();
+        expect(isPending).to.equal(false);
+    });
+
+    it("should be used to populate pendingEndpoints", async () => {
+        const firstRule = await server.get("/endpoint").thenReply(200, "first response");
+        const secondRule = await server.get("/endpoint").thenReply(200, "second response");
+
+        await fetch(server.urlFor("/endpoint"));
+
+        const allEndpoints = await server.getMockedEndpoints();
+        const pending = await server.getPendingEndpoints();
+
+        expect(pending.length).to.equal(1);
+        expect(pending[0].id).to.equal(secondRule.id);
+        expect(await pending[0].isPending()).to.equal(true);
+
+        expect(allEndpoints.length).to.equal(2);
+        expect(allEndpoints[0].id).to.equal(firstRule.id);
+        expect(allEndpoints[1].id).to.equal(secondRule.id);
+
+        expect(await allEndpoints[0].isPending()).to.equal(false);
+        expect(await allEndpoints[1].isPending()).to.equal(true);
+        expect(await firstRule.isPending()).to.equal(false);
+    });
+
 });

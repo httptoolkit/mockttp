@@ -1,5 +1,6 @@
 type Query {
     mockedEndpoints: [MockedEndpoint!]!
+    pendingEndpoints: [MockedEndpoint!]!
     mockedEndpoint(id: ID!): MockedEndpoint
 }
 
@@ -22,6 +23,7 @@ type Subscription {
 type MockedEndpoint {
     id: ID!
     seenRequests: [Request!]!
+    isPending: Boolean!
 }
 
 input MockRule {

@@ -8,13 +8,20 @@ export class MockedEndpointClient implements MockedEndpoint {
 
     public constructor(
         public readonly id: string,
-        private getMockedEndpointData: () => Promise<MockedEndpointData | null>
+        private endpointDataGetter: () => Promise<MockedEndpointData | null>
     ) { }
 
-    public async getSeenRequests(): Promise<CompletedRequest[]> {
-        const mockedEndpointData = await this.getMockedEndpointData();
+    private async getMockedEndpointData() {
+        const mockedEndpointData = await this.endpointDataGetter();
         if (mockedEndpointData === null) throw new Error("Can't get seen requests for unknown mocked endpoint");
+        else return mockedEndpointData;
+    }
 
-        return mockedEndpointData.seenRequests;
+    public async getSeenRequests(): Promise<CompletedRequest[]> {
+        return (await this.getMockedEndpointData()).seenRequests;
+    }
+
+    public async isPending(): Promise<boolean> {
+        return (await this.getMockedEndpointData()).isPending;
     }
 }

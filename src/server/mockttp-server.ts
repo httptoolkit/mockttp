@@ -191,10 +191,6 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         this.debug = this.initialDebugSetting;
     }
 
-    get mockedEndpoints(): MockedEndpoint[] {
-        return this.rules.map((rule) => new MockedEndpoint(rule));
-    }
-
     private get address() {
         if (!this.server) throw new Error('Cannot get address before server is started');
 
@@ -229,6 +225,21 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
             this.rules.push(rule);
             return new MockedEndpoint(rule);
         }));
+    }
+
+    public async getMockedEndpoints() {
+        return this.rules.map(r => new MockedEndpoint(r));
+    }
+
+    public async getPendingEndpoints() {
+        const withPendingPromises = (await this.getMockedEndpoints())
+            .map(async (endpoint) => ({
+                endpoint,
+                isPending: await endpoint.isPending()
+            }));
+
+        const withPending = await Promise.all(withPendingPromises);
+        return withPending.filter(wp => wp.isPending).map(wp => wp.endpoint);
     }
 
     public on(event: 'request-initiated', callback: (req: InitiatedRequest) => void): Promise<void>;
