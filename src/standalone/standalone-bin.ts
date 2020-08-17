@@ -14,26 +14,33 @@ handleArgs(process.argv).catch((e) => {
 
 async function handleArgs(args: string[]) {
     let debug = false;
+    let port = undefined;
 
-    for (let i of _.range(2, args.length)) {
-        if (args[i] === '-c') {
-            let remainingArgs = args.slice(i+1);
-            await runCommandWithServer(remainingArgs.join(' '), debug);
+    const remainingArgs = args.slice(2);
+    let nextArg = remainingArgs.shift();
+    while (nextArg) {
+        if (nextArg === '-c') {
+            await runCommandWithServer(remainingArgs.join(' '), debug, port);
             return;
-        } else if (args[i] === '-d') {
+        } else if (nextArg === '-d') {
             debug = true;
+        } else if (nextArg === '-p') {
+            port = parseInt(remainingArgs.shift()!, 10);
+            if (Object.is(port, NaN)) break;
         } else {
             break;
         }
+
+        nextArg = remainingArgs.shift();
     }
 
-    console.log("Usage: mockttp -c <test command>");
+    console.log("Usage: mockttp [-d] [-p 45454] -c <test command>");
     process.exit(1);
 }
 
-async function runCommandWithServer(command: string, debug: boolean) {
+async function runCommandWithServer(command: string, debug: boolean, port?: number) {
     const server = Mockttp.getStandalone({ debug });
-    await server.start();
+    await server.start(port);
 
     let realProcess = childProcess.spawn(command, [], {
         shell: true,
