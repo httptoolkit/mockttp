@@ -313,7 +313,7 @@ nodeOnly(() => {
                 let client = getRemote();
 
                 await expect(client.start())
-                    .to.eventually.be.rejectedWith('Failed to connect to standalone server at http://localhost:45456');
+                    .to.eventually.be.rejectedWith('Failed to connect to standalone server at http://localhost:45454');
             });
         });
 

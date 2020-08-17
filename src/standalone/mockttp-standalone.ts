@@ -114,7 +114,8 @@ export class MockttpStandalone {
         }));
     }
 
-    async start(listenOptions: number | {
+    async start(
+        listenOptions: number | {
             port: number,
             host: string
         } = DEFAULT_STANDALONE_PORT

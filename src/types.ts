@@ -6,7 +6,7 @@ import stream = require('stream');
 import http = require('http');
 import { EventEmitter } from 'events';
 
-export const DEFAULT_STANDALONE_PORT = 45456;
+export const DEFAULT_STANDALONE_PORT = 45454;
 
 export enum Method {
     GET,
