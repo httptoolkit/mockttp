@@ -11,7 +11,7 @@
     "http": false,
     "https": false,
     "http2": false,
-    "http2-client": false
+    "http2-wrapper": false
   },
   "types": "dist/main.d.ts",
   "bin": {
@@ -128,7 +128,7 @@
     "graphql": "^14.0.2",
     "graphql-subscriptions": "^1.1.0",
     "graphql-tools": "^4.0.5",
-    "http2-client": "^1.3.3",
+    "http2-wrapper": "^1.0.0-beta.5.2",
     "lodash": "^4.16.4",
     "native-duplexpair": "^1.0.0",
     "node-forge": "^0.9.0",

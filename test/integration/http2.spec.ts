@@ -433,7 +433,8 @@ nodeOnly(() => {
                 let targetPort: number;
 
                 beforeEach(async () => {
-                    targetPort = await portfinder.getPortPromise();
+                    // Start at 9999 to avoid H2 detection caching issues in http2-wrapper.
+                    targetPort = await portfinder.getPortPromise({ port: 9999 });
 
                     await new Promise(async (resolve, reject) => {
                         http2Server.on('error', reject);

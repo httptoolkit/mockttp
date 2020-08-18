@@ -7,7 +7,7 @@ import url = require('url');
 import net = require('net');
 import http = require('http');
 import https = require('https');
-import * as h2Client from 'http2-client';
+import * as h2Client from 'http2-wrapper';
 import { encode as encodeBase64, decode as decodeBase64 } from 'base64-arraybuffer';
 import { Readable, Transform } from 'stream';
 import { stripIndent, oneLine } from 'common-tags';
@@ -576,7 +576,9 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
         let { method, url: reqUrl, headers } = clientReq;
         let { protocol, hostname, port, path } = url.parse(reqUrl);
 
-        if (isHttp2(clientReq)) {
+        const isH2Downstream = isHttp2(clientReq);
+
+        if (isH2Downstream) {
             headers = h2HeadersToH1(headers);
         }
 
@@ -674,12 +676,17 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
             this.clientCertificateHostMap[hostname!] ||
             {};
 
+        // We only do H2 upstream for HTTPS. Http2-wrapper doesn't support H2C, it's rarely used
+        // and we can't use ALPN to detect HTTP/2 support cleanly.
+        const shouldTryH2Upstream = isH2Downstream && protocol === 'https:';
+
         let makeRequest =
-            protocol === 'https:' && isHttp2(clientReq)
-                ? h2Client.request // Only used for HTTPS, as it falls back to H1 with HTTP anyway
-            : protocol === 'https:' // HTTP/1
+            shouldTryH2Upstream
+                ? h2Client.auto
+            // HTTP/1 + TLS
+            : protocol === 'https:'
                 ? https.request
-            // Protocol is http:
+            // HTTP/1 plaintext:
                 : http.request;
 
         let family: undefined | 4 | 6;
@@ -696,20 +703,28 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
         }
 
         // Mirror the keep-alive-ness of the incoming request in our outgoing request
-        const agent = shouldKeepAlive(clientReq)
-            ? KeepAliveAgents[(protocol as 'http:' | 'https:') || 'http:']
+        const agent =
+            shouldTryH2Upstream
+                // H2 client takes multiple agents, uses the appropriate one for the detected protocol
+                ? { https: KeepAliveAgents['https:'], http2: undefined }
+            // HTTP/1 + KA:
+            : shouldKeepAlive(clientReq)
+                ? KeepAliveAgents[(protocol as 'http:' | 'https:') || 'http:']
+            // HTTP/1 without KA:
             : undefined;
 
-        return new Promise<void>((resolve, reject) => {
-            let serverReq = makeRequest({
+        return new Promise<void>(async (resolve, reject) => {
+            let serverReq = await makeRequest({
                 protocol,
                 method,
                 hostname,
                 port,
                 family,
                 path,
-                headers,
-                agent,
+                headers: shouldTryH2Upstream
+                    ? h1HeadersToH2(headers)
+                    : headers,
+                agent: agent as http.Agent,
                 rejectUnauthorized: checkServerCertificate,
                 ...clientCert
             }, async (serverRes) => {
@@ -769,13 +784,14 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                     serverHeaders = dropUndefinedValues(serverHeaders);
                 }
 
-                if (isHttp2(clientReq)) {
+                if (isH2Downstream) {
                     serverHeaders = h1HeadersToH2(serverHeaders);
                 }
 
                 Object.keys(serverHeaders).forEach((header) => {
                     const headerValue = serverHeaders[header];
                     if (headerValue === undefined) return;
+                    if (header === ':status') return; // H2 status gets set by writeHead below
 
                     try {
                         clientRes.setHeader(header, headerValue);
