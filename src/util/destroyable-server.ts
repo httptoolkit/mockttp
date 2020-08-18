@@ -3,7 +3,6 @@
  */
 
 import net = require("net");
-import http = require("http");
 
 export interface DestroyableServer extends net.Server {
     destroy(): Promise<void>;

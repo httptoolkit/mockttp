@@ -1,14 +1,15 @@
 import * as _ from 'lodash';
 import { getLocal } from "../..";
-import { expect } from '../test-utils';
+import { expect, nodeOnly } from '../test-utils';
 
 describe("Port selection", function () {
+
     let server1 = getLocal();
     let server2 = getLocal();
 
     afterEach(() => Promise.all([
-        server1.stop(),
-        server2.stop()
+        server1.stop().catch(() => {}),
+        server2.stop().catch(() => {})
     ]));
 
     it("should use a free port starting from 8000 if none is specified", async () => {
@@ -39,5 +40,20 @@ describe("Port selection", function () {
         expect(server2.port).to.be.lt(portRange.endPort);
 
         expect(server2.port).to.be.gt(server1.port);
+    });
+
+    nodeOnly(() => {
+        describe("given 100 servers starting in parallel", () => {
+
+            const servers = _.range(0, 100).map(() => getLocal());
+
+            it("finds ports for all servers safely and successfully", async () => {
+                await Promise.all(servers.map(s =>
+                    // For some reason doing this around the default 8000 range breaks on Travis
+                    s.start({ startPort: 12000, endPort: 13000 })
+                ));
+            });
+
+        });
     });
 });

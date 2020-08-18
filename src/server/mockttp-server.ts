@@ -161,10 +161,12 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
                 // Although we try to pick a free port, we may have race conditions, if something else
                 // takes the same port at the same time. If you haven't explicitly picked a port, and
                 // we do have a collision, simply try again.
-                if (e.code === 'EADDRINUSE' && !portParam) {
+                if (e.code === 'EADDRINUSE' && !_.isNumber(portParam)) {
                     if (this.debug) console.log('Address in use, retrying...');
 
-                    this.server!.destroy(); // Don't bother waiting for this, it can stop on its own time
+                    // Destroy just in case there is something that needs cleanup here. Catch because most
+                    // of the time this will error with 'Server is not running'.
+                    this.server!.destroy().catch(() => {});
                     resolve(this.start());
                 } else {
                     reject(e);
