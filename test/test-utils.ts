@@ -5,6 +5,7 @@ import * as _ from 'lodash';
 import * as net from 'net';
 import * as tls from 'tls';
 import * as http2 from 'http2';
+import * as http2Wrapper from 'http2-wrapper';
 import * as streams from 'stream';
 import getFetchPonyfill = require("fetch-ponyfill");
 
@@ -227,3 +228,11 @@ export async function cleanup(
         }
     });
 }
+
+beforeEach(() => {
+    if (isNode) {
+        // Http2-wrapper has a hostname -> H1/H2 cache, which can cause problems
+        // when our tests reuse ports with servers of different protocols.
+        (http2Wrapper.auto as any).protocolCache.clear();
+    }
+});
