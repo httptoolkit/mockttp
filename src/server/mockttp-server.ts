@@ -108,7 +108,17 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
                     (req.socket.lastHopEncrypted ? 'https' : 'http');
                 req.path = req.url;
                 const host = req.headers[':authority'] || req.headers['host'];
-                req.url = new url.URL(req.url!, `${req.protocol}://${host}`).toString();
+
+                if (!req.headers[':path']) {
+                    req.url = new url.URL(req.url!, `${req.protocol}://${host}`).toString();
+                } else {
+                    // Node's HTTP/2 compat logic maps .url to headers[':path']. We want them to
+                    // diverge: .url should always be absolute, while :path may stay relative,
+                    // so we override the built-in getter & setter:
+                    Object.defineProperty(req, 'url', {
+                        value: new url.URL(req.url!, `${req.protocol}://${host}`).toString()
+                    });
+                }
             } else {
                 req.protocol = req.url!.split('://', 1)[0];
                 req.path = getPathFromAbsoluteUrl(req.url!);
