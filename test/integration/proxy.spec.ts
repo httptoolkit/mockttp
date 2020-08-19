@@ -874,6 +874,92 @@ nodeOnly(() => {
                     expect(response.headers['fake-header']).to.equal('injected');
                     expect(response.body.toString('utf8')).to.equal('fake-response');
                 });
+
+                it("can rewrite a response status en route", async () => {
+                    await server.anyRequest().thenPassThrough({
+                        ignoreHostCertificateErrors: ['localhost'],
+                        beforeResponse: (res) => {
+                            expect(res.statusCode).to.equal(200);
+                            expect(res.statusMessage).to.equal(''); // Not used in HTTP/2
+
+                            return { statusCode: 418 };
+                        }
+                    });
+
+                    const response = await http2ProxyRequest(server, `https://localhost:${targetPort}/`);
+
+                    expect(response.headers[':status']).to.equal(418);
+                });
+
+                it("can rewrite a response headers en route", async () => {
+                    await server.anyRequest().thenPassThrough({
+                        ignoreHostCertificateErrors: ['localhost'],
+                        beforeResponse: (res) => {
+                            expect(_.omit(res.headers, 'date')).to.deep.equal({
+                                ':status': 200,
+                                'received-url': '/',
+                                'received-method': 'GET',
+                                'echo-res-header': '',
+                                'received-body': '',
+                            });
+
+                            return {
+                                headers: {
+                                    'replacement-header': 'added'
+                                }
+                            };
+                        }
+                    });
+
+                    const response = await http2ProxyRequest(server, `https://localhost:${targetPort}/`);
+
+                    expect(
+                        _.omit(response.headers, 'date') // https://github.com/nodejs/node/issues/34841
+                    ).to.deep.equal({
+                        ':status': 200,
+                        'replacement-header': 'added'
+                    });
+                });
+
+                it("can rewrite a response body en route", async () => {
+                    await server.anyRequest().thenPassThrough({
+                        ignoreHostCertificateErrors: ['localhost'],
+                        beforeResponse: (res) => {
+                            expect(res.body.text).to.equal('Real HTTP/2 response');
+
+                            return { body: 'Replacement response' };
+                        }
+                    });
+
+                    const response = await http2ProxyRequest(server, `https://localhost:${targetPort}/`);
+
+                    expect(response.body.toString('utf8')).to.equal('Replacement response');
+                });
+
+                it("can rewrite a response body as JSON en route", async () => {
+                    await server.anyRequest().thenPassThrough({
+                        ignoreHostCertificateErrors: ['localhost'],
+                        beforeResponse: (res) => {
+                            expect(res.body.text).to.equal('Real HTTP/2 response');
+
+                            return { json: { replaced: true } };
+                        }
+                    });
+
+                    const response = await http2ProxyRequest(server, `https://localhost:${targetPort}/`);
+
+                    expect(
+                        _.omit(response.headers, 'date') // https://github.com/nodejs/node/issues/34841
+                    ).to.deep.equal({
+                        ':status': 200,
+                        'content-type': 'application/json',
+                        'received-url': '/',
+                        'received-method': 'GET',
+                        'echo-res-header': '',
+                        'received-body': ''
+                    });
+                    expect(response.body.toString('utf8')).to.equal(JSON.stringify({ replaced: true }));
+                });
             });
         });
 
