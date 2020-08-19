@@ -513,6 +513,31 @@ function getCorrectContentLength(
     return lengthOverride;
 }
 
+function validateModifiedResponseHeaders(
+    originalHeaders: Headers,
+    modifiedHeaders: Headers | undefined
+) {
+    if (modifiedHeaders) {
+        // We ignore returned pseudo headers, so we error if you try to manually set them
+        const invalidHeaders = _(modifiedHeaders)
+            .pickBy((value, name) =>
+                name.startsWith(':') &&
+                // Unless you've just returned the preexisting :status header value - that's ignored
+                // silently, so that mutating & returning the provided headers is always safe.
+                !(name === ':status' && value === originalHeaders[':status'])
+            )
+            .keys();
+
+        if (invalidHeaders.size() > 0) {
+            throw new Error(
+                `Cannot set a custom ${
+                    invalidHeaders.join(', ')
+                } pseudoheader${invalidHeaders.size() > 1 ? 's' : ''} value`
+            );
+        }
+    }
+}
+
 const KeepAliveAgents = isNode
     ? { // These are only used (and only available) on the node server side
         'http:': new http.Agent({
@@ -739,11 +764,16 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 let serverHeaders = serverRes.headers;
                 let resBodyOverride: string | Buffer | undefined;
 
+                if (isH2Downstream) {
+                    serverHeaders = h1HeadersToH2(serverHeaders);
+                }
+
                 if (this.beforeResponse) {
                     let modifiedRes: CallbackResponseResult;
                     let body: Buffer;
                     try {
                         body = await streamToBuffer(serverRes);
+
                         modifiedRes = await this.beforeResponse({
                             id: clientReq.id,
                             statusCode: serverStatusCode,
@@ -751,6 +781,8 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                             headers: serverHeaders,
                             body: buildBodyReader(body, serverHeaders)
                         });
+
+                        validateModifiedResponseHeaders(serverHeaders, modifiedRes.headers);
                     } catch (e) {
                         serverReq.abort();
                         return reject(e);
@@ -786,10 +818,6 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                     }
 
                     serverHeaders = dropUndefinedValues(serverHeaders);
-                }
-
-                if (isH2Downstream) {
-                    serverHeaders = h1HeadersToH2(serverHeaders);
                 }
 
                 Object.keys(serverHeaders).forEach((header) => {

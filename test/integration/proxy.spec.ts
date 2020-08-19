@@ -921,6 +921,69 @@ nodeOnly(() => {
                     });
                 });
 
+                it("can return headers including :status, as long as it's not a custom value", async () => {
+                    await server.anyRequest().thenPassThrough({
+                        ignoreHostCertificateErrors: ['localhost'],
+                        beforeResponse: (res) => {
+                            expect(res.headers[':status']).to.equal(200);
+
+                            return {
+                                statusCode: 418,
+                                headers: res.headers // This still includes :status: 200, but statusCode willl quietly replace it
+                            };
+                        }
+                    });
+
+                    const response = await http2ProxyRequest(server, `https://localhost:${targetPort}/`);
+
+                    expect(response.headers[':status']).to.equal(418);
+                });
+
+                it("rejects custom response pseudoheader headers added en route", async () => {
+                    await server.anyRequest().thenPassThrough({
+                        ignoreHostCertificateErrors: ['localhost'],
+                        beforeResponse: () => {
+                            return {
+                                headers: {
+                                    ':custom': 'value'
+                                }
+                            };
+                        }
+                    });
+
+                    const response = await http2ProxyRequest(server, `https://localhost:${targetPort}/`);
+
+                    expect(response.headers[':status']).to.equal(500);
+                    expect(response.headers[':custom']).to.equal(undefined);
+                    expect(response.body.toString()).to.equal(
+                        'Error: Cannot set a custom :custom pseudoheader value'
+                    );
+                });
+
+                it("rejects a rewritten :status header", async () => {
+                    await server.anyRequest().thenPassThrough({
+                        ignoreHostCertificateErrors: ['localhost'],
+                        beforeResponse: (res) => {
+                            expect(res.headers[':status']).to.equal(200);
+
+                            return {
+                                statusCode: 429,
+                                headers: {
+                                    ':status': '418'
+                                }
+                            };
+                        }
+                    });
+
+                    const response = await http2ProxyRequest(server, `https://localhost:${targetPort}/`);
+
+                    expect(response.headers[':status']).to.equal(500);
+                    expect(response.body.toString()).to.equal(
+                        'Error: Cannot set a custom :status pseudoheader value'
+                    );
+
+                });
+
                 it("can rewrite a response body en route", async () => {
                     await server.anyRequest().thenPassThrough({
                         ignoreHostCertificateErrors: ['localhost'],
