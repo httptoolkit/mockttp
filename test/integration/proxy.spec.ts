@@ -190,7 +190,10 @@ nodeOnly(() => {
                 await remoteServer.post('/').thenReply(200, 'POST');
 
                 await server.get(remoteServer.urlFor("/")).thenPassThrough({
-                    beforeRequest: () => ({ method: 'POST' })
+                    beforeRequest: (req) => {
+                        expect(req.method).to.equal('GET');
+                        return { method: 'POST' };
+                    }
                 });
 
                 let response = await request.get(remoteServer.urlFor("/"));
@@ -202,7 +205,10 @@ nodeOnly(() => {
                 await remoteServer.get('/endpoint').thenReply(200, '/endpoint');
 
                 await server.get(remoteServer.urlFor("/")).thenPassThrough({
-                    beforeRequest: (req) => ({ url: req.url.replace(/\/$/, '/endpoint') })
+                    beforeRequest: (req) => {
+                        expect(req.url).to.equal(remoteServer.urlFor("/"));
+                        return { url: req.url.replace(/\/$/, '/endpoint') };
+                    }
                 });
 
                 let response = await request.get(remoteServer.urlFor("/"));
@@ -213,7 +219,10 @@ nodeOnly(() => {
                 await remoteServer.get('/').thenReply(200, 'my remote');
 
                 await server.get('http://example.com').thenPassThrough({
-                    beforeRequest: () => ({ url: remoteServer.url })
+                    beforeRequest: (req) => {
+                        expect(req.url).to.equal('http://example.com/');
+                        return { url: remoteServer.url };
+                    }
                 });
 
                 let response = await request.get('http://example.com');
@@ -227,9 +236,15 @@ nodeOnly(() => {
                 }));
 
                 await server.get(remoteServer.urlFor("/rewrite")).thenPassThrough({
-                    beforeRequest: (req) => ({
-                        headers: Object.assign({}, req.headers, { 'x-test-header': 'test' })
-                    })
+                    beforeRequest: (req) => {
+                        expect(req.headers).to.deep.equal({
+                            'host': `localhost:${remoteServer.port}`,
+                            'connection': 'close'
+                        });
+                        return {
+                            headers: Object.assign({}, req.headers, { 'x-test-header': 'test' })
+                        };
+                    }
                 });
 
                 let response = await request.get(remoteServer.urlFor("/rewrite"));
@@ -244,6 +259,11 @@ nodeOnly(() => {
 
                 await server.get(remoteServer.urlFor("/rewrite")).thenPassThrough({
                     beforeRequest: (req) => {
+                        expect(req.headers).to.deep.equal({
+                            'host': `localhost:${remoteServer.port}`,
+                            'connection': 'close'
+                        });
+
                         req.headers['x-test-header'] = 'test';
                         // You shouldn't be able to return the request itself like this
                         // according to the types, but people will anyway, so check it
@@ -263,9 +283,13 @@ nodeOnly(() => {
                 }));
 
                 await server.post(remoteServer.urlFor("/")).thenPassThrough({
-                    beforeRequest: (req) => ({
-                        body: Buffer.from(req.body.text + ' extended')
-                    })
+                    beforeRequest: (req) => {
+                        expect(req.body.text).to.equal('initial body');
+
+                        return {
+                            body: Buffer.from(req.body.text + ' extended')
+                        };
+                    }
                 });
 
                 let response = await request.post(remoteServer.urlFor("/"), {
@@ -280,7 +304,10 @@ nodeOnly(() => {
                     body: req.body.text
                 }));
                 await server.post(remoteServer.urlFor("/")).thenPassThrough({
-                    beforeRequest: () => ({ body: '' })
+                    beforeRequest: (req) => {
+                        expect(req.body.text).to.equal('initial body');
+                        return { body: '' };
+                    }
                 });
 
                 let response = await request.post(remoteServer.urlFor("/"), {
@@ -296,9 +323,13 @@ nodeOnly(() => {
                 }));
 
                 await server.post(remoteServer.urlFor("/")).thenPassThrough({
-                    beforeRequest: () => ({
-                        json: { hello: "world" }
-                    })
+                    beforeRequest: (req) => {
+                        expect(req.body.json).to.equal(undefined);
+
+                        return {
+                            json: { hello: "world" }
+                        };
+                    }
                 });
 
                 let response = await request.post(remoteServer.urlFor("/"), {
@@ -334,10 +365,15 @@ nodeOnly(() => {
             it("should be able to rewrite a response's status", async () => {
                 await remoteServer.get('/').thenReply(404);
                 await server.get(remoteServer.urlFor("/")).thenPassThrough({
-                    beforeResponse: () => ({
-                        statusCode: 204,
-                        statusMessage: 'muy bien'
-                    })
+                    beforeResponse: (res) => {
+                        expect(res.statusCode).to.equal(404);
+                        expect(res.statusMessage).to.equal("Not Found");
+
+                        return {
+                            statusCode: 204,
+                            statusMessage: 'muy bien'
+                        };
+                    }
                 });
 
                 let response = await request.get(remoteServer.urlFor("/"), {
@@ -354,9 +390,15 @@ nodeOnly(() => {
                 });
 
                 await server.get(remoteServer.urlFor("/")).thenPassThrough({
-                    beforeResponse: (res) => ({
-                        headers: { 'x-header': res.headers['x-header'] + ' extended' }
-                    })
+                    beforeResponse: (res) => {
+                        expect(res.headers).to.deep.equal({
+                            'x-header': 'original'
+                        });
+
+                        return {
+                            headers: { 'x-header': res.headers['x-header'] + ' extended' }
+                        };
+                    }
                 });
 
                 let response = await request.get(remoteServer.urlFor("/"), {
@@ -372,10 +414,14 @@ nodeOnly(() => {
                 });
 
                 await server.get(remoteServer.urlFor("/")).thenPassThrough({
-                    beforeResponse: (res) => ({
-                        headers: { 'content-length': undefined },
-                        body: res.body.text + ' extended'
-                    })
+                    beforeResponse: (res) => {
+                        expect(res.body.text).to.equal('original text');
+
+                        return {
+                            headers: { 'content-length': undefined },
+                            body: res.body.text + ' extended'
+                        }
+                    }
                 });
 
                 let response = await request.get(remoteServer.urlFor("/"));
@@ -386,9 +432,13 @@ nodeOnly(() => {
                 await remoteServer.get('/').thenReply(200, 'text');
 
                 await server.get(remoteServer.urlFor("/")).thenPassThrough({
-                    beforeResponse: (res) => ({
-                        json: { hello: "world" }
-                    })
+                    beforeResponse: (res) => {
+                        expect(res.body.json).to.equal(undefined);
+
+                        return {
+                            json: { hello: "world" }
+                        };
+                    }
                 });
 
                 let response = await request.get(remoteServer.urlFor("/"), {
