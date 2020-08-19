@@ -16,7 +16,8 @@ import {
     getHttp2Response,
     getHttp2Body,
     cleanup,
-    fetch
+    fetch,
+    H2_TLS_ON_TLS_SUPPORTED
 } from "../test-utils";
 
 browserOnly(() => {
@@ -72,8 +73,6 @@ browserOnly(() => {
 });
 
 nodeOnly(() => {
-    const H2_TLS_ON_TLS_SUPPORTED = ">=12.17";
-
     describe("Using Mockttp with HTTP/2", function () {
 
         describe("without TLS", () => {
@@ -332,12 +331,7 @@ nodeOnly(() => {
             });
 
             it("can respond to proxied HTTP/2 requests", async function() {
-                if (!semver.satisfies(process.version, H2_TLS_ON_TLS_SUPPORTED)) {
-                    // Due to a bug in Node 10 (from 10.16.3+), TLS sockets on top of
-                    // TLS sockets don't work. Mockttp works fine, it's just that
-                    // the tests fail to complete the TLS client connection.
-                    this.skip();
-                }
+                if (!semver.satisfies(process.version, H2_TLS_ON_TLS_SUPPORTED)) this.skip();
 
                 await server.get('https://example.com/mocked-endpoint')
                     .thenReply(200, "Proxied HTTP2 response!");
@@ -375,12 +369,7 @@ nodeOnly(() => {
             });
 
             it("can respond to HTTP1-proxied HTTP/2 requests", async function() {
-                if (!semver.satisfies(process.version, H2_TLS_ON_TLS_SUPPORTED)) {
-                    // Due to a bug in Node 10 (from 10.16.3+), TLS sockets on top of
-                    // TLS sockets don't work. Mockttp works fine, it's just that
-                    // the tests fail to complete the TLS client connection.
-                    this.skip();
-                }
+                if (!semver.satisfies(process.version, H2_TLS_ON_TLS_SUPPORTED)) this.skip();
 
                 await server.get('https://example.com/mocked-endpoint')
                     .thenReply(200, "Proxied HTTP2 response!");
@@ -444,12 +433,7 @@ nodeOnly(() => {
                 afterEach(() => http2Server.close());
 
                 it("can pass through end-to-end HTTP/2", async function () {
-                    if (!semver.satisfies(process.version, H2_TLS_ON_TLS_SUPPORTED)) {
-                        // Due to a bug in Node 10 (from 10.16.3+), TLS sockets on top of
-                        // TLS sockets don't work. Mockttp works fine, it's just that
-                        // the tests fail to complete the TLS client connection.
-                        this.skip();
-                    }
+                    if (!semver.satisfies(process.version, H2_TLS_ON_TLS_SUPPORTED)) this.skip();
 
                     await server.get(`https://localhost:${targetPort}/`)
                         .thenPassThrough({ ignoreHostCertificateErrors: ['localhost'] });

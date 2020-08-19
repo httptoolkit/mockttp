@@ -33,7 +33,7 @@ export interface Headers {
 export interface RequestHeaders extends Headers {
     // An arbitrary set of headers that are known to
     // only ever appear once (for legal requests).
-    host: string;
+    host?: string;
     cookie?: string;
 }
 

@@ -7,6 +7,7 @@ import * as tls from 'tls';
 import * as http2 from 'http2';
 import * as http2Wrapper from 'http2-wrapper';
 import * as streams from 'stream';
+import * as URL from 'url';
 import getFetchPonyfill = require("fetch-ponyfill");
 
 import chai = require("chai");
@@ -14,8 +15,8 @@ import chaiAsPromised = require("chai-as-promised");
 import chaiFetch = require("chai-fetch");
 
 import { Mockttp } from "..";
-import { isNode } from '../src/util/util';
-export { isNode };
+import { isNode, delay } from '../src/util/util';
+export { isNode, delay };
 
 chai.use(chaiAsPromised);
 chai.use(chaiFetch);
@@ -55,10 +56,6 @@ export function browserOnly(body: Function) {
 
 export function nodeOnly(body: Function) {
     if (isNode) body();
-}
-
-export function delay(t: number): Promise<void> {
-    return new Promise((r) => setTimeout(r, t));
 }
 
 export type Deferred<T> = Promise<T> & {
@@ -147,6 +144,8 @@ export function watchForEvent(event: string, ...servers: Mockttp[]) {
     }
 }
 
+export const H2_TLS_ON_TLS_SUPPORTED = ">=12.17";
+
 type Http2ResponseHeaders = http2.IncomingHttpHeaders & http2.IncomingHttpStatusHeader;
 
 export function getHttp2Response(req: http2.ClientHttp2Stream) {
@@ -171,10 +170,14 @@ export function getHttp2Body(req: http2.ClientHttp2Stream) {
 async function http2Request(
     url: string,
     headers: {},
+    requestBody = '',
     createConnection?: (() => streams.Duplex) | undefined
 ) {
     const client = http2.connect(url, { createConnection });
-    const req = client.request(headers);
+    const req = client.request(headers, {
+        endStream: !requestBody
+    });
+    if (requestBody) req.end(requestBody);
 
     const responseHeaders = await getHttp2Response(req);
     const responseBody = await getHttp2Body(req);
@@ -198,6 +201,40 @@ export function http2DirectRequest(
         ':path': path,
         ...headers
     });
+}
+
+export async function http2ProxyRequest(
+    proxyServer: Mockttp,
+    url: string,
+    headers: {} = {},
+    requestBody = ''
+) {
+    const proxyClient = http2.connect(proxyServer.url);
+    const parsedUrl = URL.parse(url);
+    const proxyReq = proxyClient.request({
+        ':method': 'CONNECT',
+        ':authority': parsedUrl.host
+    });
+
+    const proxyResponse = await getHttp2Response(proxyReq);
+    expect(proxyResponse[':status']).to.equal(200);
+
+    const result = http2Request(
+        url,
+        {
+            ':path': parsedUrl.path,
+            ...headers
+        },
+        requestBody,
+        () => tls.connect({
+            socket: proxyReq as any,
+            ALPNProtocols: ['h2']
+        })
+    );
+
+    await cleanup(proxyClient);
+
+    return result;
 }
 
 export async function cleanup(

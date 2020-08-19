@@ -621,7 +621,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
         // Make sure the URL is absolute, if we're transparent proxying, or redirecting/proxying
         // to URLs on this mock server (instead of externally).
         if (!hostname) {
-            const hostHeader = headers.host;
+            const hostHeader = headers.host!;
             [ hostname, port ] = hostHeader.split(':');
             protocol = clientReq.protocol + ':';
         }
@@ -630,9 +630,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
         let reqBodyOverride: string | Buffer | undefined;
         if (this.beforeRequest) {
             const modifiedReq = await this.beforeRequest(
-                await waitForCompletedRequest(Object.assign({}, clientReq, {
-                    url: new url.URL(reqUrl, `${protocol}//${hostname}${port ? `:${port}` : ''}`).toString()
-                }))
+                await waitForCompletedRequest(clientReq)
             );
 
             if (modifiedReq.response) {
@@ -645,7 +643,9 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
             reqUrl = modifiedReq.url || reqUrl;
             headers = modifiedReq.headers || headers;
 
-            headers['host'] = getCorrectHost(reqUrl, clientReq.headers, modifiedReq.headers);
+            if (!isH2Downstream) {
+                headers['host'] = getCorrectHost(reqUrl, clientReq.headers, modifiedReq.headers);
+            }
 
             if (modifiedReq.json) {
                 headers['content-type'] = 'application/json';

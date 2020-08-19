@@ -2,14 +2,25 @@ import _ = require("lodash");
 import * as fs from 'fs-extra';
 import * as http from 'http';
 import * as https from 'https';
+import * as http2 from 'http2';
+import * as semver from 'semver';
 import portfinder = require('portfinder');
 import request = require("request-promise-native");
 
 import { getLocal, Mockttp, CompletedResponse } from "../..";
 import { destroyable, DestroyableServer } from "../../src/util/destroyable-server";
-import { expect, nodeOnly, getDeferred, Deferred, sendRawRequest, delay } from "../test-utils";
+import {
+    expect,
+    nodeOnly,
+    getDeferred,
+    Deferred,
+    sendRawRequest,
+    http2ProxyRequest,
+    H2_TLS_ON_TLS_SUPPORTED
+} from "../test-utils";
 import { generateCACertificate } from "../../src/util/tls";
 import { isLocalIPv6Available } from "../../src/util/socket-util";
+import { streamToBuffer } from "../../src/util/request-utils";
 
 const INITIAL_ENV = _.cloneDeep(process.env);
 
@@ -692,6 +703,176 @@ nodeOnly(() => {
 
                         expect(response).to.equal("OK");
                     });
+                });
+            });
+
+            describe("when making HTTP/2 requests", () => {
+
+                before(function () {
+                    if (!semver.satisfies(process.version, H2_TLS_ON_TLS_SUPPORTED)) this.skip();
+                });
+
+                let http2Server: DestroyableServer;
+                let targetPort: number;
+
+                beforeEach(async () => {
+                    http2Server = destroyable(http2.createSecureServer({
+                        allowHTTP1: false,
+                        key: fs.readFileSync('./test/fixtures/test-ca.key'),
+                        cert: fs.readFileSync('./test/fixtures/test-ca.pem')
+                    }, async (req, res) => {
+                        res.writeHead(200, {
+                            "received-url": req.url,
+                            "received-method": req.method,
+                            "echo-res-header": req.headers['echo-req-header'] || '',
+                            "received-body": (await streamToBuffer(req)).toString('utf8') || ''
+                        });
+                        res.end("Real HTTP/2 response");
+                    }));
+
+                    targetPort = await portfinder.getPortPromise();
+
+                    await new Promise(async (resolve, reject) => {
+                        http2Server.on('error', reject);
+                        http2Server.listen(targetPort, resolve);
+                    });
+                });
+
+                afterEach(() => http2Server.destroy());
+
+                it("can pass through requests successfully", async () => {
+                    await server.anyRequest().thenPassThrough({
+                        ignoreHostCertificateErrors: ['localhost']
+                    });
+
+                    const response = await http2ProxyRequest(server, `https://localhost:${targetPort}`);
+
+                    expect(response.headers[':status']).to.equal(200);
+                    expect(response.headers['received-url']).to.equal('/');
+                    expect(response.body.toString('utf8')).to.equal("Real HTTP/2 response");
+                });
+
+                it("can rewrite request URLs en route", async () => {
+                    await server.anyRequest().thenPassThrough({
+                        ignoreHostCertificateErrors: ['localhost'],
+                        beforeRequest: (req) => {
+                            expect(req.url).to.equal(`https://localhost:${targetPort}/initial-path`);
+
+                            return {
+                                url: req.url.replace('initial-path', 'replaced-path')
+                            }
+                        }
+                    });
+
+                    const response = await http2ProxyRequest(server, `https://localhost:${targetPort}/initial-path`);
+
+                    expect(response.headers[':status']).to.equal(200);
+                    expect(response.headers['received-url']).to.equal('/replaced-path');
+                });
+
+                it("can change the request method en route", async () => {
+                    await server.anyRequest().thenPassThrough({
+                        ignoreHostCertificateErrors: ['localhost'],
+                        beforeRequest: (req) => {
+                            expect(req.method).to.equal('GET');
+                            return { method: 'POST' };
+                        }
+                    });
+
+                    const response = await http2ProxyRequest(server, `https://localhost:${targetPort}/`);
+
+                    expect(response.headers[':status']).to.equal(200);
+                    expect(response.headers['received-method']).to.equal('POST');
+                });
+
+                it("can rewrite request headers en route", async () => {
+                    await server.anyRequest().thenPassThrough({
+                        ignoreHostCertificateErrors: ['localhost'],
+                        beforeRequest: (req) => {
+                            expect(req.headers).to.deep.equal({
+                                ':scheme': 'https',
+                                ':authority': `localhost:${targetPort}`,
+                                ':method': 'GET',
+                                ':path': '/'
+                            });
+
+                            return {
+                                headers: {
+                                    'echo-req-header': 'injected-value'
+                                }
+                            }
+                        }
+                    });
+
+                    const response = await http2ProxyRequest(server, `https://localhost:${targetPort}/`);
+
+                    expect(response.headers[':status']).to.equal(200);
+                    expect(response.headers['echo-res-header']).to.equal('injected-value');
+                });
+
+                it("can rewrite the request body en route", async () => {
+                    await server.anyRequest().thenPassThrough({
+                        ignoreHostCertificateErrors: ['localhost'],
+                        beforeRequest: (req) => {
+                            expect(req.body.text).to.equal('initial-body');
+
+                            return { body: 'replaced-body' };
+                        }
+                    });
+
+                    const response = await http2ProxyRequest(
+                        server,
+                        `https://localhost:${targetPort}/`,
+                        { ':method': 'POST' },
+                        'initial-body'
+                    );
+
+                    expect(response.headers[':status']).to.equal(200);
+                    expect(response.headers['received-body']).to.equal('replaced-body');
+                });
+
+                it("can rewrite the request body with JSON en route", async () => {
+                    await server.anyRequest().thenPassThrough({
+                        ignoreHostCertificateErrors: ['localhost'],
+                        beforeRequest: (req) => {
+                            expect(req.body.text).to.equal('initial-body');
+
+                            return { json: { mocked: true } };
+                        }
+                    });
+
+                    const response = await http2ProxyRequest(
+                        server,
+                        `https://localhost:${targetPort}/`,
+                        { ':method': 'POST' },
+                        'initial-body'
+                    );
+
+                    expect(response.headers[':status']).to.equal(200);
+                    expect(response.headers['received-body']).to.equal(JSON.stringify({ mocked: true }));
+                });
+
+                it("can inject a response directly en route", async () => {
+                    await server.anyRequest().thenPassThrough({
+                        ignoreHostCertificateErrors: ['localhost'],
+                        beforeRequest: (req) => {
+                            return {
+                                response: {
+                                    statusCode: 404,
+                                    headers: {
+                                        'fake-header': 'injected'
+                                    },
+                                    body: 'fake-response'
+                                }
+                            };
+                        }
+                    });
+
+                    const response = await http2ProxyRequest(server, `https://localhost:${targetPort}/`);
+
+                    expect(response.headers[':status']).to.equal(404);
+                    expect(response.headers['fake-header']).to.equal('injected');
+                    expect(response.body.toString('utf8')).to.equal('fake-response');
                 });
             });
         });
