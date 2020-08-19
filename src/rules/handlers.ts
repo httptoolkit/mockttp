@@ -556,6 +556,10 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
         this.forwarding = forwarding;
 
         this.ignoreHostCertificateErrors = options.ignoreHostCertificateErrors || [];
+        if (!Array.isArray(this.ignoreHostCertificateErrors)) {
+            throw new Error("ignoreHostCertificateErrors must be an array");
+        }
+
         this.clientCertificateHostMap = options.clientCertificateHostMap || {};
 
         this.beforeRequest = options.beforeRequest;
