@@ -1,6 +1,6 @@
 import * as _ from 'lodash';
 import { getLocal } from "../..";
-import { expect, nodeOnly } from '../test-utils';
+import { expect, nodeOnly, isNode } from '../test-utils';
 
 describe("Port selection", function () {
 
@@ -25,6 +25,18 @@ describe("Port selection", function () {
         const chosenPort = 10000 + _.random(1000);
         await server1.start(chosenPort);
         expect(server1.port).to.equal(chosenPort);
+    });
+
+    it("should error if a fixed port is specified and unavailable", async function () {
+        this.retries(3); // Random ports can be in use, esp on Travis, so retry a little
+
+        const chosenPort = 10000 + _.random(1000);
+        await server1.start(chosenPort);
+        await expect(server2.start(chosenPort)).to.be.rejectedWith(new RegExp(
+            isNode
+            ? "EADDRINUSE"
+            : "already running on port " + chosenPort
+        ));
     });
 
     it("should use a port in a range if one is provided", async () => {
