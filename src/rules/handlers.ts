@@ -96,6 +96,8 @@ export class SimpleHandler extends Serializable implements RequestHandler {
         public headers?: Headers
     ) {
         super();
+
+        validateCustomHeaders({}, headers);
     }
 
     explain() {
@@ -138,7 +140,7 @@ function writeResponseFromCallback(result: CallbackResponseResult, response: Ong
 
     if (result.headers) {
         dropDefaultHeaders(response);
-        validateModifiedHeaders({}, result.headers);
+        validateCustomHeaders({}, result.headers);
         setHeaders(response, dropUndefinedValues(result.headers));
     }
 
@@ -234,6 +236,8 @@ export class StreamHandler extends Serializable implements RequestHandler {
         public headers?: Headers
     ) {
         super();
+
+        validateCustomHeaders({}, headers);
     }
 
     explain() {
@@ -348,6 +352,8 @@ export class FileHandler extends Serializable implements RequestHandler {
         public headers?: Headers
     ) {
         super();
+
+        validateCustomHeaders({}, headers);
     }
 
     explain() {
@@ -514,7 +520,7 @@ function getCorrectContentLength(
     return lengthOverride;
 }
 
-function validateModifiedHeaders(
+function validateCustomHeaders(
     originalHeaders: Headers,
     modifiedHeaders: Headers | undefined
 ) {
@@ -656,7 +662,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 })
             );
 
-            validateModifiedHeaders(clientReq.headers, modifiedReq.headers);
+            validateCustomHeaders(clientReq.headers, modifiedReq.headers);
 
             if (modifiedReq.response) {
                 // The callback has provided a full response: don't passthrough at all, just use it.
@@ -786,7 +792,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                             body: buildBodyReader(body, serverHeaders)
                         });
 
-                        validateModifiedHeaders(serverHeaders, modifiedRes.headers);
+                        validateCustomHeaders(serverHeaders, modifiedRes.headers);
                     } catch (e) {
                         serverReq.abort();
                         return reject(e);

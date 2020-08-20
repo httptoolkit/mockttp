@@ -2,7 +2,7 @@ import * as semver from 'semver';
 import * as path from 'path';
 import { PassThrough } from 'stream';
 import { getLocal } from "../..";
-import { expect, fetch, isNode, delay } from "../test-utils";
+import { expect, fetch, isNode, isWeb, delay, headersToObject } from "../test-utils";
 
 describe("HTTP mock rule handling", function () {
     let server = getLocal({
@@ -74,6 +74,15 @@ describe("HTTP mock rule handling", function () {
         expect(response.headers.get("Date")).to.equal(null);
         expect(response.headers.get('Content-Length')).to.equal(null);
         expect(response.headers.get('Transfer-Encoding')).to.equal(null);
+    });
+
+    it("should not allow mocking HTTP/2 pseudoheaders", async function () {
+        await expect(() =>
+            server.get("/mocked-endpoint")
+            .thenReply(200, "mock status", "mock body", {
+                ":status": '200'
+            })
+        ).to.throw("Cannot set custom :status pseudoheader values");
     });
 
     it("should allow mocking a binary body with a buffer", async () => {
@@ -175,6 +184,15 @@ describe("HTTP mock rule handling", function () {
         await expect(responsePromise).to.have.responseText('Hello\nworld!');
     });
 
+    it("should not allow setting pseudoheaders when streaming a response", async () => {
+        let stream = new PassThrough();
+        expect(() =>
+            server.get('/stream').thenStream(200, stream, {
+                ':status': '200'
+            })
+        ).to.throw("Cannot set custom :status pseudoheader values");
+    });
+
     it("should fail clearly when trying to repeat a single stream response", async () => {
         let stream = new PassThrough();
         await server.get('/stream').thenStream(200, stream);
@@ -226,7 +244,7 @@ describe("HTTP mock rule handling", function () {
         expect(result).to.equal('timed out');
     });
 
-    it("should allow mocking bodyy with callback", async () => {
+    it("should allow mocking the status with a callback", async () => {
         await server.get("/mocked-endpoint").thenCallback(() => {
             return { statusCode: 204, statusMessage: 'all good' }
         });
@@ -239,6 +257,49 @@ describe("HTTP mock rule handling", function () {
 
         // No headers => defaults set:
         expect(response.headers.get('Date')).to.match(/^\w+, \d+ \w+ \d+ \d\d:\d\d:\d\d \w+$/);
+    });
+
+    it("should allow mocking the response body with a callback", async () => {
+        await server.get("/mocked-endpoint").thenCallback(() => {
+            return { statusCode: 200, body: 'response body' }
+        });
+
+        let response = await fetch(server.urlFor("/mocked-endpoint"));
+
+        expect(response.status).to.equal(200);
+        expect(await response.text()).to.equal("response body");
+
+        // No headers => defaults set:
+        expect(response.headers.get('Date')).to.match(/^\w+, \d+ \w+ \d+ \d\d:\d\d:\d\d \w+$/);
+    });
+
+    it("should allow mocking response headers with a callback", async () => {
+        await server.get("/mocked-endpoint").thenCallback(() => {
+            return { statusCode: 200, headers: { 'mock-header': 'set' } }
+        });
+
+        let response = await fetch(server.urlFor("/mocked-endpoint"));
+
+        expect(response.status).to.equal(200);
+        expect(headersToObject(response.headers)).to.deep.equal({
+            'mock-header': 'set',
+            ...(isWeb ? {
+                'access-control-allow-origin': '*',
+                'access-control-expose-headers': '*'
+            } : {})
+            // No Date header, because we're manually managing the headers
+        });
+    });
+
+    it("should not allow mocking response pseudoheaders with a callback", async () => {
+        await server.get("/mocked-endpoint").thenCallback(() => {
+            return { statusCode: 200, headers: { ':status': '200' } }
+        })
+
+        let response = await fetch(server.urlFor("/mocked-endpoint"));
+
+        expect(response.status).to.equal(500);
+        expect(await response.text()).to.equal("Error: Cannot set custom :status pseudoheader values");
     });
 
     it("should allow mocking body as json with callback", async () => {
@@ -294,6 +355,15 @@ describe("HTTP mock rule handling", function () {
         expect(response.headers.get('Date')).to.equal(null);
         expect(response.headers.get('Transfer-Encoding')).to.equal(null);
         expect(response.headers.get('Content-Length')).to.equal(null);
+    });
+
+    it("should not allow setting pseudoheaders when mocking the body from a file", async () => {
+        expect(() =>
+            server.get('/mocked-endpoint').thenFromFile(200, "mock status",
+                path.join(__dirname, '..', 'fixtures', 'response-file.txt'),
+                { ':status': '200' }
+            )
+        ).to.throw("Cannot set custom :status pseudoheader values");
     });
 
     it("should return a clear error when mocking the body with contents from a non-existent file", async () => {

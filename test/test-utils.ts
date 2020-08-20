@@ -15,8 +15,8 @@ import chaiAsPromised = require("chai-as-promised");
 import chaiFetch = require("chai-fetch");
 
 import { Mockttp } from "..";
-import { isNode, delay } from '../src/util/util';
-export { isNode, delay };
+import { isNode, isWeb, delay } from '../src/util/util';
+export { isNode, isWeb, delay };
 
 chai.use(chaiAsPromised);
 chai.use(chaiFetch);
@@ -44,6 +44,16 @@ const responseImplementation = fetchImplementation.Response;
 export { headersImplementation as Headers };
 export { requestImplementation as Request };
 export { responseImplementation as Response };
+
+// Quick helper to convert Fetch response headers back into an object. Very dumb,
+// doesn't deal with multiple header values or anything correctly, but ok for tests.
+export function headersToObject(fetchHeaders: Headers) {
+    const headers: _.Dictionary<string> = {};
+    fetchHeaders.forEach((value, key) => {
+        headers[key] = value;
+    });
+    return headers;
+}
 
 export const URLSearchParams: typeof window.URLSearchParams = (isNode || !window.URLSearchParams) ?
     require('url').URLSearchParams : window.URLSearchParams;
