@@ -644,14 +644,6 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
             `);
         }
 
-        // Make sure the URL is absolute, if we're transparent proxying, or redirecting/proxying
-        // to URLs on this mock server (instead of externally).
-        if (!hostname) {
-            const hostHeader = headers.host!;
-            [ hostname, port ] = hostHeader.split(':');
-            protocol = clientReq.protocol + ':';
-        }
-
         // Override the request details, if a callback is specified:
         let reqBodyOverride: string | Buffer | undefined;
         if (this.beforeRequest) {
