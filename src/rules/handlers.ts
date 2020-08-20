@@ -387,6 +387,7 @@ export interface PassThroughResponse {
 
 interface ForwardingOptions {
     targetHost: string,
+    // Should the host (H1) or :authority (H2) header be updated to match?
     updateHostHeader?: true | false | string // Change automatically/ignore/change to custom value
 }
 
@@ -670,12 +671,14 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 ({ protocol, hostname, port } = url.parse(targetHost));
             }
 
+            const hostHeaderName = isH2Downstream ? ':authority' : 'host';
+
             if (updateHostHeader === undefined || updateHostHeader === true) {
                 // If updateHostHeader is true, or just not specified, match the new target
-                headers['host'] = hostname + (port ? `:${port}` : '');
+                headers[hostHeaderName] = hostname + (port ? `:${port}` : '');
             } else if (updateHostHeader) {
                 // If it's an explicit custom value, use that directly.
-                headers['host'] = updateHostHeader;
+                headers[hostHeaderName] = updateHostHeader;
             } // Otherwise: falsey means don't touch it.
         }
 

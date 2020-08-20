@@ -1168,6 +1168,20 @@ nodeOnly(() => {
                     expect(response.body.toString('utf8')).to.equal(JSON.stringify({ replaced: true }));
                 });
 
+                it("should allow forwarding the request", async () => {
+                    await server.anyRequest().thenForwardTo(`localhost:${targetPort}`, {
+                        ignoreHostCertificateErrors: ['localhost']
+                    });
+
+                    const response = await http2ProxyRequest(server, "https://example.com");
+
+                    expect(response.headers[':status']).to.equal(200);
+                    expect(response.body.toString()).to.equal("Real HTTP/2 response");
+
+                    const serverReceivedHeaders = JSON.parse(response.headers['received-headers'] as string);
+                    expect(serverReceivedHeaders[':authority']).to.equal(`localhost:${targetPort}`);
+                });
+
                 describe("to an HTTP/1 server", () => {
 
                     before(function () {
@@ -1217,6 +1231,20 @@ nodeOnly(() => {
 
                         expect(response.headers[':status']).to.equal(200);
                         expect(response.body.toString()).to.equal("HTTP/1 POST response");
+                    });
+
+                    it("should allow forwarding the request", async () => {
+                        const h1Endpoint = await remoteH1Server.get().thenReply(200, "HTTP/1 response");
+
+                        await server.anyRequest().thenForwardTo(remoteH1Server.url);
+
+                        const response = await http2ProxyRequest(server, "https://example.com");
+
+                        expect(response.headers[':status']).to.equal(200);
+                        expect(response.body.toString()).to.equal("HTTP/1 response");
+
+                        const receivedRequest = (await h1Endpoint.getSeenRequests())[0];
+                        expect(receivedRequest.headers['host']).to.equal(`localhost:${remoteH1Server.port}`);
                     });
 
                     it("should fail given overridden HTTP/2 pseudoheaders", async () => {
