@@ -23,8 +23,7 @@ import {
     ParsedBody,
     CompletedBody,
     TimingEvents,
-    InitiatedRequest,
-    RequestHeaders
+    InitiatedRequest
 } from "../types";
 import { nthIndexOf } from '../util/util';
 
@@ -92,7 +91,7 @@ export function isHttp2(
         ('stream' in message && 'createPushResponse' in message); // H2 response
 }
 
-export function h2HeadersToH1(h2Headers: Headers) {
+export function h2HeadersToH1(h2Headers: Headers): Headers {
     const h1Headers = _.omitBy(h2Headers, (_value, key) => {
         return key.startsWith(':')
     });
@@ -105,7 +104,7 @@ export function h2HeadersToH1(h2Headers: Headers) {
         h1Headers['cookie'] = h1Headers['cookie'].join('; ');
     }
 
-    return h1Headers as RequestHeaders;
+    return h1Headers;
 }
 
 // Take from http2/util.js in Node itself
@@ -119,7 +118,7 @@ const HTTP2_ILLEGAL_HEADERS = [
     'transfer-encoding'
 ];
 
-export function h1HeadersToH2(headers: Headers) {
+export function h1HeadersToH2(headers: Headers): Headers {
     return _.omitBy(headers, (_value, key) => {
         return HTTP2_ILLEGAL_HEADERS.includes(key);
     });

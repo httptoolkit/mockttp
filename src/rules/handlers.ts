@@ -42,7 +42,6 @@ import { readFile } from '../util/fs';
 
 import {
     Headers,
-    RequestHeaders,
     OngoingRequest,
     CompletedRequest,
     OngoingResponse,
@@ -60,7 +59,7 @@ export type SerializedBuffer = { type: 'Buffer', data: number[] };
 export interface CallbackRequestResult {
     method?: string;
     url?: string;
-    headers?: RequestHeaders;
+    headers?: Headers;
 
     json?: any;
     body?: string | Buffer;

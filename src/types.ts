@@ -25,16 +25,14 @@ export interface Headers {
     'content-length'?: string;
     'content-type'?: string;
     'user-agent'?: string;
+    cookie?: string;
+    ':method'?: string;
+    ':scheme'?: string;
+    ':authority'?: string;
+    ':path'?: string;
 
     // In general there may be 0+ of any header
     [key: string]: undefined | string | string[];
-}
-
-export interface RequestHeaders extends Headers {
-    // An arbitrary set of headers that are known to
-    // only ever appear once (for legal requests).
-    host?: string;
-    cookie?: string;
 }
 
 export interface Request {
@@ -52,7 +50,7 @@ export interface Request {
     // either way it duplicates existing data.
     hostname?: string;
 
-    headers: RequestHeaders;
+    headers: Headers;
 
     timingEvents: TimingEvents | {};
     tags: string[];
@@ -146,7 +144,7 @@ export interface ClientError {
         method?: string;
         url?: string;
         path?: string;
-        headers: Partial<RequestHeaders>;
+        headers: Headers;
     };
     response: CompletedResponse | 'aborted';
 }
