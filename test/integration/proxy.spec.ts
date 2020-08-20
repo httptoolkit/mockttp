@@ -226,6 +226,21 @@ nodeOnly(() => {
                 expect(response).to.equal("/endpoint");
             });
 
+            it("should clearly fail when rewriting a request's URL to a relative path", async () => {
+                await remoteServer.get('/').thenReply(200, 'Root');
+                await remoteServer.get('/endpoint').thenReply(200, '/endpoint');
+
+                await server.get(remoteServer.urlFor("/")).thenPassThrough({
+                    beforeRequest: (req) => {
+                        return { url: '/endpoint' };
+                    }
+                });
+
+                await expect(
+                    request.get(remoteServer.urlFor("/"))
+                ).to.be.rejectedWith("Error: Overridden request URLs must be absolute");
+            });
+
             it("should be able to rewrite a request's URL to a different host", async () => {
                 await remoteServer.get('/').thenReply(200, 'my remote');
 

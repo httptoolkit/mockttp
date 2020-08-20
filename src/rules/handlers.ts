@@ -22,7 +22,8 @@ import {
     dropDefaultHeaders,
     isHttp2,
     h1HeadersToH2,
-    h2HeadersToH1
+    h2HeadersToH1,
+    isAbsoluteUrl
 } from '../util/request-utils';
 import { isLocalPortActive } from '../util/socket-util';
 import {
@@ -696,6 +697,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
 
             // Reparse the new URL, if necessary
             if (modifiedReq.url) {
+                if (!isAbsoluteUrl(modifiedReq.url)) throw new Error("Overridden request URLs must be absolute");
                 ({ protocol, hostname, port, path } = url.parse(reqUrl));
             }
         }
