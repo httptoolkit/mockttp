@@ -442,6 +442,34 @@ function getCallbackResultBody(
     }
 }
 
+function getOverrideUrlLinkedHeader(
+    originalHeaders: Headers,
+    replacementHeaders: Headers | undefined,
+    headerName: 'host' | ':authority' | ':scheme',
+    expectedValue: string
+) {
+    const replacementValue = !!replacementHeaders ? replacementHeaders[headerName] : undefined;
+
+    if (replacementValue !== undefined) {
+        if (replacementValue !== expectedValue && replacementValue === originalHeaders[headerName]) {
+            // If you rewrite the URL-based header wrongly, by explicitly setting it to the
+            // existing value, we accept it but print a warning. This would be easy to
+            // do if you mutate the existing headers, for example, and ignore the host.
+            console.warn(oneLine`
+                Passthrough callback overrode the URL and the ${headerName} header
+                with mismatched values, which may be a mistake. The URL implies
+                ${expectedValue}, whilst the header was set to ${replacementValue}.
+            `);
+        }
+        // Whatever happens, if you explicitly set a value, we use it.
+        return replacementValue;
+    }
+
+    // If you didn't override the header at all, then we automatically ensure
+    // the correct value is set automatically.
+    return expectedValue;
+}
+
 // Helper to autocorrect the host header, but only if you didn't explicitly
 // override it yourself for some reason (e.g. testing bad behaviour).
 function getCorrectHost(
@@ -449,27 +477,43 @@ function getCorrectHost(
     originalHeaders: Headers,
     replacementHeaders: Headers | undefined
 ): string {
-    const correctHost = url.parse(reqUrl).host!;
-    const replacementHost = !!replacementHeaders ? replacementHeaders['host'] : undefined;
+    return getOverrideUrlLinkedHeader(
+        originalHeaders,
+        replacementHeaders,
+        'host',
+        url.parse(reqUrl).host!
+    );
+}
 
-    if (replacementHost !== undefined) {
-        if (replacementHost !== correctHost && replacementHost === originalHeaders['host']) {
-            // If you rewrite the host header wrongly, by explicitly setting it to the
-            // existing value, we accept it, but print a warning. This would be easy to
-            // do if you mutate the existing headers, for example, but not the host.
-            console.warn(oneLine`
-                Passthrough callback overrode the URL and the Host header
-                with mismatched values, which may be a mistake. The URL is
-                ${reqUrl}, whilst the header was set to ${replacementHost}.
-            `);
-        }
-        // Whatever happens, if you explicitly set a value, we use it.
-        return replacementHost;
-    }
+const OVERRIDABLE_REQUEST_PSEUDOHEADERS = [
+    ':authority',
+    ':scheme'
+] as const;
 
-    // If you didn't override the host at all, then we automatically ensure
-    // the correct header is set automatically.
-    return correctHost;
+// We allow manually reconfiguring the :authority & :scheme headers, so that you can
+// send a request to one server, and pretend it was sent to a different server, similar
+// to setting a custom Host header value.
+function getCorrectPseudoheaders(
+    reqUrl: string,
+    originalHeaders: Headers,
+    replacementHeaders: Headers | undefined
+): { [K in typeof OVERRIDABLE_REQUEST_PSEUDOHEADERS[number]]: string } {
+    const parsedUrl = url.parse(reqUrl);
+
+    return {
+        ':scheme': getOverrideUrlLinkedHeader(
+            originalHeaders,
+            replacementHeaders,
+            ':scheme',
+            parsedUrl.protocol!.slice(0, -1)
+        ),
+        ':authority': getOverrideUrlLinkedHeader(
+            originalHeaders,
+            replacementHeaders,
+            ':authority',
+            parsedUrl.host!
+        )
+    };
 }
 
 // Helper to handle content-length nicely for you when rewriting requests with callbacks
@@ -522,17 +566,21 @@ function getCorrectContentLength(
 
 function validateCustomHeaders(
     originalHeaders: Headers,
-    modifiedHeaders: Headers | undefined
+    modifiedHeaders: Headers | undefined,
+    headerWhitelist: readonly string[] = []
 ) {
     if (!modifiedHeaders) return;
 
-    // We ignore returned pseudo headers, so we error if you try to manually set them
+    // We ignore most returned pseudo headers, so we error if you try to manually set them
     const invalidHeaders = _(modifiedHeaders)
         .pickBy((value, name) =>
             name.startsWith(':') &&
-            // Unless you've just returned a preexisting header value - that's ignored
+            // We allow returning a preexisting header value - that's ignored
             // silently, so that mutating & returning the provided headers is always safe.
-            value !== originalHeaders[name]
+            value !== originalHeaders[name] &&
+            // In some cases, specific custom pseudoheaders may be allowed, e.g. requests
+            // can have custom :scheme and :authority headers set.
+            !headerWhitelist.includes(name)
         )
         .keys();
 
@@ -646,6 +694,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
 
         // Override the request details, if a callback is specified:
         let reqBodyOverride: string | Buffer | undefined;
+        let headersManuallyModified = false;
         if (this.beforeRequest) {
             const completedRequest = await waitForCompletedRequest(clientReq);
             const modifiedReq = await this.beforeRequest(
@@ -653,8 +702,6 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                     headers: _.clone(completedRequest.headers) // Clone headers so we can ignore mutations
                 })
             );
-
-            validateCustomHeaders(clientReq.headers, modifiedReq.headers);
 
             if (modifiedReq.response) {
                 // The callback has provided a full response: don't passthrough at all, just use it.
@@ -666,9 +713,19 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
             reqUrl = modifiedReq.url || reqUrl;
             headers = modifiedReq.headers || headers;
 
-            if (!isH2Downstream) {
-                headers['host'] = getCorrectHost(reqUrl, clientReq.headers, modifiedReq.headers);
-            }
+            Object.assign(headers,
+                isH2Downstream
+                    ? getCorrectPseudoheaders(reqUrl, clientReq.headers, modifiedReq.headers)
+                    : { 'host': getCorrectHost(reqUrl, clientReq.headers, modifiedReq.headers) }
+            );
+
+            headersManuallyModified = !!modifiedReq.headers;
+
+            validateCustomHeaders(
+                clientReq.headers,
+                modifiedReq.headers,
+                OVERRIDABLE_REQUEST_PSEUDOHEADERS // These are handled by getCorrectPseudoheaders above
+            );
 
             if (modifiedReq.json) {
                 headers['content-type'] = 'application/json';
@@ -742,13 +799,20 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
             : undefined;
 
         if (isH2Downstream && shouldTryH2Upstream) {
-            headers = _.omitBy(headers, (value, key) => key.startsWith(':'));
+            // We drop all incoming pseudoheaders, and regenerate them (except legally modified ones)
+            headers = _.pickBy(headers, (value, key) =>
+                !key.startsWith(':') ||
+                (headersManuallyModified &&
+                    OVERRIDABLE_REQUEST_PSEUDOHEADERS.includes(key as any)
+                )
+            );
         } else if (isH2Downstream && !shouldTryH2Upstream) {
             headers = h2HeadersToH1(headers);
         }
 
-        return new Promise<void>(async (resolve, reject) => {
-            let serverReq = await makeRequest({
+        let serverReq: http.ClientRequest;
+        return new Promise<void>((resolve, reject) => (async () => { // Wrapped to easily catch (a)sync errors
+            serverReq = await makeRequest({
                 protocol,
                 method,
                 hostname,
@@ -759,7 +823,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 agent: agent as http.Agent,
                 rejectUnauthorized: checkServerCertificate,
                 ...clientCert
-            }, async (serverRes) => {
+            }, (serverRes) => (async () => {
                 serverRes.once('error', reject);
 
                 let serverStatusCode = serverRes.statusCode!;
@@ -774,22 +838,18 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 if (this.beforeResponse) {
                     let modifiedRes: CallbackResponseResult;
                     let body: Buffer;
-                    try {
-                        body = await streamToBuffer(serverRes);
 
-                        modifiedRes = await this.beforeResponse({
-                            id: clientReq.id,
-                            statusCode: serverStatusCode,
-                            statusMessage: serverRes.statusMessage,
-                            headers: _.clone(serverHeaders),
-                            body: buildBodyReader(body, serverHeaders)
-                        });
+                    body = await streamToBuffer(serverRes);
 
-                        validateCustomHeaders(serverHeaders, modifiedRes.headers);
-                    } catch (e) {
-                        serverReq.abort();
-                        return reject(e);
-                    }
+                    modifiedRes = await this.beforeResponse({
+                        id: clientReq.id,
+                        statusCode: serverStatusCode,
+                        statusMessage: serverRes.statusMessage,
+                        headers: _.clone(serverHeaders),
+                        body: buildBodyReader(body, serverHeaders)
+                    });
+
+                    validateCustomHeaders(serverHeaders, modifiedRes.headers);
 
                     serverStatusCode = modifiedRes.statusCode ||
                         modifiedRes.status ||
@@ -838,28 +898,23 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                     }
                 });
 
-                try {
-                    clientRes.writeHead(
-                        serverStatusCode,
-                        serverStatusMessage || clientRes.statusMessage
-                    );
+                clientRes.writeHead(
+                    serverStatusCode,
+                    serverStatusMessage || clientRes.statusMessage
+                );
 
-                    if (resBodyOverride) {
-                        // Return the override data to the client:
-                        clientRes.end(resBodyOverride);
-                        // Dump the real response data:
-                        serverRes.resume();
+                if (resBodyOverride) {
+                    // Return the override data to the client:
+                    clientRes.end(resBodyOverride);
+                    // Dump the real response data:
+                    serverRes.resume();
 
-                        resolve();
-                    } else {
-                        serverRes.pipe(clientRes);
-                        clientRes.once('finish', resolve);
-                    }
-                } catch (e) {
-                    serverReq.abort();
-                    reject(e);
+                    resolve();
+                } else {
+                    serverRes.pipe(clientRes);
+                    clientRes.once('finish', resolve);
                 }
-            });
+            })().catch(reject));
 
             serverReq.once('socket', (socket: net.Socket) => {
                 // This event can fire multiple times for keep-alive sockets, which are used to
@@ -914,7 +969,10 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                     reject(e);
                 }
             });
-        });
+        })().catch((e) => {
+            if (serverReq) serverReq.abort();
+            reject(e);
+        }));
     }
 
     serialize(channel: ClientServerChannel): SerializedPassThroughData {
