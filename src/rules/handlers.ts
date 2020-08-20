@@ -138,7 +138,8 @@ function writeResponseFromCallback(result: CallbackResponseResult, response: Ong
 
     if (result.headers) {
         dropDefaultHeaders(response);
-        setHeaders(response, result.headers);
+        validateModifiedHeaders({}, result.headers);
+        setHeaders(response, dropUndefinedValues(result.headers));
     }
 
     response.writeHead(
@@ -513,28 +514,26 @@ function getCorrectContentLength(
     return lengthOverride;
 }
 
-function validateModifiedResponseHeaders(
+function validateModifiedHeaders(
     originalHeaders: Headers,
     modifiedHeaders: Headers | undefined
 ) {
-    if (modifiedHeaders) {
-        // We ignore returned pseudo headers, so we error if you try to manually set them
-        const invalidHeaders = _(modifiedHeaders)
-            .pickBy((value, name) =>
-                name.startsWith(':') &&
-                // Unless you've just returned the preexisting :status header value - that's ignored
-                // silently, so that mutating & returning the provided headers is always safe.
-                !(name === ':status' && value === originalHeaders[':status'])
-            )
-            .keys();
+    if (!modifiedHeaders) return;
 
-        if (invalidHeaders.size() > 0) {
-            throw new Error(
-                `Cannot set a custom ${
-                    invalidHeaders.join(', ')
-                } pseudoheader${invalidHeaders.size() > 1 ? 's' : ''} value`
-            );
-        }
+    // We ignore returned pseudo headers, so we error if you try to manually set them
+    const invalidHeaders = _(modifiedHeaders)
+        .pickBy((value, name) =>
+            name.startsWith(':') &&
+            // Unless you've just returned a preexisting header value - that's ignored
+            // silently, so that mutating & returning the provided headers is always safe.
+            value !== originalHeaders[name]
+        )
+        .keys();
+
+    if (invalidHeaders.size() > 0) {
+        throw new Error(
+            `Cannot set custom ${invalidHeaders.join(', ')} pseudoheader values`
+        );
     }
 }
 
@@ -607,10 +606,6 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
 
         const isH2Downstream = isHttp2(clientReq);
 
-        if (isH2Downstream) {
-            headers = h2HeadersToH1(headers);
-        }
-
         if (this.forwarding) {
             const { targetHost, updateHostHeader } = this.forwarding;
             if (!targetHost.includes('/')) {
@@ -654,9 +649,14 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
         // Override the request details, if a callback is specified:
         let reqBodyOverride: string | Buffer | undefined;
         if (this.beforeRequest) {
+            const completedRequest = await waitForCompletedRequest(clientReq);
             const modifiedReq = await this.beforeRequest(
-                await waitForCompletedRequest(clientReq)
+                Object.assign(completedRequest, {
+                    headers: _.clone(completedRequest.headers) // Clone headers so we can ignore mutations
+                })
             );
+
+            validateModifiedHeaders(clientReq.headers, modifiedReq.headers);
 
             if (modifiedReq.response) {
                 // The callback has provided a full response: don't passthrough at all, just use it.
@@ -742,6 +742,12 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
             // HTTP/1 without KA:
             : undefined;
 
+        if (isH2Downstream && shouldTryH2Upstream) {
+            headers = _.omitBy(headers, (value, key) => key.startsWith(':'));
+        } else if (isH2Downstream && !shouldTryH2Upstream) {
+            headers = h2HeadersToH1(headers);
+        }
+
         return new Promise<void>(async (resolve, reject) => {
             let serverReq = await makeRequest({
                 protocol,
@@ -750,9 +756,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 port,
                 family,
                 path,
-                headers: shouldTryH2Upstream
-                    ? h1HeadersToH2(headers)
-                    : headers,
+                headers,
                 agent: agent as http.Agent,
                 rejectUnauthorized: checkServerCertificate,
                 ...clientCert
@@ -778,11 +782,11 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                             id: clientReq.id,
                             statusCode: serverStatusCode,
                             statusMessage: serverRes.statusMessage,
-                            headers: serverHeaders,
+                            headers: _.clone(serverHeaders),
                             body: buildBodyReader(body, serverHeaders)
                         });
 
-                        validateModifiedResponseHeaders(serverHeaders, modifiedRes.headers);
+                        validateModifiedHeaders(serverHeaders, modifiedRes.headers);
                     } catch (e) {
                         serverReq.abort();
                         return reject(e);

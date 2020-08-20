@@ -810,6 +810,87 @@ nodeOnly(() => {
                     expect(response.headers['echo-res-header']).to.equal('injected-value');
                 });
 
+                it("can rewrite request headers including :pseudoheaders, as long as they're not custom values", async () => {
+                    await server.anyRequest().thenPassThrough({
+                        ignoreHostCertificateErrors: ['localhost'],
+                        beforeRequest: (req) => {
+                            expect(req.headers).to.deep.equal({
+                                ':scheme': 'https',
+                                ':authority': `localhost:${targetPort}`,
+                                ':method': 'GET',
+                                ':path': '/'
+                            });
+
+                            return {
+                                url: req.url.replace(/\/$/, '/abc'),
+                                // This still has the old values, including a now-mismatched
+                                // :path, but as they're unmodified they're quietly updated automatically.
+                                headers: Object.assign(req.headers, {
+                                    'echo-req-header': 'added-value'
+                                })
+                            }
+                        }
+                    });
+
+                    const response = await http2ProxyRequest(server, `https://localhost:${targetPort}/`);
+
+                    expect(response.headers[':status']).to.equal(200);
+                    expect(response.headers['received-url']).to.equal('/abc');
+                    expect(response.headers['echo-res-header']).to.equal('added-value');
+                });
+
+                it("cannot inject custom request pseudoheaders, even if they're correct", async () => {
+                    await server.anyRequest().thenPassThrough({
+                        ignoreHostCertificateErrors: ['localhost'],
+                        beforeRequest: (req) => {
+                            expect(req.headers).to.deep.equal({
+                                ':scheme': 'https',
+                                ':authority': `localhost:${targetPort}`,
+                                ':method': 'GET',
+                                ':path': '/'
+                            });
+
+                            return {
+                                url: req.url.replace(/\/$/, '/abc'),
+                                headers: Object.assign(req.headers, {
+                                    ':path': '/abc'
+                                })
+                            }
+                        }
+                    });
+
+                    const response = await http2ProxyRequest(server, `https://localhost:${targetPort}/`);
+
+                    expect(response.headers[':status']).to.equal(500);
+                    expect(response.body.toString()).to.equal('Error: Cannot set custom :path pseudoheader values');
+                });
+
+                it("rejects custom request pseudoheaders", async () => {
+                    await server.anyRequest().thenPassThrough({
+                        ignoreHostCertificateErrors: ['localhost'],
+                        beforeRequest: (req) => {
+                            expect(req.headers).to.deep.equal({
+                                ':scheme': 'https',
+                                ':authority': `localhost:${targetPort}`,
+                                ':method': 'GET',
+                                ':path': '/'
+                            });
+
+                            return {
+                                headers: {
+                                    ':path': '/abc',
+                                    ':custom': 'value'
+                                }
+                            }
+                        }
+                    });
+
+                    const response = await http2ProxyRequest(server, `https://localhost:${targetPort}/`);
+
+                    expect(response.headers[':status']).to.equal(500);
+                    expect(response.body.toString()).to.equal('Error: Cannot set custom :path, :custom pseudoheader values');
+                });
+
                 it("can rewrite the request body en route", async () => {
                     await server.anyRequest().thenPassThrough({
                         ignoreHostCertificateErrors: ['localhost'],
@@ -921,7 +1002,7 @@ nodeOnly(() => {
                     });
                 });
 
-                it("can return headers including :status, as long as it's not a custom value", async () => {
+                it("can rewrite response headers including :status, as long as it's not a custom value", async () => {
                     await server.anyRequest().thenPassThrough({
                         ignoreHostCertificateErrors: ['localhost'],
                         beforeResponse: (res) => {
@@ -929,7 +1010,10 @@ nodeOnly(() => {
 
                             return {
                                 statusCode: 418,
-                                headers: res.headers // This still includes :status: 200, but statusCode willl quietly replace it
+                                // This still includes :status: 200, but statusCode willl quietly replace it:
+                                headers: Object.assign(res.headers, {
+                                    'custom-header': 'set'
+                                })
                             };
                         }
                     });
@@ -937,6 +1021,7 @@ nodeOnly(() => {
                     const response = await http2ProxyRequest(server, `https://localhost:${targetPort}/`);
 
                     expect(response.headers[':status']).to.equal(418);
+                    expect(response.headers['custom-header']).to.equal('set');
                 });
 
                 it("rejects custom response pseudoheader headers added en route", async () => {
@@ -956,7 +1041,7 @@ nodeOnly(() => {
                     expect(response.headers[':status']).to.equal(500);
                     expect(response.headers[':custom']).to.equal(undefined);
                     expect(response.body.toString()).to.equal(
-                        'Error: Cannot set a custom :custom pseudoheader value'
+                        'Error: Cannot set custom :custom pseudoheader values'
                     );
                 });
 
@@ -979,7 +1064,7 @@ nodeOnly(() => {
 
                     expect(response.headers[':status']).to.equal(500);
                     expect(response.body.toString()).to.equal(
-                        'Error: Cannot set a custom :status pseudoheader value'
+                        'Error: Cannot set custom :status pseudoheader values'
                     );
 
                 });
