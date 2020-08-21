@@ -933,7 +933,8 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
             });
 
             if (reqBodyOverride) {
-                serverReq.end(reqBodyOverride);
+                if (reqBodyOverride.length > 0) serverReq.end(reqBodyOverride);
+                else serverReq.end(); // http2-wrapper fails given an empty buffer for methods that aren't allowed a body
             } else {
                 // asStream includes all content, including the body before this call
                 const reqBodyStream = clientReq.body.asStream();

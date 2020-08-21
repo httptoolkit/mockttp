@@ -974,6 +974,30 @@ nodeOnly(() => {
                     expect(response.headers['received-body']).to.equal('replaced-body');
                 });
 
+                it("can rewrite the request body as empty en route", async () => {
+                    await server.anyRequest().thenPassThrough({
+                        ignoreHostCertificateErrors: ['localhost'],
+                        beforeRequest: (req) => {
+                            expect(req.body.text).to.equal('');
+
+                            return {
+                                url: req.url,
+                                headers: req.headers,
+                                body: ''
+                            };
+                        }
+                    });
+
+                    const response = await http2ProxyRequest(
+                        server,
+                        `https://localhost:${targetPort}/`,
+                        { ':method': 'GET' } // GET isn't allowed a body
+                    );
+
+                    expect(response.headers[':status']).to.equal(200);
+                    expect(response.headers['received-body']).to.equal('');
+                });
+
                 it("can rewrite the request body with JSON en route", async () => {
                     await server.anyRequest().thenPassThrough({
                         ignoreHostCertificateErrors: ['localhost'],
@@ -1149,6 +1173,30 @@ nodeOnly(() => {
                     const response = await http2ProxyRequest(server, `https://localhost:${targetPort}/`);
 
                     expect(response.body.toString('utf8')).to.equal('Replacement response');
+                });
+
+                it("can rewrite the response body as empty en route", async () => {
+                    await server.anyRequest().thenPassThrough({
+                        ignoreHostCertificateErrors: ['localhost'],
+                        beforeResponse: (res) => {
+                            expect(res.body.text).to.equal('Real HTTP/2 response');
+
+                            return {
+                                statusCode: 204, // 204 must not have a response body
+                                headers: res.headers,
+                                body: ''
+                            };
+                        }
+                    });
+
+                    const response = await http2ProxyRequest(
+                        server,
+                        `https://localhost:${targetPort}/`,
+                        { method: 'HEAD' } // HEAD must not have a response body
+                    );
+
+                    expect(response.headers[':status']).to.equal(204);
+                    expect(response.headers['received-body']).to.equal('');
                 });
 
                 it("can rewrite a response body as JSON en route", async () => {
