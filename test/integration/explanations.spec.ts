@@ -1,26 +1,10 @@
+import { getLocal } from "../..";
+import { expect, fetch, URLSearchParams, Headers, isNode } from "../test-utils";
 import * as _ from "lodash";
 import { Readable } from "stream";
-import * as semver from 'semver';
-
-import { getLocal } from "../..";
-import {
-    expect,
-    fetch,
-    URLSearchParams,
-    Headers,
-    isNode,
-    nodeOnly,
-    http2ProxyRequest,
-    H2_TLS_ON_TLS_SUPPORTED
-} from "../test-utils";
 
 describe("Mockttp explanation messages", function () {
-    let server = getLocal({
-        https: {
-            keyPath: './test/fixtures/test-ca.key',
-            certPath: './test/fixtures/test-ca.pem'
-        }
-    });
+    let server = getLocal();
 
     beforeEach(() => server.start());
     afterEach(() => server.stop());
@@ -107,7 +91,7 @@ Match requests making POSTs for /endpointB, and then respond using provided call
     it("should explain received unmatched requests", async () => {
         await expect(fetch(server.urlFor("/endpoint")))
         .to.have.responseText(
-            /This request was: GET request to https:\/\/localhost:\d+\/endpoint/
+            /This request was: GET request to http:\/\/localhost:\d+\/endpoint/
         );
     });
 
@@ -117,7 +101,7 @@ Match requests making POSTs for /endpointB, and then respond using provided call
                 abc: '123'
             })
         })).to.have.responseText(
-            /This request was: GET request to https:\/\/localhost:\d+\/endpoint with headers:\n{[.\s\S]+"abc": "123"[.\s\S]+}/
+            /This request was: GET request to http:\/\/localhost:\d+\/endpoint with headers:\n{[.\s\S]+"abc": "123"[.\s\S]+}/
         );
     });
 
@@ -132,7 +116,7 @@ Match requests making POSTs for /endpointB, and then respond using provided call
             }),
             body: form
         })).to.have.responseText(
-            /This request was: POST request to https:\/\/localhost:\d+\/endpoint with body `a=123`/
+            /This request was: POST request to http:\/\/localhost:\d+\/endpoint with body `a=123`/
         );
     });
 
@@ -163,10 +147,8 @@ mockServer.get("/endpoint").thenReply(200, "your response");`);
 mockServer.post("/endpoint").withForm({"shouldMatch":"yes"}).thenReply(200, "your response");`);
     });
 
-    it("should explain why passthrough fails for non-proxy HTTP/1 requests", async () => {
-        await server.get("/endpoint").thenPassThrough({
-            ignoreHostCertificateErrors: ['localhost']
-        });
+    it("should explain why passthrough fails for non-proxy requests", async () => {
+        await server.get("/endpoint").thenPassThrough();
 
         let result = await fetch(server.urlFor("/endpoint"));
 
@@ -177,29 +159,8 @@ mockServer.post("/endpoint").withForm({"shouldMatch":"yes"}).thenReply(200, "you
 which is forwarding it to the target URL, which is a passthrough endpoint, which is forwarding it to the target \
 URL, which is a passthrough endpoint...
 
-You should either explicitly mock a response for this URL (https://localhost:${server.port}/endpoint), or use the server \
+You should either explicitly mock a response for this URL (http://localhost:${server.port}/endpoint), or use the server \
 as a proxy, instead of making requests to it directly`);
-    });
-
-    nodeOnly(() => {
-        it("should explain why passthrough fails for proxy loop HTTP/2 requests", async function () {
-            if (!semver.satisfies(process.version, H2_TLS_ON_TLS_SUPPORTED)) this.skip();
-
-            await server.get("/endpoint").thenPassThrough({
-                ignoreHostCertificateErrors: ['localhost']
-            });
-
-            let response = await http2ProxyRequest(server, server.urlFor('/endpoint'));
-
-            expect(response.headers[':status']).to.equal(500);
-            expect(response.body.toString()).to.include(
-`Passthrough loop detected. This probably means you're sending a request directly to a passthrough endpoint, \
-which is forwarding it to the target URL, which is a passthrough endpoint, which is forwarding it to the target \
-URL, which is a passthrough endpoint...
-
-You should either explicitly mock a response for this URL (https://localhost:${server.port}/endpoint), or use the server \
-as a proxy, instead of making requests to it directly`);
-        });
     });
 
     it("should be available when inspecting endpoints", async () => {
