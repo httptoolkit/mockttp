@@ -35,7 +35,6 @@
     "test:browser:debug": "ts-node ./src/standalone/standalone-bin.ts -c karma start --single-run=false --browsers ChromeWithCert",
     "standalone": "npm run build && node -e 'require(\".\").getStandalone({ debug: true }).start()'",
     "ci": "npm run test && catch-uncommitted",
-    "graphiql": "npm run build && node ./standalone-graphiql.js",
     "prepack": "npm run build"
   },
   "repository": {
