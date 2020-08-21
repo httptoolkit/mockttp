@@ -15,9 +15,9 @@ import * as net from 'net';
 import * as bodyParser from 'body-parser';
 import * as ws from 'ws';
 
-import { graphqlExpress } from 'apollo-server-express';
+import { graphqlHTTP } from 'express-graphql';
 import { GraphQLSchema, execute, subscribe } from 'graphql';
-import { makeExecutableSchema } from 'graphql-tools';
+import { makeExecutableSchema } from '@graphql-tools/schema';
 import { SubscriptionServer } from 'subscriptions-transport-ws';
 import connectWebSocketStream = require('websocket-stream');
 import { Duplex } from 'stream';
@@ -221,7 +221,7 @@ export class MockttpStandalone {
             noServer: true
         });
 
-        mockServerRouter.use(graphqlExpress({ schema }));
+        mockServerRouter.use(graphqlHTTP({ schema }));
 
         return {
             mockPort,

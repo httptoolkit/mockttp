@@ -4,7 +4,6 @@
 
 import * as _ from "lodash";
 import { Duplex } from "stream";
-import * as util from 'util';
 
 import {
   GraphQLScalarType,
@@ -12,7 +11,7 @@ import {
   ObjectValueNode,
   ValueNode
 } from "graphql";
-import { IResolvers } from "graphql-tools/dist/Interfaces";
+import { IResolvers } from "@graphql-tools/utils/Interfaces";
 import { PubSub } from "graphql-subscriptions";
 
 import MockttpServer from "../server/mockttp-server";
