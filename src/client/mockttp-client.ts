@@ -29,6 +29,13 @@ import { introspectionQuery } from './introspection-query';
 
 export class ConnectionError extends TypedError { }
 
+// The Response type requires lib.dom. We include an empty placeholder here to
+// avoid the types breaking if you don't have that available. Once day TS will
+// fix this: https://github.com/microsoft/TypeScript/issues/31894
+declare global {
+    interface Response {}
+}
+
 export class RequestError extends TypedError {
     constructor(
         message: string,
