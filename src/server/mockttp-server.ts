@@ -35,7 +35,7 @@ import { createComboServer } from "./http-combo-server";
 import { filter } from "../util/promise";
 
 import {
-    parseBody,
+    parseRequestBody,
     waitForCompletedRequest,
     trackResponse,
     waitForCompletedResponse,
@@ -66,6 +66,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
     private httpsOptions: CAOptions | undefined;
     private isHttp2Enabled: true | false | 'fallback';
+    private maxBodySize: number;
 
     private app: connect.Server;
     private server: DestroyableServer | undefined;
@@ -81,6 +82,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
         this.httpsOptions = options.https;
         this.isHttp2Enabled = options.http2 ?? 'fallback';
+        this.maxBodySize = options.maxBodySize ?? Infinity;
         this.eventEmitter = new EventEmitter();
 
         this.app = connect();
@@ -95,7 +97,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
             this.app.use(cors(corsOptions) as connect.HandleFunction);
         }
 
-        this.app.use(parseBody);
+        this.app.use(parseRequestBody({ maxSize: this.maxBodySize }));
         this.app.use((
             req: ExtendedRawRequest,
             _res: http.ServerResponse,
@@ -369,7 +371,12 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         request.once('aborted', abort);
         this.announceInitialRequestAsync(request);
 
-        const response = trackResponse(rawResponse, timingEvents, tags);
+        const response = trackResponse(
+            rawResponse,
+            timingEvents,
+            tags,
+            { maxSize: this.maxBodySize }
+        );
         response.id = id;
         response.on('error', (error) => {
             console.log('Response error:', this.debug ? error : error.message);

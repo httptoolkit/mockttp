@@ -408,21 +408,6 @@ export interface MockttpOptions {
     standaloneServerUrl?: string;
 
     /**
-     * Record the requests & response for all traffic matched by each rule, and make
-     * it available via endpoint.getSeenRequests().
-     *
-     * Defaults to true. It can be useful to set this to false if lots of data will
-     * be sent to/via the server, to avoid storing all traffic in memory unnecessarily,
-     * if getSeenRequests will not be used.
-     *
-     * If this is set to false then getSeenRequests() will always return
-     * an empty array. This only disables the built-in persistence of request data,
-     * so traffic can still be captured live or stored elsewhere using
-     * .on('request') & .on('response').
-     */
-    recordTraffic?: boolean;
-
-    /**
      * By default, requests that match no rules will receive an explanation of the
      * request & existing rules, followed by some suggested example Mockttp code
      * which could be used to match the rule.
@@ -442,6 +427,32 @@ export interface MockttpOptions {
      * configured on individual rules instead.
      */
     ignoreWebsocketHostCertificateErrors?: string[];
+
+    /**
+     * Record the requests & response for all traffic matched by each rule, and make
+     * it available via endpoint.getSeenRequests().
+     *
+     * Defaults to true. It can be useful to set this to false if lots of data will
+     * be sent to/via the server, to avoid storing all traffic in memory unnecessarily,
+     * if getSeenRequests will not be used.
+     *
+     * If this is set to false then getSeenRequests() will always return
+     * an empty array. This only disables the built-in persistence of request data,
+     * so traffic can still be captured live or stored elsewhere using
+     * .on('request') & .on('response').
+     */
+    recordTraffic?: boolean;
+
+    /**
+     * The maximum body size to process, in bytes.
+     *
+     * Bodies larger than this will be dropped, becoming empty, so they won't match
+     * body matchers, won't be available in .seenRequests, and won't be included in
+     * subscribed event data. Body data will still typically be included in passed
+     * through request & response data, in most cases, so this won't affect the
+     * external HTTP clients otherwise.
+     */
+    maxBodySize?: number;
 }
 
 /**

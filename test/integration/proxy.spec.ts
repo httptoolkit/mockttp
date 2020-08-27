@@ -560,6 +560,58 @@ nodeOnly(() => {
             });
         });
 
+        describe("when only tiny bodies are allowed", () => {
+
+            beforeEach(async () => {
+                server = getLocal({
+                    maxBodySize: 10
+                });
+                await server.start();
+                process.env = _.merge({}, process.env, server.proxyEnv);
+            });
+
+            it("should still proxy larger request bodies", async () => {
+                const remoteEndpoint = await remoteServer.anyRequest().thenReply(200);
+                const proxyEndpoint = await server.post(remoteServer.url).thenPassThrough();
+
+                let response = await request.post({
+                    url: remoteServer.url,
+                    body: "A large request body",
+                    resolveWithFullResponse: true
+                });
+
+                expect(response.statusCode).to.equal(200);
+
+                // The request data is proxied through successfully
+                const resultingRequest = (await remoteEndpoint.getSeenRequests())[0];
+                expect(resultingRequest.body.text).to.equal('A large request body');
+
+                // But it's truncated in event data, not buffered
+                const proxiedRequestData = (await proxyEndpoint.getSeenRequests())[0];
+                expect(proxiedRequestData.body.text).to.equal('');
+            });
+
+            it("should still proxy larger response bodies", async () => {
+                await remoteServer.anyRequest().thenReply(200, "A large response body");
+                const proxyEndpoint = await server.get(remoteServer.url).thenPassThrough();
+
+                let response = await request.get({
+                    url: remoteServer.url,
+                    resolveWithFullResponse: true
+                });
+
+                expect(response.statusCode).to.equal(200);
+
+                // The response data is proxied through successfully
+                expect(response.body).to.equal('A large response body');
+
+                // But it's truncated in event data, not buffered
+                const proxiedRequestData = (await proxyEndpoint.getSeenRequests())[0];
+                expect(proxiedRequestData.body.text).to.equal('');
+            });
+
+        });
+
         describe("with an HTTPS config", () => {
             beforeEach(async () => {
                 server = getLocal({

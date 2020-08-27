@@ -25,7 +25,11 @@ import {
     TimingEvents,
     InitiatedRequest
 } from "../types";
-import { nthIndexOf } from '../util/util';
+import { nthIndexOf, isNode } from '../util/util';
+
+const MAX_BUFFER_SIZE = isNode
+    ? require('buffer').constants.MAX_LENGTH
+    : Infinity;
 
 // Is this URL fully qualified?
 // Note that this supports only HTTP - no websockets or anything else.
@@ -157,11 +161,25 @@ type BufferInProgress = Promise<Buffer> & {
     failedWith?: Error // Stores the error that killed the stream, if one did
 };
 
-export const streamToBuffer = (input: stream.Readable) => {
-    const chunks: Buffer[] = [];
+export const streamToBuffer = (input: stream.Readable, maxSize = MAX_BUFFER_SIZE) => {
+    let chunks: Buffer[] = [];
+
     const bufferPromise = <BufferInProgress> new Promise(
         (resolve, reject) => {
-            input.on('data', (d: Buffer) => chunks.push(d));
+            let currentSize = 0;
+            input.on('data', (d: Buffer) => {
+                currentSize += d.length;
+
+                // If we go over maxSize, drop the whole stream, so the buffer
+                // resolves empty. MaxSize should be large, so this is rare,
+                // and only happens as an alternative to crashing the process.
+                if (currentSize > maxSize) {
+                    chunks = []; // Drop all the data so far
+                    return; // Don't save any more data
+                }
+
+                chunks.push(d);
+            });
             input.once('end', () => resolve(Buffer.concat(chunks)));
             input.once('aborted', () => {
                 bufferPromise.failedWith = new Error('Aborted');
@@ -177,7 +195,7 @@ export const streamToBuffer = (input: stream.Readable) => {
     return bufferPromise;
 };
 
-const parseBodyStream = (bodyStream: stream.Readable): ParsedBody => {
+const parseBodyStream = (bodyStream: stream.Readable, maxSize: number): ParsedBody => {
     let bufferPromise: BufferInProgress | null = null;
     let completedBuffer: Buffer | null = null;
 
@@ -193,7 +211,7 @@ const parseBodyStream = (bodyStream: stream.Readable): ParsedBody => {
         },
         asBuffer() {
             if (!bufferPromise) {
-                bufferPromise = streamToBuffer(bodyStream);
+                bufferPromise = streamToBuffer(bodyStream, maxSize);
 
                 bufferPromise
                     .then((buffer) => completedBuffer = buffer)
@@ -289,13 +307,13 @@ export const buildBodyReader = (body: Buffer, headers: Headers): CompletedBody =
     return completedBody;
 };
 
-export const parseBody = (
+export const parseRequestBody = (options: { maxSize: number }) => (
     req: http.IncomingMessage,
     _res: http.ServerResponse,
     next: () => void
 ) => {
     let transformedRequest = <OngoingRequest> <any> req;
-    transformedRequest.body = parseBodyStream(req);
+    transformedRequest.body = parseBodyStream(req, options.maxSize);
     next();
 };
 
@@ -333,7 +351,12 @@ export async function waitForCompletedRequest(request: OngoingRequest): Promise<
     return Object.assign(requestData, { body });
 }
 
-export function trackResponse(response: http.ServerResponse, timingEvents: TimingEvents, tags: string[]): OngoingResponse {
+export function trackResponse(
+    response: http.ServerResponse,
+    timingEvents: TimingEvents,
+    tags: string[],
+    options: { maxSize: number }
+): OngoingResponse {
     let trackedResponse = <OngoingResponse> response;
     if (!trackedResponse.getHeaders) {
         // getHeaders was added in 7.7. - if it's not available, polyfill it
@@ -386,7 +409,7 @@ export function trackResponse(response: http.ServerResponse, timingEvents: Timin
         return result;
     };
 
-    trackedResponse.body = parseBodyStream(trackingStream);
+    trackedResponse.body = parseBodyStream(trackingStream, options.maxSize);
 
     // Proxy errors (e.g. write-after-end) to the response, so they can be
     // handled elsewhere, rather than killing the process outright.

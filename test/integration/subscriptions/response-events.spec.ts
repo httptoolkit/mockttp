@@ -165,6 +165,47 @@ describe("Response subscriptions", () => {
         });
     });
 
+    describe("with an HTTP server allowing only tiny bodies", () => {
+
+        let server = getLocal({
+            maxBodySize: 10 // 10 bytes max
+        });
+
+        beforeEach(() => server.start());
+        afterEach(() => server.stop());
+
+        it("should include tiny bodies in response events", async () => {
+            server.get('/mocked-endpoint').thenReply(200, 'TinyResp', {
+                'x-extra-header': 'present'
+            });
+
+            let seenResponsePromise = getDeferred<CompletedResponse>();
+            await server.on('response', (r) => seenResponsePromise.resolve(r));
+
+            fetch(server.urlFor("/mocked-endpoint"));
+
+            let seenResponse = await seenResponsePromise;
+            expect(seenResponse.statusCode).to.equal(200);
+            expect(seenResponse.body.text).to.equal('TinyResp');
+        });
+
+        it("should not include the body in the response event", async () => {
+            server.get('/mocked-endpoint').thenReply(200, 'Large response body', {
+                'x-extra-header': 'present'
+            });
+
+            let seenResponsePromise = getDeferred<CompletedResponse>();
+            await server.on('response', (r) => seenResponsePromise.resolve(r));
+
+            fetch(server.urlFor("/mocked-endpoint"));
+
+            let seenResponse = await seenResponsePromise;
+            expect(seenResponse.statusCode).to.equal(200);
+            expect(seenResponse.body.text).to.equal(isNode ? '' : undefined); // Body omitted
+        });
+
+    });
+
     describe("with an HTTPS server", () => {
 
         let server = getLocal({

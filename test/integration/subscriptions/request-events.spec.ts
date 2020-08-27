@@ -237,6 +237,37 @@ describe("Request subscriptions", () => {
         });
     });
 
+    describe("with a local HTTP server allowing only tiny bodies", () => {
+
+        let server = getLocal({
+            maxBodySize: 10 // 10 bytes max
+        });
+
+        beforeEach(() => server.start());
+        afterEach(() => server.stop());
+
+        it("should include tiny bodies in request events", async () => {
+            let seenRequestPromise = getDeferred<CompletedRequest>();
+            await server.on('request', (r) => seenRequestPromise.resolve(r));
+
+            fetch(server.urlFor("/mocked-endpoint"), { method: 'POST', body: 'TinyReq' });
+
+            let seenRequest = await seenRequestPromise;
+            expect(seenRequest.body.text).to.equal('TinyReq');
+        });
+
+        it("should not include larger bodies in request event", async () => {
+            let seenRequestPromise = getDeferred<CompletedRequest>();
+            await server.on('request', (r) => seenRequestPromise.resolve(r));
+
+            fetch(server.urlFor("/mocked-endpoint"), { method: 'POST', body: 'Larger request' });
+
+            let seenRequest = await seenRequestPromise;
+            expect(seenRequest.body.text).to.equal(isNode ? '' : undefined); // Truncated
+        });
+
+    });
+
     nodeOnly(() => {
         describe("with a remote client", () => {
             let standalone = getStandalone();
