@@ -388,6 +388,10 @@ export function trackResponse(response: http.ServerResponse, timingEvents: Timin
 
     trackedResponse.body = parseBodyStream(trackingStream);
 
+    // Proxy errors (e.g. write-after-end) to the response, so they can be
+    // handled elsewhere, rather than killing the process outright.
+    trackingStream.on('error', (e) => trackedResponse.emit('error', e));
+
     return trackedResponse;
 }
 

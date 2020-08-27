@@ -348,21 +348,15 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
     private async handleRequest(rawRequest: ExtendedRawRequest, rawResponse: http.ServerResponse) {
         if (this.debug) console.log(`Handling request for ${rawRequest.url}`);
 
+        const id = uuid();
         const timingEvents = { startTime: Date.now(), startTimestamp: now() };
         const tags: string[] = [];
-
-        const response = trackResponse(rawResponse, timingEvents, tags);
-
-        const id = uuid();
 
         const request = <OngoingRequest>Object.assign(rawRequest, {
             id: id,
             timingEvents,
             tags
         });
-        response.id = id;
-
-        this.announceInitialRequestAsync(request);
 
         let result: 'responded' | 'aborted' | null = null;
         const abort = () => {
@@ -373,6 +367,14 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
             }
         }
         request.once('aborted', abort);
+        this.announceInitialRequestAsync(request);
+
+        const response = trackResponse(rawResponse, timingEvents, tags);
+        response.id = id;
+        response.on('error', (error) => {
+            console.log('Response error:', this.debug ? error : error.message);
+            abort();
+        });
 
         let nextRulePromise = filter(this.rules, (r) => r.matches(request))
             .then((matchingRules) =>
@@ -407,14 +409,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
                     console.error("Failed to handle request due to abort:", e);
                 }
             } else {
-                if (this.debug) {
-                    console.error("Failed to handle request:", e);
-                } else {
-                    console.error("Failed to handle request:", e.message);
-                }
-
-                // Make sure any errors here don't kill the process
-                response.on('error', (e) => {});
+                console.error("Failed to handle request:", this.debug ? e : e.message);
 
                 // Do whatever we can to tell the client we broke
                 try {
