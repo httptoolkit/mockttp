@@ -925,7 +925,13 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 if (currentlyForwardingSockets.has(socket)) return;
 
                 // Add this port to our list of active ports, once it's connected (before then it has no port)
-                socket.once('connect', () => currentlyForwardingSockets.add(socket));
+                if (socket.connecting) {
+                    socket.once('connect', () => {
+                        currentlyForwardingSockets.add(socket)
+                    });
+                } else if (socket.localPort !== undefined) {
+                    currentlyForwardingSockets.add(socket);
+                }
 
                 // Remove this port from our list of active ports when it's closed
                 // This is called for both clean closes & errors.
