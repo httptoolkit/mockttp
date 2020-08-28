@@ -973,6 +973,10 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                     reject(e);
                 }
             });
+
+            // We always start upstream connections *immediately*. This might be less efficient, but it
+            // ensures that we're accurately mirroring downstream, which has indeed already connected.
+            serverReq.flushHeaders();
         })().catch((e) => {
             if (serverReq) serverReq.abort();
             reject(e);
