@@ -87,12 +87,12 @@ export class WebSocketHandler {
         });
 
         // If there's some other error, we just kill the socket:
-        upstreamSocket.once('error', (e) => {
+        upstreamSocket.on('error', (e) => {
             console.warn(e);
             incomingSocket.end();
         });
 
-        incomingSocket.once('error', () => upstreamSocket.close(1011)); // Internal error
+        incomingSocket.on('error', () => upstreamSocket.close(1011)); // Internal error
     }
 
     private pipeWebSocket(inSocket: WebSocket, outSocket: WebSocket) {

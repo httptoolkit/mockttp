@@ -827,7 +827,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 rejectUnauthorized: checkServerCertificate,
                 ...clientCert
             }, (serverRes) => (async () => {
-                serverRes.once('error', reject);
+                serverRes.on('error', reject);
 
                 let serverStatusCode = serverRes.statusCode!;
                 let serverStatusMessage = serverRes.statusMessage
@@ -939,7 +939,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 // asStream includes all content, including the body before this call
                 const reqBodyStream = clientReq.body.asStream();
                 reqBodyStream.pipe(serverReq);
-                reqBodyStream.once('error', () => serverReq.abort());
+                reqBodyStream.on('error', () => serverReq.abort());
             }
 
             // If the downstream connection aborts, before the response has been completed,
@@ -951,7 +951,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
             clientReq.on('aborted', abortUpstream);
             clientRes.once('finish', () => clientReq.removeListener('aborted', abortUpstream));
 
-            serverReq.once('error', (e: any) => {
+            serverReq.on('error', (e: any) => {
                 if ((<any>serverReq).aborted) return;
 
                 // Tag responses, so programmatic examination can react to this

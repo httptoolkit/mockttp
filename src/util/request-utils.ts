@@ -142,7 +142,7 @@ const bufferThenStream = (buffer: BufferInProgress, inputStream: stream.Readable
         // Forward future data as it arrives
         inputStream.pipe(outputStream);
         // Forward any future errors from the input stream
-        inputStream.once('error', (e) => outputStream.emit('error', e));
+        inputStream.on('error', (e) => outputStream.emit('error', e));
         // Silence 'unhandled rejection' warnings here, since we'll handle them on the stream instead
         buffer.catch(() => {});
     }
@@ -185,8 +185,8 @@ export const streamToBuffer = (input: stream.Readable, maxSize = MAX_BUFFER_SIZE
                 bufferPromise.failedWith = new Error('Aborted');
                 reject(bufferPromise.failedWith);
             });
-            input.once('error', (e) => {
-                bufferPromise.failedWith = e;
+            input.on('error', (e) => {
+                bufferPromise.failedWith = bufferPromise.failedWith || e;
                 reject(e);
             });
         }
