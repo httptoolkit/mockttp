@@ -1143,6 +1143,6 @@ const isRequestLoop = (incomingSocket: net.Socket) =>
             return false;
         } else {
             return normalizeIp(outgoingSocket.localAddress) === normalizeIp(incomingSocket.remoteAddress) &&
-            outgoingSocket.remotePort === incomingSocket.localPort;
+                outgoingSocket.localPort === incomingSocket.remotePort;
         }
     });
