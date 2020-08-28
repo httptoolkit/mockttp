@@ -915,7 +915,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                     resolve();
                 } else {
                     serverRes.pipe(clientRes);
-                    clientRes.once('finish', resolve);
+                    serverRes.once('end', resolve);
                 }
             })().catch(reject));
 
