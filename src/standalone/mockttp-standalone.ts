@@ -170,6 +170,8 @@ export class MockttpStandalone {
         await new Promise<void>((resolve, reject) => {
             this.server = destroyable(this.app.listen(listenOptions, resolve));
 
+            this.server.on('error', reject);
+
             this.server.on('upgrade', async (req: http.IncomingMessage, socket: net.Socket, head: Buffer) => {
                 const reqOrigin = req.headers['origin'] as string | undefined;
                 if (this.requiredOrigin && !await strictOriginMatch(reqOrigin, this.requiredOrigin)) {
