@@ -2,6 +2,7 @@ import { PassThrough } from "stream";
 import * as net from 'net';
 import * as portfinder from 'portfinder';
 import request = require("request-promise-native");
+import * as WebSocket from 'universal-websocket-client';
 
 import { getLocal, getRemote, getStandalone, Mockttp } from "../..";
 import { expect, fetch, nodeOnly, browserOnly } from "../test-utils";
@@ -305,6 +306,79 @@ nodeOnly(() => {
                 });
 
                 await expect(client.start()).to.eventually.equal(undefined);
+            });
+
+            it("rejects subscriptions for clients that specify no origin", async () => {
+                client = getRemote({
+                    client: {
+                        headers: {
+                            origin: 'https://example.com'
+                        }
+                    }
+                });
+
+                await client.start();
+
+                // Manually send a subscription socket with no Origin (can't start an invalid client
+                // and test, because the client fails to start given a bad origin)
+                const ws = new WebSocket(`http://localhost:45454/server/${client.port}/subscription`);
+
+                await expect(new Promise((resolve, reject) => {
+                    ws.addEventListener('open', resolve);
+                    ws.addEventListener('error', reject);
+                })).to.eventually.be.rejectedWith("socket hang up");
+            });
+
+            it("rejects subscriptions for clients that specify the wrong origin", async () => {
+                client = getRemote({
+                    client: {
+                        headers: {
+                            origin: 'https://example.com'
+                        }
+                    }
+                });
+
+                await client.start();
+
+                // Manually send a subscription socket with the wrong Origin (can't start an invalid client
+                // and test, because the client fails to start given a bad origin)
+                const ws = new WebSocket(`http://localhost:45454/server/${client.port}/subscription`, {
+                    headers: {
+                        origin: 'https://twitter.com'
+                    }
+                } as any);
+
+                await expect(new Promise((resolve, reject) => {
+                    ws.addEventListener('open', resolve);
+                    ws.addEventListener('error', reject);
+                })).to.eventually.be.rejectedWith("socket hang up");
+            });
+
+            it("allows subscriptions for clients that specify the correct origin", async () => {
+                client = getRemote({
+                    client: {
+                        headers: {
+                            origin: 'https://example.com'
+                        }
+                    }
+                });
+
+                await client.start();
+
+                // Manually send a subscription socket with the right Origin for consistency with above
+                const ws = new WebSocket(`http://localhost:45454/server/${client.port}/subscription`, {
+                    headers: {
+                        origin: 'https://example.com'
+                    }
+                } as any);
+
+                await expect(new Promise((resolve, reject) => {
+                    ws.addEventListener('open', resolve);
+                    ws.addEventListener('error', reject);
+                })).to.eventually.not.equal(undefined);
+
+                // Check the standard on() subscriptions work OK too:
+                await expect(client.on('response', () => {})).to.eventually.equal(undefined);
             });
         });
 

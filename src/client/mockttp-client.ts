@@ -67,6 +67,10 @@ type SubscribableEvent =
     | 'client-error';
 
 export interface MockttpClientOptions extends MockttpOptions {
+    /**
+     * Options to include on all client requests, e.g. to add extra
+     * headers for authentication.
+     */
     client?: {
         headers?: { [key: string]: string };
     }
@@ -186,7 +190,8 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
     private openStreamToMockServer(config: MockServerConfig): Promise<Duplex> {
         const standaloneStreamServer = this.mockServerOptions.standaloneServerUrl.replace(/^http/, 'ws');
         const stream = connectWebSocketStream(`${standaloneStreamServer}/server/${config.port}/stream`, {
-            objectMode: true
+            objectMode: true,
+            headers: this.mockClientOptions?.headers
         });
 
         return new Promise((resolve, reject) => {
@@ -446,7 +451,8 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
         const url = `${standaloneStreamServer}/server/${this.port}/subscription`;
         const client = new SubscriptionClient(url, {
             reconnect: true,
-            reconnectionAttempts: 8
+            reconnectionAttempts: 8,
+            wsOptionArguments: [this.mockClientOptions]
         }, WebSocket);
 
         // Note the typeHasField checks - these are a quick hack for backward compatibility,

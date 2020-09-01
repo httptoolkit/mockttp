@@ -35,8 +35,45 @@ export interface StandaloneServerOptions {
     corsOptions?: cors.CorsOptions & { strict?: boolean };
 }
 
+async function strictOriginMatch(
+    origin: string | undefined,
+    expectedOrigin: cors.CorsOptions['origin']
+): Promise<boolean> {
+    if (!origin) return false;
+
+    if (typeof expectedOrigin === 'string') {
+        return expectedOrigin === origin;
+    }
+
+    if (_.isRegExp(expectedOrigin)) {
+        return !!origin.match(expectedOrigin);
+    }
+
+    if (_.isArray(expectedOrigin)) {
+        return _.some(expectedOrigin, (exp) =>
+            (typeof exp === 'string')
+                ? exp === origin
+                : origin.match(exp)
+        );
+    }
+
+    if (_.isFunction(expectedOrigin)) {
+        return new Promise<boolean>((resolve, reject) => {
+            expectedOrigin(origin, (error, result) => {
+                if (error) reject(error);
+                else resolve(result);
+            });
+        });
+    }
+
+    // We don't allow boolean or undefined matches
+    return false;
+}
+
 export class MockttpStandalone {
     private debug: boolean;
+    private requiredOrigin: cors.CorsOptions['origin'] | false;
+
     private app = express();
     private server: DestroyableServer | null = null;
 
@@ -47,11 +84,19 @@ export class MockttpStandalone {
         if (this.debug) console.log('Standalone server started in debug mode');
 
         this.app.use(cors(options.corsOptions));
-        if (options.corsOptions && options.corsOptions.strict) {
+
+        // If you use strict CORS, and set a specific origin, we'll enforce it:
+        this.requiredOrigin = !!options.corsOptions &&
+            !!options.corsOptions.strict &&
+            !!options.corsOptions.origin &&
+            typeof options.corsOptions.origin !== 'boolean' &&
+            options.corsOptions.origin;
+
+        if (this.requiredOrigin) {
             this.app.use(corsGate({
                 strict: true, // MUST send an allowed origin
                 allowSafe: false, // Even for HEAD/GET requests (should be none anyway)
-                origin: '' // No origin - we accept *no* same-origin requests
+                origin: '' // No base origin - we accept *no* same-origin requests
             }));
         }
 
@@ -125,7 +170,14 @@ export class MockttpStandalone {
         await new Promise<void>((resolve, reject) => {
             this.server = destroyable(this.app.listen(listenOptions, resolve));
 
-            this.server.on('upgrade', (req: http.IncomingMessage, socket: net.Socket, head: Buffer) => {
+            this.server.on('upgrade', async (req: http.IncomingMessage, socket: net.Socket, head: Buffer) => {
+                const reqOrigin = req.headers['origin'] as string | undefined;
+                if (this.requiredOrigin && !await strictOriginMatch(reqOrigin, this.requiredOrigin)) {
+                    console.warn(`Websocket request from invalid origin: ${req.headers['origin']}`);
+                    socket.destroy();
+                    return;
+                }
+
                 let isSubscriptionRequest = req.url!.match(/^\/server\/(\d+)\/subscription$/);
                 let isStreamRequest = req.url!.match(/^\/server\/(\d+)\/stream$/);
                 let isMatch = isSubscriptionRequest || isStreamRequest;
