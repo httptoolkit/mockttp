@@ -27,30 +27,35 @@ export class WebSocketHandler {
     }
 
     handleUpgrade(req: http.IncomingMessage, socket: net.Socket, head: Buffer) {
-        let { protocol: requestedProtocol, hostname, port, path } = url.parse(req.url!);
+        try {
+            let { protocol: requestedProtocol, hostname, port, path } = url.parse(req.url!);
 
-        if (this.debug) console.log(`Handling upgrade for ${req.url}`);
+            if (this.debug) console.log(`Handling upgrade for ${req.url}`);
 
-        const transparentProxy = !hostname;
+            const transparentProxy = !hostname;
 
-        if (transparentProxy) {
-            const hostHeader = req.headers.host;
-            [ hostname, port ] = hostHeader!.split(':');
+            if (transparentProxy) {
+                const hostHeader = req.headers.host;
+                [ hostname, port ] = hostHeader!.split(':');
 
-            // upstreamEncryption is set in http-combo-server, for requests that have explicitly
-            // CONNECTed upstream (which may then up/downgrade from the current encryption).
-            let protocol: string;
-            if (socket.lastHopEncrypted !== undefined) {
-                protocol = socket.lastHopEncrypted ? 'wss' : 'ws';
+                // upstreamEncryption is set in http-combo-server, for requests that have explicitly
+                // CONNECTed upstream (which may then up/downgrade from the current encryption).
+                let protocol: string;
+                if (socket.lastHopEncrypted !== undefined) {
+                    protocol = socket.lastHopEncrypted ? 'wss' : 'ws';
+                } else {
+                    protocol = req.connection.encrypted ? 'wss' : 'ws';
+                }
+
+                this.connectUpstream(`${protocol}://${hostname}${port ? ':' + port : ''}${path}`, req, socket, head);
             } else {
-                protocol = req.connection.encrypted ? 'wss' : 'ws';
+                // Connect directly according to the specified URL
+                const protocol = requestedProtocol!.replace('http', 'ws');
+                this.connectUpstream(`${protocol}//${hostname}${port ? ':' + port : ''}${path}`, req, socket, head);
             }
-
-            this.connectUpstream(`${protocol}://${hostname}${port ? ':' + port : ''}${path}`, req, socket, head);
-        } else {
-            // Connect directly according to the specified URL
-            const protocol = requestedProtocol!.replace('http', 'ws');
-            this.connectUpstream(`${protocol}//${hostname}${port ? ':' + port : ''}${path}`, req, socket, head);
+        } catch (e) {
+            console.error(e);
+            this.sendErrorResponse(socket, e);
         }
     }
 
@@ -144,6 +149,18 @@ export class WebSocketHandler {
         }
 
         socket.destroy();
+    }
+
+    private async sendErrorResponse(socket: net.Socket, error: Error) {
+        if (socket.writable) {
+            socket.write(
+                'HTTP/1.1 500 Internal Server Error\r\n' +
+                '\r\n' +
+                error.message
+            );
+        }
+
+        socket.destroy(error);
     }
 }
 
