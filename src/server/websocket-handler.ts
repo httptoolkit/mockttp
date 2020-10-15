@@ -28,6 +28,16 @@ export class WebSocketHandler {
 
     handleUpgrade(req: http.IncomingMessage, socket: net.Socket, head: Buffer) {
         try {
+            // Ensure WS errors don't crash anything. Once/if upstream connects, we'll also add
+            // a listener that will proxy errors upstream - but for now don't crash either way.
+            socket.on('error', (e) => {
+                if (socket.listenerCount('error') === 1) {
+                    // If no other error handler exists, make sure we at least try to
+                    // clean up this socket so the client sees it die.
+                    socket.destroy();
+                }
+            });
+
             let { protocol: requestedProtocol, hostname, port, path } = url.parse(req.url!);
 
             if (this.debug) console.log(`Handling upgrade for ${req.url}`);
