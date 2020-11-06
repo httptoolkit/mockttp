@@ -42,7 +42,7 @@ describe("Basic HTTP mocking", function () {
         it("can proxy requests to made to any other hosts", async () => {
             await server.get("http://google.com").thenReply(200, "Not really google");
 
-            let response = fetch("http://google.com", <{}> {
+            let response = fetch("http://google.com", <{}>{
                 agent: new HttpProxyAgent(server.url)
             });
 
@@ -50,3 +50,24 @@ describe("Basic HTTP mocking", function () {
         });
     });
 });
+
+nodeOnly(() => {
+    it("should use the unmatchedRequestHandler for non-matching requests ", async () => {
+        let server = getLocal({
+            unmatchedRequestHandler: async (request, response) => {
+                response.setHeader('Content-Type', '123');
+                response.writeHead(512, "456");
+                response.end("test123")
+            }
+        });
+
+        await server.start();
+        let result = await fetch(server.urlFor("/not-mocked-endpoint"));
+
+        expect(result.status).equal(512)
+        expect(result.statusText).equal("456");
+        expect(await result.text()).equal("test123");
+        expect(result.headers.get("Content-Type")).equal("123")
+        await server.stop();
+    })
+})

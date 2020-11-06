@@ -1,6 +1,7 @@
 /**
  * @module Mockttp
  */
+import * as http from "http";
 import { stripIndent } from "common-tags";
 import * as cors from 'cors';
 
@@ -13,7 +14,8 @@ import {
     CompletedResponse,
     TlsRequest,
     InitiatedRequest,
-    ClientError
+    ClientError,
+    OngoingRequest
 } from "./types";
 import { MockRuleData } from "./rules/mock-rule";
 import { CAOptions } from './util/tls';
@@ -59,29 +61,29 @@ export interface Mockttp {
 
     /**
      * The root URL of the server.
-     * 
+     *
      * This will throw an error if read before the server is started.
      */
     url: string;
 
     /**
      * The URL for a given path on the server.
-     * 
+     *
      * This will throw an error if read before the server is started.
      */
     urlFor(path: string): string;
     /**
      * The port the server is running on.
-     * 
+     *
      * This will throw an error if read before the server is started.
      */
     port: number;
     /**
      * The environment variables typically needed to use this server as a proxy, in a format you
      * can add to your environment straight away.
-     * 
+     *
      * This will throw an error if read before the server is started.
-     * 
+     *
      * ```
      * process.env = Object.assign(process.env, mockServer.proxyEnv)
      * ```
@@ -453,6 +455,13 @@ export interface MockttpOptions {
      * external HTTP clients otherwise.
      */
     maxBodySize?: number;
+
+    /**
+     * HTTP handler for requests without a route.
+     *
+     * If not set, it will show the error page of a non-configured routes instead.
+     */
+    unmatchedRequestHandler?: (request: OngoingRequest, response: http.ServerResponse) => Promise<void>
 }
 
 /**
@@ -464,6 +473,7 @@ export abstract class AbstractMockttp {
     protected recordTraffic: boolean;
     protected suggestChanges: boolean;
     protected ignoreWebsocketHostCertificateErrors: string[];
+    protected unmatchedRequestHandler?: (request: OngoingRequest, response: http.ServerResponse) => Promise<void>;
 
     abstract get url(): string;
     abstract on(event: 'request', callback: (req: CompletedRequest) => void): Promise<void>;
@@ -479,6 +489,7 @@ export abstract class AbstractMockttp {
             : true;
         this.ignoreWebsocketHostCertificateErrors =
             options.ignoreWebsocketHostCertificateErrors || [];
+        this.unmatchedRequestHandler = options.unmatchedRequestHandler
     }
 
     get proxyEnv(): ProxyConfig {

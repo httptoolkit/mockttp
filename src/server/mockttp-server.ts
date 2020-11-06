@@ -405,7 +405,10 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
                 if (this.debug) console.log(`Request matched rule: ${nextRule.explain()}`);
                 await nextRule.handle(request, response, this.recordTraffic);
             } else {
-                await this.sendUnmatchedRequestError(request, response);
+                if (this.unmatchedRequestHandler)
+                    await this.unmatchedRequestHandler(request, response)
+                else
+                    await this.defaultUnmatchedRequestError(request, response);
             }
             result = result || 'responded';
         } catch (e) {
@@ -448,7 +451,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         }
     }
 
-    private async sendUnmatchedRequestError(request: OngoingRequest, response: http.ServerResponse) {
+    private async defaultUnmatchedRequestError(request: OngoingRequest, response: http.ServerResponse) {
         let requestExplanation = await this.explainRequest(request);
         if (this.debug) console.warn(`Unmatched request received: ${requestExplanation}`);
 
