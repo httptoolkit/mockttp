@@ -317,6 +317,23 @@ export const parseRequestBody = (options: { maxSize: number }) => (
     next();
 };
 
+/**
+ * Translate from internal header representations (basically Node's header representations) to a
+ * mildly more consistent & simplified model that we expose externally: numbers as strings, and
+ * no sensitiveHeaders symbol for HTTP/2.
+ */
+export function cleanUpHeaders(headers: Headers) {
+    return _.mapValues(
+        _.omit(headers, ...(http2.sensitiveHeaders ? [http2.sensitiveHeaders as any] : [])),
+        (headerValue: undefined | string | string[] | number) =>
+            _.isNumber(headerValue) ? headerValue.toString() : headerValue
+    );
+}
+
+/**
+ * Build an initiated request: the external representation of a request
+ * that's just started.
+ */
 export function buildInitiatedRequest(request: OngoingRequest): InitiatedRequest {
     return {
         ..._.pick(request,
@@ -331,24 +348,34 @@ export function buildInitiatedRequest(request: OngoingRequest): InitiatedRequest
             'headers',
             'tags'
         ),
+        headers: cleanUpHeaders(request.headers),
         timingEvents: request.timingEvents
     };
 }
 
+/**
+ * Build an aborted request: the external representation of a request
+ * that's been aborted.
+ */
 export function buildAbortedRequest(request: OngoingRequest): InitiatedRequest {
     const requestData = buildInitiatedRequest(request);
     return Object.assign(requestData, {
+        headers: cleanUpHeaders(request.headers),
         // Exists for backward compat: really Abort events should have no body at all
         body: buildBodyReader(Buffer.alloc(0), {})
     });
 }
 
+/**
+ * Build a completed request: the external representation of a request
+ * that's been completely received (but not necessarily replied to).
+ */
 export async function waitForCompletedRequest(request: OngoingRequest): Promise<CompletedRequest> {
     const body = await waitForBody(request.body, request.headers);
     request.timingEvents.bodyReceivedTimestamp = request.timingEvents.bodyReceivedTimestamp || now();
 
     const requestData = buildInitiatedRequest(request);
-    return Object.assign(requestData, { body });
+    return Object.assign(requestData, { body, headers: cleanUpHeaders(request.headers) });
 }
 
 export function trackResponse(
@@ -418,6 +445,10 @@ export function trackResponse(
     return trackedResponse;
 }
 
+/**
+ * Build a completed response: the external representation of a response
+ * that's been completely written out and sent back to the client.
+ */
 export async function waitForCompletedResponse(response: OngoingResponse): Promise<CompletedResponse> {
     const body = await waitForBody(response.body, response.getHeaders());
     response.timingEvents.responseSentTimestamp = response.timingEvents.responseSentTimestamp || now();
@@ -429,11 +460,7 @@ export async function waitForCompletedResponse(response: OngoingResponse): Promi
         'timingEvents',
         'tags'
     ]).assign({
-        headers: _.mapValues(response.getHeaders(), (headerValue) => {
-            return _.isNumber(headerValue)
-                ? headerValue.toString() // HTTP :status sneaks in as a number
-                : headerValue;
-        }) as Headers,
+        headers: cleanUpHeaders(response.getHeaders()),
         body: body
     }).valueOf();
 }

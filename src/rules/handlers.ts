@@ -6,6 +6,7 @@ import _ = require('lodash');
 import url = require('url');
 import net = require('net');
 import http = require('http');
+import http2 = require('http2');
 import https = require('https');
 import * as h2Client from 'http2-wrapper';
 import { encode as encodeBase64, decode as decodeBase64 } from 'base64-arraybuffer';
@@ -23,7 +24,8 @@ import {
     isHttp2,
     h1HeadersToH2,
     h2HeadersToH1,
-    isAbsoluteUrl
+    isAbsoluteUrl,
+    cleanUpHeaders
 } from '../util/request-utils';
 import { isLocalPortActive } from '../util/socket-util';
 import {
@@ -700,11 +702,10 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
         let headersManuallyModified = false;
         if (this.beforeRequest) {
             const completedRequest = await waitForCompletedRequest(clientReq);
-            const modifiedReq = await this.beforeRequest(
-                Object.assign(completedRequest, {
-                    headers: _.clone(completedRequest.headers) // Clone headers so we can ignore mutations
-                })
-            );
+            const modifiedReq = await this.beforeRequest({
+                ...completedRequest,
+                headers: _.clone(completedRequest.headers)
+            });
 
             if (modifiedReq.response) {
                 // The callback has provided a full response: don't passthrough at all, just use it.
@@ -725,7 +726,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
             headersManuallyModified = !!modifiedReq.headers;
 
             validateCustomHeaders(
-                clientReq.headers,
+                completedRequest.headers,
                 modifiedReq.headers,
                 OVERRIDABLE_REQUEST_PSEUDOHEADERS // These are handled by getCorrectPseudoheaders above
             );
@@ -843,16 +844,17 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                     let body: Buffer;
 
                     body = await streamToBuffer(serverRes);
+                    const cleanHeaders = cleanUpHeaders(serverHeaders);
 
                     modifiedRes = await this.beforeResponse({
                         id: clientReq.id,
                         statusCode: serverStatusCode,
                         statusMessage: serverRes.statusMessage,
-                        headers: _.clone(serverHeaders),
+                        headers: _.clone(cleanHeaders),
                         body: buildBodyReader(body, serverHeaders)
                     });
 
-                    validateCustomHeaders(serverHeaders, modifiedRes.headers);
+                    validateCustomHeaders(cleanHeaders, modifiedRes.headers);
 
                     serverStatusCode = modifiedRes.statusCode ||
                         modifiedRes.status ||
@@ -888,8 +890,11 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
 
                 Object.keys(serverHeaders).forEach((header) => {
                     const headerValue = serverHeaders[header];
-                    if (headerValue === undefined) return;
-                    if (header === ':status') return; // H2 status gets set by writeHead below
+                    if (
+                        headerValue === undefined ||
+                        (header as unknown) === http2.sensitiveHeaders ||
+                        header === ':status' // H2 status gets set by writeHead below
+                    ) return;
 
                     try {
                         clientRes.setHeader(header, headerValue);

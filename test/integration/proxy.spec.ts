@@ -1115,7 +1115,7 @@ nodeOnly(() => {
                         ignoreHostCertificateErrors: ['localhost'],
                         beforeResponse: (res) => {
                             expect(_.omit(res.headers, 'date')).to.deep.equal({
-                                ':status': 200,
+                                ':status': '200',
                                 'received-url': '/',
                                 'received-method': 'GET',
                                 'received-body': '',
@@ -1149,7 +1149,7 @@ nodeOnly(() => {
                     await server.anyRequest().thenPassThrough({
                         ignoreHostCertificateErrors: ['localhost'],
                         beforeResponse: (res) => {
-                            expect(res.headers[':status']).to.equal(200);
+                            expect(res.headers[':status']).to.equal('200');
 
                             return {
                                 statusCode: 418,
@@ -1192,7 +1192,7 @@ nodeOnly(() => {
                     await server.anyRequest().thenPassThrough({
                         ignoreHostCertificateErrors: ['localhost'],
                         beforeResponse: (res) => {
-                            expect(res.headers[':status']).to.equal(200);
+                            expect(res.headers[':status']).to.equal('200');
 
                             return {
                                 statusCode: 429,
