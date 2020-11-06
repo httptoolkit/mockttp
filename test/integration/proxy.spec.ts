@@ -403,7 +403,7 @@ nodeOnly(() => {
                         expect(res.statusMessage).to.equal("Not Found");
 
                         return {
-                            statusCode: 204,
+                            statusCode: 200,
                             statusMessage: 'muy bien'
                         };
                     }
@@ -413,7 +413,7 @@ nodeOnly(() => {
                     resolveWithFullResponse: true,
                     simple: false
                 });
-                expect(response.statusCode).to.equal(204);
+                expect(response.statusCode).to.equal(200);
                 expect(response.statusMessage).to.equal('muy bien');
             });
 
