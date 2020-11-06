@@ -575,7 +575,7 @@ function validateCustomHeaders(
     // We ignore most returned pseudo headers, so we error if you try to manually set them
     const invalidHeaders = _(modifiedHeaders)
         .pickBy((value, name) =>
-            name.startsWith(':') &&
+            name.toString().startsWith(':') &&
             // We allow returning a preexisting header value - that's ignored
             // silently, so that mutating & returning the provided headers is always safe.
             value !== originalHeaders[name] &&
@@ -804,7 +804,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
         if (isH2Downstream && shouldTryH2Upstream) {
             // We drop all incoming pseudoheaders, and regenerate them (except legally modified ones)
             headers = _.pickBy(headers, (value, key) =>
-                !key.startsWith(':') ||
+                !key.toString().startsWith(':') ||
                 (headersManuallyModified &&
                     OVERRIDABLE_REQUEST_PSEUDOHEADERS.includes(key as any)
                 )

@@ -87,4 +87,8 @@ declare module "http2" {
         // so we manually preserve the socket elsewhere to work around it.
         initialSocket?: net.Socket;
     }
+
+    // A constant symbol used in-band in HTTP/2 header objects to list the headers
+    // that shouldn't/weren't automatically compressed. Only defined in Node 15+.
+    export const sensitiveHeaders: Symbol | undefined;
 }

@@ -96,8 +96,8 @@ export function isHttp2(
 }
 
 export function h2HeadersToH1(h2Headers: Headers): Headers {
-    const h1Headers = _.omitBy(h2Headers, (_value, key) => {
-        return key.startsWith(':')
+    const h1Headers = _.omitBy(h2Headers, (_value, key: string | Symbol) => {
+        return key === http2.sensitiveHeaders || key.toString().startsWith(':')
     });
 
     if (!h1Headers['host'] && h2Headers[':authority']) {
