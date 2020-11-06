@@ -167,6 +167,11 @@ export function getHttp2Response(req: http2.ClientHttp2Stream) {
 
 export function getHttp2Body(req: http2.ClientHttp2Stream) {
     return new Promise<Buffer>((resolve, reject) => {
+        if (req.closed) {
+            resolve(Buffer.from([]));
+            return;
+        }
+
         const body: Buffer[] = [];
         req.on('data', (d: Buffer | string) => {
             body.push(Buffer.from(d));
