@@ -1,0 +1,30 @@
+name: CI
+on: push
+jobs:
+  build:
+    name: Build & test
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [10.x, 12.x, v14.6.0, 14.x, 15.x]
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: actions/setup-node@v1
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - run: npm install --no-package-lock
+      - run: npm test
+
+      - name: Deploy docs
+        if: github.ref == 'refs/heads/master'
+        uses: JamesIves/github-pages-deploy-action@3.6.2
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: gh-pages
+          FOLDER: typedoc
+          CLEAN: true # Automatically remove deleted files from the deploy branch
+
