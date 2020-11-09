@@ -7,6 +7,7 @@ node_js:
     - '12.16' # Pinned, because node's H2 is buggy in 12.17+
     - '10'
 install:
+    - npm install -g npm@^6
     - npm install --no-package-lock
 services:
     - xvfb
