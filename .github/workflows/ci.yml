@@ -15,9 +15,10 @@ jobs:
       - uses: actions/setup-node@v1
         with:
           node-version: ${{ matrix.node-version }}
+      - run: npm install -g npm@6
 
       - run: npm install --no-package-lock
-      - run: npm test
+      - run: npm run ci-tests
 
       - name: Deploy docs
         if: github.ref == 'refs/heads/master'
