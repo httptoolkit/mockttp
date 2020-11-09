@@ -21,7 +21,7 @@ jobs:
       - run: npm run ci-tests
 
       - name: Deploy docs
-        if: github.ref == 'refs/heads/master'
+        if: github.ref == 'refs/heads/master' && matrix.node-version == 'v14.6.0'
         uses: JamesIves/github-pages-deploy-action@3.6.2
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
