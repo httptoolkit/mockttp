@@ -87,6 +87,16 @@ responses by hand.`);
         await expect(result).to.have.responseText('Root response');
     });
 
+    it("should match requests for a matching URL including a double initial slash", async () => {
+        await server.get(`http://localhost:${server.port}//abc`).thenReply(200, '//abc response');
+
+        // WHATWG URL parses //abc as an absolute URL with no protocol. This can cause problems. We need to
+        // ensure we always treat it as relative, and correctly use the host header for the rest:
+        let result = await fetch(server.urlFor('//abc'));
+
+        await expect(result).to.have.responseText('//abc response');
+    });
+
     it("should regex match requests for a matching path", async () => {
         await server.get(/^\/matching-\w+.txt/).thenReply(200, 'Fake file');
 
