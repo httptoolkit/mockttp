@@ -284,6 +284,12 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
         return !!_.find(type.fields, { name: fieldName });
     }
 
+    private optionalField(typeName: string, fieldName: string): string {
+        return (this.typeHasField(typeName, fieldName))
+            ? fieldName
+            : '';
+    }
+
     private typeHasInputField(typeName: string, fieldName: string): boolean {
         const type: any = _.find(this.mockServerSchema.types, { name: typeName });
         if (!type) return false;
@@ -347,7 +353,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
             `mutation ${requestName}($newRules: [MockRule!]!) {
                 endpoints: ${mutationName}(input: $newRules) {
                     id,
-                    ${this.typeHasField('MockedEndpoint', 'explanation') ? 'explanation' : ''}
+                    ${this.optionalField('MockedEndpoint', 'explanation')}
                 }
             }`, {
                 newRules: rules.map((rule) => {
@@ -372,7 +378,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
             `query GetAllEndpointData {
                 mockedEndpoints {
                     id,
-                    ${this.typeHasField('MockedEndpoint', 'explanation') ? 'explanation' : ''}
+                    ${this.optionalField('MockedEndpoint', 'explanation')}
                 }
             }`
         );
@@ -414,7 +420,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
             `mutation AddRule($newRule: MockRule!) {
                 addRule(input: $newRule) {
                     id,
-                    ${this.typeHasField('MockedEndpoint', 'explanation') ? 'explanation' : ''}
+                    ${this.optionalField('MockedEndpoint', 'explanation')}
                 }
             }`, {
                 newRule: ruleData
@@ -473,7 +479,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                         headers,
                         timingEvents,
                         httpVersion,
-                        ${this.typeHasField('InitiatedRequest', 'tags') ? 'tags' : ''}
+                        ${this.optionalField('InitiatedRequest', 'tags')}
                     }
                 }`
             },
@@ -482,7 +488,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                 query: `subscription OnRequest {
                     ${queryResultName} {
                         id,
-                        ${this.typeHasField('Request', 'matchedRuleId') ? 'matchedRuleId' : ''}
+                        ${this.optionalField('Request', 'matchedRuleId')}
                         protocol,
                         method,
                         url,
@@ -491,9 +497,9 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
 
                         headers,
                         body,
-                        ${this.typeHasField('Request', 'timingEvents') ? 'timingEvents' : ''}
-                        ${this.typeHasField('Request', 'httpVersion') ? 'httpVersion' : ''}
-                        ${this.typeHasField('Request', 'tags') ? 'tags' : ''}
+                        ${this.optionalField('Request', 'timingEvents')}
+                        ${this.optionalField('Request', 'httpVersion')}
+                        ${this.optionalField('Request', 'tags')}
                     }
                 }`
             },
@@ -506,8 +512,8 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                         statusMessage,
                         headers,
                         body,
-                        ${this.typeHasField('Response', 'timingEvents') ? 'timingEvents' : ''}
-                        ${this.typeHasField('Response', 'tags') ? 'tags' : ''}
+                        ${this.optionalField('Response', 'timingEvents')}
+                        ${this.optionalField('Response', 'tags')}
                     }
                 }`
             },
@@ -524,8 +530,8 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
 
                         headers,
                         body,
-                        ${this.typeHasField('Response', 'timingEvents') ? 'timingEvents' : ''}
-                        ${this.typeHasField('Response', 'tags') ? 'tags' : ''}
+                        ${this.optionalField('Response', 'timingEvents')}
+                        ${this.optionalField('Response', 'tags')}
                     }
                 }`
             },
@@ -536,8 +542,8 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                         failureCause
                         hostname
                         remoteIpAddress
-                        ${this.typeHasField('TlsRequest', 'tags') ? 'tags' : ''}
-                        ${this.typeHasField('TlsRequest', 'timingEvents') ? 'timingEvents' : ''}
+                        ${this.optionalField('TlsRequest', 'tags')}
+                        ${this.optionalField('TlsRequest', 'timingEvents')}
                     }
                 }`
             },
@@ -630,10 +636,10 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                         hostname,
                         headers,
                         body,
-                        ${this.typeHasField('Request', 'timingEvents') ? 'timingEvents' : ''}
-                        ${this.typeHasField('Request', 'httpVersion') ? 'httpVersion' : ''}
+                        ${this.optionalField('Request', 'timingEvents')}
+                        ${this.optionalField('Request', 'httpVersion')}
                     }
-                    ${this.typeHasField('MockedEndpoint', 'isPending') ? 'isPending' : ''}
+                    ${this.optionalField('MockedEndpoint', 'isPending')}
                 }
             }`, {
                 id: ruleId
