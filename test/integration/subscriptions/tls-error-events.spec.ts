@@ -81,11 +81,7 @@ describe("TLS error subscriptions", () => {
 
         await expect(
             fetch(badServer.urlFor("/"))
-        ).to.be.rejectedWith(
-            // Broken by bad TS handling of overrides, see
-            // https://github.com/DefinitelyTyped/DefinitelyTyped/pull/37292
-            (isNode ? /certificate/ : 'Failed to fetch') as any
-        );
+        ).to.be.rejectedWith(isNode ? /certificate/ : 'Failed to fetch');
 
         const tlsError = await seenTlsErrorPromise;
 
@@ -117,11 +113,7 @@ describe("TLS error subscriptions", () => {
 
         await expect(
             fetch(badServer.urlFor("/"))
-        ).to.be.rejectedWith(
-            // Broken by bad TS handling of overrides, see
-            // https://github.com/DefinitelyTyped/DefinitelyTyped/pull/37292
-            (isNode ? /certificate/ : 'Failed to fetch') as any
-        );
+        ).to.be.rejectedWith(isNode ? /certificate/ : 'Failed to fetch');
 
         const tlsError = await seenTlsErrorPromise;
 
