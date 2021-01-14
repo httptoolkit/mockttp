@@ -28,9 +28,12 @@ declare module "net" {
         // Our recordings of various timestamps, used for monitoring &
         // performance analysis later on
         __timingInfo?: {
-            initialSocket?: number; // Initial raw socket time
-            tunnelSetup?: number; // Latest CONNECT completion, if any
-            tlsConnected?: number; // Latest TLS handshake completion, if any
+            initialSocket: number; // Initial raw socket time, since unix epoch
+
+            // High-precision timestamps:
+            initialSocketTimestamp: number;
+            tunnelSetupTimestamp?: number; // Latest CONNECT completion, if any
+            tlsConnectedTimestamp?: number; // Latest TLS handshake completion, if any
         };
 
         // Internal reference to the parent socket, available on TLS sockets

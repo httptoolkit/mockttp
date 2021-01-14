@@ -102,6 +102,11 @@ describe("TLS error subscriptions", () => {
         ]);
         expect(tlsError.tags).to.deep.equal([]);
 
+        expect(tlsError.timingEvents.startTime).to.be.greaterThan(0);
+        expect(tlsError.timingEvents.connectTimestamp).to.be.greaterThan(0);
+        expect(tlsError.timingEvents.failureTimestamp)
+            .to.be.greaterThan(tlsError.timingEvents.connectTimestamp);
+
         await expectNoClientErrors();
     });
 
@@ -155,6 +160,13 @@ describe("TLS error subscriptions", () => {
             ]);
             expect(tlsError.hostname).to.equal('localhost');
             expect(tlsError.remoteIpAddress).to.equal('::ffff:127.0.0.1');
+
+            expect(tlsError.timingEvents.startTime).to.be.greaterThan(0);
+            expect(tlsError.timingEvents.connectTimestamp).to.be.greaterThan(0);
+            expect(tlsError.timingEvents.tunnelTimestamp)
+                .to.be.greaterThan(tlsError.timingEvents.connectTimestamp);
+            expect(tlsError.timingEvents.failureTimestamp)
+                .to.be.greaterThan(tlsError.timingEvents.tunnelTimestamp!);
 
             await expectNoClientErrors();
         });

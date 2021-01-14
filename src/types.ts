@@ -61,6 +61,18 @@ export interface TlsRequest {
     remoteIpAddress: string;
     failureCause: 'closed' | 'reset' | 'cert-rejected' | 'no-shared-cipher' | 'unknown';
     tags: string[];
+    timingEvents: TlsTimingEvents;
+}
+
+export interface TlsTimingEvents {
+    startTime: number; // Ms since unix epoch
+
+    // High-precision floating-point monotonically increasing timestamps.
+    // Comparable and precise, but not related to specific current time.
+    connectTimestamp: number; // When the socket initially connected
+    failureTimestamp: number; // When the error occurred
+    handshakeTimestamp?: number; // When the handshake completed (if it did)
+    tunnelTimestamp?: number; // When the outer tunnel was create (if present)
 }
 
 // Internal representation of an ongoing HTTP request whilst it's being processed

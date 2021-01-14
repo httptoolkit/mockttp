@@ -537,6 +537,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                         hostname
                         remoteIpAddress
                         ${this.typeHasField('TlsRequest', 'tags') ? 'tags' : ''}
+                        ${this.typeHasField('TlsRequest', 'timingEvents') ? 'timingEvents' : ''}
                     }
                 }`
             },

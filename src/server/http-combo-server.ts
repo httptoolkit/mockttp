@@ -4,8 +4,8 @@ import tls = require('tls');
 import http = require('http');
 import http2 = require('http2');
 import * as streams from 'stream';
-import SocketWrapper = require('_stream_wrap');
 import httpolyglot = require('@httptoolkit/httpolyglot');
+import now = require("performance-now");
 
 import { TlsRequest } from '../types';
 import { destroyable, DestroyableServer } from '../util/destroyable-server';
@@ -54,8 +54,11 @@ function ifTlsDropped(socket: tls.TLSSocket, errorCallback: () => void) {
         // Even if these are shut later on, that doesn't mean they're are rejected connections.
         // To differentiate the two cases, we consider connections OK after waiting 10x longer
         // than the initial TLS handshake for an unhappy disconnection.
-        const timing = socket.__timingInfo || {};
-        const tlsSetupDuration = timing.tlsConnected! - (timing.tunnelSetup! || timing.initialSocket!);
+        const timing = socket.__timingInfo;
+        const tlsSetupDuration = timing
+            ? timing.tlsConnectedTimestamp!
+                - (timing.tunnelSetupTimestamp! || timing.initialSocketTimestamp)
+            : 0;
         const maxTlsRejectionTime = (!Object.is(tlsSetupDuration, NaN) && tlsSetupDuration !== 0)
             ? tlsSetupDuration * 10
             : 5000;
@@ -88,11 +91,41 @@ function getCauseFromError(error: Error & { code?: string }) {
     : (/ECONNRESET/.test(error.message) || error.code === 'ECONNRESET')
         // The client sent no TLS alert, it just hard RST'd the connection
         ? 'reset'
-    : 'unknown'; // Something else.
+    : 'unknown'; // Something \else.
 
     if (cause === 'unknown') console.log('Unknown TLS error:', error);
 
     return cause;
+}
+
+function buildTimingInfo(): Required<net.Socket>['__timingInfo'] {
+    return { initialSocket: Date.now(), initialSocketTimestamp: now() };
+}
+
+function buildTlsError(
+    socket: tls.TLSSocket,
+    cause: TlsRequest['failureCause']
+): TlsRequest {
+    const timingInfo = socket.__timingInfo ||
+        socket._parent?.__timingInfo ||
+        buildTimingInfo();
+
+    return {
+        failureCause: cause,
+        hostname: socket.servername,
+        // These only work because of oncertcb monkeypatch above
+        remoteIpAddress: socket.remoteAddress || // Normal case
+            socket._parent?.remoteAddress || // Pre-certCB error, e.g. timeout
+            socket.initialRemoteAddress!, // Recorded by certCB monkeypatch
+        tags: [],
+        timingEvents: {
+            startTime: timingInfo.initialSocket,
+            connectTimestamp: timingInfo.initialSocketTimestamp,
+            tunnelTimestamp: timingInfo.tunnelSetupTimestamp,
+            handshakeTimestamp: timingInfo.tlsConnectedTimestamp,
+            failureTimestamp: now()
+        }
+    };
 }
 
 // The low-level server that handles all the sockets & TLS. The server will correctly call the
@@ -139,7 +172,7 @@ export async function createComboServer(
     }
 
     server.on('connection', (socket: net.Socket) => {
-        socket.__timingInfo = socket.__timingInfo || { initialSocket: Date.now() };
+        socket.__timingInfo = socket.__timingInfo || buildTimingInfo();
 
         // All sockets are initially marked as using unencrypted upstream connections.
         // If TLS is used, this is upgraded to 'true' by secureConnection below.
@@ -154,19 +187,14 @@ export async function createComboServer(
             copyAddressDetails(parentSocket, socket);
             copyTimingDetails(parentSocket, socket);
         } else if (!socket.__timingInfo) {
-            socket.__timingInfo = { initialSocket: Date.now() };
+            socket.__timingInfo = buildTimingInfo();
         }
 
-        socket.__timingInfo!.tlsConnected = Date.now();
+        socket.__timingInfo!.tlsConnectedTimestamp = now();
 
         socket.lastHopEncrypted = true;
         ifTlsDropped(socket, () => {
-            tlsClientErrorListener(socket, {
-                failureCause: 'closed',
-                hostname: socket.servername,
-                remoteIpAddress: socket.remoteAddress || socket.initialRemoteAddress!,
-                tags: []
-            });
+            tlsClientErrorListener(socket, buildTlsError(socket, 'closed'));
         });
     });
 
@@ -179,15 +207,7 @@ export async function createComboServer(
     });
 
     server.on('tlsClientError', (error: Error, socket: tls.TLSSocket) => {
-        // These only work because of oncertcb monkeypatch above
-        tlsClientErrorListener(socket, {
-            failureCause: getCauseFromError(error),
-            hostname: socket.servername,
-            remoteIpAddress: socket.remoteAddress || // Normal case
-                socket._parent?.remoteAddress || // Pre-certCB error, e.g. timeout
-                socket.initialRemoteAddress!, // Recorded by certCB monkeypatch
-            tags: []
-        });
+        tlsClientErrorListener(socket, buildTlsError(socket, getCauseFromError(error)));
     });
 
     // If the server receives a HTTP/HTTPS CONNECT request, Pretend to tunnel, then just re-handle:
@@ -217,7 +237,7 @@ export async function createComboServer(
         if (options.debug) console.log(`Proxying HTTP/1 CONNECT to ${connectUrl}`);
 
         socket.write('HTTP/' + req.httpVersion + ' 200 OK\r\n\r\n', 'utf-8', () => {
-            socket.__timingInfo!.tunnelSetup = Date.now();
+            socket.__timingInfo!.tunnelSetupTimestamp = now();
             server.emit('connection', socket);
         });
     }

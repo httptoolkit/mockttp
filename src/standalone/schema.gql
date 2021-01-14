@@ -39,6 +39,7 @@ type TlsRequest {
     hostname: String
     remoteIpAddress: String!
     tags: [String!]!
+    timingEvents: Json!
 }
 
 type ClientError {
