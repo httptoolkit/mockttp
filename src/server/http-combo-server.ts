@@ -29,6 +29,9 @@ const originalSocketInit = (<any>tls.TLSSocket.prototype)._init;
         tlsSocket.initialRemoteAddress = tlsSocket.remoteAddress || // Normal case
             tlsSocket._parent?.remoteAddress || // For early failing sockets
             tlsSocket._handle?._parentWrap?.stream?.remoteAddress; // For HTTP/2 CONNECT
+        tlsSocket.initialRemotePort = tlsSocket.remotePort ||
+            tlsSocket._parent?.remotePort ||
+            tlsSocket._handle?._parentWrap?.stream?.remotePort;
 
         return loadSNI?.apply(this, arguments as any);
     };
@@ -117,6 +120,9 @@ function buildTlsError(
         remoteIpAddress: socket.remoteAddress || // Normal case
             socket._parent?.remoteAddress || // Pre-certCB error, e.g. timeout
             socket.initialRemoteAddress!, // Recorded by certCB monkeypatch
+        remotePort: socket.remotePort ||
+            socket._parent?.remotePort ||
+            socket.initialRemotePort!,
         tags: [],
         timingEvents: {
             startTime: timingInfo.initialSocket,

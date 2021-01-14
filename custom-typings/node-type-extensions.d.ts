@@ -52,9 +52,10 @@ declare module "tls" {
         // in the type definitions.
         servername?: string;
 
-        // We cache the initially set remote address on sockets, because it's cleared
+        // We cache the initially set remote address & port on sockets, because it's cleared
         // before the TLS error callback is called, exactly when we want to read it.
         initialRemoteAddress?: string;
+        initialRemotePort?: number;
 
         // Marker used to detect whether client errors should be reported as TLS issues
         // (RST during handshake) or as subsequent client issues (RST during request)

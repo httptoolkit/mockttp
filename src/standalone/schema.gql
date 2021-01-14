@@ -38,6 +38,7 @@ type TlsRequest {
     failureCause: String!
     hostname: String
     remoteIpAddress: String!
+    remotePort: Int!
     tags: [String!]!
     timingEvents: Json!
 }

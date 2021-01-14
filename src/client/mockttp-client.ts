@@ -542,6 +542,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                         failureCause
                         hostname
                         remoteIpAddress
+                        ${this.optionalField('TlsRequest', 'remotePort')}
                         ${this.optionalField('TlsRequest', 'tags')}
                         ${this.optionalField('TlsRequest', 'timingEvents')}
                     }
