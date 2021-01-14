@@ -1,6 +1,6 @@
 import * as _ from 'lodash';
-import * as http2 from 'http2';
 import HttpsProxyAgent = require('https-proxy-agent');
+import * as semver from 'semver';
 
 import { getLocal } from "../../..";
 import {
@@ -165,10 +165,16 @@ describe("TLS error subscriptions", () => {
 
             expect(tlsError.timingEvents.startTime).to.be.greaterThan(0);
             expect(tlsError.timingEvents.connectTimestamp).to.be.greaterThan(0);
-            expect(tlsError.timingEvents.tunnelTimestamp)
-                .to.be.greaterThan(tlsError.timingEvents.connectTimestamp);
-            expect(tlsError.timingEvents.failureTimestamp)
-                .to.be.greaterThan(tlsError.timingEvents.tunnelTimestamp!);
+
+            if (semver.satisfies(process.version, '>=12')) {
+                expect(tlsError.timingEvents.tunnelTimestamp)
+                    .to.be.greaterThan(tlsError.timingEvents.connectTimestamp);
+                expect(tlsError.timingEvents.failureTimestamp)
+                    .to.be.greaterThan(tlsError.timingEvents.tunnelTimestamp!);
+            } else {
+                expect(tlsError.timingEvents.failureTimestamp)
+                    .to.be.greaterThan(tlsError.timingEvents.connectTimestamp);
+            }
 
             await expectNoClientErrors();
         });
