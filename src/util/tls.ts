@@ -116,7 +116,7 @@ export async function getCA(options: CAOptions): Promise<CA> {
         throw new Error('Unrecognized https options: you need to provide either a keyPath & certPath, or a key & cert.')
     }
 
-    return new CA(httpsOptions.key, httpsOptions.cert, httpsOptions.keyLength || 1024);
+    return new CA(httpsOptions.key, httpsOptions.cert, httpsOptions.keyLength || 2048);
 }
 
 // We share a single keypair across all certificates in this process, and
