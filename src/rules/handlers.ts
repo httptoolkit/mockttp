@@ -989,7 +989,9 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
             // ensures that we're accurately mirroring downstream, which has indeed already connected.
             serverReq.flushHeaders();
         })().catch((e) => {
+            // Catch sync/await errors in the above promise:
             if (serverReq) serverReq.abort();
+            clientRes.tags.push('passthrough-error:' + e.code);
             reject(e);
         }));
     }
