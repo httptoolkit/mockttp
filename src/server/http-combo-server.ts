@@ -84,7 +84,12 @@ function ifTlsDropped(socket: tls.TLSSocket, errorCallback: () => void) {
 }
 
 function getCauseFromError(error: Error & { code?: string }) {
-    const cause = (/alert certificate/.test(error.message) || /alert unknown ca/.test(error.message))
+    const cause = (
+        /alert certificate/.test(error.message) ||
+        /alert bad certificate/.test(error.message) ||
+        error.code === 'ERR_SSL_SSLV3_ALERT_BAD_CERTIFICATE' ||
+        /alert unknown ca/.test(error.message)
+    )
         // The client explicitly told us it doesn't like the certificate
         ? 'cert-rejected'
     : /no shared cipher/.test(error.message)
