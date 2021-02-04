@@ -307,14 +307,12 @@ export const buildBodyReader = (body: Buffer, headers: Headers): CompletedBody =
     return completedBody;
 };
 
-export const parseRequestBody = (options: { maxSize: number }) => (
-    req: http.IncomingMessage,
-    _res: http.ServerResponse,
-    next: () => void
+export const parseRequestBody = (
+    req: http.IncomingMessage | http2.Http2ServerRequest,
+    options: { maxSize: number }
 ) => {
     let transformedRequest = <OngoingRequest> <any> req;
     transformedRequest.body = parseBodyStream(req, options.maxSize);
-    next();
 };
 
 /**

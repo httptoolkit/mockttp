@@ -4,7 +4,9 @@
 import { stripIndent } from "common-tags";
 import * as cors from 'cors';
 
-import MockRuleBuilder from "./rules/mock-rule-builder";
+import { MockRuleBuilder } from "./rules/mock-rule-builder";
+import { MockWsRuleBuilder } from "./rules/websockets/mock-ws-rule-builder";
+
 import {
     ProxyConfig,
     MockedEndpoint,
@@ -17,6 +19,7 @@ import {
 } from "./types";
 import { MockRuleData } from "./rules/mock-rule";
 import { CAOptions } from './util/tls';
+import { MockWsRuleData } from "./rules/websockets/mock-ws-rule";
 
 export type PortRange = { startPort: number, endPort: number };
 
@@ -59,29 +62,29 @@ export interface Mockttp {
 
     /**
      * The root URL of the server.
-     * 
+     *
      * This will throw an error if read before the server is started.
      */
     url: string;
 
     /**
      * The URL for a given path on the server.
-     * 
+     *
      * This will throw an error if read before the server is started.
      */
     urlFor(path: string): string;
     /**
      * The port the server is running on.
-     * 
+     *
      * This will throw an error if read before the server is started.
      */
     port: number;
     /**
      * The environment variables typically needed to use this server as a proxy, in a format you
      * can add to your environment straight away.
-     * 
+     *
      * This will throw an error if read before the server is started.
-     * 
+     *
      * ```
      * process.env = Object.assign(process.env, mockServer.proxyEnv)
      * ```
@@ -90,8 +93,12 @@ export interface Mockttp {
 
     /**
      * Get a builder for a mock rule that will match any requests on any path.
+     *
+     * This only matches traditional HTTP requests, not websockets, which are handled
+     * separately. To match websockets, use `.anyWebSocket()`.
      */
     anyRequest(): MockRuleBuilder;
+
     /**
      * Get a builder for a mock rule that will match GET requests for the given path.
      * If no path is specified, this matches all GET requests.
@@ -111,6 +118,7 @@ export interface Mockttp {
      * - Regular expressions can also match the path: `/^\/abc/`
      */
     get(url?: string | RegExp): MockRuleBuilder;
+
     /**
      * Get a builder for a mock rule that will match POST requests for the given path.
      * If no path is specified, this matches all POST requests.
@@ -130,6 +138,7 @@ export interface Mockttp {
      * - Regular expressions can also match the path: `/^\/abc/`
      */
     post(url?: string | RegExp): MockRuleBuilder;
+
     /**
      * Get a builder for a mock rule that will match PUT requests for the given path.
      * If no path is specified, this matches all PUT requests.
@@ -149,6 +158,7 @@ export interface Mockttp {
      * - Regular expressions can also match the path: `/^\/abc/`
      */
     put(url?: string | RegExp): MockRuleBuilder;
+
     /**
      * Get a builder for a mock rule that will match DELETE requests for the given path.
      * If no path is specified, this matches all DELETE requests.
@@ -168,6 +178,7 @@ export interface Mockttp {
      * - Regular expressions can also match the path: `/^\/abc/`
      */
     delete(url?: string | RegExp): MockRuleBuilder;
+
     /**
      * Get a builder for a mock rule that will match PATCH requests for the given path.
      * If no path is specified, this matches all PATCH requests.
@@ -187,6 +198,7 @@ export interface Mockttp {
      * - Regular expressions can also match the path: `/^\/abc/`
      */
     patch(url?: string | RegExp): MockRuleBuilder;
+
     /**
      * Get a builder for a mock rule that will match HEAD requests for the given path.
      * If no path is specified, this matches all HEAD requests.
@@ -206,6 +218,7 @@ export interface Mockttp {
      * - Regular expressions can also match the path: `/^\/abc/`
      */
     head(url?: string | RegExp): MockRuleBuilder;
+
     /**
      * Get a builder for a mock rule that will match OPTIONS requests for the given path.
      *
@@ -234,6 +247,11 @@ export interface Mockttp {
      * requests appropriately so that the browser allows your other requests to be sent.
      */
     options(url?: string | RegExp): MockRuleBuilder;
+
+    /**
+     * Get a builder for a mock rule that will match all websocket connections.
+     */
+    anyWebSocket(): MockWsRuleBuilder;
 
     /**
      * Subscribe to hear about request details as soon as the initial request details
@@ -422,9 +440,12 @@ export interface MockttpOptions {
      * certificate errors should be ignored, allowing the use of self-signed or
      * otherwise invalid WSS certificates.
      *
-     * This is a temporary API, and will be removed in future, once full websocket
-     * interception and mocking support is available so that this option can be
-     * configured on individual rules instead.
+     * This was a temporary API, it's now deprecated, and it will be removed in
+     * future. `anyWebSocket().thenPassThrough({ ignoreHostCertificateErrors: [...] })`
+     * should be used instead, to handle this with a rule in the same way that
+     * HTTP passthrough certificate errors are handled.
+     *
+     * @deprecated Use anyWebSocket to handle websockets explicitly instead.
      */
     ignoreWebsocketHostCertificateErrors?: string[];
 
@@ -498,6 +519,12 @@ export abstract class AbstractMockttp {
 
     abstract setRules(...ruleData: MockRuleData[]): Promise<MockedEndpoint[]>;
 
+    abstract addWsRules: (...ruleData: MockWsRuleData[]) => Promise<MockedEndpoint[]>;
+    addWsRule = (rule: MockWsRuleData) =>
+        this.addWsRules(rule).then((rules) => rules[0]);
+
+    abstract setWsRules(...ruleData: MockWsRuleData[]): Promise<MockedEndpoint[]>;
+
     anyRequest(): MockRuleBuilder {
         return new MockRuleBuilder(this.addRule);
     }
@@ -537,6 +564,10 @@ export abstract class AbstractMockttp {
             `);
         }
         return new MockRuleBuilder(Method.OPTIONS, url, this.addRule);
+    }
+
+    anyWebSocket(): MockWsRuleBuilder {
+        return new MockWsRuleBuilder(this.addWsRule);
     }
 
 }

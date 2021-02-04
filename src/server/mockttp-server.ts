@@ -46,8 +46,9 @@ import {
     buildBodyReader,
     getPathFromAbsoluteUrl
 } from "../util/request-utils";
-import { WebSocketHandler } from "./websocket-handler";
 import { AbortError } from "../rules/handlers";
+import { MockWsRuleData, MockWsRule } from "../rules/websockets/mock-ws-rule";
+import { PassThroughWebSocketHandler, WebSocketHandler } from "../rules/websockets/ws-handlers";
 
 type ExtendedRawRequest = (http.IncomingMessage | http2.Http2ServerRequest) & {
     protocol?: string;
@@ -62,7 +63,9 @@ type ExtendedRawRequest = (http.IncomingMessage | http2.Http2ServerRequest) & {
  * This class does not work in browsers, as it expects to be able to start HTTP servers.
  */
 export default class MockttpServer extends AbstractMockttp implements Mockttp {
+
     private rules: MockRule[] = [];
+    private wsRules: MockWsRule[] = [];
 
     private httpsOptions: CAOptions | undefined;
     private isHttp2Enabled: true | false | 'fallback';
@@ -75,6 +78,8 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
     private readonly initialDebugSetting: boolean;
 
+    private readonly defaultWsHandler!: WebSocketHandler;
+
     constructor(options: MockttpOptions = {}) {
         super(options);
 
@@ -84,6 +89,12 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         this.isHttp2Enabled = options.http2 ?? 'fallback';
         this.maxBodySize = options.maxBodySize ?? Infinity;
         this.eventEmitter = new EventEmitter();
+
+        this.defaultWsHandler = new PassThroughWebSocketHandler({
+            // Support the old (now deprecated) websocket certificate whitelist for default
+            // proxying only. Manually added rules get configured individually.
+            ignoreHostCertificateErrors: this.ignoreWebsocketHostCertificateErrors
+        });
 
         this.app = connect();
 
@@ -97,39 +108,6 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
             this.app.use(cors(corsOptions) as connect.HandleFunction);
         }
 
-        this.app.use(parseRequestBody({ maxSize: this.maxBodySize }));
-        this.app.use((
-            req: ExtendedRawRequest,
-            _res: http.ServerResponse,
-            next: () => void
-        ) => {
-            // Make req.url always absolute, if it isn't already, using the host header.
-            // It might not be if this is a direct request, or if it's being transparently proxied.
-            if (!isAbsoluteUrl(req.url!)) {
-                req.protocol = req.headers[':scheme'] as string ||
-                    (req.socket.lastHopEncrypted ? 'https' : 'http');
-                req.path = req.url;
-
-                const host = req.headers[':authority'] || req.headers['host'];
-                const absoluteUrl = `${req.protocol}://${host}${req.path}`;
-
-                if (!req.headers[':path']) {
-                    req.url = new url.URL(absoluteUrl).toString();
-                } else {
-                    // Node's HTTP/2 compat logic maps .url to headers[':path']. We want them to
-                    // diverge: .url should always be absolute, while :path may stay relative,
-                    // so we override the built-in getter & setter:
-                    Object.defineProperty(req, 'url', {
-                        value: new url.URL(absoluteUrl).toString()
-                    });
-                }
-            } else {
-                req.protocol = req.url!.split('://', 1)[0];
-                req.path = getPathFromAbsoluteUrl(req.url!);
-            }
-
-            next();
-        });
         this.app.use(this.handleRequest.bind(this));
     }
 
@@ -162,12 +140,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
             });
         });
 
-        // Handle websocket connections too (ignore for now, just forward on)
-        const webSocketHander = new WebSocketHandler(
-            this.debug,
-            this.ignoreWebsocketHostCertificateErrors
-        );
-        this.server!.on('upgrade', webSocketHander.handleUpgrade.bind(webSocketHander));
+        this.server!.on('upgrade', this.handleWebSocket.bind(this));
 
         return new Promise<void>((resolve, reject) => {
             this.server!.on('listening', resolve);
@@ -204,6 +177,9 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
     reset() {
         this.rules.forEach(r => r.dispose());
         this.rules = [];
+        this.wsRules.forEach(r => r.dispose());
+        this.wsRules = [];
+
         this.debug = this.initialDebugSetting;
     }
 
@@ -243,8 +219,25 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         }));
     }
 
+    public setWsRules = (...ruleData: MockWsRuleData[]): Promise<ServerMockedEndpoint[]> => {
+        this.wsRules.forEach(r => r.dispose());
+        this.wsRules = ruleData.map((ruleDatum) => new MockWsRule(ruleDatum));
+        return Promise.resolve(this.wsRules.map(r => new ServerMockedEndpoint(r)));
+    }
+
+    public addWsRules = (...ruleData: MockWsRuleData[]): Promise<ServerMockedEndpoint[]> => {
+        return Promise.resolve(ruleData.map((ruleDatum) => {
+            const rule = new MockWsRule(ruleDatum);
+            this.wsRules.push(rule);
+            return new ServerMockedEndpoint(rule);
+        }));
+    }
+
     public async getMockedEndpoints(): Promise<ServerMockedEndpoint[]> {
-        return this.rules.map(r => new ServerMockedEndpoint(r));
+        return [
+            ...this.rules.map(r => new ServerMockedEndpoint(r)),
+            ...this.wsRules.map(r => new ServerMockedEndpoint(r))
+        ];
     }
 
     public async getPendingEndpoints() {
@@ -349,18 +342,49 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         });
     }
 
-    private async handleRequest(rawRequest: ExtendedRawRequest, rawResponse: http.ServerResponse) {
-        if (this.debug) console.log(`Handling request for ${rawRequest.url}`);
+    private preprocessRequest(req: ExtendedRawRequest): OngoingRequest {
+        parseRequestBody(req, { maxSize: this.maxBodySize });
+
+        // Make req.url always absolute, if it isn't already, using the host header.
+        // It might not be if this is a direct request, or if it's being transparently proxied.
+        if (!isAbsoluteUrl(req.url!)) {
+            req.protocol = req.headers[':scheme'] as string ||
+                (req.socket.lastHopEncrypted ? 'https' : 'http');
+            req.path = req.url;
+
+            const host = req.headers[':authority'] || req.headers['host'];
+            const absoluteUrl = `${req.protocol}://${host}${req.path}`;
+
+            if (!req.headers[':path']) {
+                req.url = new url.URL(absoluteUrl).toString();
+            } else {
+                // Node's HTTP/2 compat logic maps .url to headers[':path']. We want them to
+                // diverge: .url should always be absolute, while :path may stay relative,
+                // so we override the built-in getter & setter:
+                Object.defineProperty(req, 'url', {
+                    value: new url.URL(absoluteUrl).toString()
+                });
+            }
+        } else {
+            req.protocol = req.url!.split('://', 1)[0];
+            req.path = getPathFromAbsoluteUrl(req.url!);
+        }
 
         const id = uuid();
         const timingEvents = { startTime: Date.now(), startTimestamp: now() };
         const tags: string[] = [];
 
-        const request = <OngoingRequest>Object.assign(rawRequest, {
-            id: id,
+        return Object.assign(req, {
+            id,
             timingEvents,
             tags
-        });
+        }) as OngoingRequest;
+    }
+
+    private async handleRequest(rawRequest: ExtendedRawRequest, rawResponse: http.ServerResponse) {
+        if (this.debug) console.log(`Handling request for ${rawRequest.url}`);
+
+        const request = this.preprocessRequest(rawRequest);
 
         let result: 'responded' | 'aborted' | null = null;
         const abort = () => {
@@ -375,11 +399,11 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
         const response = trackResponse(
             rawResponse,
-            timingEvents,
-            tags,
+            request.timingEvents,
+            request.tags,
             { maxSize: this.maxBodySize }
         );
-        response.id = id;
+        response.id = request.id;
         response.on('error', (error) => {
             console.log('Response error:', this.debug ? error : error.message);
             abort();
@@ -439,7 +463,50 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         }
     }
 
-    private isComplete = (rule: MockRule, matchingRules: MockRule[]) => {
+    async handleWebSocket(rawRequest: ExtendedRawRequest, socket: net.Socket, head: Buffer) {
+        if (this.debug) console.log(`Handling websocket for ${rawRequest.url}`);
+
+        const request = this.preprocessRequest(rawRequest);
+
+        socket.on('error', (error) => {
+            console.log('Response error:', this.debug ? error : error.message);
+            socket.destroy();
+        });
+
+        let nextRulePromise = filter(this.wsRules, (r) => r.matches(request))
+            .then((matchingRules) =>
+                matchingRules.filter((r) =>
+                    !this.isComplete(r, matchingRules)
+                )[0] as MockWsRule | undefined
+            );
+
+        try {
+            let nextRule = await nextRulePromise;
+            if (nextRule) {
+                if (this.debug) console.log(`Websocket matched rule: ${nextRule.explain()}`);
+                await nextRule.handle(request, socket, head, this.recordTraffic);
+            } else {
+                // Unmatched requests get passed through untouched automatically. This exists for
+                // historical/backward-compat reasons, to match the initial WS implementation, and
+                // will probably be removed to match handleRequest in future.
+                await this.defaultWsHandler.handle(request, socket, head);
+            }
+        } catch (e) {
+            if (e instanceof AbortError) {
+                if (this.debug) {
+                    console.error("Failed to handle websocket due to abort:", e);
+                }
+            } else {
+                console.error("Failed to handle websocket:", this.debug ? e : e.message);
+                this.sendWebSocketErrorResponse(socket, e);
+            }
+        }
+    }
+
+    private isComplete = (
+        rule: MockRule | MockWsRule,
+        matchingRules: Array<MockRule | MockWsRule>
+    ) => {
         const isDefinitelyComplete = rule.isComplete();
         if (isDefinitelyComplete !== null) {
             return isDefinitelyComplete;
@@ -450,24 +517,48 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         }
     }
 
-    private async sendUnmatchedRequestError(request: OngoingRequest, response: http.ServerResponse) {
+    private async getUnmatchedRequestExplanation(request: OngoingRequest) {
         let requestExplanation = await this.explainRequest(request);
         if (this.debug) console.warn(`Unmatched request received: ${requestExplanation}`);
 
+        return `No rules were found matching this request.");
+This request was: ${requestExplanation}
+
+${(this.rules.length > 0 || this.wsRules.length > 0)
+    ? `The configured rules are:
+${this.rules.map((rule) => rule.explain()).join("\n")}
+${this.wsRules.map((rule) => rule.explain()).join("\n")}
+`
+    : "There are no rules configured."
+}
+${await this.suggestRule(request)}`
+    }
+
+    private async sendUnmatchedRequestError(request: OngoingRequest, response: http.ServerResponse) {
         response.setHeader('Content-Type', 'text/plain');
         response.writeHead(503, "Request for unmocked endpoint");
+        response.end(await this.getUnmatchedRequestExplanation(request));
+    }
 
-        response.write("No rules were found matching this request.\n");
-        response.write(`This request was: ${requestExplanation}\n\n`);
+    private async sendUnmatchedWebSocketError(request: OngoingRequest, socket: net.Socket) {
+        socket.end(
+            'HTTP/1.1 503 Request for unmocked endpoint\r\n' +
+            'Content-Type: text/plain\r\n' +
+            '\r\n' +
+            await this.getUnmatchedRequestExplanation(request)
+        );
+    }
 
-        if (this.rules.length > 0) {
-            response.write("The configured rules are:\n");
-            this.rules.forEach((rule) => response.write(rule.explain() + "\n"));
-        } else {
-            response.write("There are no rules configured.\n");
+    private async sendWebSocketErrorResponse(socket: net.Socket, error: Error) {
+        if (socket.writable) {
+            socket.end(
+                'HTTP/1.1 500 Internal Server Error\r\n' +
+                '\r\n' +
+                error.message
+            );
         }
 
-        response.end(await this.suggestRule(request));
+        socket.destroy(error);
     }
 
     private async explainRequest(request: OngoingRequest): Promise<string> {

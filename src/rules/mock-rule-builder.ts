@@ -9,33 +9,6 @@ import { Headers, CompletedRequest, Method, MockedEndpoint } from "../types";
 import { MockRuleData } from "./mock-rule";
 
 import {
-    RuleCompletionChecker,
-    Always,
-    NTimes,
-    Thrice,
-    Twice,
-    Once
-} from "./completion-checkers";
-
-import {
-    RequestMatcher,
-    MethodMatcher,
-    SimplePathMatcher,
-    RegexPathMatcher,
-    HeaderMatcher,
-    QueryMatcher,
-    FormDataMatcher,
-    RawBodyMatcher,
-    WildcardMatcher,
-    CookieMatcher,
-    RegexBodyMatcher,
-    JsonBodyMatcher,
-    JsonBodyFlexibleMatcher,
-    ExactQueryMatcher,
-    HostMatcher
-} from "./matchers";
-
-import {
     SimpleHandler,
     PassThroughHandler,
     CallbackHandler,
@@ -48,6 +21,7 @@ import {
 } from "./handlers";
 import { MaybePromise } from "../util/type-utils";
 import { byteLength } from "../util/util";
+import { BaseRuleBuilder } from "./base-rule-builder";
 
 /**
  * @class MockRuleBuilder
@@ -67,7 +41,8 @@ import { byteLength } from "../util/util";
  * promise returned by `.thenX()` methods to guarantee that the rule has taken
  * effect before sending requests to it.
  */
-export default class MockRuleBuilder {
+export class MockRuleBuilder extends BaseRuleBuilder {
+
     private addRule: (rule: MockRuleData) => Promise<MockedEndpoint>;
 
     /**
@@ -85,156 +60,16 @@ export default class MockRuleBuilder {
         path?: string | RegExp,
         addRule?: (rule: MockRuleData) => Promise<MockedEndpoint>
     ) {
+        super(
+            methodOrAddRule instanceof Function ? undefined : methodOrAddRule,
+            path
+        );
+
         if (methodOrAddRule instanceof Function) {
-            this.matchers.push(new WildcardMatcher());
             this.addRule = methodOrAddRule;
-            return;
+        } else {
+            this.addRule = addRule!;
         }
-
-        this.matchers.push(new MethodMatcher(methodOrAddRule));
-
-        if (path instanceof RegExp) {
-            this.matchers.push(new RegexPathMatcher(path));
-        } else if (typeof path === 'string') {
-            this.matchers.push(new SimplePathMatcher(path));
-        }
-        this.addRule = addRule!;
-    }
-
-    private matchers: RequestMatcher[] = [];
-    private completionChecker?: RuleCompletionChecker;
-
-    /**
-     * Match only requests sent to the given host
-     */
-    forHost(host: string) {
-        this.matchers.push(new HostMatcher(host));
-        return this;
-    }
-
-    /**
-     * Match only requests that include the given headers.
-     */
-    withHeaders(headers: { [key: string]: string }) {
-        this.matchers.push(new HeaderMatcher(headers));
-        return this;
-    }
-
-    /**
-     * Match only requests that include the given query parameters.
-     */
-    withQuery(query: { [key: string]: string | number | (string | number)[] }): MockRuleBuilder {
-        this.matchers.push(new QueryMatcher(query));
-        return this;
-    }
-
-    /**
-     * Match only requests that include the exact query string provided.
-     * The query string must start with a ? or be entirely empty.
-     */
-    withExactQuery(query: string): MockRuleBuilder {
-        this.matchers.push(new ExactQueryMatcher(query));
-        return this;
-    }
-
-    /**
-     * Match only requests whose bodies include the given form data.
-     */
-    withForm(formData: { [key: string]: string }): MockRuleBuilder {
-        this.matchers.push(new FormDataMatcher(formData));
-        return this;
-    }
-
-    /**
-     * Match only requests whose bodies either exactly match the given string
-     * (if a string is passed) or whose bodies match a regular expression
-     * (if a regex is passed).
-     */
-    withBody(content: string | RegExp): MockRuleBuilder {
-        this.matchers.push(
-            isString(content)
-                ? new RawBodyMatcher(content)
-                : new RegexBodyMatcher(content)
-        );
-        return this;
-    }
-
-    /**
-     * Match only requests whose bodies exactly match the given
-     * object, when parsed as JSON.
-     *
-     * Note that this only tests that the body can be parsed
-     * as JSON - it doesn't require a content-type header.
-     */
-    withJsonBody(json: {}): MockRuleBuilder {
-        this.matchers.push(
-            new JsonBodyMatcher(json)
-        );
-        return this;
-    }
-
-    /**
-     * Match only requests whose bodies match (contain equivalent
-     * values, ignoring extra values) the given object, when
-     * parsed as JSON. Matching behaviour is the same as Lodash's
-     * _.isMatch method.
-     *
-     * Note that this only tests that the body can be parsed
-     * as JSON - it doesn't require a content-type header.
-     */
-    withJsonBodyIncluding(json: {}): MockRuleBuilder {
-        this.matchers.push(
-            new JsonBodyFlexibleMatcher(json)
-        );
-        return this;
-    }
-
-    /**
-     * Match only requests that include the given cookies
-     */
-    withCookie(cookie: { [key: string]: string }) {
-        this.matchers.push(new CookieMatcher(cookie));
-        return this;
-    }
-
-    /**
-     * Run this rule forever, for all matching requests
-     */
-    always(): MockRuleBuilder {
-        this.completionChecker = new Always();
-        return this;
-    }
-
-    /**
-     * Run this rule only once, for the first matching request
-     */
-    once(): MockRuleBuilder {
-        this.completionChecker = new Once();
-        return this;
-    }
-
-    /**
-     * Run this rule twice, for the first two matching requests
-     */
-    twice(): MockRuleBuilder {
-        this.completionChecker = new Twice();
-        return this;
-    }
-
-    /**
-     * Run this rule three times, for the first three matching requests
-     */
-    thrice(): MockRuleBuilder {
-        this.completionChecker = new Thrice();
-        return this;
-    }
-
-    /**
-     * Run this rule the given number of times, for the first matching requests
-     */
-    times(n: number): MockRuleBuilder {
-        this.completionChecker = new NTimes(n);
-        return this;
     }
 
     /**
@@ -255,7 +90,12 @@ export default class MockRuleBuilder {
      * can be used to assert on the requests matched by this rule.
      */
     thenReply(status: number, data?: string | Buffer, headers?: Headers): Promise<MockedEndpoint>;
-    thenReply(status: number, statusMessage: string, data: string | Buffer, headers?: Headers): Promise<MockedEndpoint>
+    thenReply(
+        status: number,
+        statusMessage: string,
+        data: string | Buffer,
+        headers?: Headers
+    ): Promise<MockedEndpoint>
     thenReply(
         status: number,
         dataOrMessage?: string | Buffer,

@@ -4,11 +4,13 @@
 
 import * as util from 'util';
 import { CompletedRequest, MockedEndpoint } from '../types';
+
 import { MockRule } from '../rules/mock-rule';
+import { MockWsRule } from '../rules/websockets/mock-ws-rule';
 
 export class ServerMockedEndpoint implements MockedEndpoint {
 
-    constructor (private rule: MockRule) {
+    constructor (private rule: MockRule | MockWsRule) {
         this.getSeenRequests.bind(this);
     };
 

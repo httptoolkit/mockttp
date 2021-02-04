@@ -18,10 +18,13 @@ import MockttpServer from "../server/mockttp-server";
 import { ServerMockedEndpoint } from "../server/mocked-endpoint";
 import { MockedEndpoint, MockedEndpointData, CompletedRequest, CompletedResponse, ClientError } from "../types";
 import { Serialized } from "../util/serialization";
-import { MockRuleData, deserializeRuleData } from "../rules/mock-rule";
+import { MockRuleData } from "../rules/mock-rule";
 import { RequestMatcher } from "../rules/matchers";
 import { RequestHandler } from "../rules/handlers";
 import { RuleCompletionChecker } from "../rules/completion-checkers";
+import { deserializeRuleData, deserializeWsRuleData } from "../rules/rule-serialization";
+import { MockWsRuleData } from "../rules/websockets/mock-ws-rule";
+import { WebSocketHandler } from "../rules/websockets/ws-handlers";
 
 const REQUEST_INITIATED_TOPIC = 'request-initiated';
 const REQUEST_RECEIVED_TOPIC = 'request-received';
@@ -90,6 +93,20 @@ const ScalarResolvers = {
         parseLiteral(ast) {
             if (ast.kind === Kind.OBJECT) {
                 return astToObject<RequestHandler>(ast);
+            } else return null;
+        }
+    }),
+
+    WebSocketHandler: new GraphQLScalarType({
+        name: 'WebSocketHandler',
+        description: 'Handler for websockets',
+        serialize: (value) => {
+            throw new Error('Handlers are input only values')
+        },
+        parseValue: (v) => v,
+        parseLiteral(ast) {
+            if (ast.kind === Kind.OBJECT) {
+                return astToObject<WebSocketHandler>(ast);
             } else return null;
         }
     }),
@@ -209,6 +226,20 @@ export function buildStandaloneModel(mockServer: MockttpServer, stream: Duplex):
             setRules: async (__: any, { input }: { input: Array<Serialized<MockRuleData>> }) => {
                 return mockServer.setRules(...input.map((rule) =>
                     deserializeRuleData(rule, stream)
+                ));
+            },
+
+            addWsRule: async (__: any, { input }: { input: Serialized<MockWsRuleData> }) => {
+                return mockServer.addWsRule(deserializeWsRuleData(input, stream));
+            },
+            addWsRules: async (__: any, { input }: { input: Array<Serialized<MockWsRuleData>> }) => {
+                return mockServer.addWsRules(...input.map((rule) =>
+                    deserializeWsRuleData(rule, stream)
+                ));
+            },
+            setWsRules: async (__: any, { input }: { input: Array<Serialized<MockWsRuleData>> }) => {
+                return mockServer.setWsRules(...input.map((rule) =>
+                    deserializeWsRuleData(rule, stream)
                 ));
             },
 

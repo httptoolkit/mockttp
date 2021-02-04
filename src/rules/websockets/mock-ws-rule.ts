@@ -1,47 +1,53 @@
 /**
- * @module MockRule
+ * @module MockWebsocketRule
  */
 
 import * as _ from 'lodash';
 import uuid = require("uuid/v4");
+import { Duplex } from 'stream';
+import * as net from 'net';
 
-import { OngoingRequest, CompletedRequest, OngoingResponse, Explainable } from "../types";
-import { waitForCompletedRequest } from '../util/request-utils';
-import { MaybePromise } from '../util/type-utils';
+import {
+    OngoingRequest,
+    CompletedRequest,
+    Explainable
+} from "../../types";
+import { waitForCompletedRequest } from '../../util/request-utils';
+import { MaybePromise } from '../../util/type-utils';
 
-import * as matchers from "./matchers";
-import * as handlers from "./handlers";
-import * as completionCheckers from "./completion-checkers";
-import { validateMockRuleData } from './rule-serialization';
+import * as matchers from "../matchers";
+import * as completionCheckers from "../completion-checkers";
+import * as handlers from "./ws-handlers";
+import { validateMockRuleData } from '../rule-serialization';
 
 // The internal representation of a mocked endpoint
-export interface MockRule extends Explainable {
+export interface MockWsRule extends Explainable {
     id: string;
     requests: Promise<CompletedRequest>[];
 
     // We don't extend the main interfaces for these, because MockRules are not Serializable
     matches(request: OngoingRequest): MaybePromise<boolean>;
-    handle(request: OngoingRequest, response: OngoingResponse, record: boolean): Promise<void>;
+    handle(request: OngoingRequest, response: net.Socket, head: Buffer, record: boolean): Promise<void>;
     isComplete(): boolean | null;
 }
 
-export interface MockRuleData {
+export interface MockWsRuleData {
     id?: string;
     matchers: matchers.RequestMatcher[];
-    handler: handlers.RequestHandler;
+    handler: handlers.WebSocketHandler;
     completionChecker?: completionCheckers.RuleCompletionChecker;
 }
 
-export class MockRule implements MockRule {
+export class MockWsRule implements MockWsRule {
     private matchers: matchers.RequestMatcher[];
-    private handler: handlers.RequestHandler;
+    private handler: handlers.WebSocketHandler;
     private completionChecker?: completionCheckers.RuleCompletionChecker;
 
     public id: string;
     public requests: Promise<CompletedRequest>[] = [];
     public requestCount = 0;
 
-    constructor(data: MockRuleData) {
+    constructor(data: MockWsRuleData) {
         validateMockRuleData(data);
 
         this.id = data.id || uuid();
@@ -54,9 +60,9 @@ export class MockRule implements MockRule {
         return matchers.matchesAll(request, this.matchers);
     }
 
-    handle(req: OngoingRequest, res: OngoingResponse, record: boolean): Promise<void> {
+    handle(req: OngoingRequest, res: net.Socket, head: Buffer, record: boolean): Promise<void> {
         let completedPromise = (async () => {
-            await this.handler.handle(req, res);
+            await this.handler.handle(req, res, head);
             return waitForCompletedRequest(req);
         })();
 
@@ -82,7 +88,7 @@ export class MockRule implements MockRule {
     }
 
     explain(withoutExactCompletion = false): string {
-        let explanation = `Match requests ${matchers.explainMatchers(this.matchers)}, ` +
+        let explanation = `Match websockets ${matchers.explainMatchers(this.matchers)}, ` +
         `and then ${this.handler.explain()}`;
 
         if (this.completionChecker) {

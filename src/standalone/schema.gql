@@ -8,6 +8,11 @@ type Mutation {
     addRule(input: MockRule!): MockedEndpoint!
     addRules(input: [MockRule!]!): [MockedEndpoint!]!
     setRules(input: [MockRule!]!): [MockedEndpoint!]!
+
+    addWsRule(input: WsMockRule!): MockedEndpoint!
+    addWsRules(input: [WsMockRule!]!): [MockedEndpoint!]!
+    setWsRules(input: [WsMockRule!]!): [MockedEndpoint!]!
+
     reset: Boolean!
 }
 
@@ -31,6 +36,13 @@ input MockRule {
     id: String
     matchers: [RequestMatcher!]!
     handler: RequestHandler!
+    completionChecker: RuleCompletionChecker
+}
+
+input WsMockRule {
+    id: String
+    matchers: [RequestMatcher!]!
+    handler: WebSocketHandler!
     completionChecker: RuleCompletionChecker
 }
 
@@ -112,4 +124,5 @@ scalar Json
 scalar Buffer
 scalar RequestMatcher
 scalar RequestHandler
+scalar WebSocketHandler
 scalar RuleCompletionChecker

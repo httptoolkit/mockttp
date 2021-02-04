@@ -15,12 +15,12 @@ export { Mockttp };
 // Export rule data builders & type definitions:
 import * as matchers from './rules/matchers';
 import * as handlers from './rules/handlers';
+import * as wsHandlers from './rules/websockets/ws-handlers';
 import * as completionCheckers from './rules/completion-checkers';
 
-export {
-    MockRuleData
-} from './rules/mock-rule';
-export { matchers, handlers, completionCheckers };
+export { MockRuleData } from './rules/mock-rule';
+export { MockWsRuleData } from './rules/websockets/mock-ws-rule';
+export { matchers, handlers, wsHandlers, completionCheckers };
 
 // Export TLS utilities:
 export { generateCACertificate, generateSPKIFingerprint } from './util/tls';

@@ -387,7 +387,7 @@ export interface PassThroughResponse {
     body: CompletedBody;
 }
 
-interface ForwardingOptions {
+export interface ForwardingOptions {
     targetHost: string,
     // Should the host (H1) or :authority (H2) header be updated to match?
     updateHostHeader?: true | false | string // Change automatically/ignore/change to custom value
