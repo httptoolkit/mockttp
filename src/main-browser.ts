@@ -6,8 +6,9 @@ export { Method } from "./types";
 // Export rule data builders:
 import * as matchers from './rules/matchers';
 import * as handlers from './rules/handlers';
+import * as wsHandlers from './rules/websockets/ws-handlers';
 import * as completionCheckers from './rules/completion-checkers';
-export { matchers, handlers, completionCheckers };
+export { matchers, handlers, wsHandlers, completionCheckers };
 
 // Export the core API:
 export function getLocal(options: MockttpOptions = {}): Mockttp {
