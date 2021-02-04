@@ -1,6 +1,7 @@
 import * as _ from "lodash";
+import * as WebSocket from 'isomorphic-ws';
 
-import { getLocal, matchers, handlers } from "../..";
+import { getLocal, matchers, handlers, wsHandlers } from "../..";
 import { expect, fetch } from "../test-utils";
 
 describe("Mockttp rule building", function () {
@@ -66,6 +67,29 @@ describe("Mockttp rule building", function () {
         let firstResponseText = await firstResponse.text();
 
         expect(firstResponseText).to.include('replacement mock response');
+    });
+
+    it("should allow adding websocket rules", async () => {
+        await server.addWsRules({
+            matchers: [new matchers.WildcardMatcher()],
+            handler: new wsHandlers.PassThroughWebSocketHandler({
+                forwarding: {
+                    targetHost: 'wss://echo.websocket.org'
+                }
+            })
+        });
+
+        const ws = new WebSocket(server.url.replace('http', 'ws'));
+
+        ws.on('open', () => ws.send('test echo'));
+
+        const response = await new Promise((resolve, reject) => {
+            ws.on('message', resolve);
+            ws.on('error', (e) => reject(e));
+        });
+        ws.close(1000);
+
+        expect(response).to.equal('test echo');
     });
 
     it("should reject rules with no configured matchers", async () => {

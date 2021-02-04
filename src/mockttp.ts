@@ -360,7 +360,7 @@ export interface Mockttp {
 
     /**
      * Set the given rules as the only rules on the server, replacing any
-     * existing rules.
+     * existing rules (except websocket rules).
      *
      * This API is only useful if you're manually building rules, rather than
      * using MockRuleBuilder, and is only for special cases. This approach may
@@ -368,6 +368,27 @@ export interface Mockttp {
      * enable them elsewhere/later.
      */
     setRules(...ruleData: MockRuleData[]): Promise<MockedEndpoint[]>;
+
+    /**
+     * Adds the given websocket rules to the server.
+     *
+     * This API is only useful if you're manually building rules, rather than
+     * using MockRuleBuilder, and is only for special cases. This approach may
+     * be necessary if you need to configure all your rules in one place to
+     * enable them elsewhere/later.
+     */
+    addWsRules(...ruleData: MockWsRuleData[]): Promise<MockedEndpoint[]>;
+
+    /**
+     * Set the given websocket rules as the only websocket rules on the server,
+     * replacing all existing websocket rules (but leaving normal rules untouched).
+     *
+     * This API is only useful if you're manually building rules, rather than
+     * using MockRuleBuilder, and is only for special cases. This approach may
+     * be necessary if you need to configure all your rules in one place to
+     * enable them elsewhere/later.
+     */
+    setWsRules(...ruleData: MockWsRuleData[]): Promise<MockedEndpoint[]>;
 
     /**
      * Returns the set of currently registered mock endpoints.

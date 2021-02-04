@@ -227,9 +227,6 @@ export class PassThroughWebSocketHandler extends Serializable implements WebSock
         const checkServerCertificate = !_.includes(this.ignoreHostCertificateErrors, parsedUrl.hostname) &&
             !_.includes(this.ignoreHostCertificateErrors, parsedUrl.host);
 
-        this.ignoreHostCertificateErrors;
-        parsedUrl;
-
         const upstreamSocket = new WebSocket(wsUrl, {
             rejectUnauthorized: checkServerCertificate,
             maxPayload: 0,
