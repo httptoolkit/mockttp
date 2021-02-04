@@ -81,11 +81,11 @@ describe("Mockttp rule building", function () {
 
         const ws = new WebSocket(server.url.replace('http', 'ws'));
 
-        ws.on('open', () => ws.send('test echo'));
+        ws.addEventListener('open', () => ws.send('test echo'));
 
         const response = await new Promise((resolve, reject) => {
-            ws.on('message', resolve);
-            ws.on('error', (e) => reject(e));
+            ws.addEventListener('message', (evt) => resolve(evt.data));
+            ws.addEventListener('error', (e) => reject(e));
         });
         ws.close(1000);
 
