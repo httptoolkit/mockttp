@@ -8,7 +8,8 @@ import { MockWsRuleData } from "./mock-ws-rule";
 import {
     PassThroughWebSocketHandler,
     TimeoutHandler,
-    CloseConnectionHandler
+    CloseConnectionHandler,
+    PassThroughWebSocketHandlerOptions
 } from './ws-handlers';
 
 import { BaseRuleBuilder } from "../base-rule-builder";
@@ -48,6 +49,12 @@ export class MockWsRuleBuilder extends BaseRuleBuilder {
      * for proxied requests only, and direct requests will be rejected with
      * an error.
      *
+     * This method takes options to configure how the request is passed
+     * through. The available options are:
+     *
+     * * ignoreHostCertificateErrors, a list of hostnames for which server
+     *   certificate errors should be ignored (none, by default).
+     *
      * Calling this method registers the rule with the server, so it
      * starts to handle requests.
      *
@@ -56,11 +63,11 @@ export class MockWsRuleBuilder extends BaseRuleBuilder {
      * before sending requests to be matched. The mocked endpoint
      * can be used to assert on the requests matched by this rule.
      */
-    thenPassThrough(): Promise<MockedEndpoint> {
+    thenPassThrough(options: PassThroughWebSocketHandlerOptions = {}): Promise<MockedEndpoint> {
         const rule: MockWsRuleData = {
             matchers: this.matchers,
             completionChecker: this.completionChecker,
-            handler: new PassThroughWebSocketHandler()
+            handler: new PassThroughWebSocketHandler(options)
         };
 
         return this.addRule(rule);

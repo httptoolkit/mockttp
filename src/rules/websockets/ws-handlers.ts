@@ -96,6 +96,10 @@ async function mirrorRejection(socket: net.Socket, rejectionResponse: http.Incom
     socket.destroy();
 }
 
+export interface PassThroughWebSocketHandlerOptions {
+    ignoreHostCertificateErrors?: string[];
+}
+
 export class PassThroughWebSocketHandler extends Serializable implements WebSocketHandler {
     readonly type = 'ws-passthrough';
 
@@ -103,6 +107,21 @@ export class PassThroughWebSocketHandler extends Serializable implements WebSock
     public readonly ignoreHostCertificateErrors: string[] = [];
 
     private wsServer?: WebSocket.Server;
+
+    constructor(options: PassThroughWebSocketHandlerOptions = {}) {
+        super();
+
+        this.ignoreHostCertificateErrors = options.ignoreHostCertificateErrors || [];
+        if (!Array.isArray(this.ignoreHostCertificateErrors)) {
+            throw new Error("ignoreHostCertificateErrors must be an array");
+        }
+    }
+
+    explain() {
+        return this.forwarding
+            ? `forward the websocket to ${this.forwarding.targetHost}`
+            : 'pass the request through to the target host';
+    }
 
     private initializeWsServer() {
         if (this.wsServer) return;
@@ -112,21 +131,6 @@ export class PassThroughWebSocketHandler extends Serializable implements WebSock
             pipeWebSocket(ws, ws.upstreamSocket);
             pipeWebSocket(ws.upstreamSocket, ws);
         });
-    }
-
-    constructor(options: {
-        forwarding?: ForwardingOptions,
-        ignoreHostCertificateErrors?: string[]
-    } = {}) {
-        super();
-        this.forwarding = options.forwarding;
-        this.ignoreHostCertificateErrors = options.ignoreHostCertificateErrors || [];
-    }
-
-    explain() {
-        return this.forwarding
-            ? `forward the websocket to ${this.forwarding.targetHost}`
-            : 'pass the request through to the target host';
     }
 
     async handle(req: OngoingRequest, socket: net.Socket, head: Buffer) {
