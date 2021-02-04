@@ -58,6 +58,7 @@ Match requests making GETs for /endpoint, and then respond with status 200 and b
         await server.post("/endpointC").withJsonBody({ key: 'value' }).thenReply(500);
         await server.put("/endpointD").withQuery({ a: 1 }).always().thenCloseConnection();
         await server.put("/endpointE").forHost('abc.com').withExactQuery('?').thenTimeout();
+        await server.anyWebSocket().thenForwardTo("google.com");
 
         await fetch(server.urlFor("/endpointA/123"));
         let response = await fetch(server.urlFor("/non-existent-endpoint"));
@@ -72,6 +73,7 @@ Match requests making POSTs, for /endpointB, and with form data including {"key"
 Match requests making POSTs, for /endpointC, and with {"key":"value"} as a JSON body, and then respond with status 500.
 Match requests making PUTs, for /endpointD, and with a query including {"a":"1"}, and then close the connection, always (seen 0).
 Match requests making PUTs, for /endpointE, for host abc.com, and with a query exactly matching \`?\`, and then time out (never respond).
+Match websockets for anything, and then forward the websocket to google.com.
 `);
     });
 

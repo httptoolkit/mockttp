@@ -540,15 +540,6 @@ ${await this.suggestRule(request)}`
         response.end(await this.getUnmatchedRequestExplanation(request));
     }
 
-    private async sendUnmatchedWebSocketError(request: OngoingRequest, socket: net.Socket) {
-        socket.end(
-            'HTTP/1.1 503 Request for unmocked endpoint\r\n' +
-            'Content-Type: text/plain\r\n' +
-            '\r\n' +
-            await this.getUnmatchedRequestExplanation(request)
-        );
-    }
-
     private async sendWebSocketErrorResponse(socket: net.Socket, error: Error) {
         if (socket.writable) {
             socket.end(
