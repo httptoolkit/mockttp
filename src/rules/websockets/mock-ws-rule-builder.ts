@@ -74,6 +74,48 @@ export class MockWsRuleBuilder extends BaseRuleBuilder {
     }
 
     /**
+     * Forward matched websockets on to the specified forwardToUrl. The url
+     * specified must not include a path or an error will be thrown.
+     * The path portion of the original request url is used instead.
+     *
+     * The url may optionally contain a protocol. If it does, it will override
+     * the protocol (and potentially the port, if unspecified) of the request.
+     * If no protocol is specified, the protocol (and potentially the port)
+     * of the original request URL will be used instead.
+     *
+     * This method also takes options to configure how the request is passed
+     * through, see thenPassThrough for more details.
+     *
+     * Calling this method registers the rule with the server, so it
+     * starts to handle requests.
+     *
+     * This method returns a promise that resolves with a mocked endpoint.
+     * Wait for the promise to confirm that the rule has taken effect
+     * before sending requests to be matched. The mocked endpoint
+     * can be used to assert on the requests matched by this rule.
+     */
+    async thenForwardTo(
+        forwardToLocation: string,
+        options: Omit<PassThroughWebSocketHandlerOptions, 'forwarding'> & {
+            forwarding?: Omit<PassThroughWebSocketHandlerOptions['forwarding'], 'targetHost'>
+        } = {}
+    ): Promise<MockedEndpoint> {
+        const rule: MockWsRuleData = {
+            matchers: this.matchers,
+            completionChecker: this.completionChecker,
+            handler: new PassThroughWebSocketHandler({
+                ...options,
+                forwarding: {
+                    ...options.forwarding,
+                    targetHost: forwardToLocation
+                }
+            })
+        };
+
+        return this.addRule(rule);
+    }
+
+    /**
      * Close connections that match this rule immediately, without accepting
      * the socket or sending any other response.
      *

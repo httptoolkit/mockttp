@@ -366,6 +366,26 @@ nodeOnly(() => {
                 expect(response).to.equal('test echo');
             });
 
+            it("can be redirected elsewhere", async () => {
+                mockServer.anyWebSocket().thenForwardTo(`localhost:${REAL_WS_SERVER_PORT}`);
+
+                // Ask for 999 (doesn't exist), and the above will forward you
+                // invisibly to our real WS server elsewhere instead.
+                const ws = new WebSocket('ws://localhost:999', {
+                    agent: new HttpProxyAgent(`http://localhost:${mockServer.port}`)
+                });
+
+                ws.on('open', () => ws.send('test echo'));
+
+                const response = await new Promise((resolve, reject) => {
+                    ws.on('message', resolve);
+                    ws.on('error', (e) => reject(e));
+                });
+                ws.close(1000);
+
+                expect(response).to.equal('test echo');
+            });
+
             it("can be manually blocked", async () => {
                 mockServer.anyWebSocket().thenCloseConnection();
 

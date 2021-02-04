@@ -7,6 +7,7 @@ import net = require('net');
 import * as url from 'url';
 import * as http from 'http';
 import * as WebSocket from 'ws';
+import { stripIndent } from 'common-tags';
 
 import {
     Serializable
@@ -22,7 +23,7 @@ import {
     TimeoutHandler,
     ForwardingOptions
 } from '../handlers';
-import { streamToBuffer } from '../../util/request-utils';
+import { streamToBuffer, isHttp2 } from '../../util/request-utils';
 
 export interface WebSocketHandler extends Explainable, Serializable {
     type: keyof typeof WsHandlerLookup;
@@ -97,6 +98,7 @@ async function mirrorRejection(socket: net.Socket, rejectionResponse: http.Incom
 }
 
 export interface PassThroughWebSocketHandlerOptions {
+    forwarding?: ForwardingOptions;
     ignoreHostCertificateErrors?: string[];
 }
 
@@ -115,6 +117,21 @@ export class PassThroughWebSocketHandler extends Serializable implements WebSock
         if (!Array.isArray(this.ignoreHostCertificateErrors)) {
             throw new Error("ignoreHostCertificateErrors must be an array");
         }
+
+        // If a location is provided, and it's not a bare hostname, it must be parseable
+        const { forwarding } = options;
+        if (forwarding && forwarding.targetHost.includes('/')) {
+            const { protocol, hostname, port, path } = url.parse(forwarding.targetHost);
+            if (path && path.trim() !== "/") {
+                const suggestion = url.format({ protocol, hostname, port }) ||
+                    forwarding.targetHost.slice(0, forwarding.targetHost.indexOf('/'));
+                throw new Error(stripIndent`
+                    URLs for forwarding cannot include a path, but "${forwarding.targetHost}" does. ${''
+                    }Did you mean ${suggestion}?
+                `);
+            }
+        }
+        this.forwarding = options.forwarding;
     }
 
     explain() {
@@ -135,19 +152,47 @@ export class PassThroughWebSocketHandler extends Serializable implements WebSock
 
     async handle(req: OngoingRequest, socket: net.Socket, head: Buffer) {
         this.initializeWsServer();
-        let { protocol: requestedProtocol, hostname, port, path } = url.parse(req.url!);
+
+        let { protocol, hostname, port, path } = url.parse(req.url!);
+        const headers = req.headers;
 
         const reqMessage = req as unknown as http.IncomingMessage;
+        const isH2Downstream = isHttp2(req);
+        const hostHeaderName = isH2Downstream ? ':authority' : 'host';
 
-        const transparentProxy = !hostname;
+        if (this.forwarding) {
+            const { targetHost, updateHostHeader } = this.forwarding;
 
-        if (transparentProxy) {
-            const hostHeader = req.headers.host;
+            let wsUrl: string;
+            if (!targetHost.includes('/')) {
+                // We're forwarding to a bare hostname, just overwrite that bit:
+                [hostname, port] = targetHost.split(':');
+            } else {
+                // Forwarding to a full URL; override the host & protocol, but never the path.
+                ({ protocol, hostname, port } = url.parse(targetHost));
+            }
+
+            // Connect directly to the forwarding target URL
+            wsUrl = `${
+                protocol!.replace('http', 'ws')
+            }//${hostname}${port ? ':' + port : ''}${path}`;
+
+            // Optionally update the host header too:
+            if (updateHostHeader === undefined || updateHostHeader === true) {
+                // If updateHostHeader is true, or just not specified, match the new target
+                headers[hostHeaderName] = hostname + (port ? `:${port}` : '');
+            } else if (updateHostHeader) {
+                // If it's an explicit custom value, use that directly.
+                headers[hostHeaderName] = updateHostHeader;
+            } // Otherwise: falsey means don't touch it.
+
+            this.connectUpstream(wsUrl, reqMessage, headers, socket, head);
+        } else if (!hostname) { // No hostname in URL means transparent proxy, so use Host header
+            const hostHeader = req.headers[hostHeaderName];
             [ hostname, port ] = hostHeader!.split(':');
 
             // lastHopEncrypted is set in http-combo-server, for requests that have explicitly
             // CONNECTed upstream (which may then up/downgrade from the current encryption).
-            let protocol: string;
             if (socket.lastHopEncrypted !== undefined) {
                 protocol = socket.lastHopEncrypted ? 'wss' : 'ws';
             } else {
@@ -155,20 +200,21 @@ export class PassThroughWebSocketHandler extends Serializable implements WebSock
             }
 
             const wsUrl = `${protocol}://${hostname}${port ? ':' + port : ''}${path}`;
-            this.connectUpstream(wsUrl, reqMessage, socket, head);
+            this.connectUpstream(wsUrl, reqMessage, headers, socket, head);
         } else {
             // Connect directly according to the specified URL
             const wsUrl = `${
-                requestedProtocol!.replace('http', 'ws')
+                protocol!.replace('http', 'ws')
             }//${hostname}${port ? ':' + port : ''}${path}`;
 
-            this.connectUpstream(wsUrl, reqMessage, socket, head);
+            this.connectUpstream(wsUrl, reqMessage, headers, socket, head);
         }
     }
 
     private connectUpstream(
         wsUrl: string,
         req: http.IncomingMessage,
+        headers: http.IncomingHttpHeaders,
         incomingSocket: net.Socket,
         head: Buffer
     ) {
