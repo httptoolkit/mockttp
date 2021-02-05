@@ -2,16 +2,16 @@ import { Duplex } from "stream";
 
 import { Serialized, serialize, deserialize } from "../util/serialization";
 
-import { MockRuleData } from "./mock-rule";
-import { MockWsRuleData } from "./websockets/mock-ws-rule";
+import { RequestRuleData } from "./requests/request-rule";
+import { WebSocketRuleData } from "./websockets/websocket-rule";
 
 import * as matchers from "./matchers";
 import * as completionCheckers from "./completion-checkers";
 
-import { HandlerLookup } from "./handlers";
-import { WsHandlerLookup } from './websockets/ws-handlers';
+import { HandlerLookup } from "./requests/request-handlers";
+import { WsHandlerLookup } from './websockets/websocket-handlers';
 
-export function validateMockRuleData(data: MockRuleData | MockWsRuleData): void {
+export function validateMockRuleData(data: RequestRuleData | WebSocketRuleData): void {
     if (!data.matchers || data.matchers.length === 0) {
         throw new Error('Cannot create a rule without at least one matcher');
     }
@@ -21,7 +21,7 @@ export function validateMockRuleData(data: MockRuleData | MockWsRuleData): void 
 }
 
 export function serializeRuleData<
-    DataFormat extends MockRuleData | MockWsRuleData
+    DataFormat extends RequestRuleData | WebSocketRuleData
 >(data: DataFormat, stream: Duplex): Serialized<DataFormat> {
     validateMockRuleData(data);
 
@@ -33,7 +33,7 @@ export function serializeRuleData<
     } as Serialized<DataFormat>;
 };
 
-export function deserializeRuleData(data: Serialized<MockRuleData>, stream: Duplex): MockRuleData {
+export function deserializeRuleData(data: Serialized<RequestRuleData>, stream: Duplex): RequestRuleData {
     return {
         id: data.id,
         matchers: data.matchers.map((m) =>
@@ -48,7 +48,7 @@ export function deserializeRuleData(data: Serialized<MockRuleData>, stream: Dupl
     };
 }
 
-export function deserializeWsRuleData(data: Serialized<MockWsRuleData>, stream: Duplex): MockWsRuleData {
+export function deserializeWebSocketRuleData(data: Serialized<WebSocketRuleData>, stream: Duplex): WebSocketRuleData {
     return {
         id: data.id,
         matchers: data.matchers.map((m) =>

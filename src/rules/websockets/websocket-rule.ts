@@ -4,7 +4,6 @@
 
 import * as _ from 'lodash';
 import uuid = require("uuid/v4");
-import { Duplex } from 'stream';
 import * as net from 'net';
 
 import {
@@ -17,11 +16,11 @@ import { MaybePromise } from '../../util/type-utils';
 
 import * as matchers from "../matchers";
 import * as completionCheckers from "../completion-checkers";
-import * as handlers from "./ws-handlers";
+import * as handlers from "./websocket-handlers";
 import { validateMockRuleData } from '../rule-serialization';
 
 // The internal representation of a mocked endpoint
-export interface MockWsRule extends Explainable {
+export interface WebSocketRule extends Explainable {
     id: string;
     requests: Promise<CompletedRequest>[];
 
@@ -31,14 +30,14 @@ export interface MockWsRule extends Explainable {
     isComplete(): boolean | null;
 }
 
-export interface MockWsRuleData {
+export interface WebSocketRuleData {
     id?: string;
     matchers: matchers.RequestMatcher[];
     handler: handlers.WebSocketHandler;
     completionChecker?: completionCheckers.RuleCompletionChecker;
 }
 
-export class MockWsRule implements MockWsRule {
+export class WebSocketRule implements WebSocketRule {
     private matchers: matchers.RequestMatcher[];
     private handler: handlers.WebSocketHandler;
     private completionChecker?: completionCheckers.RuleCompletionChecker;
@@ -47,7 +46,7 @@ export class MockWsRule implements MockWsRule {
     public requests: Promise<CompletedRequest>[] = [];
     public requestCount = 0;
 
-    constructor(data: MockWsRuleData) {
+    constructor(data: WebSocketRuleData) {
         validateMockRuleData(data);
 
         this.id = data.id || uuid();

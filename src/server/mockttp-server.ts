@@ -29,7 +29,7 @@ import {
 import { CAOptions } from '../util/tls';
 import { DestroyableServer } from "../util/destroyable-server";
 import { Mockttp, AbstractMockttp, MockttpOptions, PortRange } from "../mockttp";
-import { MockRule, MockRuleData } from "../rules/mock-rule";
+import { RequestRule, RequestRuleData } from "../rules/requests/request-rule";
 import { ServerMockedEndpoint } from "./mocked-endpoint";
 import { createComboServer } from "./http-combo-server";
 import { filter } from "../util/promise";
@@ -46,9 +46,9 @@ import {
     buildBodyReader,
     getPathFromAbsoluteUrl
 } from "../util/request-utils";
-import { AbortError } from "../rules/handlers";
-import { MockWsRuleData, MockWsRule } from "../rules/websockets/mock-ws-rule";
-import { PassThroughWebSocketHandler, WebSocketHandler } from "../rules/websockets/ws-handlers";
+import { AbortError } from "../rules/requests/request-handlers";
+import { WebSocketRuleData, WebSocketRule } from "../rules/websockets/websocket-rule";
+import { PassThroughWebSocketHandler, WebSocketHandler } from "../rules/websockets/websocket-handlers";
 
 type ExtendedRawRequest = (http.IncomingMessage | http2.Http2ServerRequest) & {
     protocol?: string;
@@ -64,8 +64,8 @@ type ExtendedRawRequest = (http.IncomingMessage | http2.Http2ServerRequest) & {
  */
 export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
-    private rules: MockRule[] = [];
-    private wsRules: MockWsRule[] = [];
+    private requestRules: RequestRule[] = [];
+    private webSocketRules: WebSocketRule[] = [];
 
     private httpsOptions: CAOptions | undefined;
     private isHttp2Enabled: true | false | 'fallback';
@@ -175,10 +175,10 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
     }
 
     reset() {
-        this.rules.forEach(r => r.dispose());
-        this.rules = [];
-        this.wsRules.forEach(r => r.dispose());
-        this.wsRules = [];
+        this.requestRules.forEach(r => r.dispose());
+        this.requestRules = [];
+        this.webSocketRules.forEach(r => r.dispose());
+        this.webSocketRules = [];
 
         this.debug = this.initialDebugSetting;
     }
@@ -205,38 +205,38 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         return this.address.port;
     }
 
-    public setRules = (...ruleData: MockRuleData[]): Promise<ServerMockedEndpoint[]> => {
-        this.rules.forEach(r => r.dispose());
-        this.rules = ruleData.map((ruleDatum) => new MockRule(ruleDatum));
-        return Promise.resolve(this.rules.map(r => new ServerMockedEndpoint(r)));
+    public setRequestRules = (...ruleData: RequestRuleData[]): Promise<ServerMockedEndpoint[]> => {
+        this.requestRules.forEach(r => r.dispose());
+        this.requestRules = ruleData.map((ruleDatum) => new RequestRule(ruleDatum));
+        return Promise.resolve(this.requestRules.map(r => new ServerMockedEndpoint(r)));
     }
 
-    public addRules = (...ruleData: MockRuleData[]): Promise<ServerMockedEndpoint[]> => {
+    public addRequestRules = (...ruleData: RequestRuleData[]): Promise<ServerMockedEndpoint[]> => {
         return Promise.resolve(ruleData.map((ruleDatum) => {
-            const rule = new MockRule(ruleDatum);
-            this.rules.push(rule);
+            const rule = new RequestRule(ruleDatum);
+            this.requestRules.push(rule);
             return new ServerMockedEndpoint(rule);
         }));
     }
 
-    public setWsRules = (...ruleData: MockWsRuleData[]): Promise<ServerMockedEndpoint[]> => {
-        this.wsRules.forEach(r => r.dispose());
-        this.wsRules = ruleData.map((ruleDatum) => new MockWsRule(ruleDatum));
-        return Promise.resolve(this.wsRules.map(r => new ServerMockedEndpoint(r)));
+    public setWebSocketRules = (...ruleData: WebSocketRuleData[]): Promise<ServerMockedEndpoint[]> => {
+        this.webSocketRules.forEach(r => r.dispose());
+        this.webSocketRules = ruleData.map((ruleDatum) => new WebSocketRule(ruleDatum));
+        return Promise.resolve(this.webSocketRules.map(r => new ServerMockedEndpoint(r)));
     }
 
-    public addWsRules = (...ruleData: MockWsRuleData[]): Promise<ServerMockedEndpoint[]> => {
+    public addWebSocketRules = (...ruleData: WebSocketRuleData[]): Promise<ServerMockedEndpoint[]> => {
         return Promise.resolve(ruleData.map((ruleDatum) => {
-            const rule = new MockWsRule(ruleDatum);
-            this.wsRules.push(rule);
+            const rule = new WebSocketRule(ruleDatum);
+            this.webSocketRules.push(rule);
             return new ServerMockedEndpoint(rule);
         }));
     }
 
     public async getMockedEndpoints(): Promise<ServerMockedEndpoint[]> {
         return [
-            ...this.rules.map(r => new ServerMockedEndpoint(r)),
-            ...this.wsRules.map(r => new ServerMockedEndpoint(r))
+            ...this.requestRules.map(r => new ServerMockedEndpoint(r)),
+            ...this.webSocketRules.map(r => new ServerMockedEndpoint(r))
         ];
     }
 
@@ -409,11 +409,11 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
             abort();
         });
 
-        let nextRulePromise = filter(this.rules, (r) => r.matches(request))
+        let nextRulePromise = filter(this.requestRules, (r) => r.matches(request))
             .then((matchingRules) =>
                 matchingRules.filter((r) =>
                     !this.isComplete(r, matchingRules)
-                )[0] as MockRule | undefined
+                )[0] as RequestRule | undefined
             );
 
         // Async: once we know what the next rule is, ping a request event
@@ -473,11 +473,11 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
             socket.destroy();
         });
 
-        let nextRulePromise = filter(this.wsRules, (r) => r.matches(request))
+        let nextRulePromise = filter(this.webSocketRules, (r) => r.matches(request))
             .then((matchingRules) =>
                 matchingRules.filter((r) =>
                     !this.isComplete(r, matchingRules)
-                )[0] as MockWsRule | undefined
+                )[0] as WebSocketRule | undefined
             );
 
         try {
@@ -504,8 +504,8 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
     }
 
     private isComplete = (
-        rule: MockRule | MockWsRule,
-        matchingRules: Array<MockRule | MockWsRule>
+        rule: RequestRule | WebSocketRule,
+        matchingRules: Array<RequestRule | WebSocketRule>
     ) => {
         const isDefinitelyComplete = rule.isComplete();
         if (isDefinitelyComplete !== null) {
@@ -524,10 +524,10 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         return `No rules were found matching this request.");
 This request was: ${requestExplanation}
 
-${(this.rules.length > 0 || this.wsRules.length > 0)
+${(this.requestRules.length > 0 || this.webSocketRules.length > 0)
     ? `The configured rules are:
-${this.rules.map((rule) => rule.explain()).join("\n")}
-${this.wsRules.map((rule) => rule.explain()).join("\n")}
+${this.requestRules.map((rule) => rule.explain()).join("\n")}
+${this.webSocketRules.map((rule) => rule.explain()).join("\n")}
 `
     : "There are no rules configured."
 }

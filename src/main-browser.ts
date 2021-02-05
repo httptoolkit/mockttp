@@ -5,10 +5,12 @@ export { Method } from "./types";
 
 // Export rule data builders:
 import * as matchers from './rules/matchers';
-import * as handlers from './rules/handlers';
-import * as wsHandlers from './rules/websockets/ws-handlers';
+import * as requestHandlers from './rules/requests/request-handlers';
+import * as webSocketHandlers from './rules/websockets/websocket-handlers';
 import * as completionCheckers from './rules/completion-checkers';
-export { matchers, handlers, wsHandlers, completionCheckers };
+
+export { matchers, requestHandlers, webSocketHandlers, completionCheckers };
+export { requestHandlers as handlers }; // Backward compat
 
 // Export the core API:
 export function getLocal(options: MockttpOptions = {}): Mockttp {

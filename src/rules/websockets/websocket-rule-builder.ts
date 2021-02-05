@@ -3,19 +3,19 @@
  */
 
 import { MockedEndpoint } from "../../types";
-import { MockWsRuleData } from "./mock-ws-rule";
+import { WebSocketRuleData } from "./websocket-rule";
 
 import {
     PassThroughWebSocketHandler,
     TimeoutHandler,
     CloseConnectionHandler,
     PassThroughWebSocketHandlerOptions
-} from './ws-handlers';
+} from './websocket-handlers';
 
 import { BaseRuleBuilder } from "../base-rule-builder";
 
 /**
- * @class MockWsRuleBuilder
+ * @class WebSocketRuleBuilder
 
  * A builder for defining websocket mock rules. Create one using
  * `.websocket(path)` on a Mockttp instance, then call whatever
@@ -32,14 +32,14 @@ import { BaseRuleBuilder } from "../base-rule-builder";
  * promise returned by `.thenX()` methods to guarantee that the rule has taken
  * effect before sending requests to it.
  */
-export class MockWsRuleBuilder extends BaseRuleBuilder {
+export class WebSocketRuleBuilder extends BaseRuleBuilder {
 
     /**
      * Mock rule builders should be constructed through the Mockttp instance you're
      * using, not directly. You shouldn't ever need to call this constructor.
      */
     constructor(
-        private addRule: (rule: MockWsRuleData) => Promise<MockedEndpoint>
+        private addRule: (rule: WebSocketRuleData) => Promise<MockedEndpoint>
     ) {
         super();
     }
@@ -64,7 +64,7 @@ export class MockWsRuleBuilder extends BaseRuleBuilder {
      * can be used to assert on the requests matched by this rule.
      */
     thenPassThrough(options: PassThroughWebSocketHandlerOptions = {}): Promise<MockedEndpoint> {
-        const rule: MockWsRuleData = {
+        const rule: WebSocketRuleData = {
             matchers: this.matchers,
             completionChecker: this.completionChecker,
             handler: new PassThroughWebSocketHandler(options)
@@ -100,7 +100,7 @@ export class MockWsRuleBuilder extends BaseRuleBuilder {
             forwarding?: Omit<PassThroughWebSocketHandlerOptions['forwarding'], 'targetHost'>
         } = {}
     ): Promise<MockedEndpoint> {
-        const rule: MockWsRuleData = {
+        const rule: WebSocketRuleData = {
             matchers: this.matchers,
             completionChecker: this.completionChecker,
             handler: new PassThroughWebSocketHandler({
@@ -128,7 +128,7 @@ export class MockWsRuleBuilder extends BaseRuleBuilder {
      * can be used to assert on the requests matched by this rule.
      */
     thenCloseConnection(): Promise<MockedEndpoint> {
-        const rule: MockWsRuleData = {
+        const rule: WebSocketRuleData = {
             matchers: this.matchers,
             completionChecker: this.completionChecker,
             handler: new CloseConnectionHandler()
@@ -150,7 +150,7 @@ export class MockWsRuleBuilder extends BaseRuleBuilder {
      * can be used to assert on the requests matched by this rule.
      */
     thenTimeout(): Promise<MockedEndpoint> {
-        const rule: MockWsRuleData = {
+        const rule: WebSocketRuleData = {
             matchers: this.matchers,
             completionChecker: this.completionChecker,
             handler: new TimeoutHandler()

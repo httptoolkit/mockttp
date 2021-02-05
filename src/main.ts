@@ -14,13 +14,18 @@ export { Mockttp };
 
 // Export rule data builders & type definitions:
 import * as matchers from './rules/matchers';
-import * as handlers from './rules/handlers';
-import * as wsHandlers from './rules/websockets/ws-handlers';
+import * as requestHandlers from './rules/requests/request-handlers';
+import * as webSocketHandlers from './rules/websockets/websocket-handlers';
 import * as completionCheckers from './rules/completion-checkers';
 
-export { MockRuleData } from './rules/mock-rule';
-export { MockWsRuleData } from './rules/websockets/mock-ws-rule';
-export { matchers, handlers, wsHandlers, completionCheckers };
+import { RequestRuleData } from './rules/requests/request-rule';
+import { WebSocketRuleData } from './rules/websockets/websocket-rule';
+
+export { RequestRuleData, WebSocketRuleData };
+export { matchers, requestHandlers, webSocketHandlers, completionCheckers };
+
+// Old pre-WebSocket names, exported for backward compat:
+export { requestHandlers as handlers, RequestRuleData as MockRuleData };
 
 // Export TLS utilities:
 export { generateCACertificate, generateSPKIFingerprint } from './util/tls';

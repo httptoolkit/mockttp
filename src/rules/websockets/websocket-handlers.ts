@@ -22,7 +22,7 @@ import {
     CloseConnectionHandler,
     TimeoutHandler,
     ForwardingOptions
-} from '../handlers';
+} from '../requests/request-handlers';
 import { streamToBuffer, isHttp2 } from '../../util/request-utils';
 
 export interface WebSocketHandler extends Explainable, Serializable {

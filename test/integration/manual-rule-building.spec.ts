@@ -1,7 +1,7 @@
 import * as _ from "lodash";
 import * as WebSocket from 'isomorphic-ws';
 
-import { getLocal, matchers, handlers, wsHandlers } from "../..";
+import { getLocal, matchers, handlers, webSocketHandlers } from "../..";
 import { expect, fetch } from "../test-utils";
 
 describe("Mockttp rule building", function () {
@@ -70,9 +70,9 @@ describe("Mockttp rule building", function () {
     });
 
     it("should allow adding websocket rules", async () => {
-        await server.addWsRules({
+        await server.addWebSocketRules({
             matchers: [new matchers.WildcardMatcher()],
-            handler: new wsHandlers.PassThroughWebSocketHandler({
+            handler: new webSocketHandlers.PassThroughWebSocketHandler({
                 forwarding: {
                     targetHost: 'wss://echo.websocket.org'
                 }

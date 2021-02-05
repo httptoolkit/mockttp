@@ -5,8 +5,8 @@
 import { merge, isString, isBuffer } from "lodash";
 import { Readable } from "stream";
 
-import { Headers, CompletedRequest, Method, MockedEndpoint } from "../types";
-import { MockRuleData } from "./mock-rule";
+import { Headers, CompletedRequest, Method, MockedEndpoint } from "../../types";
+import { RequestRuleData } from "./request-rule";
 
 import {
     SimpleHandler,
@@ -18,13 +18,13 @@ import {
     TimeoutHandler,
     PassThroughHandlerOptions,
     FileHandler,
-} from "./handlers";
-import { MaybePromise } from "../util/type-utils";
-import { byteLength } from "../util/util";
-import { BaseRuleBuilder } from "./base-rule-builder";
+} from "./request-handlers";
+import { MaybePromise } from "../../util/type-utils";
+import { byteLength } from "../../util/util";
+import { BaseRuleBuilder } from "../base-rule-builder";
 
 /**
- * @class MockRuleBuilder
+ * @class RequestRuleBuilder
 
  * A builder for defining mock rules. Create one using a method like
  * `.get(path)` or `.post(path)` on a Mockttp instance, then call
@@ -41,24 +41,24 @@ import { BaseRuleBuilder } from "./base-rule-builder";
  * promise returned by `.thenX()` methods to guarantee that the rule has taken
  * effect before sending requests to it.
  */
-export class MockRuleBuilder extends BaseRuleBuilder {
+export class RequestRuleBuilder extends BaseRuleBuilder {
 
-    private addRule: (rule: MockRuleData) => Promise<MockedEndpoint>;
+    private addRule: (rule: RequestRuleData) => Promise<MockedEndpoint>;
 
     /**
      * Mock rule builders should be constructed through the Mockttp instance you're
      * using, not directly. You shouldn't ever need to call this constructor.
      */
-    constructor(addRule: (rule: MockRuleData) => Promise<MockedEndpoint>)
+    constructor(addRule: (rule: RequestRuleData) => Promise<MockedEndpoint>)
     constructor(
         method: Method,
         path: string | RegExp | undefined,
-        addRule: (rule: MockRuleData) => Promise<MockedEndpoint>
+        addRule: (rule: RequestRuleData) => Promise<MockedEndpoint>
     )
     constructor(
-        methodOrAddRule: Method | ((rule: MockRuleData) => Promise<MockedEndpoint>),
+        methodOrAddRule: Method | ((rule: RequestRuleData) => Promise<MockedEndpoint>),
         path?: string | RegExp,
-        addRule?: (rule: MockRuleData) => Promise<MockedEndpoint>
+        addRule?: (rule: RequestRuleData) => Promise<MockedEndpoint>
     ) {
         super(
             methodOrAddRule instanceof Function ? undefined : methodOrAddRule,
@@ -112,7 +112,7 @@ export class MockRuleBuilder extends BaseRuleBuilder {
             headers = dataOrHeaders as Headers | undefined;
         }
 
-        const rule: MockRuleData = {
+        const rule: RequestRuleData = {
             matchers: this.matchers,
             completionChecker: this.completionChecker,
             handler: new SimpleHandler(status, statusMessage, data, headers)
@@ -144,7 +144,7 @@ export class MockRuleBuilder extends BaseRuleBuilder {
             'Content-Length': byteLength(jsonData).toString()
         }, headers);
 
-        const rule: MockRuleData = {
+        const rule: RequestRuleData = {
             matchers: this.matchers,
             completionChecker: this.completionChecker,
             handler: new SimpleHandler(status, undefined, jsonData, headers)
@@ -187,7 +187,7 @@ export class MockRuleBuilder extends BaseRuleBuilder {
     thenCallback(callback:
         (request: CompletedRequest) => MaybePromise<CallbackResponseResult>
     ): Promise<MockedEndpoint> {
-        const rule: MockRuleData = {
+        const rule: RequestRuleData = {
             matchers: this.matchers,
             completionChecker: this.completionChecker,
             handler: new CallbackHandler(callback)
@@ -215,7 +215,7 @@ export class MockRuleBuilder extends BaseRuleBuilder {
      * can be used to assert on the requests matched by this rule.
      */
     thenStream(status: number, stream: Readable, headers?: Headers): Promise<MockedEndpoint> {
-        const rule: MockRuleData = {
+        const rule: RequestRuleData = {
             matchers: this.matchers,
             completionChecker: this.completionChecker,
             handler: new StreamHandler(status, stream, headers)
@@ -263,7 +263,7 @@ export class MockRuleBuilder extends BaseRuleBuilder {
             headers = pathOrHeaders as Headers | undefined;
         }
 
-        const rule: MockRuleData = {
+        const rule: RequestRuleData = {
             matchers: this.matchers,
             completionChecker: this.completionChecker,
             handler: new FileHandler(status, statusMessage, path, headers)
@@ -319,7 +319,7 @@ export class MockRuleBuilder extends BaseRuleBuilder {
      * can be used to assert on the requests matched by this rule.
      */
     thenPassThrough(options?: PassThroughHandlerOptions): Promise<MockedEndpoint> {
-        const rule: MockRuleData = {
+        const rule: RequestRuleData = {
             matchers: this.matchers,
             completionChecker: this.completionChecker,
             handler: new PassThroughHandler(options)
@@ -355,7 +355,7 @@ export class MockRuleBuilder extends BaseRuleBuilder {
             forwarding?: Omit<PassThroughHandlerOptions['forwarding'], 'targetHost'>
         } = {}
     ): Promise<MockedEndpoint> {
-        const rule: MockRuleData = {
+        const rule: RequestRuleData = {
             matchers: this.matchers,
             completionChecker: this.completionChecker,
             handler: new PassThroughHandler({
@@ -383,7 +383,7 @@ export class MockRuleBuilder extends BaseRuleBuilder {
      * can be used to assert on the requests matched by this rule.
      */
     thenCloseConnection(): Promise<MockedEndpoint> {
-        const rule: MockRuleData = {
+        const rule: RequestRuleData = {
             matchers: this.matchers,
             completionChecker: this.completionChecker,
             handler: new CloseConnectionHandler()
@@ -405,7 +405,7 @@ export class MockRuleBuilder extends BaseRuleBuilder {
      * can be used to assert on the requests matched by this rule.
      */
     thenTimeout(): Promise<MockedEndpoint> {
-        const rule: MockRuleData = {
+        const rule: RequestRuleData = {
             matchers: this.matchers,
             completionChecker: this.completionChecker,
             handler: new TimeoutHandler()

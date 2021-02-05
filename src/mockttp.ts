@@ -4,8 +4,8 @@
 import { stripIndent } from "common-tags";
 import * as cors from 'cors';
 
-import { MockRuleBuilder } from "./rules/mock-rule-builder";
-import { MockWsRuleBuilder } from "./rules/websockets/mock-ws-rule-builder";
+import { RequestRuleBuilder } from "./rules/requests/request-rule-builder";
+import { WebSocketRuleBuilder } from "./rules/websockets/websocket-rule-builder";
 
 import {
     ProxyConfig,
@@ -17,9 +17,9 @@ import {
     InitiatedRequest,
     ClientError
 } from "./types";
-import { MockRuleData } from "./rules/mock-rule";
+import { RequestRuleData } from "./rules/requests/request-rule";
 import { CAOptions } from './util/tls';
-import { MockWsRuleData } from "./rules/websockets/mock-ws-rule";
+import { WebSocketRuleData } from "./rules/websockets/websocket-rule";
 
 export type PortRange = { startPort: number, endPort: number };
 
@@ -27,7 +27,7 @@ export type PortRange = { startPort: number, endPort: number };
  * A mockttp instance allow you to start and stop mock servers and control their behaviour.
  *
  * Call `.start()` to set up a server on a random port, use methods like `.get(url)`,
- * `.post(url)` and `.anyRequest()` to get a {@link MockRuleBuilder} and start defining
+ * `.post(url)` and `.anyRequest()` to get a {@link RequestRuleBuilder} and start defining
  * mock rules. Call `.stop()` when your test is complete.
  */
 export interface Mockttp {
@@ -97,7 +97,7 @@ export interface Mockttp {
      * This only matches traditional HTTP requests, not websockets, which are handled
      * separately. To match websockets, use `.anyWebSocket()`.
      */
-    anyRequest(): MockRuleBuilder;
+    anyRequest(): RequestRuleBuilder;
 
     /**
      * Get a builder for a mock rule that will match GET requests for the given path.
@@ -117,7 +117,7 @@ export interface Mockttp {
      * - Regular expressions can match the absolute URL: `/^http:\/\/localhost:8000\/abc$/`
      * - Regular expressions can also match the path: `/^\/abc/`
      */
-    get(url?: string | RegExp): MockRuleBuilder;
+    get(url?: string | RegExp): RequestRuleBuilder;
 
     /**
      * Get a builder for a mock rule that will match POST requests for the given path.
@@ -137,7 +137,7 @@ export interface Mockttp {
      * - Regular expressions can match the absolute URL: `/^http:\/\/localhost:8000\/abc$/`
      * - Regular expressions can also match the path: `/^\/abc/`
      */
-    post(url?: string | RegExp): MockRuleBuilder;
+    post(url?: string | RegExp): RequestRuleBuilder;
 
     /**
      * Get a builder for a mock rule that will match PUT requests for the given path.
@@ -157,7 +157,7 @@ export interface Mockttp {
      * - Regular expressions can match the absolute URL: `/^http:\/\/localhost:8000\/abc$/`
      * - Regular expressions can also match the path: `/^\/abc/`
      */
-    put(url?: string | RegExp): MockRuleBuilder;
+    put(url?: string | RegExp): RequestRuleBuilder;
 
     /**
      * Get a builder for a mock rule that will match DELETE requests for the given path.
@@ -177,7 +177,7 @@ export interface Mockttp {
      * - Regular expressions can match the absolute URL: `/^http:\/\/localhost:8000\/abc$/`
      * - Regular expressions can also match the path: `/^\/abc/`
      */
-    delete(url?: string | RegExp): MockRuleBuilder;
+    delete(url?: string | RegExp): RequestRuleBuilder;
 
     /**
      * Get a builder for a mock rule that will match PATCH requests for the given path.
@@ -197,7 +197,7 @@ export interface Mockttp {
      * - Regular expressions can match the absolute URL: `/^http:\/\/localhost:8000\/abc$/`
      * - Regular expressions can also match the path: `/^\/abc/`
      */
-    patch(url?: string | RegExp): MockRuleBuilder;
+    patch(url?: string | RegExp): RequestRuleBuilder;
 
     /**
      * Get a builder for a mock rule that will match HEAD requests for the given path.
@@ -217,7 +217,7 @@ export interface Mockttp {
      * - Regular expressions can match the absolute URL: `/^http:\/\/localhost:8000\/abc$/`
      * - Regular expressions can also match the path: `/^\/abc/`
      */
-    head(url?: string | RegExp): MockRuleBuilder;
+    head(url?: string | RegExp): RequestRuleBuilder;
 
     /**
      * Get a builder for a mock rule that will match OPTIONS requests for the given path.
@@ -246,12 +246,12 @@ export interface Mockttp {
      * but if you're testing in a browser you will need to ensure you mock all OPTIONS
      * requests appropriately so that the browser allows your other requests to be sent.
      */
-    options(url?: string | RegExp): MockRuleBuilder;
+    options(url?: string | RegExp): RequestRuleBuilder;
 
     /**
      * Get a builder for a mock rule that will match all websocket connections.
      */
-    anyWebSocket(): MockWsRuleBuilder;
+    anyWebSocket(): WebSocketRuleBuilder;
 
     /**
      * Subscribe to hear about request details as soon as the initial request details
@@ -352,43 +352,53 @@ export interface Mockttp {
      * Adds the given rules to the server.
      *
      * This API is only useful if you're manually building rules, rather than
-     * using MockRuleBuilder, and is only for special cases. This approach may
+     * using RequestRuleBuilder, and is only for special cases. This approach may
      * be necessary if you need to configure all your rules in one place to
      * enable them elsewhere/later.
      */
-    addRules(...ruleData: MockRuleData[]): Promise<MockedEndpoint[]>;
+    addRequestRules(...ruleData: RequestRuleData[]): Promise<MockedEndpoint[]>;
 
     /**
      * Set the given rules as the only rules on the server, replacing any
      * existing rules (except websocket rules).
      *
      * This API is only useful if you're manually building rules, rather than
-     * using MockRuleBuilder, and is only for special cases. This approach may
+     * using RequestRuleBuilder, and is only for special cases. This approach may
      * be necessary if you need to configure all your rules in one place to
      * enable them elsewhere/later.
      */
-    setRules(...ruleData: MockRuleData[]): Promise<MockedEndpoint[]>;
+    setRequestRules(...ruleData: RequestRuleData[]): Promise<MockedEndpoint[]>;
+
+    /**
+     * @deprecated alias for `addRequestRules`
+     */
+    addRules(...ruleData: RequestRuleData[]): Promise<MockedEndpoint[]>;
+
+    /**
+     * @deprecated alias for `setRequestRules`
+     */
+    setRules(...ruleData: RequestRuleData[]): Promise<MockedEndpoint[]>;
 
     /**
      * Adds the given websocket rules to the server.
      *
      * This API is only useful if you're manually building rules, rather than
-     * using MockRuleBuilder, and is only for special cases. This approach may
+     * using RequestRuleBuilder, and is only for special cases. This approach may
      * be necessary if you need to configure all your rules in one place to
      * enable them elsewhere/later.
      */
-    addWsRules(...ruleData: MockWsRuleData[]): Promise<MockedEndpoint[]>;
+    addWebSocketRules(...ruleData: WebSocketRuleData[]): Promise<MockedEndpoint[]>;
 
     /**
      * Set the given websocket rules as the only websocket rules on the server,
      * replacing all existing websocket rules (but leaving normal rules untouched).
      *
      * This API is only useful if you're manually building rules, rather than
-     * using MockRuleBuilder, and is only for special cases. This approach may
+     * using RequestRuleBuilder, and is only for special cases. This approach may
      * be necessary if you need to configure all your rules in one place to
      * enable them elsewhere/later.
      */
-    setWsRules(...ruleData: MockWsRuleData[]): Promise<MockedEndpoint[]>;
+    setWebSocketRules(...ruleData: WebSocketRuleData[]): Promise<MockedEndpoint[]>;
 
     /**
      * Returns the set of currently registered mock endpoints.
@@ -534,47 +544,52 @@ export abstract class AbstractMockttp {
         return this.url + path;
     }
 
-    abstract addRules: (...ruleData: MockRuleData[]) => Promise<MockedEndpoint[]>;
-    addRule = (rule: MockRuleData) =>
-        this.addRules(rule).then((rules) => rules[0]);
+    abstract addRequestRules: (...ruleData: RequestRuleData[]) => Promise<MockedEndpoint[]>;
+    addRequestRule = (rule: RequestRuleData) =>
+        this.addRequestRules(rule).then((rules) => rules[0]);
 
-    abstract setRules(...ruleData: MockRuleData[]): Promise<MockedEndpoint[]>;
+    abstract setRequestRules(...ruleData: RequestRuleData[]): Promise<MockedEndpoint[]>;
 
-    abstract addWsRules: (...ruleData: MockWsRuleData[]) => Promise<MockedEndpoint[]>;
-    addWsRule = (rule: MockWsRuleData) =>
-        this.addWsRules(rule).then((rules) => rules[0]);
+    // Deprecated endpoints for backward compat:
+    addRule = (ruleData: RequestRuleData) => this.addRequestRule(ruleData);
+    addRules = (...ruleData: RequestRuleData[]) => this.addRequestRules(...ruleData);
+    setRules = (...ruleData: RequestRuleData[]) => this.setRequestRules(...ruleData);
 
-    abstract setWsRules(...ruleData: MockWsRuleData[]): Promise<MockedEndpoint[]>;
+    abstract addWebSocketRules: (...ruleData: WebSocketRuleData[]) => Promise<MockedEndpoint[]>;
+    addWebSocketRule = (rule: WebSocketRuleData) =>
+        this.addWebSocketRules(rule).then((rules) => rules[0]);
 
-    anyRequest(): MockRuleBuilder {
-        return new MockRuleBuilder(this.addRule);
+    abstract setWebSocketRules(...ruleData: WebSocketRuleData[]): Promise<MockedEndpoint[]>;
+
+    anyRequest(): RequestRuleBuilder {
+        return new RequestRuleBuilder(this.addRequestRule);
     }
 
-    get(url?: string | RegExp): MockRuleBuilder {
-        return new MockRuleBuilder(Method.GET, url, this.addRule);
+    get(url?: string | RegExp): RequestRuleBuilder {
+        return new RequestRuleBuilder(Method.GET, url, this.addRequestRule);
     }
 
-    post(url?: string | RegExp): MockRuleBuilder {
-        return new MockRuleBuilder(Method.POST, url, this.addRule);
+    post(url?: string | RegExp): RequestRuleBuilder {
+        return new RequestRuleBuilder(Method.POST, url, this.addRequestRule);
     }
 
-    put(url?: string | RegExp): MockRuleBuilder {
-        return new MockRuleBuilder(Method.PUT, url, this.addRule);
+    put(url?: string | RegExp): RequestRuleBuilder {
+        return new RequestRuleBuilder(Method.PUT, url, this.addRequestRule);
     }
 
-    delete(url?: string | RegExp): MockRuleBuilder {
-        return new MockRuleBuilder(Method.DELETE, url, this.addRule);
+    delete(url?: string | RegExp): RequestRuleBuilder {
+        return new RequestRuleBuilder(Method.DELETE, url, this.addRequestRule);
     }
 
-    patch(url?: string | RegExp): MockRuleBuilder {
-        return new MockRuleBuilder(Method.PATCH, url, this.addRule);
+    patch(url?: string | RegExp): RequestRuleBuilder {
+        return new RequestRuleBuilder(Method.PATCH, url, this.addRequestRule);
     }
 
-    head(url?: string | RegExp): MockRuleBuilder {
-        return new MockRuleBuilder(Method.HEAD, url, this.addRule);
+    head(url?: string | RegExp): RequestRuleBuilder {
+        return new RequestRuleBuilder(Method.HEAD, url, this.addRequestRule);
     }
 
-    options(url?: string | RegExp): MockRuleBuilder {
+    options(url?: string | RegExp): RequestRuleBuilder {
         if (this.corsOptions) {
             throw new Error(stripIndent`
                 Cannot mock OPTIONS requests with CORS enabled.
@@ -584,11 +599,11 @@ export abstract class AbstractMockttp {
                 }responses by hand.
             `);
         }
-        return new MockRuleBuilder(Method.OPTIONS, url, this.addRule);
+        return new RequestRuleBuilder(Method.OPTIONS, url, this.addRequestRule);
     }
 
-    anyWebSocket(): MockWsRuleBuilder {
-        return new MockWsRuleBuilder(this.addWsRule);
+    anyWebSocket(): WebSocketRuleBuilder {
+        return new WebSocketRuleBuilder(this.addWebSocketRule);
     }
 
 }

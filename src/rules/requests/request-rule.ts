@@ -5,17 +5,17 @@
 import * as _ from 'lodash';
 import uuid = require("uuid/v4");
 
-import { OngoingRequest, CompletedRequest, OngoingResponse, Explainable } from "../types";
-import { waitForCompletedRequest } from '../util/request-utils';
-import { MaybePromise } from '../util/type-utils';
+import { OngoingRequest, CompletedRequest, OngoingResponse, Explainable } from "../../types";
+import { waitForCompletedRequest } from '../../util/request-utils';
+import { MaybePromise } from '../../util/type-utils';
 
-import * as matchers from "./matchers";
-import * as handlers from "./handlers";
-import * as completionCheckers from "./completion-checkers";
-import { validateMockRuleData } from './rule-serialization';
+import * as matchers from "../matchers";
+import * as handlers from "./request-handlers";
+import * as completionCheckers from "../completion-checkers";
+import { validateMockRuleData } from '../rule-serialization';
 
 // The internal representation of a mocked endpoint
-export interface MockRule extends Explainable {
+export interface RequestRule extends Explainable {
     id: string;
     requests: Promise<CompletedRequest>[];
 
@@ -25,14 +25,14 @@ export interface MockRule extends Explainable {
     isComplete(): boolean | null;
 }
 
-export interface MockRuleData {
+export interface RequestRuleData {
     id?: string;
     matchers: matchers.RequestMatcher[];
     handler: handlers.RequestHandler;
     completionChecker?: completionCheckers.RuleCompletionChecker;
 }
 
-export class MockRule implements MockRule {
+export class RequestRule implements RequestRule {
     private matchers: matchers.RequestMatcher[];
     private handler: handlers.RequestHandler;
     private completionChecker?: completionCheckers.RuleCompletionChecker;
@@ -41,7 +41,7 @@ export class MockRule implements MockRule {
     public requests: Promise<CompletedRequest>[] = [];
     public requestCount = 0;
 
-    constructor(data: MockRuleData) {
+    constructor(data: RequestRuleData) {
         validateMockRuleData(data);
 
         this.id = data.id || uuid();

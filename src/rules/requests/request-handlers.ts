@@ -26,8 +26,8 @@ import {
     h2HeadersToH1,
     isAbsoluteUrl,
     cleanUpHeaders
-} from '../util/request-utils';
-import { isLocalPortActive } from '../util/socket-util';
+} from '../../util/request-utils';
+import { isLocalPortActive } from '../../util/socket-util';
 import {
     Serializable,
     ClientServerChannel,
@@ -38,9 +38,9 @@ import {
     WithSerializedBodyBuffer,
     serializeBuffer,
     deserializeBuffer
-} from "../util/serialization";
-import { MaybePromise, Replace } from '../util/type-utils';
-import { readFile } from '../util/fs';
+} from "../../util/serialization";
+import { MaybePromise, Replace } from '../../util/type-utils';
+import { readFile } from '../../util/fs';
 
 import {
     Headers,
@@ -49,8 +49,8 @@ import {
     OngoingResponse,
     CompletedBody,
     Explainable
-} from "../types";
-import { byteLength, isNode } from '../util/util';
+} from "../../types";
+import { byteLength, isNode } from '../../util/util';
 
 // An error that indicates that the handler is aborting the request.
 // This could be intentional, or an upstream server aborting the request.
@@ -265,7 +265,7 @@ export class StreamHandler extends Serializable implements RequestHandler {
                 Streams can typically only be read once, so all subsequent requests would be empty.
                 To mock repeated stream requests, call 'thenStream' repeatedly with multiple streams.
 
-                (Have a better way to handle this? Open an issue at ${require('../../package.json').bugs.url})
+                (Have a better way to handle this? Open an issue at ${require('../../../package.json').bugs.url})
             `);
         }
     }

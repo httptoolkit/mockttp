@@ -18,13 +18,13 @@ import MockttpServer from "../server/mockttp-server";
 import { ServerMockedEndpoint } from "../server/mocked-endpoint";
 import { MockedEndpoint, MockedEndpointData, CompletedRequest, CompletedResponse, ClientError } from "../types";
 import { Serialized } from "../util/serialization";
-import { MockRuleData } from "../rules/mock-rule";
+import { RequestRuleData } from "../rules/requests/request-rule";
 import { RequestMatcher } from "../rules/matchers";
-import { RequestHandler } from "../rules/handlers";
+import { RequestHandler } from "../rules/requests/request-handlers";
 import { RuleCompletionChecker } from "../rules/completion-checkers";
-import { deserializeRuleData, deserializeWsRuleData } from "../rules/rule-serialization";
-import { MockWsRuleData } from "../rules/websockets/mock-ws-rule";
-import { WebSocketHandler } from "../rules/websockets/ws-handlers";
+import { deserializeRuleData, deserializeWebSocketRuleData } from "../rules/rule-serialization";
+import { WebSocketRuleData } from "../rules/websockets/websocket-rule";
+import { WebSocketHandler } from "../rules/websockets/websocket-handlers";
 
 const REQUEST_INITIATED_TOPIC = 'request-initiated';
 const REQUEST_RECEIVED_TOPIC = 'request-received';
@@ -215,31 +215,31 @@ export function buildStandaloneModel(mockServer: MockttpServer, stream: Duplex):
         },
 
         Mutation: {
-            addRule: async (__: any, { input }: { input: Serialized<MockRuleData> }) => {
+            addRule: async (__: any, { input }: { input: Serialized<RequestRuleData> }) => {
                 return mockServer.addRule(deserializeRuleData(input, stream));
             },
-            addRules: async (__: any, { input }: { input: Array<Serialized<MockRuleData>> }) => {
-                return mockServer.addRules(...input.map((rule) =>
+            addRules: async (__: any, { input }: { input: Array<Serialized<RequestRuleData>> }) => {
+                return mockServer.addRequestRules(...input.map((rule) =>
                     deserializeRuleData(rule, stream)
                 ));
             },
-            setRules: async (__: any, { input }: { input: Array<Serialized<MockRuleData>> }) => {
-                return mockServer.setRules(...input.map((rule) =>
+            setRules: async (__: any, { input }: { input: Array<Serialized<RequestRuleData>> }) => {
+                return mockServer.setRequestRules(...input.map((rule) =>
                     deserializeRuleData(rule, stream)
                 ));
             },
 
-            addWsRule: async (__: any, { input }: { input: Serialized<MockWsRuleData> }) => {
-                return mockServer.addWsRule(deserializeWsRuleData(input, stream));
+            addWebSocketRule: async (__: any, { input }: { input: Serialized<WebSocketRuleData> }) => {
+                return mockServer.addWebSocketRule(deserializeWebSocketRuleData(input, stream));
             },
-            addWsRules: async (__: any, { input }: { input: Array<Serialized<MockWsRuleData>> }) => {
-                return mockServer.addWsRules(...input.map((rule) =>
-                    deserializeWsRuleData(rule, stream)
+            addWebSocketRules: async (__: any, { input }: { input: Array<Serialized<WebSocketRuleData>> }) => {
+                return mockServer.addWebSocketRules(...input.map((rule) =>
+                    deserializeWebSocketRuleData(rule, stream)
                 ));
             },
-            setWsRules: async (__: any, { input }: { input: Array<Serialized<MockWsRuleData>> }) => {
-                return mockServer.setWsRules(...input.map((rule) =>
-                    deserializeWsRuleData(rule, stream)
+            setWebSocketRules: async (__: any, { input }: { input: Array<Serialized<WebSocketRuleData>> }) => {
+                return mockServer.setWebSocketRules(...input.map((rule) =>
+                    deserializeWebSocketRuleData(rule, stream)
                 ));
             },
 

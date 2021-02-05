@@ -20,8 +20,8 @@ const {
 import { MockedEndpoint } from "../types";
 import { Mockttp, AbstractMockttp, MockttpOptions, PortRange } from "../mockttp";
 import { MockServerConfig } from "../standalone/mockttp-standalone";
-import { MockRuleData } from "../rules/mock-rule";
-import { MockWsRuleData } from '../rules/websockets/mock-ws-rule';
+import { RequestRuleData } from "../rules/requests/request-rule";
+import { WebSocketRuleData } from '../rules/websockets/websocket-rule';
 import { serializeRuleData } from '../rules/rule-serialization';
 
 import { MockedEndpointData, DEFAULT_STANDALONE_PORT } from "../types";
@@ -324,24 +324,24 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
         return this.mockServerConfig!.port;
     }
 
-    public addRules = async (...rules: MockRuleData[]): Promise<MockedEndpoint[]> => {
+    public addRequestRules = async (...rules: RequestRuleData[]): Promise<MockedEndpoint[]> => {
         return this._addRules(rules, false);
     }
 
-    public setRules = async (...rules: MockRuleData[]): Promise<MockedEndpoint[]> => {
+    public setRequestRules = async (...rules: RequestRuleData[]): Promise<MockedEndpoint[]> => {
         return this._addRules(rules, true);
     }
 
-    public addWsRules = async (...rules: MockWsRuleData[]): Promise<MockedEndpoint[]> => {
+    public addWebSocketRules = async (...rules: WebSocketRuleData[]): Promise<MockedEndpoint[]> => {
         return this._addWsRules(rules, false);
     }
 
-    public setWsRules = async (...rules: MockWsRuleData[]): Promise<MockedEndpoint[]> => {
+    public setWebSocketRules = async (...rules: WebSocketRuleData[]): Promise<MockedEndpoint[]> => {
         return this._addWsRules(rules, true);
     }
 
     private _addRules = async (
-        rules: Array<MockRuleData>,
+        rules: Array<RequestRuleData>,
         reset: boolean
     ): Promise<MockedEndpoint[]> => {
         if (!this.mockServerConfig) throw new Error('Cannot add rules before the server is started');
@@ -387,7 +387,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
     }
 
     private _addWsRules = async (
-        rules: Array<MockWsRuleData>,
+        rules: Array<WebSocketRuleData>,
         reset: boolean
     ): Promise<MockedEndpoint[]> => {
         // Seperate and much simpler than _addRules, because it doesn't have to deal with
@@ -395,11 +395,11 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
 
         if (!this.mockServerConfig) throw new Error('Cannot add rules before the server is started');
 
-        const requestName = (reset ? 'Set' : 'Add') + 'WsRules';
-        const mutationName = (reset ? 'set' : 'add') + 'WsRules';
+        const requestName = (reset ? 'Set' : 'Add') + 'WebSocketRules';
+        const mutationName = (reset ? 'set' : 'add') + 'WebSocketRules';
 
         let endpoints = (await this.queryMockServer<{ endpoints: Array<{ id: string, explanation?: string }> }>(
-            `mutation ${requestName}($newRules: [WsMockRule!]!) {
+            `mutation ${requestName}($newRules: [WebSocketMockRule!]!) {
                 endpoints: ${mutationName}(input: $newRules) {
                     id,
                     explanation
@@ -453,7 +453,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
     }
 
     // Exists purely for backward compat with servers that don't support AddRules/SetRules.
-    private _addRule = async (rule: MockRuleData): Promise<MockedEndpoint> => {
+    private _addRule = async (rule: RequestRuleData): Promise<MockedEndpoint> => {
         const ruleData = serializeRuleData(rule, this.mockServerStream!)
         delete ruleData.id; // Old servers don't support sending ids.
 

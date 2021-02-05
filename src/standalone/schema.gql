@@ -9,9 +9,9 @@ type Mutation {
     addRules(input: [MockRule!]!): [MockedEndpoint!]!
     setRules(input: [MockRule!]!): [MockedEndpoint!]!
 
-    addWsRule(input: WsMockRule!): MockedEndpoint!
-    addWsRules(input: [WsMockRule!]!): [MockedEndpoint!]!
-    setWsRules(input: [WsMockRule!]!): [MockedEndpoint!]!
+    addWebSocketRule(input: WebSocketMockRule!): MockedEndpoint!
+    addWebSocketRules(input: [WebSocketMockRule!]!): [MockedEndpoint!]!
+    setWebSocketRules(input: [WebSocketMockRule!]!): [MockedEndpoint!]!
 
     reset: Boolean!
 }
@@ -39,7 +39,7 @@ input MockRule {
     completionChecker: RuleCompletionChecker
 }
 
-input WsMockRule {
+input WebSocketMockRule {
     id: String
     matchers: [RequestMatcher!]!
     handler: WebSocketHandler!
