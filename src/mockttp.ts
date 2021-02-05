@@ -26,9 +26,23 @@ export type PortRange = { startPort: number, endPort: number };
 /**
  * A mockttp instance allow you to start and stop mock servers and control their behaviour.
  *
+ * This should be created using the exported `getLocal()` or `getRemote()` methods, like:
+ *
+ * ```
+ * const mockServer = require('mockttp').getLocal()
+ * ```
+ *
  * Call `.start()` to set up a server on a random port, use methods like `.get(url)`,
  * `.post(url)` and `.anyRequest()` to get a {@link RequestRuleBuilder} and start defining
- * mock rules. Call `.stop()` when your test is complete.
+ * mock rules. You can also mock WebSocket requests using `.anyWebSocket()`. Call `.stop()`
+ * when your test is complete. An example:
+ *
+ * ```
+ * await mockServer.start();
+ * await mockServer.get('/abc').thenReply(200, "a response");
+ * // ...Make some requests
+ * await mockServer.stop();
+ * ```
  */
 export interface Mockttp {
     /**
