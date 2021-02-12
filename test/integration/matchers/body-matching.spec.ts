@@ -1,5 +1,7 @@
+import { PassThrough } from 'stream';
+
 import { getLocal } from "../../..";
-import { expect, fetch, Headers } from "../../test-utils";
+import { expect, fetch, Headers, delay, nodeOnly } from "../../test-utils";
 
 describe("Body matching", function () {
     let server = getLocal();
@@ -154,5 +156,58 @@ describe("Body matching", function () {
             })).to.have.responseText('matched');
         });
 
+    });
+
+    nodeOnly(() => { // TODO: This could be tested in a browser, but it's just a bit fiddly
+        describe("when waiting for a body", function () {
+            this.timeout(500);
+
+            beforeEach(async () => {
+                await server.put('/')
+                    .thenReply(201, "Created");
+
+                await server.post("/")
+                    .withBody('should-match')
+                    .thenReply(200, 'Body matched');
+
+                await server.post("/")
+                    .thenReply(404, 'No POST body matched');
+            });
+
+            it("should short-circuit, not waiting, if another matcher fails", async () => {
+                const neverEndingStream = new PassThrough();
+                neverEndingStream.write('some data\n');
+
+                const neverEndingFetch = fetch(server.url, {
+                    method: 'PUT', // Matches the PUT rule, not the POST
+                    body: neverEndingStream as any
+                });
+
+                const fetchResult = await neverEndingFetch;
+
+                // Should return immediately, regardless of the request body not completing:
+                expect (fetchResult.status).to.equal(201);
+            });
+
+            it("should wait, if it really might match", async () => {
+                const neverEndingStream = new PassThrough();
+                neverEndingStream.write('some data\n');
+
+                const neverEndingFetch = fetch(server.url, {
+                    method: 'POST',
+                    body: neverEndingStream as any
+                });
+
+                const result = await Promise.race([
+                    neverEndingFetch,
+                    delay(200).then(() => 'timeout')
+                ]);
+
+                // Should return immediately, regardless of the request body not completing:
+                expect (result).to.equal('timeout');
+                neverEndingStream.end(); // Clean up
+            });
+
+        });
     });
 });

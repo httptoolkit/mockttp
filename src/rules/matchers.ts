@@ -393,12 +393,20 @@ export const MatcherLookup = {
     'cookie': CookieMatcher,
 };
 
-export async function matchesAll(req: OngoingRequest, matchers: RequestMatcher[]) {
-    return _.every(
-        await Promise.all(
-            matchers.map((matcher) => matcher.matches(req))
-        )
-    );
+export async function matchesAll(req: OngoingRequest, matchers: RequestMatcher[]): Promise<boolean> {
+    return new Promise((resolve, reject) => {
+        const resultsPromises = matchers.map((matcher) => matcher.matches(req));
+
+        resultsPromises.forEach(async (maybePromiseResult) => {
+            const result = await maybePromiseResult;
+            if (!result) resolve(false); // Resolve mismatches immediately
+        });
+
+        // Otherwise resolve as normal: all true matches, exceptions reject.
+        Promise.all(resultsPromises)
+            .then((result) => resolve(_.every(result)))
+            .catch((e) => reject(e));
+    });
 }
 
 export function explainMatchers(matchers: RequestMatcher[]) {
