@@ -162,19 +162,10 @@ describe("Body matching", function () {
         describe("when waiting for a body", function () {
             this.timeout(500);
 
-            beforeEach(async () => {
-                await server.put('/')
-                    .thenReply(201, "Created");
-
-                await server.post("/")
-                    .withBody('should-match')
-                    .thenReply(200, 'Body matched');
-
-                await server.post("/")
-                    .thenReply(404, 'No POST body matched');
-            });
-
             it("should short-circuit, not waiting, if another matcher fails", async () => {
+                await server.put().thenReply(201, "Created");
+                await server.post().withBody('should-match').thenReply(400, 'Body matched');
+
                 const neverEndingStream = new PassThrough();
                 neverEndingStream.write('some data\n');
 
@@ -189,7 +180,28 @@ describe("Body matching", function () {
                 expect (fetchResult.status).to.equal(201);
             });
 
-            it("should wait, if it really might match", async () => {
+            it("should short-circuit, not waiting, if an incomplete matcher matches first", async () => {
+                await server.post().thenReply(201, "Created");
+                await server.post().withBody('should-match').thenReply(400, 'Body matched');
+
+                const neverEndingStream = new PassThrough();
+                neverEndingStream.write('some data\n');
+
+                const neverEndingFetch = fetch(server.urlFor('/specific-endpoint'), {
+                    method: 'POST', // Matches the PUT rule, not the POST
+                    body: neverEndingStream as any
+                });
+
+                const fetchResult = await neverEndingFetch;
+
+                // Should match immediately, regardless of the request body not completing:
+                expect (fetchResult.status).to.equal(201);
+            });
+
+            it("should wait, if it really might be the best match", async () => {
+                await server.post().withBody('should-match').thenReply(400, 'Body matched');
+                await server.post().thenReply(201, "Created");
+
                 const neverEndingStream = new PassThrough();
                 neverEndingStream.write('some data\n');
 
@@ -203,7 +215,7 @@ describe("Body matching", function () {
                     delay(200).then(() => 'timeout')
                 ]);
 
-                // Should return immediately, regardless of the request body not completing:
+                // Should time out, because we really need to know if this rule really matches
                 expect (result).to.equal('timeout');
                 neverEndingStream.end(); // Clean up
             });

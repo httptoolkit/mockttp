@@ -16,9 +16,10 @@ describe("HTTP mock rule completion", function () {
         await expect(fetch(server.urlFor("/endpoint"))).to.have.responseText("second response");
     });
 
-    it("should continue triggering the last provided rule indefinitely", async () => {
+    it("should continue triggering the last matching rule indefinitely", async () => {
         await server.get("/endpoint").thenReply(200, "first response");
         await server.get("/endpoint").thenReply(200, "second response");
+        await server.get("/other-endpoint").thenReply(200, "unrelated response");
 
         await fetch(server.urlFor("/endpoint"));
         await fetch(server.urlFor("/endpoint"));

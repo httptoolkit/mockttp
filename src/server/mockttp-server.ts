@@ -409,12 +409,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
             abort();
         });
 
-        let nextRulePromise = filter(this.requestRules, (r) => r.matches(request))
-            .then((matchingRules) =>
-                matchingRules.filter((r) =>
-                    !this.isComplete(r, matchingRules)
-                )[0] as RequestRule | undefined
-            );
+        let nextRulePromise = this.findMatchingRule(this.requestRules, request);
 
         // Async: once we know what the next rule is, ping a request event
         nextRulePromise
@@ -473,12 +468,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
             socket.destroy();
         });
 
-        let nextRulePromise = filter(this.webSocketRules, (r) => r.matches(request))
-            .then((matchingRules) =>
-                matchingRules.filter((r) =>
-                    !this.isComplete(r, matchingRules)
-                )[0] as WebSocketRule | undefined
-            );
+        let nextRulePromise = this.findMatchingRule(this.webSocketRules, request);
 
         try {
             let nextRule = await nextRulePromise;
@@ -503,18 +493,28 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         }
     }
 
-    private isComplete = (
-        rule: RequestRule | WebSocketRule,
-        matchingRules: Array<RequestRule | WebSocketRule>
-    ) => {
-        const isDefinitelyComplete = rule.isComplete();
-        if (isDefinitelyComplete !== null) {
-            return isDefinitelyComplete;
-        } else {
-            // By default, if no more specific completion rule is applied,
-            // the last matching rule keeps responding forever:
-            return (matchingRules[matchingRules.length - 1] !== rule);
+    private async findMatchingRule<R extends WebSocketRule | RequestRule>(
+        rules: Array<R>,
+        request: OngoingRequest
+    ): Promise<R | undefined> {
+        // Start all rules matching immediately
+        const rulesMatches = rules.map((r) => ({ rule: r, match: r.matches(request) }));
+
+        // Evaluate the matches one by one, and immediately use the first
+        for (let { rule, match } of rulesMatches) {
+            if (await match && rule.isComplete() === false) {
+                // The first matching incomplete rule we find is the one we should use
+                return rule;
+            }
         }
+
+        // There are no incomplete & matching rules! One last option: if the last matching rule is
+        // maybe-incomplete (i.e. default completion status but has seen >0 requests) then it should
+        // match anyway. This allows us to add rules and have the last repeat indefinitely.
+        const lastMatchingRule = _.last(await filter(rulesMatches, m => m.match))?.rule;
+        if (!lastMatchingRule || lastMatchingRule.isComplete()) return undefined;
+        // Otherwise, must be a rule with isComplete === null, i.e. no specific completion check:
+        else return lastMatchingRule;
     }
 
     private async getUnmatchedRequestExplanation(request: OngoingRequest) {
