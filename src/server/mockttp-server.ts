@@ -510,10 +510,10 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         const isDefinitelyComplete = rule.isComplete();
         if (isDefinitelyComplete !== null) {
             return isDefinitelyComplete;
-        } else if (matchingRules[matchingRules.length - 1] === rule) {
-            return false;
         } else {
-            return rule.requests.length !== 0;
+            // By default, if no more specific completion rule is applied,
+            // the last matching rule keeps responding forever:
+            return (matchingRules[matchingRules.length - 1] !== rule);
         }
     }
 

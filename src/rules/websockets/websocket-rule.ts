@@ -80,8 +80,14 @@ export class WebSocketRule implements WebSocketRule {
 
     isComplete(): boolean | null {
         if (this.completionChecker) {
+            // If we have a specific rule, use that
             return this.completionChecker.isComplete(this.requestCount);
+        } else if (this.requestCount === 0) {
+            // Otherwise, by default we're definitely incomplete if we've seen no requests
+            return false;
         } else {
+            // And we're _maybe_ complete if we've seen at least one request. In reality, we're incomplete
+            // but we should be used anyway if we're at any point we're the last matching rule for a request.
             return null;
         }
     }
