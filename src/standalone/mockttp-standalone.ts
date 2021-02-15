@@ -61,7 +61,7 @@ async function strictOriginMatch(
         return new Promise<boolean>((resolve, reject) => {
             expectedOrigin(origin, (error, result) => {
                 if (error) reject(error);
-                else resolve(result);
+                else resolve(strictOriginMatch(origin, result));
             });
         });
     }
