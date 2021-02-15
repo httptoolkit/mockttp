@@ -50,10 +50,8 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
      * an error.
      *
      * This method takes options to configure how the request is passed
-     * through. The available options are:
-     *
-     * * ignoreHostCertificateErrors, a list of hostnames for which server
-     *   certificate errors should be ignored (none, by default).
+     * through. See {@link PassThroughWebSocketHandlerOptions} for the full
+     * details of the options available.
      *
      * Calling this method registers the rule with the server, so it
      * starts to handle requests.
@@ -83,8 +81,9 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
      * If no protocol is specified, the protocol (and potentially the port)
      * of the original request URL will be used instead.
      *
-     * This method also takes options to configure how the request is passed
-     * through, see thenPassThrough for more details.
+     * This method takes options to configure how the request is passed
+     * through. See {@link PassThroughWebSocketHandlerOptions} for the full
+     * details of the options available.
      *
      * Calling this method registers the rule with the server, so it
      * starts to handle requests.

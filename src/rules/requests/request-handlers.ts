@@ -704,7 +704,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
 
     public readonly lookupOptions: PassThroughLookupOptions | undefined;
 
-    private _cacheableLookupInstance: CacheableLookup | undefined; // Initialized on first request
+    private _cacheableLookupInstance: CacheableLookup | undefined;
     private lookup() {
         if (!this.lookupOptions) return undefined;
 
@@ -712,7 +712,8 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
             this._cacheableLookupInstance = new CacheableLookup({
                 maxTtl: this.lookupOptions.maxTtl,
                 errorTtl: this.lookupOptions.errorTtl,
-                fallbackDuration: 1 // We want as little caching of "use the fallback server" as possible
+                // As little caching of "use the fallback server" as possible:
+                fallbackDuration: 1
             });
 
             if (this.lookupOptions.servers) {

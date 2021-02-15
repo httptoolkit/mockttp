@@ -8,6 +8,7 @@ import * as url from 'url';
 import * as http from 'http';
 import * as WebSocket from 'ws';
 import { stripIndent } from 'common-tags';
+import CacheableLookup from 'cacheable-lookup';
 
 import {
     Serializable
@@ -21,7 +22,8 @@ import {
 import {
     CloseConnectionHandler,
     TimeoutHandler,
-    ForwardingOptions
+    ForwardingOptions,
+    PassThroughLookupOptions
 } from '../requests/request-handlers';
 import { streamToBuffer, isHttp2 } from '../../util/request-utils';
 
@@ -98,8 +100,28 @@ async function mirrorRejection(socket: net.Socket, rejectionResponse: http.Incom
 }
 
 export interface PassThroughWebSocketHandlerOptions {
-    forwarding?: ForwardingOptions;
+    /**
+     * The forwarding configuration for the passthrough rule.
+     * This generally shouldn't be used explicitly unless you're
+     * building rule data by hand. Instead, call `thenPassThrough`
+     * to send data directly or `thenForwardTo` with options to
+     * configure traffic forwarding.
+     */
+    forwarding?: ForwardingOptions,
+
+    /**
+     * A list of hostnames for which server certificate errors should be
+     * ignored (none, by default).
+     */
     ignoreHostCertificateErrors?: string[];
+
+    /**
+     * Custom DNS options, to allow configuration of the resolver used
+     * when forwarding requests upstream. Passing any option switches
+     * from using node's default dns.lookup function to using the
+     * cacheable-lookup module, which will cache responses.
+     */
+    lookupOptions?: PassThroughLookupOptions;
 }
 
 export class PassThroughWebSocketHandler extends Serializable implements WebSocketHandler {
@@ -109,6 +131,29 @@ export class PassThroughWebSocketHandler extends Serializable implements WebSock
     public readonly ignoreHostCertificateErrors: string[] = [];
 
     private wsServer?: WebSocket.Server;
+
+    // Same lookup configuration as normal request PassThroughHandler:
+    public readonly lookupOptions: PassThroughLookupOptions | undefined;
+
+    private _cacheableLookupInstance: CacheableLookup | undefined;
+    private lookup() {
+        if (!this.lookupOptions) return undefined;
+
+        if (!this._cacheableLookupInstance) {
+            this._cacheableLookupInstance = new CacheableLookup({
+                maxTtl: this.lookupOptions.maxTtl,
+                errorTtl: this.lookupOptions.errorTtl,
+                // As little caching of "use the fallback server" as possible:
+                fallbackDuration: 1
+            });
+
+            if (this.lookupOptions.servers) {
+                this._cacheableLookupInstance.servers = this.lookupOptions.servers;
+            }
+        }
+
+        return this._cacheableLookupInstance.lookup;
+    }
 
     constructor(options: PassThroughWebSocketHandlerOptions = {}) {
         super();
@@ -132,6 +177,8 @@ export class PassThroughWebSocketHandler extends Serializable implements WebSock
             }
         }
         this.forwarding = options.forwarding;
+
+        this.lookupOptions = options.lookupOptions;
     }
 
     explain() {
@@ -230,11 +277,12 @@ export class PassThroughWebSocketHandler extends Serializable implements WebSock
         const upstreamSocket = new WebSocket(wsUrl, {
             rejectUnauthorized: checkServerCertificate,
             maxPayload: 0,
+            lookup: this.lookup(),
             headers: _.omitBy(headers, (_v, headerName) =>
                 headerName.toLowerCase().startsWith('sec-websocket') ||
                 headerName.toLowerCase() === 'connection'
             ) as { [key: string]: string } // Simplify to string - doesn't matter though, only used by http module anyway
-        });
+        } as WebSocket.ClientOptions);
 
         upstreamSocket.once('open', () => {
             // Presumably the below adds an error handler. But what about before we get here?

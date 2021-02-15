@@ -4,9 +4,10 @@ import HttpProxyAgent = require('http-proxy-agent');
 import HttpsProxyAgent = require('https-proxy-agent');
 import { getLocal, generateCACertificate } from '../..';
 
-import { expect, nodeOnly } from '../test-utils';
+import { expect, nodeOnly, startDnsServer } from '../test-utils';
 import { getCA } from '../../src/util/tls';
 import { delay } from '../../src/util/util';
+import { DestroyableServer } from '../../src/util/destroyable-server';
 
 // TODO: Create browsers tests as well (need a way to set up a websocket
 // server from inside a browser though...)
@@ -334,10 +335,46 @@ nodeOnly(() => {
 
             afterEach(() => wsServer.close());
 
+            let dnsServer: DestroyableServer | undefined;
+            let fixedDnsResponse: string | undefined = undefined;
+
+            before(async () => {
+                dnsServer = await startDnsServer(() => fixedDnsResponse);
+            });
+
+            after(async () => {
+                await dnsServer!.destroy();
+            });
+
             it("can be passed through untouched", async () => {
                 mockServer.anyWebSocket().thenPassThrough();
 
                 const ws = new WebSocket(`ws://localhost:${REAL_WS_SERVER_PORT}`, {
+                    agent: new HttpProxyAgent(`http://localhost:${mockServer.port}`)
+                });
+
+                ws.on('open', () => ws.send('test echo'));
+
+                const response = await new Promise((resolve, reject) => {
+                    ws.on('message', resolve);
+                    ws.on('error', (e) => reject(e));
+                });
+                ws.close(1000);
+
+                expect(response).to.equal('test echo');
+            });
+
+            it("can be passed through with custom DNS resolution", async () => {
+                fixedDnsResponse = '127.0.0.1'; // Send all requests to localhost
+
+                mockServer.anyWebSocket().thenPassThrough({
+                    lookupOptions: {
+                        servers: [`127.0.0.1:${(dnsServer!.address() as any).port}`]
+                    }
+                });
+
+                // Send to an invalid domain - should magically resolve regardless
+                const ws = new WebSocket(`ws://nope.test:${REAL_WS_SERVER_PORT}`, {
                     agent: new HttpProxyAgent(`http://localhost:${mockServer.port}`)
                 });
 
