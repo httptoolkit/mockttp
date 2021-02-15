@@ -1,7 +1,7 @@
 import * as _ from "lodash";
 import * as WebSocket from 'isomorphic-ws';
 
-import { getLocal, matchers, handlers, webSocketHandlers } from "../..";
+import { getLocal, matchers, handlers, webSocketHandlers, completionCheckers } from "../..";
 import { expect, fetch } from "../test-utils";
 
 describe("Mockttp rule building", function () {
@@ -69,7 +69,9 @@ describe("Mockttp rule building", function () {
         expect(firstResponseText).to.include('replacement mock response');
     });
 
-    it("should allow adding websocket rules", async () => {
+    it("should allow adding websocket rules", async function () {
+        this.timeout(10000); // Sometimes echo.websocket.org can be very slow
+
         await server.addWebSocketRules({
             matchers: [new matchers.WildcardMatcher()],
             handler: new webSocketHandlers.PassThroughWebSocketHandler({
