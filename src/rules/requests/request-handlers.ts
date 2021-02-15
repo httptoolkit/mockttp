@@ -394,12 +394,65 @@ export interface ForwardingOptions {
 }
 
 export interface PassThroughHandlerOptions {
+    /**
+     * The forwarding configuration for the passthrough rule.
+     * This generally shouldn't be used explicitly unless you're
+     * building rule data by hand. Instead, call `thenPassThrough`
+     * to send data directly or `thenForwardTo` with options to
+     * configure traffic forwarding.
+     */
     forwarding?: ForwardingOptions,
+
+    /**
+     * A list of hostnames for which server certificate errors should be ignored
+     * (none, by default).
+     */
     ignoreHostCertificateErrors?: string[];
+
+    /**
+     * A mapping of hosts to client certificates to use, in the form of
+     * `{ key, cert }` objects (none, by default)
+     */
     clientCertificateHostMap?: {
         [host: string]: { pfx: Buffer, passphrase?: string }
     };
+
+    /**
+     * A callback that will be passed the full request before it is passed through,
+     * and which returns an object that defines how the the request content should
+     * be changed before it's passed to the upstream server.
+     *
+     * The callback should return an object that definies how the request
+     * should be changed. All fields on the object are optional. The possible
+     * fields are:
+     *
+     * - `method` (a replacement HTTP verb, capitalized)
+     * - `url` (a full URL to send the request to)
+     * - `response` (a response callback result: if provided this will be used
+     *   directly, the request will not be passed through at all, and any
+     *   beforeResponse callback will never fire)
+     * - `headers` (object with string keys & values, replaces all headers if set)
+     * - `body` (string or buffer, replaces the body if set)
+     * - `json` (object, to be sent as a JSON-encoded body, taking precedence
+     *   over `body` if both are set)
+     */
     beforeRequest?: (req: CompletedRequest) => MaybePromise<CallbackRequestResult>;
+
+    /**
+     * A callback that will be passed the full response before it is passed through,
+     * and which returns an object that defines how the the response content should
+     * before it's returned to the client.
+     *
+     * The callback should return an object that definies how the response
+     * should be changed. All fields on the object are optional. The possible
+     * fields are:
+     *
+     * - `status` (number, will replace the HTTP status code)
+     * - `headers` (object with string keys & values, replaces all headers if set)
+     * - `body` (string or buffer, replaces the body if set)
+     * - `json` (object, to be sent as a JSON-encoded body, taking precedence
+     *   over `body` if both are set)
+     */
     beforeResponse?: (res: PassThroughResponse) => MaybePromise<CallbackResponseResult>;
 }
 

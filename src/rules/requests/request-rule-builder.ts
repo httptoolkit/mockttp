@@ -278,37 +278,8 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
      * an error.
      *
      * This method takes options to configure how the request is passed
-     * through. The available options are:
-     *
-     * * ignoreHostCertificateErrors, a list of hostnames for which server
-     *   certificate errors should be ignored (none, by default).
-     * * clientCertificateHostMap, a mapping of hosts to client certificates to use,
-     *   in the form of { key, cert } objects (none, by default)
-     * * beforeRequest, a callback that will be passed the full request
-     *   before it is passed through, and which returns an object that defines
-     *   how the the request content should be changed before it's passed
-     *   to the upstream server (details below).
-     * * beforeResponse, a callback that will be passed the full response
-     *   before it is completed, and which returns an object that defines
-     *   how the the response content should be changed before it's returned
-     *   to the client (details below).
-     *
-     * The beforeRequest & beforeResponse callbacks should return objects
-     * defining how the request/response should be changed. All fields on
-     * the object are optional. The valid fields are:
-     *
-     * Valid fields are:
-     * - Request only: `method` (a replacement HTTP verb, capitalized)
-     * - Request only: `url` (a full URL to send the request to)
-     * - Request only: `response` (a response callback result: if provided
-     *   this will be used directly, the request will not be passed through
-     *   at all, and any beforeResponse callback will never fire)
-     * - Response only: `status` (number, will replace the HTTP status code)
-     * - Both: `headers` (object with string keys & values, replaces all
-     *   headers if set)
-     * - Both: `body` (string or buffer, replaces the body if set)
-     * - Both: `json` (object, to be sent as a JSON-encoded body, taking
-     *   precedence over `body` if both are set)
+     * through. See {@link PassThroughHandlerOptions} for the full details
+     * of the options available.
      *
      * Calling this method registers the rule with the server, so it
      * starts to handle requests.
@@ -338,8 +309,9 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
      * If no protocol is specified, the protocol (and potentially the port)
      * of the original request URL will be used instead.
      *
-     * This method also takes options to configure how the request is passed
-     * through, see thenPassThrough for more details.
+     * This method takes options to configure how the request is passed
+     * through. See {@link PassThroughHandlerOptions} for the full details
+     * of the options available.
      *
      * Calling this method registers the rule with the server, so it
      * starts to handle requests.
