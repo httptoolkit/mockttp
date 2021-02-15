@@ -9,6 +9,7 @@ import http = require('http');
 import http2 = require('http2');
 import https = require('https');
 import * as h2Client from 'http2-wrapper';
+import CacheableLookup from 'cacheable-lookup';
 import { encode as encodeBase64, decode as decodeBase64 } from 'base64-arraybuffer';
 import { Readable, Transform } from 'stream';
 import { stripIndent, oneLine } from 'common-tags';
@@ -393,6 +394,28 @@ export interface ForwardingOptions {
     updateHostHeader?: true | false | string // Change automatically/ignore/change to custom value
 }
 
+export interface PassThroughLookupOptions {
+    /**
+     * The maximum time to cache a DNS response. Up to this limit,
+     * responses will be cached according to their own TTL. Defaults
+     * to Infinity.
+     */
+    maxTtl?: number;
+    /**
+     * How long to cache a DNS ENODATA or ENOTFOUND response. Defaults
+     * to 0.15.
+     */
+    errorTtl?: number;
+    /**
+     * The primary servers to use. DNS queries will be resolved against
+     * these servers first. If no data is available, queries will fall
+     * back to dns.lookup, and use the OS's default DNS servers.
+     *
+     * This defaults to dns.getServers().
+     */
+    servers?: string[];
+}
+
 export interface PassThroughHandlerOptions {
     /**
      * The forwarding configuration for the passthrough rule.
@@ -416,6 +439,14 @@ export interface PassThroughHandlerOptions {
     clientCertificateHostMap?: {
         [host: string]: { pfx: Buffer, passphrase?: string }
     };
+
+    /**
+     * Custom DNS options, to allow configuration of the resolver used
+     * when forwarding requests upstream. Passing any option switches
+     * from using node's default dns.lookup function to using the
+     * cacheable-lookup module, which will cache responses.
+     */
+    lookupOptions?: PassThroughLookupOptions;
 
     /**
      * A callback that will be passed the full request before it is passed through,
@@ -462,6 +493,7 @@ interface SerializedPassThroughData {
     forwarding?: ForwardingOptions;
     ignoreHostCertificateErrors?: string[];
     clientCertificateHostMap?: { [host: string]: { pfx: string, passphrase?: string } };
+    lookupOptions?: PassThroughLookupOptions;
 
     hasBeforeRequestCallback?: boolean;
     hasBeforeResponseCallback?: boolean;
@@ -670,6 +702,27 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
     public readonly beforeRequest?: (req: CompletedRequest) => MaybePromise<CallbackRequestResult>;
     public readonly beforeResponse?: (res: PassThroughResponse) => MaybePromise<CallbackResponseResult>;
 
+    public readonly lookupOptions: PassThroughLookupOptions | undefined;
+
+    private _cacheableLookupInstance: CacheableLookup | undefined; // Initialized on first request
+    private lookup() {
+        if (!this.lookupOptions) return undefined;
+
+        if (!this._cacheableLookupInstance) {
+            this._cacheableLookupInstance = new CacheableLookup({
+                maxTtl: this.lookupOptions.maxTtl,
+                errorTtl: this.lookupOptions.errorTtl,
+                fallbackDuration: 1 // We want as little caching of "use the fallback server" as possible
+            });
+
+            if (this.lookupOptions.servers) {
+                this._cacheableLookupInstance.servers = this.lookupOptions.servers;
+            }
+        }
+
+        return this._cacheableLookupInstance.lookup;
+    }
+
     constructor(options: PassThroughHandlerOptions = {}) {
         super();
 
@@ -694,6 +747,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
             throw new Error("ignoreHostCertificateErrors must be an array");
         }
 
+        this.lookupOptions = options.lookupOptions;
         this.clientCertificateHostMap = options.clientCertificateHostMap || {};
 
         this.beforeRequest = options.beforeRequest;
@@ -877,6 +931,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 family,
                 path,
                 headers,
+                lookup: this.lookup(),
                 agent: agent as http.Agent,
                 rejectUnauthorized: checkServerCertificate,
                 ...clientCert
@@ -1086,6 +1141,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 forwardToLocation: this.forwarding.targetHost,
                 forwarding: this.forwarding
             } : {},
+            lookupOptions: this.lookupOptions,
             ignoreHostCertificateErrors: this.ignoreHostCertificateErrors,
             clientCertificateHostMap: _.mapValues(this.clientCertificateHostMap,
                 ({ pfx, passphrase }) => ({ pfx: serializeBuffer(pfx), passphrase })
@@ -1138,6 +1194,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 forwarding: { targetHost: data.forwardToLocation }
             } : {},
             forwarding: data.forwarding,
+            lookupOptions: data.lookupOptions,
             ignoreHostCertificateErrors: data.ignoreHostCertificateErrors,
             clientCertificateHostMap: _.mapValues(data.clientCertificateHostMap,
                 ({ pfx, passphrase }) => ({ pfx: deserializeBuffer(pfx), passphrase })

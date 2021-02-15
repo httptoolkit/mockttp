@@ -14,7 +14,10 @@ import chai = require("chai");
 import chaiAsPromised = require("chai-as-promised");
 import chaiFetch = require("chai-fetch");
 
+import * as dns2 from 'dns2'; // Imported here just for types
+
 import { Mockttp } from "..";
+import { destroyable, DestroyableServer } from "../src/util/destroyable-server";
 import { isNode, isWeb, delay } from '../src/util/util';
 export { isNode, isWeb, delay };
 
@@ -152,6 +155,37 @@ export function watchForEvent(event: string, ...servers: Mockttp[]) {
         await delay(100);
         expect(eventResult).to.equal(undefined, `Unexpected ${event} event`);
     }
+}
+
+// An extremely simple & dumb DNS server for quick testing:
+export async function startDnsServer(callback: (question: dns2.DnsQuestion) => string | undefined) {
+    // We import the implementation async, because it fails in the browser
+    const dns2 = await import('dns2');
+
+    const server = destroyable(dns2.createServer(async (request, sendResponse) => {
+        const response = dns2.Packet.createResponseFromRequest(request);
+
+        // Multiple questions are allowed in theory, but apparently nobody
+        // supports it, so we don't either.
+        const [question] = request.questions;
+
+        const answer = callback(question);
+
+        if (answer) response.answers.push({
+            name: question.name,
+            type: dns2.Packet.TYPE.A,
+            class: dns2.Packet.CLASS.IN,
+            ttl: 0,
+            address: answer
+        });
+        sendResponse(response);
+    }));
+
+    return new Promise<DestroyableServer>((resolve, reject) => {
+        server.listen(5333, '127.0.0.1');
+        server.on('listening', () => resolve(server));
+        server.on('error', reject);
+    });
 }
 
 export const H2_TLS_ON_TLS_SUPPORTED = ">=12.17";

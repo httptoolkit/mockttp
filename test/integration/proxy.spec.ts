@@ -16,7 +16,8 @@ import {
     Deferred,
     sendRawRequest,
     http2ProxyRequest,
-    H2_TLS_ON_TLS_SUPPORTED
+    H2_TLS_ON_TLS_SUPPORTED,
+    startDnsServer
 } from "../test-utils";
 import { generateCACertificate } from "../../src/util/tls";
 import { isLocalIPv6Available } from "../../src/util/socket-util";
@@ -1451,6 +1452,73 @@ nodeOnly(() => {
 
                 let seenRequests = await remoteEndpointMock.getSeenRequests();
                 expect(seenRequests[0].headers.host).to.equal('google.com');
+            });
+        });
+
+        describe("when configured with custom DNS options", () => {
+
+            beforeEach(async () => {
+                server = getLocal();
+                await server.start();
+                process.env = _.merge({}, process.env, server.proxyEnv);
+
+                fixedDnsResponse = undefined;
+            });
+
+            let dnsServer: DestroyableServer | undefined;
+            let fixedDnsResponse: string | undefined = undefined;
+
+            before(async () => {
+                dnsServer = await startDnsServer(() => fixedDnsResponse);
+            });
+
+            after(async () => {
+                await dnsServer!.destroy();
+            });
+
+            it("should use default DNS settings given an empty object", async () => {
+                await server.anyRequest().thenPassThrough({
+                    lookupOptions: {}
+                });
+
+                await expect(
+                    request.get("http://not-a-real-server.test:${remoteServer.port}")
+                ).to.be.rejectedWith("ENOTFOUND"); // Goes nowhere
+            });
+
+            it("should use custom DNS servers when provided", async () => {
+                remoteServer.anyRequest().thenReply(200, "remote localhost server");
+                fixedDnsResponse = '127.0.0.1'; // Resolve everything to localhost
+
+                await server.anyRequest().thenPassThrough({
+                    lookupOptions: {
+                        servers: [`127.0.0.1:${(dnsServer!.address() as any).port}`]
+                    }
+                });
+
+                const response = await request.get(`http://still-not-real.test:${remoteServer.port}`);
+
+                expect(response).to.equal("remote localhost server");
+            });
+
+            it("should fall back to default DNS servers when custom servers can't resolve", async function () {
+                remoteServer.anyRequest().thenReply(200, "remote localhost server");
+                this.timeout(10000);
+
+                fixedDnsResponse = undefined; // Don't resolve anything
+
+                await server.anyRequest().thenPassThrough({
+                    lookupOptions: {
+                        servers: [`127.0.0.1:${(dnsServer!.address() as any).port}`]
+                    }
+                });
+
+                const response = await request.get({
+                    url: `http://local.httptoolkit.tech:${remoteServer.port}`, // Really does resolve to localhost
+                    resolveWithFullResponse: true
+                });
+
+                await expect(response.statusCode).to.equal(200);
             });
         });
     });
