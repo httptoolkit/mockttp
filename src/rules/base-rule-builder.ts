@@ -24,6 +24,7 @@ import {
     QueryMatcher,
     FormDataMatcher,
     RawBodyMatcher,
+    RawBodyIncludesMatcher,
     WildcardMatcher,
     CookieMatcher,
     RegexBodyMatcher,
@@ -118,6 +119,14 @@ export abstract class BaseRuleBuilder {
                 ? new RawBodyMatcher(content)
                 : new RegexBodyMatcher(content)
         );
+        return this;
+    }
+
+    /**
+     * Match only requests whose bodies include the given string.
+     */
+    withBodyIncluding(content: string): this {
+        this.matchers.push(new RawBodyIncludesMatcher(content));
         return this;
     }
 

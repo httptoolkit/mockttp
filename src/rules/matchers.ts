@@ -284,6 +284,24 @@ export class RawBodyMatcher extends Serializable implements RequestMatcher {
     }
 }
 
+export class RawBodyIncludesMatcher extends Serializable implements RequestMatcher {
+    readonly type = 'raw-body-includes';
+
+    constructor(
+        public content: string
+    ) {
+        super();
+    }
+
+    async matches(request: OngoingRequest) {
+        return (await request.body.asText()).includes(this.content);
+    }
+
+    explain() {
+        return `with body including '${this.content}'`;
+    }
+}
+
 export class RegexBodyMatcher extends Serializable implements RequestMatcher {
     readonly type = 'raw-body-regexp';
     readonly regexString: string;
@@ -388,6 +406,7 @@ export const MatcherLookup = {
     'form-data': FormDataMatcher,
     'raw-body': RawBodyMatcher,
     'raw-body-regexp': RegexBodyMatcher,
+    'raw-body-includes': RawBodyIncludesMatcher,
     'json-body': JsonBodyMatcher,
     'json-body-matching': JsonBodyFlexibleMatcher,
     'cookie': CookieMatcher,

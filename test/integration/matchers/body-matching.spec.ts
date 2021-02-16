@@ -36,7 +36,7 @@ describe("Body matching", function () {
                 method: 'POST',
                 body: 'should-match',
                 headers: new Headers({
-                'Content-Type': 'application/json'
+                    'Content-Type': 'application/json'
                 }),
             })).to.have.responseText('matched');
         });
@@ -45,6 +45,13 @@ describe("Body matching", function () {
             return expect(fetch(server.url, {
                 method: 'POST'
             })).not.to.have.responseText("matched");
+        });
+
+        it("should not match requests that only contain the given body", async () => {
+            return expect(fetch(server.url, {
+                method: 'POST',
+                body: 'this-should-match-nothing'
+            })).not.to.have.responseText('matched');
         });
     });
 
@@ -68,6 +75,52 @@ describe("Body matching", function () {
                 method: 'POST',
                 body: '{"user": "test", "passwd": "test"}'
             })).not.to.have.responseText('matched');
+        });
+
+        it("should not match requests with no body", async () => {
+            return expect(fetch(server.url, {
+                method: 'POST'
+            })).not.to.have.responseText("matched");
+        });
+    });
+
+    describe("for included strings", () => {
+
+        beforeEach(async () => {
+            await server.post("/")
+                .withBodyIncluding('should-match')
+                .thenReply(200, 'matched');
+        });
+
+        it("should match requests with an exactly matching body", async () => {
+            return expect(fetch(server.url, {
+                method: 'POST',
+                body: 'should-match'
+            })).to.have.responseText('matched');
+        });
+
+        it("should match requests that contain the given body", async () => {
+            return expect(fetch(server.url, {
+                method: 'POST',
+                body: 'this-should-match-as-included'
+            })).to.have.responseText('matched');
+        });
+
+        it("shouldn't match requests with the wrong body", async () => {
+            return expect(fetch(server.url, {
+                method: 'POST',
+                body: 'should-not-match'
+            })).not.to.have.responseText('matched');
+        });
+
+        it("should match requests ignoring content types", async () => {
+            return expect(fetch(server.url, {
+                method: 'POST',
+                body: 'this-should-match',
+                headers: new Headers({
+                    'Content-Type': 'application/json'
+                }),
+            })).to.have.responseText('matched');
         });
 
         it("should not match requests with no body", async () => {
