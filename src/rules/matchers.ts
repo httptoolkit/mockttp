@@ -298,7 +298,7 @@ export class RawBodyIncludesMatcher extends Serializable implements RequestMatch
     }
 
     explain() {
-        return `with body including '${this.content}'`;
+        return `with a body including '${this.content}'`;
     }
 }
 
@@ -317,7 +317,7 @@ export class RegexBodyMatcher extends Serializable implements RequestMatcher {
     }
 
     explain() {
-        return `with body matching /${unescapeRegexp(this.regexString)}/`;
+        return `with a body matching /${unescapeRegexp(this.regexString)}/`;
     }
 
 }
@@ -339,7 +339,7 @@ export class JsonBodyMatcher extends Serializable implements RequestMatcher {
     }
 
     explain() {
-        return `with ${JSON.stringify(this.body)} as a JSON body`;
+        return `with a JSON body equivalent to ${JSON.stringify(this.body)}`;
     }
 
 }
@@ -361,7 +361,7 @@ export class JsonBodyFlexibleMatcher extends Serializable implements RequestMatc
     }
 
     explain() {
-        return `with JSON body including ${JSON.stringify(this.body)}`;
+        return `with a JSON body including ${JSON.stringify(this.body)}`;
     }
 
 }
