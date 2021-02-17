@@ -713,7 +713,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 maxTtl: this.lookupOptions.maxTtl,
                 errorTtl: this.lookupOptions.errorTtl,
                 // As little caching of "use the fallback server" as possible:
-                fallbackDuration: 1
+                fallbackDuration: 0
             });
 
             if (this.lookupOptions.servers) {
