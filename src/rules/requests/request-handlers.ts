@@ -686,7 +686,8 @@ const KeepAliveAgents = isNode
         }),
         'https:': new https.Agent({
             keepAlive: true
-        })
+        }),
+        'h2': new h2Client.Agent() // Yes yes, not a real protocol, but useful to store here anywhere
     } : {};
 
 export class PassThroughHandler extends Serializable implements RequestHandler {
@@ -877,14 +878,15 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
         // and we can't use ALPN to detect HTTP/2 support cleanly.
         const shouldTryH2Upstream = isH2Downstream && protocol === 'https:';
 
-        let makeRequest =
+        let makeRequest = (
             shouldTryH2Upstream
                 ? h2Client.auto
             // HTTP/1 + TLS
             : protocol === 'https:'
                 ? https.request
             // HTTP/1 plaintext:
-                : http.request;
+                : http.request
+        ) as typeof https.request; // Simplifies typing. All matches except session & agent.
 
         let family: undefined | 4 | 6;
         if (hostname === 'localhost') {
@@ -903,7 +905,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
         const agent =
             shouldTryH2Upstream
                 // H2 client takes multiple agents, uses the appropriate one for the detected protocol
-                ? { https: KeepAliveAgents['https:'], http2: undefined }
+                ? { https: KeepAliveAgents['https:'], http2: KeepAliveAgents['h2'] }
             // HTTP/1 + KA:
             : shouldKeepAlive(clientReq)
                 ? KeepAliveAgents[(protocol as 'http:' | 'https:') || 'http:']
@@ -933,7 +935,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 path,
                 headers,
                 lookup: this.lookup(),
-                agent: agent as http.Agent,
+                agent: agent as https.Agent,
                 rejectUnauthorized: checkServerCertificate,
                 ...clientCert
             }, (serverRes) => (async () => {
