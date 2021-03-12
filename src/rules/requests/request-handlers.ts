@@ -687,7 +687,9 @@ const KeepAliveAgents = isNode
         'https:': new https.Agent({
             keepAlive: true
         }),
-        'h2': new h2Client.Agent() // Yes yes, not a real protocol, but useful to store here anywhere
+        'h2': new h2Client.Agent({ // Yes yes, not a protocol name, but useful to store here anywhere
+            timeout: 10000 // 10 second session keep-alive
+        })
     } : {};
 
 export class PassThroughHandler extends Serializable implements RequestHandler {
