@@ -104,7 +104,7 @@ export class ClientServerChannel extends Duplex {
         this.topicId = topicId || uuid();
     }
 
-    _write(message: Message, encoding: string, callback: (error?: Error | null) => void) {
+    _write(message: Message, encoding: BufferEncoding, callback: (error?: Error | null) => void) {
         message.topicId = this.topicId;
         const chunk = JSON.stringify(message) + '\n';
 

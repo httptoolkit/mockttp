@@ -752,10 +752,8 @@ nodeOnly(() => {
 
                         authenticatingServerPort = await portfinder.getPortPromise();
                         return new Promise(async (resolve, reject) => {
-                            authenticatingServer.listen(authenticatingServerPort, (e: any) => {
-                                if (e) reject(e);
-                                else resolve();
-                            });
+                            authenticatingServer.listen(authenticatingServerPort, resolve);
+                            authenticatingServer.on('error', reject);
                         });
                     });
 

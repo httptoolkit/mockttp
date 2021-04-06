@@ -87,7 +87,7 @@ export interface ParsedBody {
     asBuffer: () => Promise<Buffer>;
     asText: () => Promise<string>;
     asJson: () => Promise<object>;
-    asFormData: () => Promise<{ [key: string]: string | string[] }>;
+    asFormData: () => Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
 export interface CompletedBody {
@@ -95,7 +95,7 @@ export interface CompletedBody {
     decodedBuffer: Buffer | undefined;
     text: string | undefined;
     json: object | undefined;
-    formData: { [key: string]: string | string[] } | undefined;
+    formData: { [key: string]: string | string[] | undefined } | undefined;
 }
 
 // Internal & external representation of an initiated (no body yet received) HTTP request.

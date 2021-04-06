@@ -33,6 +33,7 @@ import { RequestRule, RequestRuleData } from "../rules/requests/request-rule";
 import { ServerMockedEndpoint } from "./mocked-endpoint";
 import { createComboServer } from "./http-combo-server";
 import { filter } from "../util/promise";
+import { Mutable } from "../util/type-utils";
 
 import {
     parseRequestBody,
@@ -356,7 +357,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
             const absoluteUrl = `${req.protocol}://${host}${req.path}`;
 
             if (!req.headers[':path']) {
-                req.url = new url.URL(absoluteUrl).toString();
+                (req as Mutable<ExtendedRawRequest>).url = new url.URL(absoluteUrl).toString();
             } else {
                 // Node's HTTP/2 compat logic maps .url to headers[':path']. We want them to
                 // diverge: .url should always be absolute, while :path may stay relative,

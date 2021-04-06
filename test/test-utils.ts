@@ -262,7 +262,7 @@ export async function http2ProxyRequest(
     const parsedUrl = URL.parse(url);
     const proxyReq = proxyClient.request({
         ':method': 'CONNECT',
-        ':authority': parsedUrl.host
+        ':authority': parsedUrl.host!
     });
 
     const proxyResponse = await getHttp2Response(proxyReq);

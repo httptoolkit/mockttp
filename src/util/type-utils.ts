@@ -8,3 +8,7 @@ export type MaybePromise<T> = T | Promise<T>;
 
 export type Replace<T, K extends keyof T, V> =
     Omit<T, K> & { [k in K]: V };
+
+export type Mutable<T> = {
+    -readonly [K in keyof T]: T[K]
+}

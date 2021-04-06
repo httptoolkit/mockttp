@@ -219,7 +219,7 @@ const parseBodyStream = (bodyStream: stream.Readable, maxSize: number): ParsedBo
             }
             return bufferPromise;
         },
-        asText(encoding = 'utf8') {
+        asText(encoding: BufferEncoding = 'utf8') {
             return body.asBuffer().then((b) => b.toString(encoding));
         },
         asJson() {
@@ -512,7 +512,7 @@ export function tryToParseHttp(input: Buffer, socket: net.Socket): PartiallyPars
 
         try {
             const parsedUrl = url.parse(rawUri);
-            req.path = parsedUrl.path;
+            req.path = parsedUrl.path ?? undefined;
 
             const hostHeader = _.find(req.headers, (_value, key) => key.toLowerCase() === 'host');
 
