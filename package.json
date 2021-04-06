@@ -86,7 +86,7 @@
     "chai": "^3.5.0",
     "chai-as-promised": "^6.0.0",
     "chai-fetch": "^0.3.1",
-    "dns2": "^1.4.2",
+    "dns2": "1.4.2",
     "fs-extra": "^8.1.0",
     "http-proxy-agent": "^2.0.0",
     "https-proxy-agent": "^2.2.1",
