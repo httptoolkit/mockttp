@@ -19,7 +19,7 @@ import {
     H2_TLS_ON_TLS_SUPPORTED,
     startDnsServer
 } from "../test-utils";
-import { generateCACertificate } from "../../src/util/tls";
+import { generateCACertificate, CA } from "../../src/util/tls";
 import { isLocalIPv6Available } from "../../src/util/socket-util";
 import { streamToBuffer } from "../../src/util/request-utils";
 
@@ -722,6 +722,92 @@ nodeOnly(() => {
                         });
 
                         let response = await request.get(badServer.url, {
+                            resolveWithFullResponse: true,
+                            simple: false
+                        });
+
+                        expect(response.statusCode).to.equal(502);
+                    });
+                });
+
+                describe("given a TLSv1 upstream server", () => {
+
+                    let oldServerPort: number;
+                    let oldServer: DestroyableServer;
+
+                    beforeEach(async () => {
+                        const caKey = await fs.readFile('./test/fixtures/test-ca.key');
+                        const caCert = await fs.readFile('./test/fixtures/test-ca.pem');
+                        const ca = new CA(caKey, caCert, 1024);
+
+                        const cert = ca.generateCertificate('localhost');
+
+                        oldServer = destroyable(https.createServer({
+                            ...cert,
+                            minVersion: 'TLSv1',
+                            maxVersion: 'TLSv1',
+                        }, (_req, res) => {
+                            res.writeHead(200);
+                            res.end('OK');
+                        }));
+
+                        oldServerPort = await portfinder.getPortPromise();
+                        return new Promise(async (resolve, reject) => {
+                            oldServer.listen(oldServerPort, resolve);
+                            oldServer.on('error', reject);
+                        });
+                    });
+
+                    afterEach(() => {
+                        oldServer.destroy();
+                    });
+
+                    it("should refuse to pass through requests", async () => {
+                        await server.anyRequest().thenPassThrough();
+
+                        let response = await request.get(`https://localhost:${oldServerPort}`, {
+                            resolveWithFullResponse: true,
+                            simple: false
+                        });
+
+                        expect(response.statusCode).to.equal(502);
+                        expect(response.body).to.include("SSL alert number 70");
+                    });
+
+                    it("should tag failed requests", async () => {
+                        await server.anyRequest().thenPassThrough();
+
+                        let responsePromise = getDeferred<CompletedResponse>();
+                        await server.on('response', (r) => responsePromise.resolve(r));
+
+                        await request.get(`https://localhost:${oldServerPort}`).catch(() => {});
+
+                        const seenResponse = await responsePromise;
+                        expect(seenResponse.tags).to.deep.equal([
+                            'passthrough-tls-error:ssl-alert-70',
+                            'passthrough-error:EPROTO'
+                        ]);
+                    });
+
+                    it("should allow passing through requests if the host is specifically listed", async () => {
+                        await server.anyRequest().thenPassThrough({
+                            ignoreHostHttpsErrors: ['localhost']
+                        });
+
+                        let response = await request.get(`https://localhost:${oldServerPort}`, {
+                            resolveWithFullResponse: true,
+                            simple: false
+                        });
+
+                        expect(response.statusCode).to.equal(200);
+                    });
+
+                    it("should refuse to pass through requests if a non-matching host is listed", async () => {
+                        await server.anyRequest().thenPassThrough({
+                            ignoreHostHttpsErrors: ['differenthost']
+                        });
+
+                        let response = await request.get(`https://localhost:${oldServerPort}`, {
                             resolveWithFullResponse: true,
                             simple: false
                         });

@@ -5,6 +5,7 @@
 import _ = require('lodash');
 import url = require('url');
 import net = require('net');
+import tls = require('tls');
 import http = require('http');
 import http2 = require('http2');
 import https = require('https');
@@ -427,8 +428,14 @@ export interface PassThroughHandlerOptions {
     forwarding?: ForwardingOptions,
 
     /**
-     * A list of hostnames for which server certificate errors should be ignored
-     * (none, by default).
+     * A list of hostnames for which server certificate and TLS version errors
+     * should be ignored (none, by default).
+     */
+    ignoreHostHttpsErrors?: string[];
+
+    /**
+     * Deprecated alias for ignoreHostHttpsErrors.
+     * @deprecated
      */
     ignoreHostCertificateErrors?: string[];
 
@@ -491,7 +498,7 @@ interface SerializedPassThroughData {
     type: 'passthrough';
     forwardToLocation?: string;
     forwarding?: ForwardingOptions;
-    ignoreHostCertificateErrors?: string[];
+    ignoreHostCertificateErrors?: string[]; // Doesn't match option name, backward compat
     clientCertificateHostMap?: { [host: string]: { pfx: string, passphrase?: string } };
     lookupOptions?: PassThroughLookupOptions;
 
@@ -697,7 +704,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
 
     public readonly forwarding?: ForwardingOptions;
 
-    public readonly ignoreHostCertificateErrors: string[] = [];
+    public readonly ignoreHostHttpsErrors: string[] = [];
     public readonly clientCertificateHostMap: {
         [host: string]: { pfx: Buffer, passphrase?: string }
     };
@@ -746,9 +753,11 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
 
         this.forwarding = forwarding;
 
-        this.ignoreHostCertificateErrors = options.ignoreHostCertificateErrors || [];
-        if (!Array.isArray(this.ignoreHostCertificateErrors)) {
-            throw new Error("ignoreHostCertificateErrors must be an array");
+        this.ignoreHostHttpsErrors = options.ignoreHostHttpsErrors ||
+            options.ignoreHostCertificateErrors ||
+            [];
+        if (!Array.isArray(this.ignoreHostHttpsErrors)) {
+            throw new Error("ignoreHostHttpsErrors must be an array");
         }
 
         this.lookupOptions = options.lookupOptions;
@@ -868,8 +877,8 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
         const hostWithPort = `${hostname}:${port}`
 
         // Ignore cert errors if the host+port or whole hostname is whitelisted
-        const checkServerCertificate = !_.includes(this.ignoreHostCertificateErrors, hostname) &&
-            !_.includes(this.ignoreHostCertificateErrors, hostWithPort);
+        const strictHttpsChecks = !_.includes(this.ignoreHostHttpsErrors, hostname) &&
+            !_.includes(this.ignoreHostHttpsErrors, hostWithPort);
 
         // Use a client cert if it's listed for the host+port or whole hostname
         const clientCert = this.clientCertificateHostMap[hostWithPort] ||
@@ -938,7 +947,8 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 headers,
                 lookup: this.lookup(),
                 agent: agent as https.Agent,
-                rejectUnauthorized: checkServerCertificate,
+                minVersion: strictHttpsChecks ? tls.DEFAULT_MIN_VERSION : 'TLSv1', // Allow TLSv1, if !strict
+                rejectUnauthorized: strictHttpsChecks,
                 ...clientCert
             }, (serverRes) => (async () => {
                 serverRes.on('error', reject);
@@ -1147,7 +1157,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 forwarding: this.forwarding
             } : {},
             lookupOptions: this.lookupOptions,
-            ignoreHostCertificateErrors: this.ignoreHostCertificateErrors,
+            ignoreHostCertificateErrors: this.ignoreHostHttpsErrors,
             clientCertificateHostMap: _.mapValues(this.clientCertificateHostMap,
                 ({ pfx, passphrase }) => ({ pfx: serializeBuffer(pfx), passphrase })
             ),
@@ -1200,7 +1210,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
             } : {},
             forwarding: data.forwarding,
             lookupOptions: data.lookupOptions,
-            ignoreHostCertificateErrors: data.ignoreHostCertificateErrors,
+            ignoreHostHttpsErrors: data.ignoreHostCertificateErrors,
             clientCertificateHostMap: _.mapValues(data.clientCertificateHostMap,
                 ({ pfx, passphrase }) => ({ pfx: deserializeBuffer(pfx), passphrase })
             ),
