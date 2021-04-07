@@ -17,7 +17,8 @@ import {
     sendRawRequest,
     http2ProxyRequest,
     H2_TLS_ON_TLS_SUPPORTED,
-    startDnsServer
+    startDnsServer,
+    TLS_MIN_VERSION_SUPPORTED
 } from "../test-utils";
 import { generateCACertificate, CA } from "../../src/util/tls";
 import { isLocalIPv6Available } from "../../src/util/socket-util";
@@ -735,7 +736,9 @@ nodeOnly(() => {
                     let oldServerPort: number;
                     let oldServer: DestroyableServer;
 
-                    beforeEach(async () => {
+                    beforeEach(async function () {
+                        if (!semver.satisfies(process.version, TLS_MIN_VERSION_SUPPORTED)) this.skip();
+
                         const caKey = await fs.readFile('./test/fixtures/test-ca.key');
                         const caCert = await fs.readFile('./test/fixtures/test-ca.pem');
                         const ca = new CA(caKey, caCert, 1024);
