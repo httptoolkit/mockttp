@@ -3,6 +3,9 @@ tmp.setGracefulCleanup();
 
 const webpack = require('webpack');
 
+// Run a websocket server in the background for testing
+require('./test/fixtures/websocket-test-server');
+
 module.exports = function(config) {
     config.set({
         frameworks: ['mocha', 'chai'],

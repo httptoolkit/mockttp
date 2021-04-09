@@ -70,14 +70,12 @@ describe("Mockttp rule building", function () {
     });
 
     it("should allow adding websocket rules", async function () {
-        this.timeout(10000); // Sometimes echo.websocket.org can be very slow
-        this.retries(3); // And/or unreliable
-
         await server.addWebSocketRules({
             matchers: [new matchers.WildcardMatcher()],
             handler: new webSocketHandlers.PassThroughWebSocketHandler({
                 forwarding: {
-                    targetHost: 'wss://echo.websocket.org'
+                    // Simple echo fixture, see websocket-test-server.js
+                    targetHost: 'ws://localhost:8694'
                 }
             })
         });

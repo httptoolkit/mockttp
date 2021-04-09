@@ -21,6 +21,13 @@ import { destroyable, DestroyableServer } from "../src/util/destroyable-server";
 import { isNode, isWeb, delay } from '../src/util/util';
 export { isNode, isWeb, delay };
 
+if (isNode) {
+    // Run a target websocket server in the background. In browsers, this is
+    // launched by from the Karma script. Eventually this should be replaced
+    // by a Mockttp-spawned WS server, once we have one.
+    require('./fixtures/websocket-test-server');
+}
+
 chai.use(chaiAsPromised);
 chai.use(chaiFetch);
 
