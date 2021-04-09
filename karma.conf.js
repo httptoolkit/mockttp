@@ -50,7 +50,7 @@ module.exports = function(config) {
             'src/**/*.ts': ['webpack', 'sourcemap'],
             'test/**/*.ts': ['webpack', 'sourcemap']
         },
-        reporters: ['progress'],
+        reporters: ['spec'],
         port: 9876,
         logLevel: config.LOG_INFO,
 
