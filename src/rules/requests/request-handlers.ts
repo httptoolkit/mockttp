@@ -693,9 +693,6 @@ const KeepAliveAgents = isNode
         }),
         'https:': new https.Agent({
             keepAlive: true
-        }),
-        'h2': new h2Client.Agent({ // Yes yes, not a protocol name, but useful to store here anywhere
-            timeout: 10000 // 10 second session keep-alive
         })
     } : {};
 
@@ -889,15 +886,14 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
         // and we can't use ALPN to detect HTTP/2 support cleanly.
         const shouldTryH2Upstream = isH2Downstream && protocol === 'https:';
 
-        let makeRequest = (
+        let makeRequest =
             shouldTryH2Upstream
                 ? h2Client.auto
             // HTTP/1 + TLS
             : protocol === 'https:'
                 ? https.request
             // HTTP/1 plaintext:
-                : http.request
-        ) as typeof https.request; // Simplifies typing. All matches except session & agent.
+                : http.request;
 
         let family: undefined | 4 | 6;
         if (hostname === 'localhost') {
@@ -916,7 +912,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
         const agent =
             shouldTryH2Upstream
                 // H2 client takes multiple agents, uses the appropriate one for the detected protocol
-                ? { https: KeepAliveAgents['https:'], http2: KeepAliveAgents['h2'] }
+                ? { https: KeepAliveAgents['https:'], http2: undefined }
             // HTTP/1 + KA:
             : shouldKeepAlive(clientReq)
                 ? KeepAliveAgents[(protocol as 'http:' | 'https:') || 'http:']
@@ -946,7 +942,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 path,
                 headers,
                 lookup: this.lookup(),
-                agent: agent as https.Agent,
+                agent: agent as http.Agent,
                 minVersion: strictHttpsChecks ? tls.DEFAULT_MIN_VERSION : 'TLSv1', // Allow TLSv1, if !strict
                 rejectUnauthorized: strictHttpsChecks,
                 ...clientCert
