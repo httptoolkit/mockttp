@@ -110,8 +110,14 @@ export interface PassThroughWebSocketHandlerOptions {
     forwarding?: ForwardingOptions,
 
     /**
-     * A list of hostnames for which server certificate errors should be
-     * ignored (none, by default).
+     * A list of hostnames for which server certificate and TLS version errors
+     * should be ignored (none, by default).
+     */
+    ignoreHostHttpsErrors?: string[];
+
+    /**
+     * Deprecated alias for ignoreHostHttpsErrors.
+     * @deprecated
      */
     ignoreHostCertificateErrors?: string[];
 
@@ -124,11 +130,18 @@ export interface PassThroughWebSocketHandlerOptions {
     lookupOptions?: PassThroughLookupOptions;
 }
 
+interface SerializedPassThroughWebSocketData {
+    type: 'ws-passthrough';
+    forwarding?: ForwardingOptions;
+    ignoreHostCertificateErrors?: string[]; // Doesn't match option name, backward compat
+    lookupOptions?: PassThroughLookupOptions;
+}
+
 export class PassThroughWebSocketHandler extends Serializable implements WebSocketHandler {
     readonly type = 'ws-passthrough';
 
     public readonly forwarding?: ForwardingOptions;
-    public readonly ignoreHostCertificateErrors: string[] = [];
+    public readonly ignoreHostHttpsErrors: string[] = [];
 
     private wsServer?: WebSocket.Server;
 
@@ -158,9 +171,11 @@ export class PassThroughWebSocketHandler extends Serializable implements WebSock
     constructor(options: PassThroughWebSocketHandlerOptions = {}) {
         super();
 
-        this.ignoreHostCertificateErrors = options.ignoreHostCertificateErrors || [];
-        if (!Array.isArray(this.ignoreHostCertificateErrors)) {
-            throw new Error("ignoreHostCertificateErrors must be an array");
+        this.ignoreHostHttpsErrors = options.ignoreHostHttpsErrors ||
+            options.ignoreHostCertificateErrors ||
+            [];
+        if (!Array.isArray(this.ignoreHostHttpsErrors)) {
+            throw new Error("ignoreHostHttpsErrors must be an array");
         }
 
         // If a location is provided, and it's not a bare hostname, it must be parseable
@@ -271,8 +286,8 @@ export class PassThroughWebSocketHandler extends Serializable implements WebSock
 
         // Skip cert checks if the host or host+port are whitelisted
         const parsedUrl = url.parse(wsUrl);
-        const checkServerCertificate = !_.includes(this.ignoreHostCertificateErrors, parsedUrl.hostname) &&
-            !_.includes(this.ignoreHostCertificateErrors, parsedUrl.host);
+        const checkServerCertificate = !_.includes(this.ignoreHostHttpsErrors, parsedUrl.hostname) &&
+            !_.includes(this.ignoreHostHttpsErrors, parsedUrl.host);
 
         const upstreamSocket = new WebSocket(wsUrl, {
             rejectUnauthorized: checkServerCertificate,
@@ -305,6 +320,24 @@ export class PassThroughWebSocketHandler extends Serializable implements WebSock
         });
 
         incomingSocket.on('error', () => upstreamSocket.close(1011)); // Internal error
+    }
+
+    serialize(): SerializedPassThroughWebSocketData {
+        // By default, we assume data is transferrable as-is
+        return {
+            type: this.type,
+            forwarding: this.forwarding,
+            ignoreHostCertificateErrors: this.ignoreHostHttpsErrors,
+            lookupOptions: this.lookupOptions
+        };
+    }
+
+    static deserialize(data: SerializedPassThroughWebSocketData): any {
+        // By default, we assume we just need to assign the right prototype
+        return _.create(this.prototype, {
+            ...data,
+            ignoreHostHttpsErrors: data.ignoreHostCertificateErrors
+        });
     }
 }
 
