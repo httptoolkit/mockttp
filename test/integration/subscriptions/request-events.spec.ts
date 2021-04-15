@@ -50,6 +50,7 @@ describe("Request initiated subscriptions", () => {
                     'connection': 'close',
                     'accept': '*/*',
                     'content-length': '9',
+                    'content-type': 'text/plain;charset=UTF-8',
                     'host': `localhost:${server.port}`
                 }
                 : {
@@ -132,6 +133,7 @@ describe("Request initiated subscriptions", () => {
                     'connection': 'close',
                     'accept': '*/*',
                     'content-length': '9',
+                    'content-type': 'text/plain;charset=UTF-8',
                     'host': `localhost:${server.port}`
                 }
                 : {
