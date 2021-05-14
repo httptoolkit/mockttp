@@ -18,6 +18,28 @@ import {
 } from "../../test-utils";
 import { TimingEvents } from "../../../dist/types";
 
+// Headers we ignore when checking the received values, because they can vary depending
+// on details of the local environment (to pass in Wallaby & fail in GHA, for example)
+const INCONSISTENT_HEADERS = [
+    // Varies on testing ports & hostnames:
+    'origin',
+    'referer',
+
+    // Varies on OS config:
+    'accept-language',
+
+    // Depends on browser version:
+    'user-agent',
+    'accept-encoding',
+
+    // Security headers only available in new Chrome versions:
+    'sec-ch-ua',
+    'sec-ch-ua-mobile',
+    'sec-fetch-dest',
+    'sec-fetch-mode',
+    'sec-fetch-site',
+];
+
 describe("Request initiated subscriptions", () => {
     describe("with a local HTTP server", () => {
         let server = getLocal();
@@ -38,33 +60,14 @@ describe("Request initiated subscriptions", () => {
             expect(seenRequest.url).to.equal(server.urlFor("/mocked-endpoint"));
             expect((seenRequest as any).body).to.equal(undefined); // No body included yet
 
-            const matchableHeaders = _.omit(seenRequest.headers, [
-                'user-agent',
-                'origin',
-                'referer',
-                'accept-language'
-            ]);
-            expect(matchableHeaders).to.deep.equal(isNode
-                ? {
-                    'accept-encoding': 'gzip,deflate',
-                    'connection': 'close',
-                    'accept': '*/*',
-                    'content-length': '9',
-                    'content-type': 'text/plain;charset=UTF-8',
-                    'host': `localhost:${server.port}`
-                }
-                : {
-                    'accept': '*/*',
-                    'accept-encoding': 'gzip, deflate, br',
-                    'connection': 'keep-alive',
-                    'content-length': '9',
-                    'content-type': 'text/plain;charset=UTF-8',
-                    'host': `localhost:${server.port}`,
-                    'sec-fetch-dest': 'empty',
-                    'sec-fetch-mode': 'cors',
-                    'sec-fetch-site': 'same-site'
-                }
-            );
+            const matchableHeaders = _.omit(seenRequest.headers, INCONSISTENT_HEADERS);
+            expect(matchableHeaders).to.deep.equal({
+                'connection': isNode ? 'close' : 'keep-alive',
+                'accept': '*/*',
+                'content-length': '9',
+                'content-type': 'text/plain;charset=UTF-8',
+                'host': `localhost:${server.port}`
+            });
         });
 
         nodeOnly(() => {
@@ -121,33 +124,14 @@ describe("Request initiated subscriptions", () => {
             expect(seenRequest.url).to.equal(server.urlFor("/mocked-endpoint"));
             expect((seenRequest as any).body).to.equal(undefined); // No body included yet
 
-            const matchableHeaders = _.omit(seenRequest.headers, [
-                'user-agent',
-                'origin',
-                'referer',
-                'accept-language'
-            ]);
-            expect(matchableHeaders).to.deep.equal(isNode
-                ? {
-                    'accept-encoding': 'gzip,deflate',
-                    'connection': 'close',
-                    'accept': '*/*',
-                    'content-length': '9',
-                    'content-type': 'text/plain;charset=UTF-8',
-                    'host': `localhost:${server.port}`
-                }
-                : {
-                    'accept': '*/*',
-                    'accept-encoding': 'gzip, deflate, br',
-                    'connection': 'keep-alive',
-                    'content-length': '9',
-                    'content-type': 'text/plain;charset=UTF-8',
-                    'host': `localhost:${server.port}`,
-                    'sec-fetch-dest': 'empty',
-                    'sec-fetch-mode': 'cors',
-                    'sec-fetch-site': 'cross-site'
-                }
-            );
+            const matchableHeaders = _.omit(seenRequest.headers, INCONSISTENT_HEADERS);
+            expect(matchableHeaders).to.deep.equal({
+                'connection': isNode ? 'close' : 'keep-alive',
+                'accept': '*/*',
+                'content-length': '9',
+                'content-type': 'text/plain;charset=UTF-8',
+                'host': `localhost:${server.port}`
+            });
         });
     });
 

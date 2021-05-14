@@ -25,7 +25,8 @@ import {
     ForwardingOptions,
     PassThroughLookupOptions
 } from '../requests/request-handlers';
-import { streamToBuffer, isHttp2 } from '../../util/request-utils';
+import { isHttp2 } from '../../util/request-utils';
+import { streamToBuffer } from '../../util/buffer-utils';
 
 export interface WebSocketHandler extends Explainable, Serializable {
     type: keyof typeof WsHandlerLookup;

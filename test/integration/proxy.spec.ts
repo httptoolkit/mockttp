@@ -22,7 +22,7 @@ import {
 } from "../test-utils";
 import { generateCACertificate, CA } from "../../src/util/tls";
 import { isLocalIPv6Available } from "../../src/util/socket-util";
-import { streamToBuffer } from "../../src/util/request-utils";
+import { streamToBuffer } from "../../src/util/buffer-utils";
 
 const INITIAL_ENV = _.cloneDeep(process.env);
 

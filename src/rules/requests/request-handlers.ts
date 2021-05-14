@@ -20,7 +20,6 @@ import {
     waitForCompletedRequest,
     setHeaders,
     buildBodyReader,
-    streamToBuffer,
     shouldKeepAlive,
     dropDefaultHeaders,
     isHttp2,
@@ -29,6 +28,7 @@ import {
     isAbsoluteUrl,
     cleanUpHeaders
 } from '../../util/request-utils';
+import { streamToBuffer } from '../../util/buffer-utils';
 import { isLocalPortActive } from '../../util/socket-util';
 import {
     Serializable,
