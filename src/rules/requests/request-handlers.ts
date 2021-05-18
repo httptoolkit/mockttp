@@ -26,9 +26,10 @@ import {
     h1HeadersToH2,
     h2HeadersToH1,
     isAbsoluteUrl,
-    cleanUpHeaders
+    cleanUpHeaders,
+    isMockttpBody
 } from '../../util/request-utils';
-import { streamToBuffer } from '../../util/buffer-utils';
+import { streamToBuffer, asBuffer } from '../../util/buffer-utils';
 import { isLocalPortActive } from '../../util/socket-util';
 import {
     Serializable,
@@ -78,7 +79,7 @@ export interface CallbackResponseResult {
     headers?: Headers;
 
     json?: any;
-    body?: string | Buffer;
+    body?: string | Buffer | Uint8Array;
 }
 
 function isSerializedBuffer(obj: any): obj is SerializedBuffer {
@@ -96,7 +97,7 @@ export class SimpleHandler extends Serializable implements RequestHandler {
     constructor(
         public status: number,
         public statusMessage?: string,
-        public data?: string | Buffer | SerializedBuffer,
+        public data?: string | Uint8Array | Buffer | SerializedBuffer,
         public headers?: Headers
     ) {
         super();
@@ -129,10 +130,14 @@ export class SimpleHandler extends Serializable implements RequestHandler {
 export interface SerializedCallbackHandlerData {
     type: string;
     name?: string;
+    version?: number;
 }
 
 interface CallbackRequestMessage {
-    args: [CompletedRequest];
+    args: [
+        | Replace<CompletedRequest, 'body', string> // New format
+        | CompletedRequest // Old format with directly serialized body
+    ];
 }
 
 function writeResponseFromCallback(result: CallbackResponseResult, response: OngoingResponse) {
@@ -188,21 +193,34 @@ export class CallbackHandler extends Serializable implements RequestHandler {
             CallbackRequestMessage,
             CallbackResponseResult
         >(async (streamMsg) => {
-            return withSerializedBodyBuffer(
-                await this.callback.apply(null, streamMsg.args)
-            );
+            const request = _.isString(streamMsg.args[0].body)
+                ? withDeserializedBodyReader( // New format: body serialized as base64
+                    streamMsg.args[0] as Replace<CompletedRequest, 'body', string>
+                )
+                : { // Backward compat: old fully-serialized format
+                    ...streamMsg.args[0],
+                    body: buildBodyReader(streamMsg.args[0].body.buffer, streamMsg.args[0].headers)
+                };
+
+            const callbackResult = await this.callback.call(null, request);
+
+            return withSerializedBodyBuffer(callbackResult);
         });
 
-        return { type: this.type, name: this.callback.name };
+        return { type: this.type, name: this.callback.name, version: 2 };
     }
 
-    static deserialize({ name }: SerializedCallbackHandlerData, channel: ClientServerChannel): CallbackHandler {
+    static deserialize({ name, version }: SerializedCallbackHandlerData, channel: ClientServerChannel): CallbackHandler {
         const rpcCallback = async (request: CompletedRequest) => {
             return withDeserializedBodyBuffer(
                 await channel.request<
                     CallbackRequestMessage,
                     WithSerializedBodyBuffer<CallbackResponseResult>
-                >({ args: [request] })
+                >({ args: [
+                    (version || -1) >= 2
+                        ? withSerializedBodyReader(request)
+                        : request // Backward compat: old handlers
+                ] })
             );
         };
         // Pass across the name from the real callback, for explain()
@@ -521,11 +539,11 @@ function dropUndefinedValues<D extends {}>(obj: D): D {
 
 // Callback result bodies can take a few formats: tidy them up a little
 function getCallbackResultBody(
-    replacementBody: string | Buffer | CompletedBody | undefined
-): string | Buffer | undefined {
+    replacementBody: string | Uint8Array | Buffer | CompletedBody | undefined
+): Buffer | undefined {
     if (replacementBody === undefined) {
         return replacementBody;
-    } else if (replacementBody.hasOwnProperty('decodedBuffer')) {
+    } else if (isMockttpBody(replacementBody)) {
         // It's our own bodyReader instance. That's not supposed to happen, but
         // it's ok, we just need to use the buffer data instead of the whole object
         return Buffer.from((replacementBody as CompletedBody).buffer);
@@ -533,7 +551,7 @@ function getCallbackResultBody(
         // For empty bodies, it's slightly more convenient if they're truthy
         return Buffer.alloc(0);
     } else {
-        return replacementBody as string | Buffer;
+        return asBuffer(replacementBody as Uint8Array | Buffer | string);
     }
 }
 
@@ -613,7 +631,7 @@ function getCorrectPseudoheaders(
 
 // Helper to handle content-length nicely for you when rewriting requests with callbacks
 function getCorrectContentLength(
-    body: string | Buffer,
+    body: string | Uint8Array | Buffer,
     originalHeaders: Headers,
     replacementHeaders: Headers | undefined,
     mismatchAllowed: boolean = false
@@ -850,7 +868,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
 
             if (modifiedReq.json) {
                 headers['content-type'] = 'application/json';
-                reqBodyOverride = JSON.stringify(modifiedReq.json);
+                reqBodyOverride = asBuffer(JSON.stringify(modifiedReq.json));
             } else {
                 reqBodyOverride = getCallbackResultBody(modifiedReq.body);
             }

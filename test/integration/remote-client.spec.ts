@@ -67,9 +67,9 @@ nodeOnly(() => {
                 afterEach(() => targetServer.stop());
 
                 it("should successfully rewrite requests with live callbacks", async () => {
-                    targetServer.post('/different-endpoint').thenCallback((req) => ({
+                    targetServer.post('/different-endpoint').thenCallback(async (req) => ({
                         statusCode: 200,
-                        body: `response, body: ${req.body.text}`,
+                        body: `response, body: ${await req.body.getText()}`,
                         headers: { 'my-header': 'real value' }
                     }));
 
@@ -79,12 +79,12 @@ nodeOnly(() => {
                             url: req.url.replace(/\/$/, '/different-endpoint'),
                             body: 'injected'
                         }),
-                        beforeResponse: (res) => ({
+                        beforeResponse: async (res) => ({
                             statusCode: 201,
                             headers: Object.assign(res.headers, {
                                 'intercepted-response': 'true'
                             }),
-                            body: Buffer.from(res.body.text + ' (intercepted response)')
+                            body: Buffer.from(await res.body.getText() + ' (intercepted response)')
                         })
                     });
 

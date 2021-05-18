@@ -73,7 +73,7 @@ describe("Client error subscription", () => {
                 const response = clientError.response as CompletedResponse;
                 expect(response.statusCode).to.equal(400);
                 expect(response.statusMessage).to.equal("Bad Request");
-                expect(response.body.text).to.equal("");
+                expect(await response.body.getText()).to.equal("");
                 expect(response.tags).to.deep.equal(['client-error:HPE_INVALID_VERSION']);
             });
 
@@ -236,7 +236,7 @@ describe("Client error subscription", () => {
                 const response = clientError.response as CompletedResponse;
                 expect(response.statusCode).to.equal(400);
                 expect(response.statusMessage).to.equal("Bad Request");
-                expect(response.body.text).to.equal("");
+                expect(await response.body.getText()).to.equal("");
                 expect(response.tags).to.deep.equal(['client-error:HPE_INVALID_METHOD']);
             });
 

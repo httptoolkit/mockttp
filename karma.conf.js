@@ -34,7 +34,6 @@ module.exports = function(config) {
                 ]
             },
             node: {
-                fs: 'empty', // Only required because brotli includes an unused 'fs' dependency
                 __dirname: true
             },
             plugins: [

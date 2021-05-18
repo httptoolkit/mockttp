@@ -115,7 +115,7 @@ function normalizeHttpMessage(event: SubscribableEvent, message: any) {
         message.headers = JSON.parse(message.headers);
     }
 
-    if (message.body) {
+    if (message.body !== undefined) {
         // Body is serialized as the raw encoded buffer in base64
         message.body = buildBodyReader(Buffer.from(message.body, 'base64'), message.headers);
     }

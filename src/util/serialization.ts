@@ -5,7 +5,8 @@ import { encode as encodeBase64 } from 'base64-arraybuffer';
 
 import { MaybePromise, Replace, Omit } from './type-utils';
 import { CompletedBody, Headers } from '../types';
-import { buildBodyReader } from './request-utils';
+import { buildBodyReader, isMockttpBody } from './request-utils';
+import { asBuffer } from './buffer-utils';
 
 export function serialize<T extends Serializable>(
     obj: T,
@@ -244,7 +245,9 @@ export function deserializeBuffer(buffer: string): Buffer {
 export function withSerializedBodyReader<T extends {
     body: CompletedBody
 }>(input: T): Replace<T, 'body', string> {
-    return Object.assign({}, input, { body: input.body.buffer.toString('base64') });
+    return Object.assign({}, input, {
+        body: asBuffer(input.body.buffer).toString('base64')
+    });
 }
 
 export function withDeserializedBodyReader<T extends { headers: Headers, body: CompletedBody }>(
@@ -263,13 +266,13 @@ export function withSerializedBodyBuffer<T extends {
     if (!input.body) {
         serializedBody = undefined;
     } else if (_.isString(input.body)) {
-        serializedBody = serializeBuffer(Buffer.from(input.body));
+        serializedBody = serializeBuffer(asBuffer(input.body));
     } else if (_.isBuffer(input.body)) {
         serializedBody = serializeBuffer(input.body as Buffer);
     } else if (_.isArrayBuffer(input.body) || _.isTypedArray(input.body)) {
         serializedBody = encodeBase64(input.body as ArrayBuffer);
-    } else if (input.body.hasOwnProperty('decodedBuffer')) {
-        serializedBody = serializeBuffer(input.body.buffer);
+    } else if (isMockttpBody(input.body)) {
+        serializedBody = serializeBuffer(asBuffer(input.body.buffer));
     }
 
     return Object.assign({}, input, { body: serializedBody });

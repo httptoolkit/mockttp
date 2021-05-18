@@ -44,7 +44,7 @@ describe("HTTP request spying", function () {
 
             const seenRequests = await endpointMock.getSeenRequests();
             expect(seenRequests.length).to.equal(1);
-            expect(await seenRequests[0].body.text).to.equal("a=1&b=2");
+            expect(await seenRequests[0].body.getText()).to.equal("a=1&b=2");
         });
 
         it("should return immutable fixed view of the mock's seen requests so far", async () => {

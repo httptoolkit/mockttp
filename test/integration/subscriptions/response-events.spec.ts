@@ -60,7 +60,7 @@ describe("Response subscriptions", () => {
 
             let seenResponse = await seenResponsePromise;
             expect(seenResponse.statusCode).to.equal(200);
-            expect(seenResponse.body.text).to.equal('Mock response');
+            expect(await seenResponse.body.getText()).to.equal('Mock response');
             expect(seenResponse.tags).to.deep.equal([]);
 
             expect(seenResponse.headers).to.deep.equal(isNode
@@ -88,7 +88,7 @@ describe("Response subscriptions", () => {
 
             let seenResponse = await seenResponsePromise;
             expect(seenResponse.statusCode).to.equal(200);
-            expect(seenResponse.body.text).to.equal('Mock response');
+            expect(await seenResponse.body.getText()).to.equal('Mock response');
         });
 
         it("should expose un-deflated bodies as .text", async () => {
@@ -105,7 +105,7 @@ describe("Response subscriptions", () => {
 
             let seenResponse = await seenResponsePromise;
             expect(seenResponse.statusCode).to.equal(200);
-            expect(seenResponse.body.text).to.equal('Mock response');
+            expect(await seenResponse.body.getText()).to.equal('Mock response');
         });
 
         it("should expose un-raw-deflated bodies as .text", async () => {
@@ -122,7 +122,7 @@ describe("Response subscriptions", () => {
 
             let seenResponse = await seenResponsePromise;
             expect(seenResponse.statusCode).to.equal(200);
-            expect(seenResponse.body.text).to.equal('Mock response');
+            expect(await seenResponse.body.getText()).to.equal('Mock response');
         });
 
         it("should include an id that matches the request event", async () => {
@@ -186,7 +186,7 @@ describe("Response subscriptions", () => {
 
             let seenResponse = await seenResponsePromise;
             expect(seenResponse.statusCode).to.equal(200);
-            expect(seenResponse.body.text).to.equal('TinyResp');
+            expect(await seenResponse.body.getText()).to.equal('TinyResp');
         });
 
         it("should not include the body in the response event", async () => {
@@ -201,7 +201,7 @@ describe("Response subscriptions", () => {
 
             let seenResponse = await seenResponsePromise;
             expect(seenResponse.statusCode).to.equal(200);
-            expect(seenResponse.body.text).to.equal(isNode ? '' : undefined); // Body omitted
+            expect(await seenResponse.body.getText()).to.equal(''); // Body omitted
         });
 
     });
@@ -230,7 +230,7 @@ describe("Response subscriptions", () => {
 
             let seenResponse = await seenResponsePromise;
             expect(seenResponse.statusCode).to.equal(200);
-            expect(seenResponse.body.text).to.equal('Mock response');
+            expect(await seenResponse.body.getText()).to.equal('Mock response');
             expect(seenResponse.tags).to.deep.equal([]);
 
             const matchableHeaders = _.omit(seenResponse.headers);

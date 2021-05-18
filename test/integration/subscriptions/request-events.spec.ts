@@ -95,7 +95,7 @@ describe("Request initiated subscriptions", () => {
 
                 req.end('end body');
                 let seenCompletedRequest = await seenCompletedRequestPromise;
-                expect(seenCompletedRequest.body.text).to.equal('start body\nend body');
+                expect(await seenCompletedRequest.body.getText()).to.equal('start body\nend body');
             });
         });
     });
@@ -180,7 +180,7 @@ describe("Request subscriptions", () => {
             expect(seenRequest.protocol).to.equal('http');
             expect(seenRequest.httpVersion).to.equal('1.1');
             expect(seenRequest.url).to.equal(server.urlFor("/mocked-endpoint"));
-            expect(seenRequest.body.text).to.equal('body-text');
+            expect(await seenRequest.body.getText()).to.equal('body-text');
             expect(seenRequest.tags).to.deep.equal([]);
         });
 
@@ -239,7 +239,7 @@ describe("Request subscriptions", () => {
             fetch(server.urlFor("/mocked-endpoint"), { method: 'POST', body: 'TinyReq' });
 
             let seenRequest = await seenRequestPromise;
-            expect(seenRequest.body.text).to.equal('TinyReq');
+            expect(await seenRequest.body.getText()).to.equal('TinyReq');
         });
 
         it("should not include larger bodies in request event", async () => {
@@ -249,7 +249,7 @@ describe("Request subscriptions", () => {
             fetch(server.urlFor("/mocked-endpoint"), { method: 'POST', body: 'Larger request' });
 
             let seenRequest = await seenRequestPromise;
-            expect(seenRequest.body.text).to.equal(isNode ? '' : undefined); // Truncated
+            expect(await seenRequest.body.getText()).to.equal(''); // Omitted
         });
 
     });
@@ -276,7 +276,7 @@ describe("Request subscriptions", () => {
                 expect(seenRequest.url).to.equal(
                     `http://localhost:${client.port}/mocked-endpoint`
                 );
-                expect(seenRequest.body.text).to.equal('body-text');
+                expect(await seenRequest.body.getText()).to.equal('body-text');
                 expect(seenRequest.tags).to.deep.equal([]);
             });
         });

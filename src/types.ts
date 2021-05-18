@@ -92,10 +92,34 @@ export interface ParsedBody {
 
 export interface CompletedBody {
     buffer: Buffer;
+
+    /**
+     * @deprecated Use `getDecodedBuffer()` instead with promises, to support
+     * more encodings and improve performance.
+     */
     decodedBuffer: Buffer | undefined;
+    getDecodedBuffer(): Promise<Buffer | undefined>;
+
+    /**
+     * @deprecated Use `getText()` instead with promises, to support
+     * more encodings and improve performance.
+     */
     text: string | undefined;
+    getText(): Promise<string | undefined>;
+
+    /**
+     * @deprecated Use `getJson()` instead with promises, to support
+     * more encodings and improve performance.
+     */
     json: object | undefined;
+    getJson(): Promise<object | undefined>;
+
+    /**
+     * @deprecated Use `getDecodedBuffer()` instead with promises, to support
+     * more encodings and improve performance.
+     */
     formData: { [key: string]: string | string[] | undefined } | undefined;
+    getFormData(): Promise<{ [key: string]: string | string[] | undefined } | undefined>;
 }
 
 // Internal & external representation of an initiated (no body yet received) HTTP request.

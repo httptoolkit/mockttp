@@ -99,9 +99,9 @@ nodeOnly(() => {
             });
 
             it("should be able to pass through request headers", async () => {
-                await remoteServer.anyRequest().thenCallback((req) => ({
+                await remoteServer.anyRequest().thenCallback(async (req) => ({
                     statusCode: 200,
-                    body: req.body.text,
+                    body: await req.body.getText(),
                     headers: { "my-header": "123" }
                 }));
 
@@ -117,9 +117,9 @@ nodeOnly(() => {
             });
 
             it("should be able to pass through requests with a body", async () => {
-                await remoteServer.anyRequest().thenCallback((req) => ({
+                await remoteServer.anyRequest().thenCallback(async (req) => ({
                     statusCode: 200,
-                    body: req.body.text
+                    body: await req.body.getText()
                 }));
                 await server.post(remoteServer.url).thenPassThrough();
 
@@ -169,7 +169,7 @@ nodeOnly(() => {
 
                 const seenRequests = await endpointMock.getSeenRequests();
                 expect(seenRequests.length).to.equal(1);
-                expect(await seenRequests[0].body.text).to.equal('{"test":true}');
+                expect(await seenRequests[0].body.getText()).to.equal('{"test":true}');
             });
 
             it("should successfully pass through non-proxy requests with a host header", async () => {
@@ -312,17 +312,17 @@ nodeOnly(() => {
             });
 
             it("should be able to rewrite a request's body", async () => {
-                await remoteServer.post('/').thenCallback((req) => ({
+                await remoteServer.post('/').thenCallback(async (req) => ({
                     statusCode: 200,
-                    body: req.body.text
+                    body: await req.body.getText()
                 }));
 
                 await server.post(remoteServer.urlFor("/")).thenPassThrough({
-                    beforeRequest: (req) => {
-                        expect(req.body.text).to.equal('initial body');
+                    beforeRequest: async (req) => {
+                        expect(await req.body.getText()).to.equal('initial body');
 
                         return {
-                            body: Buffer.from(req.body.text + ' extended')
+                            body: Buffer.from(await req.body.getText() + ' extended')
                         };
                     }
                 });
@@ -334,13 +334,13 @@ nodeOnly(() => {
             });
 
             it("should be able to rewrite a request's body with an empty string", async () => {
-                await remoteServer.post('/').thenCallback((req) => ({
+                await remoteServer.post('/').thenCallback(async (req) => ({
                     statusCode: 200,
-                    body: req.body.text
+                    body: await req.body.getText()
                 }));
                 await server.post(remoteServer.urlFor("/")).thenPassThrough({
-                    beforeRequest: (req) => {
-                        expect(req.body.text).to.equal('initial body');
+                    beforeRequest: async (req) => {
+                        expect(await req.body.getText()).to.equal('initial body');
                         return { body: '' };
                     }
                 });
@@ -352,14 +352,14 @@ nodeOnly(() => {
             });
 
             it("should be able to rewrite a request's body with json", async () => {
-                await remoteServer.post('/').thenCallback((req) => ({
+                await remoteServer.post('/').thenCallback(async (req) => ({
                     statusCode: 200,
-                    json: req.body.json
+                    json: await req.body.getJson()
                 }));
 
                 await server.post(remoteServer.urlFor("/")).thenPassThrough({
-                    beforeRequest: (req) => {
-                        expect(req.body.json).to.equal(undefined);
+                    beforeRequest: async (req) => {
+                        expect(await req.body.getJson()).to.equal(undefined);
 
                         return {
                             json: { hello: "world" }
@@ -449,12 +449,12 @@ nodeOnly(() => {
                 });
 
                 await server.get(remoteServer.urlFor("/")).thenPassThrough({
-                    beforeResponse: (res) => {
-                        expect(res.body.text).to.equal('original text');
+                    beforeResponse: async (res) => {
+                        expect(await res.body.getText()).to.equal('original text');
 
                         return {
                             headers: { 'content-length': undefined },
-                            body: res.body.text + ' extended'
+                            body: await res.body.getText() + ' extended'
                         }
                     }
                 });
@@ -467,8 +467,8 @@ nodeOnly(() => {
                 await remoteServer.get('/').thenReply(200, 'text');
 
                 await server.get(remoteServer.urlFor("/")).thenPassThrough({
-                    beforeResponse: (res) => {
-                        expect(res.body.json).to.equal(undefined);
+                    beforeResponse: async (res) => {
+                        expect(await res.body.getJson()).to.equal(undefined);
 
                         return {
                             json: { hello: "world" }
@@ -586,11 +586,11 @@ nodeOnly(() => {
 
                 // The request data is proxied through successfully
                 const resultingRequest = (await remoteEndpoint.getSeenRequests())[0];
-                expect(resultingRequest.body.text).to.equal('A large request body');
+                expect(await resultingRequest.body.getText()).to.equal('A large request body');
 
                 // But it's truncated in event data, not buffered
                 const proxiedRequestData = (await proxyEndpoint.getSeenRequests())[0];
-                expect(proxiedRequestData.body.text).to.equal('');
+                expect(await proxiedRequestData.body.getText()).to.equal('');
             });
 
             it("should still proxy larger response bodies", async () => {
@@ -609,7 +609,7 @@ nodeOnly(() => {
 
                 // But it's truncated in event data, not buffered
                 const proxiedRequestData = (await proxyEndpoint.getSeenRequests())[0];
-                expect(proxiedRequestData.body.text).to.equal('');
+                expect(await proxiedRequestData.body.getText()).to.equal('');
             });
 
         });
@@ -1096,8 +1096,8 @@ nodeOnly(() => {
                 it("can rewrite the request body en route", async () => {
                     await server.anyRequest().thenPassThrough({
                         ignoreHostCertificateErrors: ['localhost'],
-                        beforeRequest: (req) => {
-                            expect(req.body.text).to.equal('initial-body');
+                        beforeRequest: async (req) => {
+                            expect(await req.body.getText()).to.equal('initial-body');
 
                             return { body: 'replaced-body' };
                         }
@@ -1117,8 +1117,8 @@ nodeOnly(() => {
                 it("can rewrite the request body as empty en route", async () => {
                     await server.anyRequest().thenPassThrough({
                         ignoreHostCertificateErrors: ['localhost'],
-                        beforeRequest: (req) => {
-                            expect(req.body.text).to.equal('');
+                        beforeRequest: async (req) => {
+                            expect(await req.body.getText()).to.equal('');
 
                             return {
                                 url: req.url,
@@ -1141,8 +1141,8 @@ nodeOnly(() => {
                 it("can rewrite the request body with JSON en route", async () => {
                     await server.anyRequest().thenPassThrough({
                         ignoreHostCertificateErrors: ['localhost'],
-                        beforeRequest: (req) => {
-                            expect(req.body.text).to.equal('initial-body');
+                        beforeRequest: async (req) => {
+                            expect(await req.body.getText()).to.equal('initial-body');
 
                             return { json: { mocked: true } };
                         }
@@ -1162,7 +1162,7 @@ nodeOnly(() => {
                 it("can inject a response directly en route", async () => {
                     await server.anyRequest().thenPassThrough({
                         ignoreHostCertificateErrors: ['localhost'],
-                        beforeRequest: (req) => {
+                        beforeRequest: () => {
                             return {
                                 response: {
                                     statusCode: 404,
@@ -1303,8 +1303,8 @@ nodeOnly(() => {
                 it("can rewrite a response body en route", async () => {
                     await server.anyRequest().thenPassThrough({
                         ignoreHostCertificateErrors: ['localhost'],
-                        beforeResponse: (res) => {
-                            expect(res.body.text).to.equal('Real HTTP/2 response');
+                        beforeResponse: async (res) => {
+                            expect(await res.body.getText()).to.equal('Real HTTP/2 response');
 
                             return { body: 'Replacement response' };
                         }
@@ -1318,8 +1318,8 @@ nodeOnly(() => {
                 it("can rewrite the response body as empty en route", async () => {
                     await server.anyRequest().thenPassThrough({
                         ignoreHostCertificateErrors: ['localhost'],
-                        beforeResponse: (res) => {
-                            expect(res.body.text).to.equal('Real HTTP/2 response');
+                        beforeResponse: async (res) => {
+                            expect(await res.body.getText()).to.equal('Real HTTP/2 response');
 
                             return {
                                 statusCode: 204, // 204 must not have a response body
@@ -1342,8 +1342,8 @@ nodeOnly(() => {
                 it("can rewrite a response body as JSON en route", async () => {
                     await server.anyRequest().thenPassThrough({
                         ignoreHostCertificateErrors: ['localhost'],
-                        beforeResponse: (res) => {
-                            expect(res.body.text).to.equal('Real HTTP/2 response');
+                        beforeResponse: async (res) => {
+                            expect(await res.body.getText()).to.equal('Real HTTP/2 response');
 
                             return { json: { replaced: true } };
                         }

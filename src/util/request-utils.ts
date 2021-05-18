@@ -11,6 +11,7 @@ import * as stream from 'stream';
 import * as querystring from 'querystring';
 import now = require("performance-now");
 import * as url from 'url';
+import { decodeBuffer, decodeBufferSync } from 'http-encoding';
 
 import {
     Headers,
@@ -30,9 +31,9 @@ import {
     bufferToStream,
     BufferInProgress,
     splitBuffer,
-    streamToBuffer
+    streamToBuffer,
+    asBuffer
 } from './buffer-utils';
-import { decodeBuffer } from './encoding-utils';
 
 // Is this URL fully qualified?
 // Note that this supports only HTTP - no websockets or anything else.
@@ -177,19 +178,56 @@ function runOrUndefined<R>(func: () => R): R | undefined {
     }
 }
 
+async function runAsyncOrUndefined<R>(func: () => Promise<R>): Promise<R | undefined> {
+    try {
+        return await func();
+    } catch {
+        return undefined;
+    }
+}
+
 const waitForBody = async (body: ParsedBody, headers: Headers): Promise<CompletedBody> => {
     const bufferBody = await body.asBuffer();
     return buildBodyReader(bufferBody, headers);
 };
 
-
+export const isMockttpBody = (body: any): body is CompletedBody => {
+    return body.hasOwnProperty('getDecodedBuffer');
+}
 
 export const buildBodyReader = (body: Buffer, headers: Headers): CompletedBody => {
     const completedBody = {
         buffer: body,
+
+        async getDecodedBuffer() {
+            return runAsyncOrUndefined(async () =>
+                asBuffer(
+                    await decodeBuffer(this.buffer, headers['content-encoding'])
+                )
+            );
+        },
+        async getText() {
+            return runAsyncOrUndefined(async () =>
+                (await this.getDecodedBuffer())!.toString()
+            );
+        },
+        async getJson() {
+            return runAsyncOrUndefined(async () =>
+                JSON.parse((await completedBody.getText())!)
+            )
+        },
+        async getFormData() {
+            return runAsyncOrUndefined(async () => {
+                const text = await completedBody.getText();
+                return text ? querystring.parse(text) : undefined;
+            });
+        },
+
+        // Deprecated sync properties, for backwards compat. Note that these do not
+        // support new encodings, e.g. Brotli/Zstandard.
         get decodedBuffer() {
             return runOrUndefined(() =>
-                decodeBuffer(this.buffer, headers['content-encoding'])
+                decodeBufferSync(this.buffer, headers['content-encoding'])
             );
         },
         get text() {

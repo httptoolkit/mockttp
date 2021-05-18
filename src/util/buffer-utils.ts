@@ -11,6 +11,14 @@ const MAX_BUFFER_SIZE = isNode
     ? require('buffer').constants.MAX_LENGTH
     : Infinity;
 
+export const asBuffer = (input: Buffer | Uint8Array | string) =>
+    Buffer.isBuffer(input)
+        ? input
+    : typeof input === "string"
+        ? Buffer.from(input, 'utf8')
+    // Is Array:
+        : Buffer.from(input);
+
 export type BufferInProgress = Promise<Buffer> & {
     currentChunks: Buffer[] // Stores the body chunks as they arrive
     failedWith?: Error // Stores the error that killed the stream, if one did
