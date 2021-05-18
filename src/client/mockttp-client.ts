@@ -55,7 +55,12 @@ export class GraphQLError extends RequestError {
         public errors: Array<{ message: string }>
     ) {
         super(
-            `GraphQL request failed, with errors:\n${errors.map((e) => e.message).join('\n')}`,
+            errors.length === 0
+                ? `GraphQL request failed with ${response.status} response`
+            : errors.length === 1
+                ? `GraphQL request failed with: ${errors[0].message}`
+            : // >1
+                `GraphQL request failed, with errors:\n${errors.map((e) => e.message).join('\n')}`,
             response
         );
     }
@@ -238,12 +243,14 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                 return data as T;
             }
         } catch (e) {
+            let graphQLErrors: Error[] | undefined = undefined;
             try {
-                let graphQLErrors = (await e.response.json()).errors;
+                graphQLErrors = (await e.response.json()).errors;
+            } catch (e2) {}
+
+            if (graphQLErrors) {
                 throw new GraphQLError(e, graphQLErrors);
-            } catch (e2) {
-                // If we fail to get a proper JSON graphql error, just throw the
-                // underlying exception without decoration
+            } else {
                 throw e;
             }
         }
