@@ -91,6 +91,10 @@ export interface ParsedBody {
 }
 
 export interface CompletedBody {
+    /**
+     * The raw bytes of the response. If a content encoding was used, this is
+     * the raw encoded data.
+     */
     buffer: Buffer;
 
     /**
@@ -98,6 +102,12 @@ export interface CompletedBody {
      * more encodings and improve performance.
      */
     decodedBuffer: Buffer | undefined;
+
+    /**
+     * The decoded bytes of the response. If no encoding was used, this is the
+     * same as `.buffer`. The response is decoded and returned asynchronously
+     * as a Promise.
+     */
     getDecodedBuffer(): Promise<Buffer | undefined>;
 
     /**
@@ -105,6 +115,11 @@ export interface CompletedBody {
      * more encodings and improve performance.
      */
     text: string | undefined;
+
+    /**
+     * The contents of the response, decoded and parsed as a UTF-8 string.
+     * The response is decoded and returned asynchronously as a Promise.
+     */
     getText(): Promise<string | undefined>;
 
     /**
@@ -112,6 +127,12 @@ export interface CompletedBody {
      * more encodings and improve performance.
      */
     json: object | undefined;
+
+    /**
+     * The contents of the response, decoded, parsed as UTF-8 string, and
+     * then parsed a JSON. The response is decoded and returned asynchronously
+     * as a Promise.
+     */
     getJson(): Promise<object | undefined>;
 
     /**
@@ -119,6 +140,12 @@ export interface CompletedBody {
      * more encodings and improve performance.
      */
     formData: { [key: string]: string | string[] | undefined } | undefined;
+
+    /**
+     * The contents of the response, decoded, parsed as UTF-8 string, and
+     * then parsed form-encoded data. The response is decoded and returned
+     * asynchronously as a Promise.
+     */
     getFormData(): Promise<{ [key: string]: string | string[] | undefined } | undefined>;
 }
 
