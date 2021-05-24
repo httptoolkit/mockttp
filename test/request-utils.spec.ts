@@ -1,10 +1,9 @@
 import * as zlib from 'zlib';
+import * as brotliPromise from 'brotli-wasm';
 import { ZstdCodec, ZstdStreaming } from 'zstd-codec';
 
 import { expect } from './test-utils';
 import { buildBodyReader } from '../src/util/request-utils';
-
-const brotli = import('wasm-brotli');
 
 const zstd: Promise<ZstdStreaming> = new Promise((resolve) =>
     ZstdCodec.run((binding) => {
@@ -13,6 +12,12 @@ const zstd: Promise<ZstdStreaming> = new Promise((resolve) =>
 );
 
 describe("buildBodyReader", () => {
+
+    let brotli: typeof import('brotli-wasm');
+    beforeEach(async () => {
+        brotli = await brotliPromise;
+    });
+
     describe(".text", () => {
         it('returns the raw text for unspecified requests', async () => {
             const body = buildBodyReader(Buffer.from('hello world'), {});
@@ -59,7 +64,17 @@ describe("buildBodyReader", () => {
 
         it('can decode brotli bodies', async () => {
             const content = Buffer.from(
-                await (await brotli).compress(Buffer.from('Brotli brotli brotli brotli brotli', 'utf8'))
+                await brotli.compress(Buffer.from('Brotli brotli brotli brotli brotli', 'utf8'))
+            );
+            const body = buildBodyReader(content, {
+                'content-encoding': 'br'
+            });
+            expect(await body.getText()).to.equal('Brotli brotli brotli brotli brotli');
+        });
+
+        it('can decode brotli bodies again', async () => {
+            const content = Buffer.from(
+                await brotli.compress(Buffer.from('Brotli brotli brotli brotli brotli', 'utf8'))
             );
             const body = buildBodyReader(content, {
                 'content-encoding': 'br'
@@ -77,7 +92,7 @@ describe("buildBodyReader", () => {
 
         it('can decode bodies with multiple encodings', async () => {
             const content = zlib.gzipSync(
-                Buffer.from(await (await brotli).compress(
+                Buffer.from(await brotli.compress(
                     Buffer.from('First brotli, then gzip, now this', 'utf8')
                 ))
             );

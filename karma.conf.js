@@ -3,6 +3,8 @@ tmp.setGracefulCleanup();
 
 const webpack = require('webpack');
 
+const outputPath = tmp.dirSync();
+
 // Run a websocket server in the background for testing
 require('./test/fixtures/websocket-test-server');
 
