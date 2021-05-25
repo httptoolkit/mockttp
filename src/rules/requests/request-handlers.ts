@@ -15,6 +15,7 @@ import { encode as encodeBase64, decode as decodeBase64 } from 'base64-arraybuff
 import { Readable, Transform } from 'stream';
 import { stripIndent, oneLine } from 'common-tags';
 import { TypedError } from 'typed-error';
+import { encodeBuffer, SUPPORTED_ENCODING } from 'http-encoding';
 
 import {
     waitForCompletedRequest,
@@ -474,6 +475,21 @@ export interface PassThroughHandlerOptions {
     lookupOptions?: PassThroughLookupOptions;
 
     /**
+     * A set of data to automatically transform a request. This includes properties
+     * to support many transformation common use cases.
+     *
+     * For advanced cases, a custom callback using beforeRequest can be used instead.
+     * Using this field however where possible is typically simpler, more declarative,
+     * and can be more performant. The two options are mutually exclusive: you cannot
+     * use both transformRequest and a beforeRequest callback.
+     *
+     * Only one transformation for each target (method, headers & body) can be
+     * specified. If more than one is specified then an error will be thrown when the
+     * rule is registered.
+     */
+    transformRequest?: RequestTransform;
+
+    /**
      * A callback that will be passed the full request before it is passed through,
      * and which returns an object that defines how the the request content should
      * be changed before it's passed to the upstream server.
@@ -512,6 +528,54 @@ export interface PassThroughHandlerOptions {
     beforeResponse?: (res: PassThroughResponse) => MaybePromise<CallbackResponseResult>;
 }
 
+interface RequestTransform {
+
+    /**
+     * A replacement HTTP method. Case insensitive.
+     */
+    replaceMethod?: string;
+
+    /**
+     * A headers object which will be merged with the real request headers to add or
+     * replace values. Headers with undefined values will be removed.
+     */
+    updateHeaders?: Headers;
+
+    /**
+     * A headers object which will completely replace the real request headers.
+     */
+    replaceHeaders?: Headers;
+
+    /**
+     * A string or buffer that replaces the request body entirely.
+     *
+     * If this is specified, the upstream request will not wait for the original request
+     * body, so this may make responses faster than they would be otherwise given large
+     * request bodies or slow/streaming clients.
+     */
+    replaceBody?: string | Uint8Array | Buffer;
+
+    /**
+     * The path to a file, which will be used to replace the request body entirely. The
+     * file will be re-read for each request, so the body will always reflect the latest
+     * file contents.
+     *
+     * If this is specified, the upstream request will not wait for the original request
+     * body, so this may make responses faster than they would be otherwise given large
+     * request bodies or slow/streaming clients.
+     */
+    replaceBodyFromFile?: string;
+
+    /**
+     * A JSON object which will be merged with the real request body. Undefined values
+     * will be removed. Any request which are received with an invalid JSON body that
+     * match this rule will fail.
+     */
+    updateJsonBody?: {
+        [key: string]: any;
+    };
+}
+
 interface SerializedPassThroughData {
     type: 'passthrough';
     forwardToLocation?: string;
@@ -519,6 +583,8 @@ interface SerializedPassThroughData {
     ignoreHostCertificateErrors?: string[]; // Doesn't match option name, backward compat
     clientCertificateHostMap?: { [host: string]: { pfx: string, passphrase?: string } };
     lookupOptions?: PassThroughLookupOptions;
+
+    transformRequest: Replace<RequestTransform, 'replaceBody', string | undefined>; // Serialized as base64 buffer
 
     hasBeforeRequestCallback?: boolean;
     hasBeforeResponseCallback?: boolean;
@@ -668,7 +734,7 @@ function getCorrectContentLength(
         !mismatchAllowed // Set for HEAD responses
     ) {
         console.warn(oneLine`
-            Passthrough callback overrode the body and the content-length header
+            Passthrough modifications overrode the body and the content-length header
             with mismatched values, which may be a mistake. The body contains
             ${byteLength(body)} bytes, whilst the header was set to ${lengthOverride}.
         `);
@@ -704,6 +770,9 @@ function validateCustomHeaders(
     }
 }
 
+// Used in merging as a marker for values to omit, because lodash ignores undefineds.
+const OMIT_SYMBOL = Symbol('omit-value');
+
 const KeepAliveAgents = isNode
     ? { // These are only used (and only available) on the node server side
         'http:': new http.Agent({
@@ -723,6 +792,8 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
     public readonly clientCertificateHostMap: {
         [host: string]: { pfx: Buffer, passphrase?: string }
     };
+
+    public readonly transformRequest?: RequestTransform;
 
     public readonly beforeRequest?: (req: CompletedRequest) => MaybePromise<CallbackRequestResult>;
     public readonly beforeResponse?: (res: PassThroughResponse) => MaybePromise<CallbackResponseResult>;
@@ -778,7 +849,28 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
         this.lookupOptions = options.lookupOptions;
         this.clientCertificateHostMap = options.clientCertificateHostMap || {};
 
-        this.beforeRequest = options.beforeRequest;
+        if (options.beforeRequest && options.transformRequest && !_.isEmpty(options.transformRequest)) {
+            throw new Error("BeforeRequest and transformRequest options are mutually exclusive");
+        } else if (options.beforeRequest) {
+            this.beforeRequest = options.beforeRequest;
+        } else if (options.transformRequest) {
+            if ([
+                options.transformRequest.updateHeaders,
+                options.transformRequest.replaceHeaders
+            ].filter(o => !!o).length > 1) {
+                throw new Error("Only one header transform can be specified at a time");
+            }
+            if ([
+                options.transformRequest.replaceBody,
+                options.transformRequest.replaceBodyFromFile,
+                options.transformRequest.updateJsonBody
+            ].filter(o => !!o).length > 1) {
+                throw new Error("Only one body transform can be specified at a time");
+            }
+
+            this.transformRequest = options.transformRequest;
+        }
+
         this.beforeResponse = options.beforeResponse;
     }
 
@@ -832,10 +924,67 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
             `);
         }
 
-        // Override the request details, if a callback is specified:
-        let reqBodyOverride: string | Buffer | undefined;
+        // Override the request details, if a transform or callback is specified:
+        let reqBodyOverride: Buffer | undefined;
         let headersManuallyModified = false;
-        if (this.beforeRequest) {
+        if (this.transformRequest) {
+            if (this.transformRequest.replaceMethod) {
+                method = this.transformRequest.replaceMethod;
+            }
+
+            if (this.transformRequest.updateHeaders) {
+                headers = {
+                    ...headers,
+                    ...this.transformRequest.updateHeaders
+                };
+                headersManuallyModified = true;
+            } else if (this.transformRequest.replaceHeaders) {
+                headers = { ...this.transformRequest.replaceHeaders };
+                headersManuallyModified = true;
+            }
+
+            if (this.transformRequest.replaceBody) {
+                // Note that we're replacing the body without actually waiting for the real one, so
+                // this can result in sending a request much more quickly!
+                reqBodyOverride = asBuffer(this.transformRequest.replaceBody);
+            } else if (this.transformRequest.replaceBodyFromFile) {
+                reqBodyOverride = await readFile(this.transformRequest.replaceBodyFromFile, null);
+            } else if (this.transformRequest.updateJsonBody) {
+                const { body: realBody } = await waitForCompletedRequest(clientReq);
+                if (realBody.getJson === undefined) {
+                    throw new Error("Can't transform non-JSON request body");
+                }
+
+                const updatedBody = _.mergeWith(
+                    await realBody.getJson(),
+                    this.transformRequest.updateJsonBody,
+                    (_oldValue, newValue) => {
+                        // We want to remove values with undefines, but Lodash ignores
+                        // undefined return values here. Fortunately, JSON.stringify
+                        // ignores Symbols, omitting them from the result.
+                        if (newValue === undefined) return OMIT_SYMBOL;
+                    }
+                );
+
+                reqBodyOverride = asBuffer(JSON.stringify(updatedBody));
+            }
+
+            if (reqBodyOverride) {
+                // We always re-encode the body to match the resulting content-encoding header:
+                reqBodyOverride = await encodeBuffer(
+                    reqBodyOverride,
+                    (headers['content-encoding'] || '') as SUPPORTED_ENCODING
+                );
+
+                headers['content-length'] = getCorrectContentLength(
+                    reqBodyOverride,
+                    clientReq.headers,
+                    this.transformRequest.updateHeaders || this.transformRequest.replaceHeaders
+                );
+            }
+
+            headers = dropUndefinedValues(headers);
+        } else if (this.beforeRequest) {
             const completedRequest = await waitForCompletedRequest(clientReq);
             const modifiedReq = await this.beforeRequest({
                 ...completedRequest,
@@ -1081,6 +1230,8 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
             });
 
             if (reqBodyOverride) {
+                clientReq.body.asStream().resume(); // Dump any remaining real request body
+
                 if (reqBodyOverride.length > 0) serverReq.end(reqBodyOverride);
                 else serverReq.end(); // http2-wrapper fails given an empty buffer for methods that aren't allowed a body
             } else {
@@ -1175,6 +1326,13 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
             clientCertificateHostMap: _.mapValues(this.clientCertificateHostMap,
                 ({ pfx, passphrase }) => ({ pfx: serializeBuffer(pfx), passphrase })
             ),
+            transformRequest: {
+                ...this.transformRequest,
+                replaceBody: !!this.transformRequest?.replaceBody
+                    // Always serialize as a base64 buffer:
+                    ? serializeBuffer(asBuffer(this.transformRequest.replaceBody))
+                    : undefined
+            },
             hasBeforeRequestCallback: !!this.beforeRequest,
             hasBeforeResponseCallback: !!this.beforeResponse
         };
@@ -1218,6 +1376,12 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
         return new PassThroughHandler({
             beforeRequest,
             beforeResponse,
+            transformRequest: {
+                ...data.transformRequest,
+                ...(data.transformRequest.replaceBody !== undefined ? {
+                    replaceBody: deserializeBuffer(data.transformRequest.replaceBody)
+                } : {}),
+            },
             // Backward compat for old clients:
             ...data.forwardToLocation ? {
                 forwarding: { targetHost: data.forwardToLocation }
