@@ -72,16 +72,6 @@ describe("buildBodyReader", () => {
             expect(await body.getText()).to.equal('Brotli brotli brotli brotli brotli');
         });
 
-        it('can decode brotli bodies again', async () => {
-            const content = Buffer.from(
-                await brotli.compress(Buffer.from('Brotli brotli brotli brotli brotli', 'utf8'))
-            );
-            const body = buildBodyReader(content, {
-                'content-encoding': 'br'
-            });
-            expect(await body.getText()).to.equal('Brotli brotli brotli brotli brotli');
-        });
-
         it('can decode zstandard bodies', async () => {
             const content = Buffer.from((await zstd).compress(Buffer.from('hello zstd zstd zstd world')));
             const body = buildBodyReader(content, {

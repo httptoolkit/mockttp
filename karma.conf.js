@@ -3,8 +3,6 @@ tmp.setGracefulCleanup();
 
 const webpack = require('webpack');
 
-const outputPath = tmp.dirSync();
-
 // Run a websocket server in the background for testing
 require('./test/fixtures/websocket-test-server');
 
@@ -36,9 +34,11 @@ module.exports = function(config) {
                 ]
             },
             node: {
+                fs: 'empty',
                 __dirname: true
             },
             plugins: [
+                new webpack.IgnorePlugin(/^dns2$/),
                 new webpack.DefinePlugin({
                     "process.version": '"' + process.version + '"'
                 })
