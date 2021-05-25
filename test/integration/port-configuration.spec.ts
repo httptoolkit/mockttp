@@ -59,10 +59,14 @@ describe("Port selection", function () {
 
             const servers = _.range(0, 100).map(() => getLocal());
 
+            afterEach(async () => Promise.all(
+                servers.map(s => s.stop())
+            ));
+
             it("finds ports for all servers safely and successfully", async () => {
                 await Promise.all(servers.map(s =>
                     // For some reason doing this around the default 8000 range breaks on Travis
-                    s.start({ startPort: 12000, endPort: 13000 })
+                    s.start({ startPort: 10000, endPort: 60000 })
                 ));
             });
 
