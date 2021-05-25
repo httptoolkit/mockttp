@@ -130,6 +130,53 @@ nodeOnly(() => {
 
                     expect(await targetEndpoint.getSeenRequests()).to.deep.equal([]);
                 });
+
+                it("should successfully replace request & response bodies", async () => {
+                    // Echo the incoming request
+                    await targetServer.anyRequest().thenCallback(async (req) => ({
+                        status: 200,
+                        json: {
+                            url: req.url,
+                            method: req.method,
+                            headers: req.headers,
+                            body: await req.body.getText(),
+                        }
+                    }));
+
+                    await client.post(targetServer.urlFor('/req')).thenPassThrough({
+                        transformRequest: {
+                            replaceBody: 'request-body'
+                        }
+                    });
+
+                    expect(await request.post(targetServer.urlFor('/req'), {
+                        proxy: client.urlFor("/"),
+                        json: true
+                    })).to.deep.equal({
+                        url: `http://localhost:${targetServer.port}/req`,
+                        method: 'POST',
+                        headers: {
+                            host: `localhost:${targetServer.port}`,
+                            accept: 'application/json',
+                            'content-length': '12',
+                            connection: 'close'
+                        },
+                        body: 'request-body'
+                    });
+
+                    await client.post(targetServer.urlFor('/res')).thenPassThrough({
+                        transformResponse: {
+                            replaceBody: 'replaced-response-body'
+                        }
+                    });
+
+                    expect(await request.post(targetServer.urlFor('/res'), {
+                        proxy: client.urlFor("/"),
+                        json: true
+                    })).to.equal(
+                        'replaced-response-body'
+                    );
+                });
             });
 
             it("should successfully mock requests with live streams", async () => {

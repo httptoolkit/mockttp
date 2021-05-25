@@ -20,7 +20,8 @@ import {
     http2ProxyRequest,
     H2_TLS_ON_TLS_SUPPORTED,
     startDnsServer,
-    TLS_MIN_VERSION_SUPPORTED
+    TLS_MIN_VERSION_SUPPORTED,
+    ZLIB_BROTLI_AVAILABLE
 } from "../test-utils";
 import { generateCACertificate, CA } from "../../src/util/tls";
 import { isLocalIPv6Available } from "../../src/util/socket-util";
@@ -1865,6 +1866,307 @@ nodeOnly(() => {
                     body: JSON.stringify({ a: 100, c: 2 })
                 });
             });
+        });
+
+        describe("when configured to transform responses automatically", () => {
+
+            beforeEach(async () => {
+                server = getLocal({ debug: true });
+                await server.start();
+                process.env = _.merge({}, process.env, server.proxyEnv);
+
+                // The remote server always returns a fixed value
+                expect(remoteServer.port).to.not.equal(server.port);
+                await remoteServer.anyRequest().thenJSON(200, {
+                    'body-value': true,
+                    'another-body-value': 'a value',
+                }, {
+                    'custom-response-header': 'custom-value'
+                });
+            });
+
+            it("does nothing with an empty transform", async () => {
+                await server.anyRequest().thenPassThrough({
+                    transformResponse: {}
+                });
+
+                let response = await request.post(remoteServer.url, {
+                    resolveWithFullResponse: true
+                });
+
+                expect(response.statusCode).to.equal(200);
+                expect(response.statusMessage).to.equal('OK');
+                expect(response.headers).to.deep.equal({
+                    'content-type': 'application/json',
+                    'content-length': '50',
+                    'custom-response-header': 'custom-value'
+                });
+                expect(JSON.parse(response.body)).to.deep.equal({
+                    'body-value': true,
+                    'another-body-value': 'a value',
+                });
+            });
+
+            it("can replace the response status", async () => {
+                await server.anyRequest().thenPassThrough({
+                    transformResponse: {
+                        replaceStatus: 404
+                    }
+                });
+
+                let response = await request.post(remoteServer.url, {
+                    resolveWithFullResponse: true,
+                    simple: false
+                });
+
+                expect(response.statusCode).to.equal(404);
+                expect(response.statusMessage).to.equal('Not Found');
+                expect(response.headers).to.deep.equal({
+                    'content-type': 'application/json',
+                    'content-length': '50',
+                    'custom-response-header': 'custom-value'
+                });
+                expect(JSON.parse(response.body)).to.deep.equal({
+                    'body-value': true,
+                    'another-body-value': 'a value',
+                });
+            });
+
+            it("can add extra headers", async () => {
+                await server.anyRequest().thenPassThrough({
+                    transformResponse: {
+                        updateHeaders: {
+                            'new-header': 'new-value'
+                        }
+                    }
+                });
+
+                let response = await request.post(remoteServer.url, {
+                    resolveWithFullResponse: true,
+                    simple: false
+                });
+
+                expect(response.statusCode).to.equal(200);
+                expect(response.statusMessage).to.equal('OK');
+                expect(response.headers).to.deep.equal({
+                    'content-type': 'application/json',
+                    'content-length': '50',
+                    'custom-response-header': 'custom-value',
+                    'new-header': 'new-value'
+                });
+                expect(JSON.parse(response.body)).to.deep.equal({
+                    'body-value': true,
+                    'another-body-value': 'a value',
+                });
+            });
+
+            it("can replace specific headers", async () => {
+                await server.anyRequest().thenPassThrough({
+                    transformResponse: {
+                        updateHeaders: {
+                            'custom-response-header': 'replaced-value'
+                        }
+                    }
+                });
+
+                let response = await request.post(remoteServer.url, {
+                    resolveWithFullResponse: true,
+                    simple: false
+                });
+
+                expect(response.statusCode).to.equal(200);
+                expect(response.statusMessage).to.equal('OK');
+                expect(response.headers).to.deep.equal({
+                    'content-type': 'application/json',
+                    'content-length': '50',
+                    'custom-response-header': 'replaced-value',
+                });
+                expect(JSON.parse(response.body)).to.deep.equal({
+                    'body-value': true,
+                    'another-body-value': 'a value',
+                });
+            });
+
+            it("can replace all headers", async () => {
+                await server.anyRequest().thenPassThrough({
+                    transformResponse: {
+                        replaceHeaders: {
+                            'custom-replacement-header': 'replaced-value'
+                        }
+                    }
+                });
+
+                let response = await request.post(remoteServer.url, {
+                    resolveWithFullResponse: true,
+                    simple: false
+                });
+
+                expect(response.statusCode).to.equal(200);
+                expect(response.statusMessage).to.equal('OK');
+                expect(response.headers).to.deep.equal({
+                    'custom-replacement-header': 'replaced-value'
+                });
+                expect(JSON.parse(response.body)).to.deep.equal({
+                    'body-value': true,
+                    'another-body-value': 'a value',
+                });
+            });
+
+            it("can replace the body with a string", async () => {
+                await server.anyRequest().thenPassThrough({
+                    transformResponse: {
+                        replaceBody: 'replacement-body'
+                    }
+                });
+
+                let response = await request.post(remoteServer.url, {
+                    resolveWithFullResponse: true,
+                    simple: false
+                });
+
+                expect(response.statusCode).to.equal(200);
+                expect(response.statusMessage).to.equal('OK');
+                expect(response.headers).to.deep.equal({
+                    'content-type': 'application/json',
+                    'content-length': '16',
+                    'custom-response-header': 'custom-value',
+                });
+                expect(response.body).to.equal('replacement-body');
+            });
+
+            it("can replace the body with a buffer", async () => {
+                await server.anyRequest().thenPassThrough({
+                    transformResponse: {
+                        replaceBody: Buffer.from('replacement buffer', 'utf8')
+                    }
+                });
+
+                let response = await request.post(remoteServer.url, {
+                    resolveWithFullResponse: true,
+                    simple: false
+                });
+
+                expect(response.statusCode).to.equal(200);
+                expect(response.statusMessage).to.equal('OK');
+                expect(response.headers).to.deep.equal({
+                    'content-type': 'application/json',
+                    'content-length': '18',
+                    'custom-response-header': 'custom-value',
+                });
+                expect(response.body).to.equal('replacement buffer');
+            });
+
+            it("can replace the body with a file", async () => {
+                await server.anyRequest().thenPassThrough({
+                    transformResponse: {
+                        updateHeaders: {
+                            "content-type": 'text/plain'
+                        },
+                        replaceBodyFromFile:
+                            path.join(__dirname, '..', 'fixtures', 'response-file.txt')
+                    }
+                });
+
+                let response = await request.post(remoteServer.url, {
+                    resolveWithFullResponse: true,
+                    simple: false
+                });
+
+                expect(response.statusCode).to.equal(200);
+                expect(response.statusMessage).to.equal('OK');
+                expect(response.headers).to.deep.equal({
+                    'content-type': 'text/plain',
+                    'content-length': '23',
+                    'custom-response-header': 'custom-value'
+                });
+                expect(response.body).to.equal('Response from text file');
+            });
+
+            it("should show a clear error when replacing the body with a non-existent file", async () => {
+                await server.anyRequest().thenPassThrough({
+                    transformResponse: {
+                        replaceBodyFromFile:
+                            path.join(__dirname, '..', 'fixtures', 'non-existent-file.txt')
+                    }
+                });
+
+                await expect(request.post(remoteServer.url, {
+                    resolveWithFullResponse: true,
+                })).to.be.rejectedWith('no such file or directory');
+            });
+
+            it("can update a JSON body with new fields", async () => {
+                await server.anyRequest().thenPassThrough({
+                    transformResponse: {
+                        updateJsonBody:{
+                            'body-value': false, // Update
+                            'another-body-value': undefined, // Remove
+                            'new-value': 123 // Add
+                        }
+                    }
+                });
+
+                let response = await request.post(remoteServer.url, {
+                    resolveWithFullResponse: true,
+                    simple: false
+                });
+
+                expect(response.statusCode).to.equal(200);
+                expect(response.statusMessage).to.equal('OK');
+                expect(response.headers).to.deep.equal({
+                    'content-type': 'application/json',
+                    'content-length': '36',
+                    'custom-response-header': 'custom-value'
+                });
+                expect(JSON.parse(response.body)).to.deep.equal({
+                    'body-value': false,
+                    'new-value': 123
+                });
+            });
+
+            it("can update a JSON body while handling encoding automatically", async function () {
+                if (!semver.satisfies(process.version, ZLIB_BROTLI_AVAILABLE)) this.skip();
+
+                await server.anyRequest().thenPassThrough({
+                    transformResponse: {
+                        updateHeaders: {
+                            'content-encoding': 'br'
+                        },
+                        updateJsonBody:{
+                            'body-value': false, // Update
+                            'another-body-value': undefined, // Remove
+                            'new-value': 123 // Add
+                        }
+                    }
+                });
+
+                let response = await request.post(remoteServer.url, {
+                    resolveWithFullResponse: true,
+                    simple: false,
+                    encoding: null
+                });
+
+                expect(response.statusCode).to.equal(200);
+                expect(response.statusMessage).to.equal('OK');
+                expect(response.headers).to.deep.equal({
+                    'content-type': 'application/json',
+                    'content-length': '40',
+                    'custom-response-header': 'custom-value',
+                    'content-encoding': 'br'
+                });
+
+                expect(
+                    JSON.parse(
+                        zlib.brotliDecompressSync(
+                            response.body
+                        ).toString('utf8')
+                    )
+                ).to.deep.equal({
+                    'body-value': false,
+                    'new-value': 123
+                });
+            });
+
         });
 
         describe("when configured with custom DNS options", () => {

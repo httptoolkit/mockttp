@@ -490,6 +490,21 @@ export interface PassThroughHandlerOptions {
     transformRequest?: RequestTransform;
 
     /**
+     * A set of data to automatically transform a response. This includes properties
+     * to support many transformation common use cases.
+     *
+     * For advanced cases, a custom callback using beforeResponse can be used instead.
+     * Using this field however where possible is typically simpler, more declarative,
+     * and can be more performant. The two options are mutually exclusive: you cannot
+     * use both transformResponse and a beforeResponse callback.
+     *
+     * Only one transformation for each target (status, headers & body) can be
+     * specified. If more than one is specified then an error will be thrown when the
+     * rule is registered.
+     */
+    transformResponse?: ResponseTransform;
+
+    /**
      * A callback that will be passed the full request before it is passed through,
      * and which returns an object that defines how the the request content should
      * be changed before it's passed to the upstream server.
@@ -568,13 +583,63 @@ interface RequestTransform {
 
     /**
      * A JSON object which will be merged with the real request body. Undefined values
-     * will be removed. Any request which are received with an invalid JSON body that
+     * will be removed. Any requests which are received with an invalid JSON body that
      * match this rule will fail.
      */
     updateJsonBody?: {
         [key: string]: any;
     };
 }
+
+interface ResponseTransform {
+
+    /**
+     * A replacement response status code.
+     */
+    replaceStatus?: number;
+
+    /**
+     * A headers object which will be merged with the real response headers to add or
+     * replace values. Headers with undefined values will be removed.
+     */
+    updateHeaders?: Headers;
+
+    /**
+     * A headers object which will completely replace the real response headers.
+     */
+    replaceHeaders?: Headers;
+
+    /**
+     * A string or buffer that replaces the response body entirely.
+     *
+     * If this is specified, the downstream response will not wait for the original response
+     * body, so this may make responses arrive faster than they would be otherwise given large
+     * response bodies or slow/streaming servers.
+     */
+    replaceBody?: string | Uint8Array | Buffer;
+
+    /**
+     * The path to a file, which will be used to replace the response body entirely. The
+     * file will be re-read for each response, so the body will always reflect the latest
+     * file contents.
+     *
+     * If this is specified, the downstream response will not wait for the original response
+     * body, so this may make responses arrive faster than they would be otherwise given large
+     * response bodies or slow/streaming servers.
+     */
+    replaceBodyFromFile?: string;
+
+    /**
+     * A JSON object which will be merged with the real response body. Undefined values
+     * will be removed. Any responses which are received with an invalid JSON body that
+     * match this rule will fail.
+     */
+    updateJsonBody?: {
+        [key: string]: any;
+    };
+
+}
+
 
 interface SerializedPassThroughData {
     type: 'passthrough';
@@ -585,6 +650,7 @@ interface SerializedPassThroughData {
     lookupOptions?: PassThroughLookupOptions;
 
     transformRequest: Replace<RequestTransform, 'replaceBody', string | undefined>; // Serialized as base64 buffer
+    transformResponse: Replace<ResponseTransform, 'replaceBody', string | undefined>; // Serialized as base64 buffer
 
     hasBeforeRequestCallback?: boolean;
     hasBeforeResponseCallback?: boolean;
@@ -794,6 +860,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
     };
 
     public readonly transformRequest?: RequestTransform;
+    public readonly transformResponse?: ResponseTransform;
 
     public readonly beforeRequest?: (req: CompletedRequest) => MaybePromise<CallbackRequestResult>;
     public readonly beforeResponse?: (res: PassThroughResponse) => MaybePromise<CallbackResponseResult>;
@@ -858,20 +925,40 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 options.transformRequest.updateHeaders,
                 options.transformRequest.replaceHeaders
             ].filter(o => !!o).length > 1) {
-                throw new Error("Only one header transform can be specified at a time");
+                throw new Error("Only one request header transform can be specified at a time");
             }
             if ([
                 options.transformRequest.replaceBody,
                 options.transformRequest.replaceBodyFromFile,
                 options.transformRequest.updateJsonBody
             ].filter(o => !!o).length > 1) {
-                throw new Error("Only one body transform can be specified at a time");
+                throw new Error("Only one request body transform can be specified at a time");
             }
 
             this.transformRequest = options.transformRequest;
         }
 
-        this.beforeResponse = options.beforeResponse;
+        if (options.beforeResponse && options.transformResponse && !_.isEmpty(options.transformResponse)) {
+            throw new Error("BeforeResponse and transformResponse options are mutually exclusive");
+        } else if (options.beforeResponse) {
+            this.beforeResponse = options.beforeResponse;
+        } else if (options.transformResponse) {
+            if ([
+                options.transformResponse.updateHeaders,
+                options.transformResponse.replaceHeaders
+            ].filter(o => !!o).length > 1) {
+                throw new Error("Only one response header transform can be specified at a time");
+            }
+            if ([
+                options.transformResponse.replaceBody,
+                options.transformResponse.replaceBodyFromFile,
+                options.transformResponse.updateJsonBody
+            ].filter(o => !!o).length > 1) {
+                throw new Error("Only one response body transform can be specified at a time");
+            }
+
+            this.transformResponse = options.transformResponse;
+        }
     }
 
     explain() {
@@ -928,28 +1015,37 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
         let reqBodyOverride: Buffer | undefined;
         let headersManuallyModified = false;
         if (this.transformRequest) {
-            if (this.transformRequest.replaceMethod) {
-                method = this.transformRequest.replaceMethod;
+            const {
+                replaceMethod,
+                updateHeaders,
+                replaceHeaders,
+                replaceBody,
+                replaceBodyFromFile,
+                updateJsonBody
+            } = this.transformRequest;
+
+            if (replaceMethod) {
+                method = replaceMethod;
             }
 
-            if (this.transformRequest.updateHeaders) {
+            if (updateHeaders) {
                 headers = {
                     ...headers,
-                    ...this.transformRequest.updateHeaders
+                    ...updateHeaders
                 };
                 headersManuallyModified = true;
-            } else if (this.transformRequest.replaceHeaders) {
-                headers = { ...this.transformRequest.replaceHeaders };
+            } else if (replaceHeaders) {
+                headers = { ...replaceHeaders };
                 headersManuallyModified = true;
             }
 
-            if (this.transformRequest.replaceBody) {
+            if (replaceBody) {
                 // Note that we're replacing the body without actually waiting for the real one, so
                 // this can result in sending a request much more quickly!
-                reqBodyOverride = asBuffer(this.transformRequest.replaceBody);
-            } else if (this.transformRequest.replaceBodyFromFile) {
-                reqBodyOverride = await readFile(this.transformRequest.replaceBodyFromFile, null);
-            } else if (this.transformRequest.updateJsonBody) {
+                reqBodyOverride = asBuffer(replaceBody);
+            } else if (replaceBodyFromFile) {
+                reqBodyOverride = await readFile(replaceBodyFromFile, null);
+            } else if (updateJsonBody) {
                 const { body: realBody } = await waitForCompletedRequest(clientReq);
                 if (realBody.getJson === undefined) {
                     throw new Error("Can't transform non-JSON request body");
@@ -957,7 +1053,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
 
                 const updatedBody = _.mergeWith(
                     await realBody.getJson(),
-                    this.transformRequest.updateJsonBody,
+                    updateJsonBody,
                     (_oldValue, newValue) => {
                         // We want to remove values with undefines, but Lodash ignores
                         // undefined return values here. Fortunately, JSON.stringify
@@ -979,7 +1075,9 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 headers['content-length'] = getCorrectContentLength(
                     reqBodyOverride,
                     clientReq.headers,
-                    this.transformRequest.updateHeaders || this.transformRequest.replaceHeaders
+                    (updateHeaders && updateHeaders['content-length'] !== undefined)
+                        ? headers // Iff you replaced the content length
+                        : replaceHeaders,
                 );
             }
 
@@ -1119,13 +1217,82 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 let serverStatusCode = serverRes.statusCode!;
                 let serverStatusMessage = serverRes.statusMessage
                 let serverHeaders = serverRes.headers;
-                let resBodyOverride: string | Buffer | undefined;
+                let resBodyOverride: Buffer | undefined;
 
                 if (isH2Downstream) {
                     serverHeaders = h1HeadersToH2(serverHeaders);
                 }
 
-                if (this.beforeResponse) {
+                if (this.transformResponse) {
+                    const {
+                        replaceStatus,
+                        updateHeaders,
+                        replaceHeaders,
+                        replaceBody,
+                        replaceBodyFromFile,
+                        updateJsonBody
+                    } = this.transformResponse;
+
+                    if (replaceStatus) {
+                        serverStatusCode = replaceStatus;
+                        serverStatusMessage = undefined; // Reset to default
+                    }
+
+                    if (updateHeaders) {
+                        serverHeaders = {
+                            ...serverHeaders,
+                            ...updateHeaders
+                        };
+                    } else if (replaceHeaders) {
+                        serverHeaders = { ...replaceHeaders };
+                    }
+
+                    if (replaceBody) {
+                        // Note that we're replacing the body without actually waiting for the real one, so
+                        // this can result in sending a request much more quickly!
+                        resBodyOverride = asBuffer(replaceBody);
+                    } else if (replaceBodyFromFile) {
+                        resBodyOverride = await readFile(replaceBodyFromFile, null);
+                    } else if (updateJsonBody) {
+                        const rawBody = await streamToBuffer(serverRes);
+                        const realBody = buildBodyReader(rawBody, serverHeaders)
+                        if (realBody.getJson === undefined) {
+                            throw new Error("Can't transform non-JSON response body");
+                        }
+
+                        const updatedBody = _.mergeWith(
+                            await realBody.getJson(),
+                            updateJsonBody,
+                            (_oldValue, newValue) => {
+                                // We want to remove values with undefines, but Lodash ignores
+                                // undefined return values here. Fortunately, JSON.stringify
+                                // ignores Symbols, omitting them from the result.
+                                if (newValue === undefined) return OMIT_SYMBOL;
+                            }
+                        );
+
+                        resBodyOverride = asBuffer(JSON.stringify(updatedBody));
+                    }
+
+                    if (resBodyOverride) {
+                        // We always re-encode the body to match the resulting content-encoding header:
+                        resBodyOverride = await encodeBuffer(
+                            resBodyOverride,
+                            (serverHeaders['content-encoding'] || '') as SUPPORTED_ENCODING
+                        );
+
+                        serverHeaders['content-length'] = getCorrectContentLength(
+                            resBodyOverride,
+                            serverRes.headers,
+                            (updateHeaders && updateHeaders['content-length'] !== undefined)
+                                ? serverHeaders // Iff you replaced the content length
+                                : replaceHeaders,
+                            method === 'HEAD' // HEAD responses are allowed mismatched content-length
+                        );
+                    }
+
+                    serverHeaders = dropUndefinedValues(serverHeaders);
+                } else if (this.beforeResponse) {
                     let modifiedRes: CallbackResponseResult;
                     let body: Buffer;
 
@@ -1152,7 +1319,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
 
                     if (modifiedRes.json) {
                         serverHeaders['content-type'] = 'application/json';
-                        resBodyOverride = JSON.stringify(modifiedRes.json);
+                        resBodyOverride = asBuffer(JSON.stringify(modifiedRes.json));
                     } else {
                         resBodyOverride = getCallbackResultBody(modifiedRes.body);
                     }
@@ -1333,6 +1500,13 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                     ? serializeBuffer(asBuffer(this.transformRequest.replaceBody))
                     : undefined
             },
+            transformResponse: {
+                ...this.transformResponse,
+                replaceBody: !!this.transformResponse?.replaceBody
+                    // Always serialize as a base64 buffer:
+                    ? serializeBuffer(asBuffer(this.transformResponse.replaceBody))
+                    : undefined
+            },
             hasBeforeRequestCallback: !!this.beforeRequest,
             hasBeforeResponseCallback: !!this.beforeResponse
         };
@@ -1380,6 +1554,12 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 ...data.transformRequest,
                 ...(data.transformRequest.replaceBody !== undefined ? {
                     replaceBody: deserializeBuffer(data.transformRequest.replaceBody)
+                } : {}),
+            },
+            transformResponse: {
+                ...data.transformResponse,
+                ...(data.transformResponse.replaceBody !== undefined ? {
+                    replaceBody: deserializeBuffer(data.transformResponse.replaceBody)
                 } : {}),
             },
             // Backward compat for old clients:
