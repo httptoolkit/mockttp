@@ -1151,14 +1151,15 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
         // and we can't use ALPN to detect HTTP/2 support cleanly.
         const shouldTryH2Upstream = isH2Downstream && protocol === 'https:';
 
-        let makeRequest =
+        let makeRequest = (
             shouldTryH2Upstream
                 ? h2Client.auto
             // HTTP/1 + TLS
             : protocol === 'https:'
                 ? https.request
             // HTTP/1 plaintext:
-                : http.request;
+                : http.request
+        ) as typeof https.request;
 
         let family: undefined | 4 | 6;
         if (hostname === 'localhost') {
