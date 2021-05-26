@@ -65,11 +65,14 @@ function pipeWebSocket(inSocket: WebSocket, outSocket: WebSocket) {
     });
 
     inSocket.on('close', (num, reason) => {
-        if (num >= 1000 && num <= 1004) {
-            outSocket.close(num, reason);
+        if (num !== undefined) {
+            try {
+                outSocket.close(num, reason);
+            } catch (e) {
+                console.warn(e);
+                outSocket.close();
+            }
         } else {
-            console.log(`Unhappily closing websocket ${num}: ${reason}`);
-            // Unspecified or invalid error
             outSocket.close();
         }
     });
