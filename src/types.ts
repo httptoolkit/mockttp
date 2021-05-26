@@ -78,11 +78,11 @@ export interface TlsTimingEvents {
 
 // Internal representation of an ongoing HTTP request whilst it's being processed
 export interface OngoingRequest extends Request, EventEmitter {
-    body: ParsedBody;
+    body: OngoingBody;
     timingEvents: TimingEvents;
 }
 
-export interface ParsedBody {
+export interface OngoingBody {
     asStream: () => stream.Readable;
     asBuffer: () => Promise<Buffer>;
     asText: () => Promise<string>;
@@ -175,7 +175,7 @@ export interface TimingEvents {
 export interface OngoingResponse extends http.ServerResponse {
     id: string;
     getHeaders(): Headers;
-    body: ParsedBody;
+    body: OngoingBody;
     timingEvents: TimingEvents;
     tags: string[];
 }

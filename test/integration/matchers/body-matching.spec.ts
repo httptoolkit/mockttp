@@ -1,3 +1,4 @@
+import * as zlib from 'zlib';
 import { PassThrough } from 'stream';
 
 import { getLocal } from "../../..";
@@ -127,6 +128,18 @@ describe("Body matching", function () {
             return expect(fetch(server.url, {
                 method: 'POST'
             })).not.to.have.responseText("matched");
+        });
+
+        it("should match gzip-encoded requests that contain the given body", async () => {
+            return expect(fetch(server.url, {
+                method: 'POST',
+                headers: {
+                    'content-encoding': 'gzip'
+                },
+                body: zlib.gzipSync(
+                    'this-should-match-as-included'
+                )
+            })).to.have.responseText('matched');
         });
     });
 

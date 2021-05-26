@@ -24,7 +24,7 @@ import {
     TlsRequest,
     ClientError,
     TimingEvents,
-    ParsedBody
+    OngoingBody
 } from "../types";
 import { CAOptions } from '../util/tls';
 import { DestroyableServer } from "../util/destroyable-server";
@@ -53,7 +53,7 @@ import { PassThroughWebSocketHandler, WebSocketHandler } from "../rules/websocke
 
 type ExtendedRawRequest = (http.IncomingMessage | http2.Http2ServerRequest) & {
     protocol?: string;
-    body?: ParsedBody;
+    body?: OngoingBody;
     path?: string;
 };
 

@@ -19,7 +19,7 @@ import {
     CompletedRequest,
     OngoingResponse,
     CompletedResponse,
-    ParsedBody,
+    OngoingBody,
     CompletedBody,
     TimingEvents,
     InitiatedRequest
@@ -132,7 +132,9 @@ export function h1HeadersToH2(headers: Headers): Headers {
     });
 }
 
-const parseBodyStream = (bodyStream: stream.Readable, maxSize: number): ParsedBody => {
+// Parse an in-progress request or response stream, i.e. where the body or possibly even the headers have
+// not been fully received/sent yet.
+const parseBodyStream = (bodyStream: stream.Readable, maxSize: number, getHeaders: () => Headers): OngoingBody => {
     let bufferPromise: BufferInProgress | null = null;
     let completedBuffer: Buffer | null = null;
 
@@ -156,8 +158,12 @@ const parseBodyStream = (bodyStream: stream.Readable, maxSize: number): ParsedBo
             }
             return bufferPromise;
         },
+        async asDecodedBuffer() {
+            const buffer = await body.asBuffer();
+            return decodeBuffer(buffer, getHeaders()['content-encoding']);
+        },
         asText(encoding: BufferEncoding = 'utf8') {
-            return body.asBuffer().then((b) => b.toString(encoding));
+            return body.asDecodedBuffer().then((b) => b.toString(encoding));
         },
         asJson() {
             return body.asText().then((t) => JSON.parse(t));
@@ -186,7 +192,7 @@ async function runAsyncOrUndefined<R>(func: () => Promise<R>): Promise<R | undef
     }
 }
 
-const waitForBody = async (body: ParsedBody, headers: Headers): Promise<CompletedBody> => {
+const waitForBody = async (body: OngoingBody, headers: Headers): Promise<CompletedBody> => {
     const bufferBody = await body.asBuffer();
     return buildBodyReader(bufferBody, headers);
 };
@@ -255,7 +261,7 @@ export const parseRequestBody = (
     options: { maxSize: number }
 ) => {
     let transformedRequest = <OngoingRequest> <any> req;
-    transformedRequest.body = parseBodyStream(req, options.maxSize);
+    transformedRequest.body = parseBodyStream(req, options.maxSize, () => req.headers);
 };
 
 /**
@@ -377,7 +383,11 @@ export function trackResponse(
         return result;
     };
 
-    trackedResponse.body = parseBodyStream(trackingStream, options.maxSize);
+    trackedResponse.body = parseBodyStream(
+        trackingStream,
+        options.maxSize,
+        () => trackedResponse.getHeaders()
+    );
 
     // Proxy errors (e.g. write-after-end) to the response, so they can be
     // handled elsewhere, rather than killing the process outright.
