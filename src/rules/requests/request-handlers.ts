@@ -649,8 +649,8 @@ interface SerializedPassThroughData {
     clientCertificateHostMap?: { [host: string]: { pfx: string, passphrase?: string } };
     lookupOptions?: PassThroughLookupOptions;
 
-    transformRequest: Replace<RequestTransform, 'replaceBody', string | undefined>; // Serialized as base64 buffer
-    transformResponse: Replace<ResponseTransform, 'replaceBody', string | undefined>; // Serialized as base64 buffer
+    transformRequest?: Replace<RequestTransform, 'replaceBody', string | undefined>; // Serialized as base64 buffer
+    transformResponse?: Replace<ResponseTransform, 'replaceBody', string | undefined>; // Serialized as base64 buffer
 
     hasBeforeRequestCallback?: boolean;
     hasBeforeResponseCallback?: boolean;
@@ -1553,13 +1553,13 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
             beforeResponse,
             transformRequest: {
                 ...data.transformRequest,
-                ...(data.transformRequest.replaceBody !== undefined ? {
+                ...(data.transformRequest?.replaceBody !== undefined ? {
                     replaceBody: deserializeBuffer(data.transformRequest.replaceBody)
                 } : {}),
             },
             transformResponse: {
                 ...data.transformResponse,
-                ...(data.transformResponse.replaceBody !== undefined ? {
+                ...(data.transformResponse?.replaceBody !== undefined ? {
                     replaceBody: deserializeBuffer(data.transformResponse.replaceBody)
                 } : {}),
             },
