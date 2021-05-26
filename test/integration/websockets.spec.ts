@@ -1,16 +1,47 @@
-import * as WebSocket from 'ws';
+import * as WebSocket from 'isomorphic-ws';
 import * as https from 'https';
 import HttpProxyAgent = require('http-proxy-agent');
 import HttpsProxyAgent = require('https-proxy-agent');
 import { getLocal, generateCACertificate } from '../..';
 
-import { expect, nodeOnly, startDnsServer } from '../test-utils';
+import { expect, nodeOnly, browserOnly, startDnsServer } from '../test-utils';
 import { getCA } from '../../src/util/tls';
 import { delay } from '../../src/util/util';
 import { DestroyableServer } from '../../src/util/destroyable-server';
 
-// TODO: Create browsers tests as well (need a way to set up a websocket
-// server from inside a browser though...)
+browserOnly(() => {
+    describe('Websocket requests', function() {
+
+        let mockServer = getLocal({
+            https: {
+                keyPath: './test/fixtures/test-ca.key',
+                certPath: './test/fixtures/test-ca.pem'
+            }
+        });
+
+        beforeEach(() => mockServer.start());
+        afterEach(() => mockServer.stop());
+
+        it("can be defined and passed through from the browser", async function () {
+            // Forward to WS echo fixture, see websocket-test-server.js
+            await mockServer.anyWebSocket().thenForwardTo('ws://localhost:8694');
+
+            const ws = new WebSocket(mockServer.url.replace('http', 'ws'));
+
+            ws.addEventListener('open', () => ws.send('test echo'));
+
+            const response = await new Promise((resolve, reject) => {
+                ws.addEventListener('message', (evt) => resolve(evt.data));
+                ws.addEventListener('error', (e) => reject(e));
+            });
+            ws.close(1000);
+
+            expect(response).to.equal('test echo');
+        });
+        // Browser testing is limited, since we can't configure target WS server
+        // behaviour, at least until Mockttp can spawn them for us.
+    });
+});
 
 nodeOnly(() => {
     describe('Websocket requests', function() {
