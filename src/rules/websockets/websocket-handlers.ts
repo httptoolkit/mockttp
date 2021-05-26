@@ -41,12 +41,14 @@ export interface WebSocketHandler extends Explainable, Serializable {
 }
 
 interface InterceptedWebSocket extends WebSocket {
-    upstreamSocket: WebSocket;
+    upstreamWebSocket: WebSocket;
 }
 
 function isOpen(socket: WebSocket) {
     return socket.readyState === WebSocket.OPEN;
 }
+
+const INVALID_STATUS_REGEX = /Invalid WebSocket frame: invalid status code (\d+)/;
 
 function pipeWebSocket(inSocket: WebSocket, outSocket: WebSocket) {
     const onPipeFailed = (op: string) => (err?: Error) => {
@@ -78,6 +80,28 @@ function pipeWebSocket(inSocket: WebSocket, outSocket: WebSocket) {
 
     inSocket.on('pong', (data) => {
         if (isOpen(outSocket)) outSocket.pong(data, undefined, onPipeFailed('pong'))
+    });
+
+    // If either socket has an general error (connection failure, but also could be invalid WS
+    // frames) then we kill the raw connection upstream to simulate a generic connection error:
+    inSocket.on('error', (err) => {
+        console.log(`Error in proxied WebSocket:`, err);
+        const rawOutSocket = outSocket as any;
+
+        if (err.message.match(INVALID_STATUS_REGEX)) {
+            const status = parseInt(INVALID_STATUS_REGEX.exec(err.message)![1]);
+
+            // Simulate errors elsewhere by messing with ws internals. This may break things,
+            // that's effectively on purpose: we're simulating the client going wrong:
+            const buf = Buffer.allocUnsafe(2);
+            buf.writeUInt16BE(status); // status comes from readUInt16BE, so always fits
+            rawOutSocket._sender.doClose(buf, true, () => {
+                rawOutSocket._socket.destroy();
+            });
+        } else {
+            // Unknown error, just kill the connection with no explanation
+            rawOutSocket._socket.destroy();
+        }
     });
 }
 
@@ -208,8 +232,8 @@ export class PassThroughWebSocketHandler extends Serializable implements WebSock
 
         this.wsServer = new WebSocket.Server({ noServer: true });
         this.wsServer.on('connection', (ws: InterceptedWebSocket) => {
-            pipeWebSocket(ws, ws.upstreamSocket);
-            pipeWebSocket(ws.upstreamSocket, ws);
+            pipeWebSocket(ws, ws.upstreamWebSocket);
+            pipeWebSocket(ws.upstreamWebSocket, ws);
         });
     }
 
@@ -282,7 +306,7 @@ export class PassThroughWebSocketHandler extends Serializable implements WebSock
         head: Buffer
     ) {
         // Initialize the server when we handle the first actual request. Mainly just so we
-        // don't try to initialize it in a browser when buiding rules initially.
+        // don't try to initialize it in a browser when building rules initially.
         if (!this.wsServer) this.wsServer = new WebSocket.Server({ noServer: true });
 
         // Skip cert checks if the host or host+port are whitelisted
@@ -290,7 +314,7 @@ export class PassThroughWebSocketHandler extends Serializable implements WebSock
         const checkServerCertificate = !_.includes(this.ignoreHostHttpsErrors, parsedUrl.hostname) &&
             !_.includes(this.ignoreHostHttpsErrors, parsedUrl.host);
 
-        const upstreamSocket = new WebSocket(wsUrl, {
+        const upstreamWebSocket = new WebSocket(wsUrl, {
             rejectUnauthorized: checkServerCertificate,
             maxPayload: 0,
             lookup: this.lookup(),
@@ -300,27 +324,27 @@ export class PassThroughWebSocketHandler extends Serializable implements WebSock
             ) as { [key: string]: string } // Simplify to string - doesn't matter though, only used by http module anyway
         } as WebSocket.ClientOptions);
 
-        upstreamSocket.once('open', () => {
+        upstreamWebSocket.once('open', () => {
             // Presumably the below adds an error handler. But what about before we get here?
             this.wsServer!.handleUpgrade(req, incomingSocket, head, (ws) => {
-                (<InterceptedWebSocket> ws).upstreamSocket = upstreamSocket;
+                (<InterceptedWebSocket> ws).upstreamWebSocket = upstreamWebSocket;
                 this.wsServer!.emit('connection', ws);
             });
         });
 
         // If the upstream says no, we say no too.
-        upstreamSocket.on('unexpected-response', (req, res) => {
+        upstreamWebSocket.on('unexpected-response', (req, res) => {
             console.log(`Unexpected websocket response from ${wsUrl}: ${res.statusCode}`);
             mirrorRejection(incomingSocket, res);
         });
 
         // If there's some other error, we just kill the socket:
-        upstreamSocket.on('error', (e) => {
+        upstreamWebSocket.on('error', (e) => {
             console.warn(e);
             incomingSocket.end();
         });
 
-        incomingSocket.on('error', () => upstreamSocket.close(1011)); // Internal error
+        incomingSocket.on('error', () => upstreamWebSocket.close(1011)); // Internal error
     }
 
     serialize(): SerializedPassThroughWebSocketData {

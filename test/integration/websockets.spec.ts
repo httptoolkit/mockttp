@@ -31,9 +31,11 @@ nodeOnly(() => {
             describe('over HTTP', () => {
 
                 let wsServer: WebSocket.Server;
+                let wsErrors: Error[] = [];
 
                 beforeEach(async () => {
                     wsServer = new WebSocket.Server({ port: 9090 });
+                    wsErrors = [];
 
                     // Echo every message
                     wsServer.on('connection', (ws, request) => {
@@ -45,10 +47,19 @@ nodeOnly(() => {
                             ws.send(message);
                             ws.close();
                         });
+
+                        ws.on('error', (e) => {
+                            wsErrors.push(e)
+                        });
                     });
+
+                    wsServer.on('error', (e) => wsErrors.push(e));
                 });
 
-                afterEach(() => wsServer.close());
+                afterEach(async () => {
+                    await new Promise((resolve) => wsServer.close(resolve));
+                    expect(wsErrors.length).to.equal(0);
+                });
 
                 it('can be passed through successfully over HTTP', async () => {
                     const ws = new WebSocket('ws://localhost:9090', {
@@ -81,6 +92,35 @@ nodeOnly(() => {
                     ws.close(1000);
 
                     expect(response).to.equal('echo-header: a=b');
+                });
+
+                it("can handle & proxy invalid client frames upstream", async () => {
+                    const ws = new WebSocket('ws://localhost:9090', {
+                        agent: new HttpProxyAgent(`http://localhost:${mockServer.port}`),
+                        headers: {
+                            'echo-header': 'a=b'
+                        }
+                    });
+
+                    await new Promise((resolve) => {
+                        ws.on('open', () => {
+                            const rawWs = ws as any;
+
+                            // Badly behaved games with the ws internals:
+                            const buf = Buffer.allocUnsafe(2);
+                            buf.writeUInt16BE(0);
+                            rawWs._sender.doClose(buf, true, () => {
+                                rawWs._socket.end();
+                                resolve();
+                            });
+                        });
+                    });
+
+                    // Make sure the error was proxied upstream:
+                    await delay(50);
+                    expect(wsErrors.length).to.equal(1);
+                    expect(wsErrors[0].message).to.include("invalid status code 0");
+                    wsErrors = []; // Clear this, so the test passes, since it's expected
                 });
 
                 it('can be passed through successfully over HTTPS', async () => {
