@@ -177,6 +177,69 @@ nodeOnly(() => {
                         'replaced-response-body'
                     );
                 });
+
+                it("should successfully update request & response body JSON", async () => {
+                    // Echo the incoming request
+                    await targetServer.anyRequest().thenCallback(async (req) => ({
+                        status: 200,
+                        json: {
+                            url: req.url,
+                            method: req.method,
+                            headers: req.headers,
+                            body: await req.body.getText(),
+                        }
+                    }));
+
+                    await client.post(targetServer.urlFor('/req')).thenPassThrough({
+                        transformRequest: {
+                            updateJsonBody: {
+                                initialValue: undefined,
+                                replacementValue: true
+                            }
+                        }
+                    });
+
+                    expect(await request.post(targetServer.urlFor('/req'), {
+                        proxy: client.urlFor("/"),
+                        json: true,
+                        body: {
+                            initialValue: true
+                        }
+                    })).to.deep.equal({
+                        url: `http://localhost:${targetServer.port}/req`,
+                        method: 'POST',
+                        headers: {
+                            host: `localhost:${targetServer.port}`,
+                            accept: 'application/json',
+                            'content-type': 'application/json',
+                            'content-length': '25',
+                            connection: 'close'
+                        },
+                        body: JSON.stringify({
+                            // Initial value is removed, only replacement remains:
+                            replacementValue: true
+                        })
+                    });
+
+                    await client.post(targetServer.urlFor('/res')).thenPassThrough({
+                        transformResponse: {
+                            updateJsonBody: {
+                                method: 'REPLACEMENT METHOD',
+                                headers: undefined
+                            }
+                        }
+                    });
+
+                    expect(await request.post(targetServer.urlFor('/res'), {
+                        proxy: client.urlFor("/"),
+                        json: true
+                    })).to.deep.equal({
+                        url: `http://localhost:${targetServer.port}/res`,
+                        // Method field replaced, headers field removed:
+                        method: 'REPLACEMENT METHOD',
+                        body: ''
+                    });
+                });
             });
 
             it("should successfully mock requests with live streams", async () => {

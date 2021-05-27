@@ -665,8 +665,14 @@ interface SerializedPassThroughData {
     clientCertificateHostMap?: { [host: string]: { pfx: string, passphrase?: string } };
     lookupOptions?: PassThroughLookupOptions;
 
-    transformRequest?: Replace<RequestTransform, 'replaceBody', string | undefined>; // Serialized as base64 buffer
-    transformResponse?: Replace<ResponseTransform, 'replaceBody', string | undefined>; // Serialized as base64 buffer
+    transformRequest?: Replace<
+        Replace<RequestTransform, 'replaceBody', string | undefined>, // Serialized as base64 buffer
+        'updateJsonBody', string | undefined // Serialized as a string to preserve undefined values
+    >,
+    transformResponse?: Replace<
+        Replace<ResponseTransform, 'replaceBody', string | undefined>, // Serialized as base64 buffer
+        'updateJsonBody', string | undefined // Serialized as a string to preserve undefined values
+    >,
 
     hasBeforeRequestCallback?: boolean;
     hasBeforeResponseCallback?: boolean;
@@ -854,6 +860,7 @@ function validateCustomHeaders(
 
 // Used in merging as a marker for values to omit, because lodash ignores undefineds.
 const OMIT_SYMBOL = Symbol('omit-value');
+const SERIALIZED_OMIT = "__mockttp__transform__omit__";
 
 const KeepAliveAgents = isNode
     ? { // These are only used (and only available) on the node server side
@@ -1544,6 +1551,12 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 replaceBody: !!this.transformRequest?.replaceBody
                     // Always serialize as a base64 buffer:
                     ? serializeBuffer(asBuffer(this.transformRequest.replaceBody))
+                    : undefined,
+                updateJsonBody: !!this.transformRequest?.updateJsonBody
+                    ? JSON.stringify(
+                        this.transformRequest.updateJsonBody,
+                        (k, v) => v === undefined ? SERIALIZED_OMIT : v
+                    )
                     : undefined
             },
             transformResponse: {
@@ -1551,6 +1564,12 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 replaceBody: !!this.transformResponse?.replaceBody
                     // Always serialize as a base64 buffer:
                     ? serializeBuffer(asBuffer(this.transformResponse.replaceBody))
+                    : undefined,
+                updateJsonBody: !!this.transformResponse?.updateJsonBody
+                    ? JSON.stringify(
+                        this.transformResponse.updateJsonBody,
+                        (k, v) => v === undefined ? SERIALIZED_OMIT : v
+                    )
                     : undefined
             },
             hasBeforeRequestCallback: !!this.beforeRequest,
@@ -1601,12 +1620,24 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 ...(data.transformRequest?.replaceBody !== undefined ? {
                     replaceBody: deserializeBuffer(data.transformRequest.replaceBody)
                 } : {}),
+                ...(data.transformRequest?.updateJsonBody !== undefined ? {
+                    updateJsonBody: JSON.parse(
+                        data.transformRequest.updateJsonBody,
+                        (k, v) => v === SERIALIZED_OMIT ? OMIT_SYMBOL : v
+                    )
+                } : {}),
             },
             transformResponse: {
                 ...data.transformResponse,
                 ...(data.transformResponse?.replaceBody !== undefined ? {
                     replaceBody: deserializeBuffer(data.transformResponse.replaceBody)
                 } : {}),
+                ...(data.transformResponse?.updateJsonBody !== undefined ? {
+                    updateJsonBody: JSON.parse(
+                        data.transformResponse.updateJsonBody,
+                        (k, v) => v === SERIALIZED_OMIT ? OMIT_SYMBOL : v
+                    )
+                } : {})
             },
             // Backward compat for old clients:
             ...data.forwardToLocation ? {
