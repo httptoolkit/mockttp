@@ -11,7 +11,7 @@ describe("Mockttp rule building", function () {
     afterEach(() => server.stop());
 
     it("should allow manually adding a single rule", async () => {
-        await server.addRules({
+        await server.addRequestRules({
             matchers: [new matchers.SimplePathMatcher('/endpoint')],
             handler: new handlers.SimpleHandler(200, '', 'mock response'),
         });
@@ -25,7 +25,7 @@ describe("Mockttp rule building", function () {
     it("should allow manually setting a rule id", async () => {
         const manualId = _.uniqueId();
 
-        const rule = await server.addRules({
+        const rule = await server.addRequestRules({
             id: manualId,
             matchers: [new matchers.SimplePathMatcher('/endpoint')],
             handler: new handlers.SimpleHandler(200, '', 'mock response'),
@@ -35,11 +35,11 @@ describe("Mockttp rule building", function () {
     });
 
     it("should allow repeatedly adding rules", async () => {
-        await server.addRules({
+        await server.addRequestRules({
             matchers: [new matchers.SimplePathMatcher('/endpoint')],
             handler: new handlers.SimpleHandler(200, '', 'first mock response'),
         });
-        await server.addRules({
+        await server.addRequestRules({
             matchers: [new matchers.SimplePathMatcher('/endpoint')],
             handler: new handlers.SimpleHandler(200, '', 'second mock response'),
         });
@@ -54,11 +54,11 @@ describe("Mockttp rule building", function () {
     });
 
     it("should allow completely replacing rules", async () => {
-        await server.addRules({
+        await server.addRequestRules({
             matchers: [new matchers.SimplePathMatcher('/endpoint')],
             handler: new handlers.SimpleHandler(200, '',  'original mock response')
         });
-        await server.setRules({
+        await server.setRequestRules({
             matchers: [new matchers.SimplePathMatcher('/endpoint')],
             handler: new handlers.SimpleHandler(200, '', 'replacement mock response')
         });
@@ -95,7 +95,7 @@ describe("Mockttp rule building", function () {
 
     it("should reject rules with no configured matchers", async () => {
         return expect((async () => { // Funky setup to handle sync & async failure for node & browser
-            await server.addRules({
+            await server.addRequestRules({
                 matchers: [],
                 handler: new handlers.SimpleHandler(200, 'mock response'),
             })
@@ -104,7 +104,7 @@ describe("Mockttp rule building", function () {
 
     it("should reject rules with no configured handler", async () => {
         return expect((async () => { // Funky setup to handle sync & async failure for node & browser
-            await server.addRules({
+            await server.addRequestRules({
                 matchers: [new matchers.SimplePathMatcher('/')],
                 handler: <any> null
             })
