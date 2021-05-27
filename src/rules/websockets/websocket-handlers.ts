@@ -48,6 +48,19 @@ function isOpen(socket: WebSocket) {
     return socket.readyState === WebSocket.OPEN;
 }
 
+// Based on ws's validation.js
+function isValidStatusCode(code: number) {
+    return ( // Standard code:
+        code >= 1000 &&
+        code <= 1014 &&
+        code !== 1004 &&
+        code !== 1005 &&
+        code !== 1006
+    ) || ( // Application-specific code:
+        code >= 3000 && code <= 4999
+    );
+}
+
 const INVALID_STATUS_REGEX = /Invalid WebSocket frame: invalid status code (\d+)/;
 
 function pipeWebSocket(inSocket: WebSocket, outSocket: WebSocket) {
@@ -65,7 +78,7 @@ function pipeWebSocket(inSocket: WebSocket, outSocket: WebSocket) {
     });
 
     inSocket.on('close', (num, reason) => {
-        if (num !== undefined) {
+        if (isValidStatusCode(num)) {
             try {
                 outSocket.close(num, reason);
             } catch (e) {
