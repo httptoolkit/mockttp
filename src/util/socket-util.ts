@@ -32,3 +32,30 @@ export const isLocalIPv6Available = isNode
         (addresses) => _.some(addresses, a => a.address === '::1')
     )
     : true;
+
+// We need to normalize ips for comparison, because the same ip may be reported as ::ffff:127.0.0.1
+// and 127.0.0.1 on the two sides of the connection, for the same ip.
+const normalizeIp = (ip: string | undefined) =>
+    (ip && ip.startsWith('::ffff:'))
+        ? ip.slice('::ffff:'.length)
+        : ip;
+
+// Check whether an incoming socket is the other end of one of our outgoing sockets:
+export const isSocketLoop = (outgoingSockets: net.Socket[] | Set<net.Socket>, incomingSocket: net.Socket) =>
+    // We effectively just compare the address & port: if they match, we've almost certainly got a loop.
+
+    // I don't think it's generally possible to see the same ip on different interfaces from one process (you need
+    // ip-netns network namespaces), but if it is, then there's a tiny chance of false positives here. If we have ip X,
+    // and on another interface somebody else has ip X, and they send a request with the same incoming port as an
+    // outgoing request we have on the other interface, we'll assume it's a loop. Extremely unlikely imo.
+
+    _.some([...outgoingSockets], (outgoingSocket) => {
+        if (!outgoingSocket.localAddress || !outgoingSocket.localPort) {
+            // It's possible for sockets in outgoingSockets to be closed, in which case these properties
+            // will be undefined. If so, we know they're not relevant to loops, so skip entirely.
+            return false;
+        } else {
+            return normalizeIp(outgoingSocket.localAddress) === normalizeIp(incomingSocket.remoteAddress) &&
+                outgoingSocket.localPort === incomingSocket.remotePort;
+        }
+    });

@@ -9,7 +9,7 @@ import portfinder = require('portfinder');
 import request = require("request-promise-native");
 import * as zlib from 'zlib';
 
-import { getLocal, Mockttp, CompletedResponse } from "../..";
+import { getLocal, Mockttp, CompletedResponse, MockedEndpoint } from "../..";
 import {
     expect,
     nodeOnly,
@@ -2168,6 +2168,44 @@ nodeOnly(() => {
                 });
             });
 
+        });
+
+        describe("when configured to use an upstream proxy", () => {
+
+            const intermediateProxy = getLocal({ debug: true });
+            let proxyEndpoint: MockedEndpoint;
+
+            beforeEach(async () => {
+                server = getLocal({ debug: true });
+                await server.start();
+
+                await intermediateProxy.start();
+                proxyEndpoint = await intermediateProxy.anyRequest().thenPassThrough(); // Totally neutral proxy
+
+                // Configure Request to use the *first* server as a proxy
+                process.env = _.merge({}, process.env, server.proxyEnv);
+            });
+
+            afterEach(() => intermediateProxy.stop());
+
+            it("should forward traffic through the remote proxy", async () => {
+                // Remote server sends fixed response on this one URL:
+                await remoteServer.get('/test-url').thenReply(200, "Remote server says hi!");
+
+                // Mockttp forwards requests via our intermediate proxy
+                await server.anyRequest().thenPassThrough({
+                    proxyConfig: {
+                        proxyUrl: intermediateProxy.url
+                    }
+                });
+
+                const response = await request.get(remoteServer.urlFor("/test-url"));
+
+                // We get a successful response
+                expect(response).to.equal("Remote server says hi!");
+                // And it went via the intermediate proxy
+                expect((await proxyEndpoint.getSeenRequests()).length).to.equal(1);
+            });
         });
 
         describe("when configured with custom DNS options", () => {

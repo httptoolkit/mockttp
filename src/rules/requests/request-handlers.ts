@@ -9,6 +9,7 @@ import tls = require('tls');
 import http = require('http');
 import http2 = require('http2');
 import https = require('https');
+import ProxyAgent = require('proxy-agent');
 import * as h2Client from 'http2-wrapper';
 import CacheableLookup from 'cacheable-lookup';
 import { encode as encodeBase64, decode as decodeBase64 } from 'base64-arraybuffer';
@@ -31,7 +32,7 @@ import {
     isMockttpBody
 } from '../../util/request-utils';
 import { streamToBuffer, asBuffer } from '../../util/buffer-utils';
-import { isLocalPortActive } from '../../util/socket-util';
+import { isLocalPortActive, isSocketLoop } from '../../util/socket-util';
 import {
     Serializable,
     ClientServerChannel,
@@ -414,6 +415,16 @@ export interface ForwardingOptions {
     updateHostHeader?: true | false | string // Change automatically/ignore/change to custom value
 }
 
+export interface ProxyConfig {
+    /**
+     * The URL for the proxy to pass through.
+     *
+     * This can be any URL supported by https://www.npmjs.com/package/proxy-agent.
+     * For example: http://..., socks5://..., pac+http://...
+     */
+    proxyUrl: string;
+}
+
 export interface PassThroughLookupOptions {
     /**
      * The maximum time to cache a DNS response. Up to this limit,
@@ -465,6 +476,11 @@ export interface PassThroughHandlerOptions {
     clientCertificateHostMap?: {
         [host: string]: { pfx: Buffer, passphrase?: string }
     };
+
+    /**
+     * Upstream proxy configuration: pass through requests via this proxy
+     */
+    proxyConfig?: ProxyConfig
 
     /**
      * Custom DNS options, to allow configuration of the resolver used
@@ -849,6 +865,34 @@ const KeepAliveAgents = isNode
         })
     } : {};
 
+function getAgent(options: {
+    protocol: 'http:' | 'https:' | undefined,
+    tryHttp2: boolean,
+    keepAlive: boolean
+    proxyConfig: ProxyConfig | undefined,
+}): {} | undefined {
+    if (options.proxyConfig && options.proxyConfig.proxyUrl) {
+        // If there's a (non-empty) proxy configured, use it. We require non-empty because empty strings
+        // will fall back to detecting from the environment, which is likely to behave unexpectedly.
+
+        // We notably ignore HTTP/2 upstream in this case: it's complicated to mix that up with proxying
+        // so for now we ignore it entirely.
+        return new ProxyAgent(options.proxyConfig.proxyUrl);
+    } else {
+        if (options.tryHttp2 && options.protocol === 'https:') {
+            // H2 wrapper takes multiple agents, uses the appropriate one for the detected protocol.
+            // We notably never use H2 upstream for plaintext, it's rare and we can't use ALPN to detect it.
+            return { https: KeepAliveAgents['https:'], http2: undefined };
+        } else if (options.keepAlive) {
+            // HTTP/1.1 or HTTP/1 with explicit keep-alive
+            return KeepAliveAgents[options.protocol || 'http:']
+        } else {
+            // HTTP/1 without KA - just send the request with no agent
+            return undefined;
+        }
+    }
+}
+
 export class PassThroughHandler extends Serializable implements RequestHandler {
     readonly type = 'passthrough';
 
@@ -865,7 +909,8 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
     public readonly beforeRequest?: (req: CompletedRequest) => MaybePromise<CallbackRequestResult>;
     public readonly beforeResponse?: (res: PassThroughResponse) => MaybePromise<CallbackResponseResult>;
 
-    public readonly lookupOptions: PassThroughLookupOptions | undefined;
+    public readonly lookupOptions?: PassThroughLookupOptions;
+    public readonly proxyConfig?: ProxyConfig;
 
     private _cacheableLookupInstance: CacheableLookup | undefined;
     private lookup() {
@@ -886,6 +931,8 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
 
         return this._cacheableLookupInstance.lookup;
     }
+
+    private outgoingSockets = new Set<net.Socket>();
 
     constructor(options: PassThroughHandlerOptions = {}) {
         super();
@@ -915,6 +962,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
 
         this.lookupOptions = options.lookupOptions;
         this.clientCertificateHostMap = options.clientCertificateHostMap || {};
+        this.proxyConfig = options.proxyConfig;
 
         if (options.beforeRequest && options.transformRequest && !_.isEmpty(options.transformRequest)) {
             throw new Error("BeforeRequest and transformRequest options are mutually exclusive");
@@ -999,7 +1047,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
         }
 
         // Check if this request is a request loop:
-        if (isRequestLoop((<any> clientReq).socket)) {
+        if (isSocketLoop(this.outgoingSockets, (<any> clientReq).socket)) {
             throw new Error(oneLine`
                 Passthrough loop detected. This probably means you're sending a request directly
                 to a passthrough endpoint, which is forwarding it to the target URL, which is a
@@ -1175,15 +1223,12 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
         }
 
         // Mirror the keep-alive-ness of the incoming request in our outgoing request
-        const agent =
-            shouldTryH2Upstream
-                // H2 client takes multiple agents, uses the appropriate one for the detected protocol
-                ? { https: KeepAliveAgents['https:'], http2: undefined }
-            // HTTP/1 + KA:
-            : shouldKeepAlive(clientReq)
-                ? KeepAliveAgents[(protocol as 'http:' | 'https:') || 'http:']
-            // HTTP/1 without KA:
-            : undefined;
+        const agent = getAgent({
+            protocol: (protocol || undefined) as 'http:' | 'https:' | undefined,
+            tryHttp2: shouldTryH2Upstream,
+            keepAlive: shouldKeepAlive(clientReq),
+            proxyConfig: this.proxyConfig
+        }) as http.Agent;
 
         if (isH2Downstream && shouldTryH2Upstream) {
             // We drop all incoming pseudoheaders, and regenerate them (except legally modified ones)
@@ -1208,7 +1253,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 path,
                 headers,
                 lookup: this.lookup(),
-                agent: agent as http.Agent,
+                agent,
                 minVersion: strictHttpsChecks ? tls.DEFAULT_MIN_VERSION : 'TLSv1', // Allow TLSv1, if !strict
                 rejectUnauthorized: strictHttpsChecks,
                 ...clientCert
@@ -1381,20 +1426,20 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
             serverReq.once('socket', (socket: net.Socket) => {
                 // This event can fire multiple times for keep-alive sockets, which are used to
                 // make multiple requests. If/when that happens, we don't need more event listeners.
-                if (currentlyForwardingSockets.has(socket)) return;
+                if (this.outgoingSockets.has(socket)) return;
 
                 // Add this port to our list of active ports, once it's connected (before then it has no port)
                 if (socket.connecting) {
                     socket.once('connect', () => {
-                        currentlyForwardingSockets.add(socket)
+                        this.outgoingSockets.add(socket)
                     });
                 } else if (socket.localPort !== undefined) {
-                    currentlyForwardingSockets.add(socket);
+                    this.outgoingSockets.add(socket);
                 }
 
                 // Remove this port from our list of active ports when it's closed
                 // This is called for both clean closes & errors.
-                socket.once('close', () => currentlyForwardingSockets.delete(socket));
+                socket.once('close', () => this.outgoingSockets.delete(socket));
             });
 
             if (reqBodyOverride) {
@@ -1613,33 +1658,3 @@ export const HandlerLookup = {
     'close-connection': CloseConnectionHandler,
     'timeout': TimeoutHandler
 }
-
-// Passthrough handlers need to spot loops - tracking ongoing sockets lets us get pretty
-// close to doing that (for 1 step loops, at least):
-
-// We keep a list of all currently active outgoing sockets.
-const currentlyForwardingSockets = new Set<net.Socket>();
-
-// We need to normalize ips for comparison, because the same ip may be reported as ::ffff:127.0.0.1
-// and 127.0.0.1 on the two sides of the connection, for the same ip.
-const normalizeIp = (ip: string | undefined) =>
-    (ip && ip.startsWith('::ffff:'))
-        ? ip.slice('::ffff:'.length)
-        : ip;
-
-// For incoming requests, compare the address & port: if they match, we've almost certainly got a loop.
-// I don't think it's generally possible to see the same ip on different interfaces from one process (you need
-// ip-netns network namespaces), but if it is, then there's a tiny chance of false positives here. If we have ip X,
-// and on another interface somebody else has ip X, and the send a request with the same incoming port as an
-// outgoing request we have on the other interface, we'll assume it's a loop. Extremely unlikely imo.
-const isRequestLoop = (incomingSocket: net.Socket) =>
-    _.some([...currentlyForwardingSockets], (outgoingSocket) => {
-        if (!outgoingSocket.localAddress || !outgoingSocket.localPort) {
-            // It's possible for sockets in currentlyForwardingSockets to be closed, in which case these
-            // properties will be undefined. If so, we know they're not relevant to loops, so skip entirely.
-            return false;
-        } else {
-            return normalizeIp(outgoingSocket.localAddress) === normalizeIp(incomingSocket.remoteAddress) &&
-                outgoingSocket.localPort === incomingSocket.remotePort;
-        }
-    });
