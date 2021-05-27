@@ -232,6 +232,8 @@ export class MockttpStandalone {
 
             this.mockServers = _.reject(this.mockServers, mockServer);
             delete this.routers[mockPort];
+
+            this.subscriptionServers[mockPort].close();
             delete this.subscriptionServers[mockPort];
 
             this.streamServers[mockPort].close();

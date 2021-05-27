@@ -144,6 +144,8 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
     private mockServerStream: Duplex | undefined;
     private mockServerSchema: any;
 
+    private subscriptionClient: SubscriptionClient | undefined;
+
     constructor(options: MockttpClientOptions = {}) {
         super(_.defaults(options, {
             // Browser clients generally want cors enabled. For other clients, it doesn't hurt.
@@ -209,6 +211,25 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
         });
     }
 
+    private prepareSubscriptionClientToMockServer(config: MockServerConfig) {
+        const standaloneWsServer = this.mockServerOptions.standaloneServerUrl.replace(/^http/, 'ws');
+        const subscriptionUrl = `${standaloneWsServer}/server/${config.port}/subscription`;
+        this.subscriptionClient = new SubscriptionClient(subscriptionUrl, {
+            lazy: true, // Doesn't actually connect until you use subscriptions
+            reconnect: true,
+            reconnectionAttempts: 8,
+            wsOptionArguments: [this.mockClientOptions]
+        }, WebSocket);
+
+        this.subscriptionClient.onError((e) => {
+            if (this.debug) console.error("Subscription error", e)
+        });
+
+        this.subscriptionClient.onReconnecting(() =>
+            console.warn(`Reconnecting Mockttp subscription client`)
+        );
+    }
+
     private async requestFromMockServer(path: string, options?: RequestInit): Promise<Response> {
         if (!this.mockServerConfig) throw new Error('Not connected to mock server');
 
@@ -271,6 +292,9 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
         // Also open a stream connection, for 2-way communication we might need later.
         this.mockServerStream = await this.openStreamToMockServer(mockServerConfig);
 
+        // Create a subscription client, preconfigured & ready to connect if on() is called later:
+        this.prepareSubscriptionClientToMockServer(mockServerConfig);
+
         // We don't persist the config or resolve this promise until everything is set up
         this.mockServerConfig = mockServerConfig;
 
@@ -282,6 +306,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
         if (!this.mockServerConfig) return;
 
         this.mockServerStream!.end();
+        this.subscriptionClient!.close();
         await this.requestFromMockServer('/stop', {
             method: 'POST'
         });
@@ -503,14 +528,6 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
             !this.typeHasField('Subscription', queryResultName)
         ) return Promise.resolve();
 
-        const standaloneStreamServer = this.mockServerOptions.standaloneServerUrl.replace(/^http/, 'ws');
-        const url = `${standaloneStreamServer}/server/${this.port}/subscription`;
-        const client = new SubscriptionClient(url, {
-            reconnect: true,
-            reconnectionAttempts: 8,
-            wsOptionArguments: [this.mockClientOptions]
-        }, WebSocket);
-
         // Note the typeHasField checks - these are a quick hack for backward compatibility,
         // introspecting the server schema to avoid requesting fields that don't exist on old servers.
 
@@ -628,7 +645,11 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
             }
         }[event];
 
-        client.request(query).subscribe({
+        // This isn't 100% correct (you can be WS-connected, but still negotiating some GQL
+        // setup) but it's good enough for our purposes (knowing-ish if the connection worked).
+        let isConnected = !!this.subscriptionClient!.client;
+
+        this.subscriptionClient!.request(query).subscribe({
             next: (value) => {
                 if (value.data) {
                     const data = (<any> value.data)[queryResultName];
@@ -658,18 +679,12 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
         });
 
         return new Promise((resolve, reject) => {
-            client.onConnected(() => {
-                if (this.debug) console.log("Subscription connected");
-                resolve();
-            });
-            client.onDisconnected(() => {
-                if (this.debug) console.warn("Subscription disconnected");
-                reject();
-            });
-            client.onError((e) => {
-                if (this.debug) console.error("Subscription error", e)
-            });
-            client.onReconnecting(() => console.warn(`Reconnecting ${event} subscription`));
+            if (isConnected) resolve();
+            else {
+                this.subscriptionClient!.onConnected(resolve);
+                this.subscriptionClient!.onDisconnected(reject);
+                this.subscriptionClient!.onError(reject);
+            }
         });
     }
 
