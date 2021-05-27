@@ -7,12 +7,12 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [10.x, 12.x, v14.6.0, 14.x, '*']
+        node-version: [10.x, 12.x, 14.x, v16.2, '*']
 
     steps:
       - uses: actions/checkout@v2
 
-      - uses: actions/setup-node@v1
+      - uses: actions/setup-node@v2
         with:
           node-version: ${{ matrix.node-version }}
       - run: npm install -g npm@6

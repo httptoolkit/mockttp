@@ -389,13 +389,17 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
         let result: 'responded' | 'aborted' | null = null;
         const abort = () => {
-            if (result === null) {
+            if (result === null && !rawResponse.writableEnded) {
                 result = 'aborted';
                 request.timingEvents.abortedTimestamp = now();
                 this.announceAbortAsync(request);
             }
         }
         request.once('aborted', abort);
+        // In Node 16+ we don't get an abort even in many cases, just closes, but we know
+        // it's aborted because the response is closed before we've written anything.
+        rawResponse.once('close', abort);
+
         this.announceInitialRequestAsync(request);
 
         const response = trackResponse(
