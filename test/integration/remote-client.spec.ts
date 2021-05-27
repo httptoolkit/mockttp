@@ -261,11 +261,11 @@ nodeOnly(() => {
                 beforeEach(async () => {
                     server = net.createServer(() => {});
                     port = await portfinder.getPortPromise();
-                    return new Promise(resolve => server.listen(port, resolve));
+                    return new Promise<void>(resolve => server.listen(port, resolve));
                 });
 
                 afterEach(() => {
-                    return new Promise(resolve => server.close(resolve));
+                    return new Promise<unknown>(resolve => server.close(resolve));
                 });
 
                 it("should reject Mockttp clients trying to use that port", async () => {

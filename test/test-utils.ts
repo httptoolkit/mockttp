@@ -100,13 +100,13 @@ export const TOO_LONG_HEADER_VALUE = _.range(TOO_LONG_HEADER_SIZE).map(() => "X"
 
 export async function openRawSocket(server: Mockttp) {
     const client = new net.Socket();
-    await new Promise((resolve) => client.connect(server.port, '127.0.0.1', resolve));
+    await new Promise<void>((resolve) => client.connect(server.port, '127.0.0.1', resolve));
     return client;
 }
 
 export async function sendRawRequest(server: Mockttp, requestContent: string): Promise<string> {
     const client = new net.Socket();
-    await new Promise((resolve) => client.connect(server.port, '127.0.0.1', resolve));
+    await new Promise<void>((resolve) => client.connect(server.port, '127.0.0.1', resolve));
 
     const dataPromise = new Promise<string>((resolve) => {
         client.on('data', function(data) {
@@ -298,7 +298,7 @@ export async function http2ProxyRequest(
 export async function cleanup(
     ...streams: (streams.Duplex | http2.Http2Session | http2.Http2Stream)[]
 ) {
-    return new Promise((resolve, reject) => {
+    return new Promise<void>((resolve, reject) => {
         if (streams.length === 0) resolve();
         else {
             const nextStream = streams[0];

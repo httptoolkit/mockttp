@@ -540,13 +540,13 @@ nodeOnly(() => {
                         res.end("OK");
                     });
 
-                    return new Promise((resolve, reject) => {
+                    return new Promise<void>((resolve, reject) => {
                         ipV6Server.listen({ host: '::1', family: 6, port: ipV6Port }, resolve);
                         ipV6Server.on('error', reject);
                     });
                 });
 
-                afterEach(() => new Promise((resolve, reject) => {
+                afterEach(() => new Promise<void>((resolve, reject) => {
                     ipV6Server.close((error) => {
                         if (error) reject();
                         else resolve();
@@ -759,14 +759,14 @@ nodeOnly(() => {
                         }));
 
                         oldServerPort = await portfinder.getPortPromise();
-                        return new Promise(async (resolve, reject) => {
+                        return new Promise<void>(async (resolve, reject) => {
                             oldServer.listen(oldServerPort, resolve);
                             oldServer.on('error', reject);
                         });
                     });
 
                     afterEach(() => {
-                        oldServer.destroy();
+                        if (oldServer) oldServer.destroy();
                     });
 
                     it("should refuse to pass through requests", async () => {
@@ -844,7 +844,7 @@ nodeOnly(() => {
                         }));
 
                         authenticatingServerPort = await portfinder.getPortPromise();
-                        return new Promise(async (resolve, reject) => {
+                        return new Promise<void>(async (resolve, reject) => {
                             authenticatingServer.listen(authenticatingServerPort, resolve);
                             authenticatingServer.on('error', reject);
                         });
@@ -898,7 +898,7 @@ nodeOnly(() => {
 
                     targetPort = await portfinder.getPortPromise();
 
-                    await new Promise(async (resolve, reject) => {
+                    await new Promise<void>(async (resolve, reject) => {
                         http2Server.on('error', reject);
                         http2Server.listen(targetPort, resolve);
                     });

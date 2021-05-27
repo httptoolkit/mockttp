@@ -1519,7 +1519,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
 
         if (data.hasBeforeRequestCallback) {
             beforeRequest = async (req: CompletedRequest) => {
-                const result = withDeserializedBodyBuffer(
+                const result = withDeserializedBodyBuffer<WithSerializedBodyBuffer<CallbackRequestResult>>(
                     await channel.request<
                         BeforePassthroughRequestRequest,
                         WithSerializedBodyBuffer<CallbackRequestResult>

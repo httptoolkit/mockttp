@@ -425,7 +425,7 @@ nodeOnly(() => {
                 beforeEach(async () => {
                     targetPort = await portfinder.getPortPromise();
 
-                    await new Promise(async (resolve, reject) => {
+                    await new Promise<void>(async (resolve, reject) => {
                         http2Server.on('error', reject);
                         http2Server.listen(targetPort, resolve);
                     });

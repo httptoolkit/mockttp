@@ -21,7 +21,7 @@ nodeOnly(() => {
                 res.end('signed response!');
             });
 
-            await new Promise((resolve) => server.listen(4430, resolve));
+            await new Promise<void>((resolve) => server.listen(4430, resolve));
 
             await expect(fetch('https://localhost:4430')).to.have.responseText('signed response!');
         });

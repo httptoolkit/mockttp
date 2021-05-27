@@ -142,7 +142,7 @@ nodeOnly(() => {
                         }
                     });
 
-                    await new Promise((resolve) => {
+                    await new Promise<void>((resolve) => {
                         ws.on('open', () => {
                             const rawWs = ws as any;
 
@@ -204,7 +204,7 @@ nodeOnly(() => {
                         });
                     });
 
-                    await new Promise((resolve) => wsHttpsServer.listen(9090, resolve));
+                    await new Promise<void>((resolve) => wsHttpsServer.listen(9090, resolve));
                 });
 
                 afterEach(() => new Promise((resolve) => wsHttpsServer.close(resolve)));
@@ -265,7 +265,7 @@ nodeOnly(() => {
                         });
                     });
 
-                    await new Promise((resolve) => wsBadHttpsServer.listen(9090, resolve));
+                    await new Promise<void>((resolve) => wsBadHttpsServer.listen(9090, resolve));
                 });
 
                 afterEach(() => new Promise((resolve) => wsBadHttpsServer.close(resolve)));
@@ -319,7 +319,7 @@ nodeOnly(() => {
                     it('should still block requests to other hosts', async () => {
                         // Change the WSS server port
                         await new Promise((resolve) => wsBadHttpsServer.close(resolve));
-                        await new Promise((resolve) => wsBadHttpsServer.listen(9091, resolve));
+                        await new Promise<void>((resolve) => wsBadHttpsServer.listen(9091, resolve));
 
                         const ws = new WebSocket(`wss://localhost:9091`, {
                             agent: new HttpsProxyAgent(`https://localhost:${serverWithWhitelist.port}`)

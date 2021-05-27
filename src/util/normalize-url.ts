@@ -29,7 +29,7 @@ export const legacyNormalizeUrl =
 export const normalizeUrl =
     _.memoize(
         (urlInput: string): string => {
-            let parsedUrl: url.UrlWithStringQuery | undefined;
+            let parsedUrl: Partial<url.UrlWithStringQuery> | undefined;
 
             let isProtocolless = false;
 

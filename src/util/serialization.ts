@@ -165,7 +165,7 @@ export class ClientServerChannel extends Duplex {
                         // Derialize error from plain object
                         reject(Object.assign(new Error(), { stack: undefined }, response.error));
                     } else {
-                        resolve(response.data);
+                        resolve(response.data!);
                     }
                     this.removeListener('data', responseListener);
                 }

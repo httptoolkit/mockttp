@@ -11,7 +11,7 @@ import {
   ObjectValueNode,
   ValueNode
 } from "graphql";
-import { IResolvers } from "@graphql-tools/utils/Interfaces";
+import type { IResolvers } from "@graphql-tools/utils/Interfaces";
 import { PubSub } from "graphql-subscriptions";
 
 import MockttpServer from "../server/mockttp-server";
