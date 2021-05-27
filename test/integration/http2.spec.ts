@@ -15,6 +15,7 @@ import {
     browserOnly,
     getHttp2Response,
     getHttp2Body,
+    destroyable,
     cleanup,
     fetch,
     H2_TLS_ON_TLS_SUPPORTED
@@ -410,14 +411,14 @@ nodeOnly(() => {
 
             describe("to an HTTP/2-only target", () => {
 
-                const http2Server = http2.createSecureServer({
+                const http2Server = destroyable(http2.createSecureServer({
                     allowHTTP1: false,
                     key: fs.readFileSync('./test/fixtures/test-ca.key'),
                     cert: fs.readFileSync('./test/fixtures/test-ca.pem')
                 }, (req, res) => {
                     res.writeHead(200);
                     res.end("Real HTTP/2 response");
-                });
+                }));
 
                 let targetPort: number;
 
@@ -430,7 +431,7 @@ nodeOnly(() => {
                     });
                 });
 
-                afterEach(() => http2Server.close());
+                afterEach(() => http2Server.destroy());
 
                 it("can pass through end-to-end HTTP/2", async function () {
                     if (!semver.satisfies(process.version, H2_TLS_ON_TLS_SUPPORTED)) this.skip();

@@ -10,7 +10,6 @@ import request = require("request-promise-native");
 import * as zlib from 'zlib';
 
 import { getLocal, Mockttp, CompletedResponse } from "../..";
-import { destroyable, DestroyableServer } from "../../src/util/destroyable-server";
 import {
     expect,
     nodeOnly,
@@ -18,8 +17,10 @@ import {
     Deferred,
     sendRawRequest,
     http2ProxyRequest,
-    H2_TLS_ON_TLS_SUPPORTED,
     startDnsServer,
+    destroyable,
+    DestroyableServer,
+    H2_TLS_ON_TLS_SUPPORTED,
     TLS_MIN_VERSION_SUPPORTED,
     ZLIB_BROTLI_AVAILABLE
 } from "../test-utils";

@@ -19,7 +19,7 @@ import * as dns2 from 'dns2'; // Imported here just for types
 import { Mockttp } from "..";
 import { destroyable, DestroyableServer } from "../src/util/destroyable-server";
 import { isNode, isWeb, delay } from '../src/util/util';
-export { isNode, isWeb, delay };
+export { isNode, isWeb, delay, destroyable, DestroyableServer };
 
 if (isNode) {
     // Run a target websocket server in the background. In browsers, this is

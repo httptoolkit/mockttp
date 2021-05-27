@@ -4,10 +4,15 @@ import HttpProxyAgent = require('http-proxy-agent');
 import HttpsProxyAgent = require('https-proxy-agent');
 import { getLocal, generateCACertificate } from '../..';
 
-import { expect, nodeOnly, browserOnly, startDnsServer } from '../test-utils';
+import {
+    expect,
+    nodeOnly,
+    browserOnly,
+    startDnsServer,
+    DestroyableServer
+} from '../test-utils';
 import { getCA } from '../../src/util/tls';
 import { delay } from '../../src/util/util';
-import { DestroyableServer } from '../../src/util/destroyable-server';
 
 browserOnly(() => {
     describe('Websocket requests', function() {
@@ -54,15 +59,24 @@ nodeOnly(() => {
             }
         });
 
-        beforeEach(() => mockServer.start());
-        afterEach(() => mockServer.stop());
+        let wsServer: WebSocket.Server;
+        let wsErrors: Error[] = [];
+
+        beforeEach(async () => {
+            await mockServer.start();
+            wsErrors = [];
+        });
+        afterEach(async () => {
+            await mockServer.stop();
+            if (wsServer) {
+                await new Promise((resolve) => wsServer.close(resolve));
+                expect(wsErrors).to.be.empty;
+            }
+        });
 
         describe("with default rules", () => {
 
             describe('over HTTP', () => {
-
-                let wsServer: WebSocket.Server;
-                let wsErrors: Error[] = [];
 
                 beforeEach(async () => {
                     wsServer = new WebSocket.Server({ port: 9090 });
@@ -85,11 +99,6 @@ nodeOnly(() => {
                     });
 
                     wsServer.on('error', (e) => wsErrors.push(e));
-                });
-
-                afterEach(async () => {
-                    await new Promise((resolve) => wsServer.close(resolve));
-                    expect(wsErrors.length).to.equal(0);
                 });
 
                 it('can be passed through successfully over HTTP', async () => {
@@ -185,7 +194,7 @@ nodeOnly(() => {
                         cert: cert.cert
                     });
 
-                    const wsServer = new WebSocket.Server({ server: wsHttpsServer });
+                    wsServer = new WebSocket.Server({ server: wsHttpsServer });
 
                     // Echo every message
                     wsServer.on('connection', (ws) => {
@@ -246,7 +255,7 @@ nodeOnly(() => {
                         cert: cert.cert
                     });
 
-                    const wsServer = new WebSocket.Server({ server: wsBadHttpsServer });
+                    wsServer = new WebSocket.Server({ server: wsBadHttpsServer });
 
                     // Echo every message
                     wsServer.on('connection', (ws) => {
@@ -289,7 +298,7 @@ nodeOnly(() => {
                     });
 
                     beforeEach(() => serverWithWhitelist.start());
-                    afterEach(() => serverWithWhitelist.start());
+                    afterEach(() => serverWithWhitelist.stop());
 
                     it('should allow the request, if the host matches', async () => {
                         const ws = new WebSocket(`wss://localhost:9090`, {
@@ -352,16 +361,12 @@ nodeOnly(() => {
 
             describe("when the websocket server rejects the request", () => {
 
-                let wsServer: WebSocket.Server;
-
                 beforeEach(async () => {
                     wsServer = new WebSocket.Server({
                         port: 9001,
                         verifyClient: () => false // Reject all clients
                     });
                 });
-
-                afterEach(() => wsServer.close());
 
                 it('should mirror the request rejection', async () => {
                     const ws = new WebSocket(`ws://localhost:9001`, {
@@ -386,8 +391,6 @@ nodeOnly(() => {
 
             const REAL_WS_SERVER_PORT = 9123;
 
-            let wsServer: WebSocket.Server;
-
             beforeEach(async () => {
                 // Real server that echoes every message
                 wsServer = new WebSocket.Server({ port: REAL_WS_SERVER_PORT });
@@ -403,8 +406,6 @@ nodeOnly(() => {
                     });
                 });
             });
-
-            afterEach(() => wsServer.close());
 
             let dnsServer: DestroyableServer | undefined;
             let fixedDnsResponse: string | undefined = undefined;
