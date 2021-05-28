@@ -27,6 +27,7 @@ import {
 } from '../requests/request-handlers';
 import { isHttp2 } from '../../util/request-utils';
 import { streamToBuffer } from '../../util/buffer-utils';
+import { getAgent, ProxyConfig } from '../../util/http-agents';
 
 export interface WebSocketHandler extends Explainable, Serializable {
     type: keyof typeof WsHandlerLookup;
@@ -163,6 +164,11 @@ export interface PassThroughWebSocketHandlerOptions {
     ignoreHostCertificateErrors?: string[];
 
     /**
+     * Upstream proxy configuration: pass through requests via this proxy
+     */
+    proxyConfig?: ProxyConfig;
+
+    /**
      * Custom DNS options, to allow configuration of the resolver used
      * when forwarding requests upstream. Passing any option switches
      * from using node's default dns.lookup function to using the
@@ -188,6 +194,8 @@ export class PassThroughWebSocketHandler extends Serializable implements WebSock
 
     // Same lookup configuration as normal request PassThroughHandler:
     public readonly lookupOptions: PassThroughLookupOptions | undefined;
+
+    public readonly proxyConfig?: ProxyConfig;
 
     private _cacheableLookupInstance: CacheableLookup | undefined;
     private lookup() {
@@ -235,6 +243,7 @@ export class PassThroughWebSocketHandler extends Serializable implements WebSock
         this.forwarding = options.forwarding;
 
         this.lookupOptions = options.lookupOptions;
+        this.proxyConfig = options.proxyConfig;
     }
 
     explain() {
@@ -330,9 +339,23 @@ export class PassThroughWebSocketHandler extends Serializable implements WebSock
         const checkServerCertificate = !_.includes(this.ignoreHostHttpsErrors, parsedUrl.hostname) &&
             !_.includes(this.ignoreHostHttpsErrors, parsedUrl.host);
 
+        const effectivePort = !!parsedUrl.port
+            ? parseInt(parsedUrl.port, 10)
+            : parsedUrl.protocol == 'wss:' ? 443 : 80;
+
+        const agent = getAgent({
+            protocol: parsedUrl.protocol as 'ws:' | 'wss:',
+            hostname: parsedUrl.hostname!,
+            port: effectivePort,
+            proxyConfig: this.proxyConfig,
+            tryHttp2: false, // We don't support websockets over H2 yet
+            keepAlive: false // Not a thing for websockets: they take over the whole connection
+        });
+
         const upstreamWebSocket = new WebSocket(wsUrl, {
             rejectUnauthorized: checkServerCertificate,
             maxPayload: 0,
+            agent,
             lookup: this.lookup(),
             headers: _.omitBy(headers, (_v, headerName) =>
                 headerName.toLowerCase().startsWith('sec-websocket') ||

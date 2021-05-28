@@ -2,7 +2,7 @@ import * as WebSocket from 'isomorphic-ws';
 import * as https from 'https';
 import HttpProxyAgent = require('http-proxy-agent');
 import HttpsProxyAgent = require('https-proxy-agent');
-import { getLocal, generateCACertificate } from '../..';
+import { getLocal, generateCACertificate, MockedEndpoint } from '../..';
 
 import {
     expect,
@@ -434,6 +434,73 @@ nodeOnly(() => {
                 ws.close(1000);
 
                 expect(response).to.equal('test echo');
+            });
+
+            describe("given an upstream proxy", () => {
+
+                const intermediateProxy = getLocal();
+                let proxyEndpoint: MockedEndpoint;
+
+                beforeEach(async () => {
+                    await intermediateProxy.start();
+                    // Totally neutral WS proxy:
+                    proxyEndpoint = await intermediateProxy.anyWebSocket().thenPassThrough();
+                });
+
+                afterEach(() => intermediateProxy.stop());
+
+                it("can be passed through via an upstream proxy", async () => {
+                    await mockServer.anyWebSocket().thenPassThrough({
+                        proxyConfig: {
+                            proxyUrl: intermediateProxy.url
+                        }
+                    });
+
+                    const ws = new WebSocket(`ws://localhost:${REAL_WS_SERVER_PORT}`, {
+                        agent: new HttpProxyAgent(`http://localhost:${mockServer.port}`)
+                    });
+
+                    ws.on('open', () => ws.send('test echo'));
+
+                    const response = await new Promise((resolve, reject) => {
+                        ws.on('message', resolve);
+                        ws.on('error', (e) => reject(e));
+                    });
+                    ws.close(1000);
+
+                    // We get our echoed responses:
+                    expect(response).to.equal('test echo');
+                    // And they go via the intermediate proxy
+                    expect((await proxyEndpoint.getSeenRequests()).length).to.equal(1);
+                });
+
+                it("can skip the upstream proxy when noProxy is used", async () => {
+                    await mockServer.anyWebSocket().thenPassThrough({
+                        proxyConfig: {
+                            proxyUrl: intermediateProxy.url,
+                            noProxy: ['localhost']
+                        }
+                    });
+
+                    const ws = new WebSocket(`ws://localhost:${REAL_WS_SERVER_PORT}`, {
+                        agent: new HttpProxyAgent(`http://localhost:${mockServer.port}`)
+                    });
+
+                    ws.on('open', () => ws.send('test echo'));
+
+                    const response = await new Promise((resolve, reject) => {
+                        ws.on('message', resolve);
+                        ws.on('error', (e) => reject(e));
+                    });
+                    ws.close(1000);
+
+                    // We get our echoed responses:
+                    expect(response).to.equal('test echo');
+
+                    // But it doesn't go via the intermediate proxy:
+                    expect((await proxyEndpoint.getSeenRequests()).length).to.equal(0);
+                });
+
             });
 
             it("can be passed through with custom DNS resolution", async () => {
