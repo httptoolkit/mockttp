@@ -26,7 +26,7 @@ module.exports = (wallaby) => {
     },
 
     workers: {
-      initial: 4,
+      initial: 1,
       regular: 1,
       restart: true
     },
