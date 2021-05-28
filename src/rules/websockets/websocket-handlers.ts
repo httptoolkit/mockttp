@@ -180,6 +180,7 @@ export interface PassThroughWebSocketHandlerOptions {
 interface SerializedPassThroughWebSocketData {
     type: 'ws-passthrough';
     forwarding?: ForwardingOptions;
+    proxyConfig?: ProxyConfig;
     ignoreHostCertificateErrors?: string[]; // Doesn't match option name, backward compat
     lookupOptions?: PassThroughLookupOptions;
 }
@@ -391,6 +392,7 @@ export class PassThroughWebSocketHandler extends Serializable implements WebSock
         return {
             type: this.type,
             forwarding: this.forwarding,
+            proxyConfig: this.proxyConfig,
             ignoreHostCertificateErrors: this.ignoreHostHttpsErrors,
             lookupOptions: this.lookupOptions
         };

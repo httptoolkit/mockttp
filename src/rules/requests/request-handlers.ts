@@ -651,6 +651,7 @@ interface SerializedPassThroughData {
     type: 'passthrough';
     forwardToLocation?: string;
     forwarding?: ForwardingOptions;
+    proxyConfig?: ProxyConfig;
     ignoreHostCertificateErrors?: string[]; // Doesn't match option name, backward compat
     clientCertificateHostMap?: { [host: string]: { pfx: string, passphrase?: string } };
     lookupOptions?: PassThroughLookupOptions;
@@ -1501,6 +1502,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 forwardToLocation: this.forwarding.targetHost,
                 forwarding: this.forwarding
             } : {},
+            proxyConfig: this.proxyConfig,
             lookupOptions: this.lookupOptions,
             ignoreHostCertificateErrors: this.ignoreHostHttpsErrors,
             clientCertificateHostMap: _.mapValues(this.clientCertificateHostMap,
@@ -1604,6 +1606,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 forwarding: { targetHost: data.forwardToLocation }
             } : {},
             forwarding: data.forwarding,
+            proxyConfig: data.proxyConfig,
             lookupOptions: data.lookupOptions,
             ignoreHostHttpsErrors: data.ignoreHostCertificateErrors,
             clientCertificateHostMap: _.mapValues(data.clientCertificateHostMap,
