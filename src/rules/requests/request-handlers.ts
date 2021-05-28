@@ -29,7 +29,8 @@ import {
     h2HeadersToH1,
     isAbsoluteUrl,
     cleanUpHeaders,
-    isMockttpBody
+    isMockttpBody,
+    matchesNoProxy
 } from '../../util/request-utils';
 import { streamToBuffer, asBuffer } from '../../util/buffer-utils';
 import { isLocalPortActive, isSocketLoop } from '../../util/socket-util';
@@ -423,6 +424,26 @@ export interface ProxyConfig {
      * For example: http://..., socks5://..., pac+http://...
      */
     proxyUrl: string;
+
+    /**
+     * A list of no-proxy values, matching URLs which should not be proxied.
+     *
+     * This is a common proxy feature, but unfortunately isn't standardized. See
+     * https://about.gitlab.com/blog/2021/01/27/we-need-to-talk-no-proxy/ for some
+     * background. This implementation is intended to match Curl's behaviour, and
+     * any differences are a bug.
+     *
+     * The currently supported formats are:
+     * - example.com (matches domain and all subdomains)
+     * - example.com:443 (matches domain and all subdomains, but only on that port)
+     * - 10.0.0.1 (matches IP, but only when used directly - does not resolve domains)
+     *
+     * Some other formats (e.g. leading dots or *.) will work, but the leading
+     * characters are ignored. More formats may be added in future, e.g. CIDR ranges.
+     * To maximize compatibility with values used elsewhere, unrecognized formats
+     * will generally be ignored, but may match in unexpected ways.
+     */
+    noProxy?: string[];
 }
 
 export interface PassThroughLookupOptions {
@@ -480,7 +501,7 @@ export interface PassThroughHandlerOptions {
     /**
      * Upstream proxy configuration: pass through requests via this proxy
      */
-    proxyConfig?: ProxyConfig
+    proxyConfig?: ProxyConfig;
 
     /**
      * Custom DNS options, to allow configuration of the resolver used
@@ -872,31 +893,37 @@ const KeepAliveAgents = isNode
         })
     } : {};
 
-function getAgent(options: {
+function getAgent({
+    protocol, hostname, port, tryHttp2, keepAlive, proxyConfig
+}: {
     protocol: 'http:' | 'https:' | undefined,
+    hostname: string,
+    port: number,
     tryHttp2: boolean,
     keepAlive: boolean
     proxyConfig: ProxyConfig | undefined,
 }): {} | undefined {
-    if (options.proxyConfig && options.proxyConfig.proxyUrl) {
+    if (proxyConfig && proxyConfig.proxyUrl) {
         // If there's a (non-empty) proxy configured, use it. We require non-empty because empty strings
         // will fall back to detecting from the environment, which is likely to behave unexpectedly.
 
-        // We notably ignore HTTP/2 upstream in this case: it's complicated to mix that up with proxying
-        // so for now we ignore it entirely.
-        return new ProxyAgent(options.proxyConfig.proxyUrl);
-    } else {
-        if (options.tryHttp2 && options.protocol === 'https:') {
-            // H2 wrapper takes multiple agents, uses the appropriate one for the detected protocol.
-            // We notably never use H2 upstream for plaintext, it's rare and we can't use ALPN to detect it.
-            return { https: KeepAliveAgents['https:'], http2: undefined };
-        } else if (options.keepAlive) {
-            // HTTP/1.1 or HTTP/1 with explicit keep-alive
-            return KeepAliveAgents[options.protocol || 'http:']
-        } else {
-            // HTTP/1 without KA - just send the request with no agent
-            return undefined;
+        if (!matchesNoProxy(hostname, port, proxyConfig.noProxy)) {
+            // We notably ignore HTTP/2 upstream in this case: it's complicated to mix that up with proxying
+            // so for now we ignore it entirely.
+            return new ProxyAgent(proxyConfig.proxyUrl);
         }
+    }
+
+    if (tryHttp2 && protocol === 'https:') {
+        // H2 wrapper takes multiple agents, uses the appropriate one for the detected protocol.
+        // We notably never use H2 upstream for plaintext, it's rare and we can't use ALPN to detect it.
+        return { https: KeepAliveAgents['https:'], http2: undefined };
+    } else if (keepAlive) {
+        // HTTP/1.1 or HTTP/1 with explicit keep-alive
+        return KeepAliveAgents[protocol || 'http:']
+    } else {
+        // HTTP/1 without KA - just send the request with no agent
+        return undefined;
     }
 }
 
@@ -1216,22 +1243,25 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 : http.request
         ) as typeof https.request;
 
+        const effectivePort = !!port
+            ? parseInt(port, 10)
+            : (protocol === 'https:' ? 443 : 80);
+
         let family: undefined | 4 | 6;
         if (hostname === 'localhost') {
             // Annoying special case: some localhost servers listen only on either ipv4 or ipv6.
             // Very specific situation, but a very common one for development use.
             // We need to work out which one family is, as Node sometimes makes bad choices.
-            const portToTest = !!port
-                ? parseInt(port, 10)
-                : (protocol === 'https:' ? 443 : 80);
 
-            if (await isLocalPortActive('::1', portToTest)) family = 6;
+            if (await isLocalPortActive('::1', effectivePort)) family = 6;
             else family = 4;
         }
 
         // Mirror the keep-alive-ness of the incoming request in our outgoing request
         const agent = getAgent({
             protocol: (protocol || undefined) as 'http:' | 'https:' | undefined,
+            hostname: hostname!,
+            port: effectivePort,
             tryHttp2: shouldTryH2Upstream,
             keepAlive: shouldKeepAlive(clientReq),
             proxyConfig: this.proxyConfig

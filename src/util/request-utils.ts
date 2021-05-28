@@ -65,6 +65,36 @@ export const shouldKeepAlive = (req: OngoingRequest): boolean =>
     req.headers['connection'] !== 'close' &&
     req.headers['proxy-connection'] !== 'close';
 
+export const matchesNoProxy = (hostname: string, portNum: number, noProxyValues: string[] | undefined) => {
+    if (!noProxyValues || noProxyValues.length === 0) return false; // Skip everything in the common case.
+
+    const port = portNum.toString();
+    const hostParts = hostname.split('.').reverse();
+
+    return noProxyValues.some((noProxy) => {
+        const [noProxyHost, noProxyPort] = noProxy.split(':') as [string, string | undefined];
+
+        let noProxyParts = noProxyHost.split('.').reverse();
+        const lastPart = noProxyParts[noProxyParts.length - 1];
+        if (lastPart === '' || lastPart === '*') {
+            noProxyParts = noProxyParts.slice(0, -1);
+        }
+
+        if (noProxyPort && port !== noProxyPort) return false;
+
+        for (let i = 0; i < noProxyParts.length; i++) {
+            let noProxyPart = noProxyParts[i];
+            let hostPart = hostParts[i];
+
+            if (hostPart === undefined) return false; // No-proxy is longer than hostname
+            if (noProxyPart !== hostPart) return false; // Mismatch
+        }
+
+        // If we run out of no-proxy parts with no mismatch then we've matched
+        return true;
+    });
+}
+
 export const setHeaders = (response: http.ServerResponse, headers: Headers) => {
     Object.keys(headers).forEach((header) => {
         let value = headers[header];

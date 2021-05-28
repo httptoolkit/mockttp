@@ -1545,7 +1545,7 @@ nodeOnly(() => {
         describe("when configured to transform requests automatically", () => {
 
             beforeEach(async () => {
-                server = getLocal({ debug: true });
+                server = getLocal();
                 await server.start();
                 process.env = _.merge({}, process.env, server.proxyEnv);
 
@@ -1868,7 +1868,7 @@ nodeOnly(() => {
         describe("when configured to transform responses automatically", () => {
 
             beforeEach(async () => {
-                server = getLocal({ debug: true });
+                server = getLocal();
                 await server.start();
                 process.env = _.merge({}, process.env, server.proxyEnv);
 
@@ -2166,11 +2166,11 @@ nodeOnly(() => {
 
         describe("when configured to use an upstream proxy", () => {
 
-            const intermediateProxy = getLocal({ debug: true });
+            const intermediateProxy = getLocal();
             let proxyEndpoint: MockedEndpoint;
 
             beforeEach(async () => {
-                server = getLocal({ debug: true });
+                server = getLocal();
                 await server.start();
 
                 await intermediateProxy.start();
@@ -2198,6 +2198,143 @@ nodeOnly(() => {
                 // We get a successful response
                 expect(response).to.equal("Remote server says hi!");
                 // And it went via the intermediate proxy
+                expect((await proxyEndpoint.getSeenRequests()).length).to.equal(1);
+            });
+
+            it("should skip the proxy if the target is in the no-proxy list", async () => {
+                // Remote server sends fixed response on this one URL:
+                await remoteServer.get('/test-url').thenReply(200, "Remote server says hi!");
+
+                // Mockttp forwards requests via our intermediate proxy
+                await server.anyRequest().thenPassThrough({
+                    proxyConfig: {
+                        proxyUrl: intermediateProxy.url,
+                        noProxy: ['localhost']
+                    }
+                });
+
+                const response = await request.get(remoteServer.urlFor("/test-url"));
+
+                // We get a successful response
+                expect(response).to.equal("Remote server says hi!");
+
+                // And it didn't use the proxy
+                expect((await proxyEndpoint.getSeenRequests()).length).to.equal(0);
+            });
+
+            it("should skip the proxy if the target is in the no-proxy list with a matching port", async () => {
+                // Remote server sends fixed response on this one URL:
+                await remoteServer.get('/test-url').thenReply(200, "Remote server says hi!");
+
+                // Mockttp forwards requests via our intermediate proxy
+                await server.anyRequest().thenPassThrough({
+                    proxyConfig: {
+                        proxyUrl: intermediateProxy.url,
+                        noProxy: [`localhost:${remoteServer.port}`]
+                    }
+                });
+
+                const response = await request.get(remoteServer.urlFor("/test-url"));
+
+                // We get a successful response
+                expect(response).to.equal("Remote server says hi!");
+
+                // And it didn't use the proxy
+                expect((await proxyEndpoint.getSeenRequests()).length).to.equal(0);
+            });
+
+            it("should skip the proxy if the target's implicit port is in the no-proxy list", async () => {
+                // Mockttp forwards requests via our intermediate proxy
+                await server.anyRequest().thenPassThrough({
+                    proxyConfig: {
+                        proxyUrl: intermediateProxy.url,
+                        noProxy: ['example.com:80']
+                    }
+                });
+
+                await request.get('http://example.com/').catch(() => {});
+
+                // And it didn't use the proxy
+                expect((await proxyEndpoint.getSeenRequests()).length).to.equal(0);
+            });
+
+            it("should skip the proxy if a suffix of the target is in the no-proxy list", async () => {
+                // Remote server sends fixed response on this one URL:
+                await remoteServer.get('/test-url').thenReply(200, "Remote server says hi!");
+
+                // Mockttp forwards requests via our intermediate proxy
+                await server.anyRequest().thenPassThrough({
+                    proxyConfig: {
+                        proxyUrl: intermediateProxy.url,
+                        noProxy: ['localhost']
+                    }
+                });
+
+                const response = await request.get(
+                    `http://test-subdomain.localhost:${remoteServer.port}/test-url`
+                );
+
+                // We get a successful response
+                expect(response).to.equal("Remote server says hi!");
+
+                // And it didn't use the proxy
+                expect((await proxyEndpoint.getSeenRequests()).length).to.equal(0);
+            });
+
+            it("should not skip the proxy if an unrelated URL is in the no-proxy list", async () => {
+                // Remote server sends fixed response on this one URL:
+                await remoteServer.get('/test-url').thenReply(200, "Remote server says hi!");
+
+                // Mockttp forwards requests via our intermediate proxy
+                await server.anyRequest().thenPassThrough({
+                    proxyConfig: {
+                        proxyUrl: intermediateProxy.url,
+                        noProxy: ['example.com']
+                    }
+                });
+
+                const response = await request.get(remoteServer.urlFor("/test-url"));
+
+                // We get a successful response
+                expect(response).to.equal("Remote server says hi!");
+
+                // And it went via the intermediate proxy
+                expect((await proxyEndpoint.getSeenRequests()).length).to.equal(1);
+            });
+
+            it("should not skip the proxy if the target's port is not in the no-proxy list", async () => {
+                // Remote server sends fixed response on this one URL:
+                await remoteServer.get('/test-url').thenReply(200, "Remote server says hi!");
+
+                // Mockttp forwards requests via our intermediate proxy
+                await server.anyRequest().thenPassThrough({
+                    proxyConfig: {
+                        proxyUrl: intermediateProxy.url,
+                        noProxy: ['localhost:1234']
+                    }
+                });
+
+                const response = await request.get(remoteServer.urlFor("/test-url"));
+
+                // We get a successful response
+                expect(response).to.equal("Remote server says hi!");
+
+                // And it went via the intermediate proxy
+                expect((await proxyEndpoint.getSeenRequests()).length).to.equal(1);
+            });
+
+            it("should not skip the proxy if the target's implicit port is not in the no-proxy list", async () => {
+                // Mockttp forwards requests via our intermediate proxy
+                await server.anyRequest().thenPassThrough({
+                    proxyConfig: {
+                        proxyUrl: intermediateProxy.url,
+                        noProxy: ['example.com:443']
+                    }
+                });
+
+                await request.get('http://example.com/').catch(() => {});
+
+                // And it didn't use the proxy
                 expect((await proxyEndpoint.getSeenRequests()).length).to.equal(1);
             });
         });
