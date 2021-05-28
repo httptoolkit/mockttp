@@ -55,7 +55,9 @@ describe("Port selection", function () {
     });
 
     nodeOnly(() => {
-        describe("given 100 servers starting in parallel", () => {
+        describe("given 100 servers starting in parallel", function () {
+
+            this.timeout(10000); // This can be slow, surprise surprise.
 
             const servers = _.range(0, 100).map(() => getLocal());
 

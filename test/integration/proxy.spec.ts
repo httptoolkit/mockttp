@@ -2208,7 +2208,9 @@ nodeOnly(() => {
             });
         });
 
-        describe("when configured with custom DNS options", () => {
+        describe("when configured with custom DNS options", function () {
+
+            this.timeout(5000); // Sometimes these can take a little while, DNS failures can be slow
 
             beforeEach(async () => {
                 server = getLocal();
