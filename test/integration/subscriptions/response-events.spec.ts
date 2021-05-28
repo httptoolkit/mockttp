@@ -340,6 +340,66 @@ describe("Abort subscriptions", () => {
             expect(seenAbort.timingEvents.bodyReceivedTimestamp).to.equal(undefined);
             expect(wasRequestSeen).to.equal(false);
         });
+
+        describe("given a server that closes connections", () => {
+
+            const badServer = new http.Server((req, res) => {
+                // Forcefully close the socket with no response
+                req.socket!.destroy();
+            });
+
+            beforeEach(async () => {
+                await new Promise((resolve, reject) => {
+                    badServer.listen(8901);
+                    badServer.on('listening', resolve);
+                    badServer.on('error', reject);
+                });
+            });
+
+            afterEach(() => {
+                badServer.close();
+            });
+
+            it("should be sent when the remote server aborts the resopnse", async () => {
+                let seenAbortPromise = getDeferred<InitiatedRequest>();
+                await server.on('abort', (r) => seenAbortPromise.resolve(r));
+
+                let seenResponsePromise = getDeferred<CompletedResponse>();
+                await server.on('response', (r) => seenResponsePromise.resolve(r));
+
+                await server.anyRequest().thenForwardTo(`http://localhost:8901`);
+
+                fetch(server.urlFor("/mocked-endpoint")).catch(() => {});
+
+                await Promise.race([
+                    seenAbortPromise,
+                    seenResponsePromise.then(() => {
+                        throw new Error('Should not fire a response event');
+                    })
+                ]);
+            });
+
+            it("should be sent when a remote proxy aborts the response", async () => {
+                let seenAbortPromise = getDeferred<InitiatedRequest>();
+                await server.on('abort', (r) => seenAbortPromise.resolve(r));
+
+                let seenResponsePromise = getDeferred<CompletedResponse>();
+                await server.on('response', (r) => seenResponsePromise.resolve(r));
+
+                await server.anyRequest().thenPassThrough({
+                    proxyConfig: { proxyUrl: `http://localhost:8901` }
+                });
+
+                fetch(server.urlFor("/mocked-endpoint")).catch(() => {});
+
+                await Promise.race([
+                    seenAbortPromise,
+                    seenResponsePromise.then(() => {
+                        throw new Error('Should not fire a response event');
+                    })
+                ]);
+            });
+        });
     });
 
     it("should be sent in place of response notifications, not in addition", async () => {
@@ -347,7 +407,7 @@ describe("Abort subscriptions", () => {
         await server.on('request', (r) => seenRequestPromise.resolve(r));
 
         let seenResponsePromise = getDeferred<CompletedResponse>();
-        await server.on('response', (r) => Promise.resolve(r));
+        await server.on('response', (r) => seenResponsePromise.resolve(r));
 
         await server.post('/mocked-endpoint').thenCallback((req) => delay(500).then(() => ({})));
 
