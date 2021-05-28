@@ -1156,17 +1156,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
 
         // We only do H2 upstream for HTTPS. Http2-wrapper doesn't support H2C, it's rarely used
         // and we can't use ALPN to detect HTTP/2 support cleanly.
-        const shouldTryH2Upstream = isH2Downstream && protocol === 'https:';
-
-        let makeRequest = (
-            shouldTryH2Upstream
-                ? h2Client.auto
-            // HTTP/1 + TLS
-            : protocol === 'https:'
-                ? https.request
-            // HTTP/1 plaintext:
-                : http.request
-        ) as typeof https.request;
+        let shouldTryH2Upstream = isH2Downstream && protocol === 'https:';
 
         const effectivePort = !!port
             ? parseInt(port, 10)
@@ -1191,6 +1181,21 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
             keepAlive: shouldKeepAlive(clientReq),
             proxyConfig: this.proxyConfig
         });
+
+        if (agent && !('http2' in agent)) {
+            // I.e. only use HTTP/2 if we're using an HTTP/2-compatible agent
+            shouldTryH2Upstream = false;
+        }
+
+        let makeRequest = (
+            shouldTryH2Upstream
+                ? h2Client.auto
+            // HTTP/1 + TLS
+            : protocol === 'https:'
+                ? https.request
+            // HTTP/1 plaintext:
+                : http.request
+        ) as typeof https.request;
 
         if (isH2Downstream && shouldTryH2Upstream) {
             // We drop all incoming pseudoheaders, and regenerate them (except legally modified ones)
