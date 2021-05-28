@@ -20,9 +20,7 @@ import {
     startDnsServer,
     destroyable,
     DestroyableServer,
-    H2_TLS_ON_TLS_SUPPORTED,
-    TLS_MIN_VERSION_SUPPORTED,
-    ZLIB_BROTLI_AVAILABLE
+    H2_TLS_ON_TLS_SUPPORTED
 } from "../test-utils";
 import { generateCACertificate, CA } from "../../src/util/tls";
 import { isLocalIPv6Available } from "../../src/util/socket-util";
@@ -740,9 +738,7 @@ nodeOnly(() => {
                     let oldServerPort: number;
                     let oldServer: DestroyableServer;
 
-                    beforeEach(async function () {
-                        if (!semver.satisfies(process.version, TLS_MIN_VERSION_SUPPORTED)) this.skip();
-
+                    beforeEach(async () => {
                         const caKey = await fs.readFile('./test/fixtures/test-ca.key');
                         const caCert = await fs.readFile('./test/fixtures/test-ca.pem');
                         const ca = new CA(caKey, caCert, 1024);
@@ -2125,9 +2121,7 @@ nodeOnly(() => {
                 });
             });
 
-            it("can update a JSON body while handling encoding automatically", async function () {
-                if (!semver.satisfies(process.version, ZLIB_BROTLI_AVAILABLE)) this.skip();
-
+            it("can update a JSON body while handling encoding automatically", async () => {
                 await server.anyRequest().thenPassThrough({
                     transformResponse: {
                         updateHeaders: {

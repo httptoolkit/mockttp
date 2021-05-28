@@ -87,8 +87,7 @@ describe("TLS error subscriptions", () => {
 
         expect(tlsError.failureCause).to.be.oneOf([
             // Depends on specific client behaviour:
-            'reset', // Node 12
-            'closed', // Node 10
+            'reset', // Node 12+
             'cert-rejected' // Chrome
         ]);
         expect(tlsError.hostname).to.equal('localhost');
@@ -119,8 +118,7 @@ describe("TLS error subscriptions", () => {
 
         expect(tlsError.failureCause).to.be.oneOf([
             // Depends on specific client behaviour:
-            'reset', // Node 12
-            'closed', // Node 10
+            'reset', // Node 12+
             'cert-rejected' // Chrome
         ]);
 
@@ -146,11 +144,7 @@ describe("TLS error subscriptions", () => {
 
             const tlsError = await seenTlsErrorPromise;
 
-            expect(tlsError.failureCause).to.be.oneOf([
-                // Depends on specific client behaviour:
-                'reset', // Node 12+
-                'closed', // Node 10-
-            ]);
+            expect(tlsError.failureCause).to.be.equal('reset');
             expect(tlsError.hostname).to.equal('localhost');
             expect(tlsError.remoteIpAddress).to.equal('::ffff:127.0.0.1');
             expect(tlsError.remotePort).to.be.greaterThan(0);

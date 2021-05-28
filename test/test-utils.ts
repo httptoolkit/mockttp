@@ -196,8 +196,6 @@ export async function startDnsServer(callback: (question: dns2.DnsQuestion) => s
 }
 
 export const H2_TLS_ON_TLS_SUPPORTED = ">=12.17";
-export const TLS_MIN_VERSION_SUPPORTED = ">=12";
-export const ZLIB_BROTLI_AVAILABLE = ">=12";
 
 type Http2ResponseHeaders = http2.IncomingHttpHeaders & http2.IncomingHttpStatusHeader;
 
