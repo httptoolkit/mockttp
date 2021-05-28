@@ -192,9 +192,13 @@ nodeOnly(() => {
 
                     await client.post(targetServer.urlFor('/req')).thenPassThrough({
                         transformRequest: {
+                            updateHeaders: {
+                                'custom-header': undefined, // Remove
+                                'injected-header': 'injected-value' // Add
+                            },
                             updateJsonBody: {
-                                initialValue: undefined,
-                                replacementValue: true
+                                initialValue: undefined, // Remove
+                                replacementValue: true // Add
                             }
                         }
                     });
@@ -202,6 +206,9 @@ nodeOnly(() => {
                     expect(await request.post(targetServer.urlFor('/req'), {
                         proxy: client.urlFor("/"),
                         json: true,
+                        headers: {
+                            'custom-header': 'a custom value'
+                        },
                         body: {
                             initialValue: true
                         }
@@ -213,7 +220,8 @@ nodeOnly(() => {
                             accept: 'application/json',
                             'content-type': 'application/json',
                             'content-length': '25',
-                            connection: 'close'
+                            connection: 'close',
+                            'injected-header': 'injected-value' // Only injected header remains
                         },
                         body: JSON.stringify({
                             // Initial value is removed, only replacement remains:
@@ -223,6 +231,10 @@ nodeOnly(() => {
 
                     await client.post(targetServer.urlFor('/res')).thenPassThrough({
                         transformResponse: {
+                            updateHeaders: {
+                                'custom-header': undefined, // Remove
+                                'injected-header': 'injected-value' // Add
+                            },
                             updateJsonBody: {
                                 method: 'REPLACEMENT METHOD',
                                 headers: undefined
@@ -230,10 +242,19 @@ nodeOnly(() => {
                         }
                     });
 
-                    expect(await request.post(targetServer.urlFor('/res'), {
+                    const response = await request.post(targetServer.urlFor('/res'), {
                         proxy: client.urlFor("/"),
-                        json: true
-                    })).to.deep.equal({
+                        json: true,
+                        resolveWithFullResponse: true
+                    });
+
+                    expect(response.headers).to.deep.equal({
+                        'access-control-allow-origin': '*',
+                        'content-type': 'application/json',
+                        'injected-header': 'injected-value'
+                    });
+
+                    expect(response.body).to.deep.equal({
                         url: `http://localhost:${targetServer.port}/res`,
                         // Method field replaced, headers field removed:
                         method: 'REPLACEMENT METHOD',

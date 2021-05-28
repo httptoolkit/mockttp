@@ -656,12 +656,18 @@ interface SerializedPassThroughData {
     lookupOptions?: PassThroughLookupOptions;
 
     transformRequest?: Replace<
-        Replace<RequestTransform, 'replaceBody', string | undefined>, // Serialized as base64 buffer
-        'updateJsonBody', string | undefined // Serialized as a string to preserve undefined values
+        RequestTransform,
+        | 'replaceBody' // Serialized as base64 buffer
+        | 'updateHeaders' // // Serialized as a string to preserve undefined values
+        | 'updateJsonBody', // Serialized as a string to preserve undefined values
+        string | undefined
     >,
     transformResponse?: Replace<
-        Replace<ResponseTransform, 'replaceBody', string | undefined>, // Serialized as base64 buffer
-        'updateJsonBody', string | undefined // Serialized as a string to preserve undefined values
+        ResponseTransform,
+        | 'replaceBody' // Serialized as base64 buffer
+        | 'updateHeaders' // // Serialized as a string to preserve undefined values
+        | 'updateJsonBody', // Serialized as a string to preserve undefined values
+        string | undefined
     >,
 
     hasBeforeRequestCallback?: boolean;
@@ -851,6 +857,17 @@ function validateCustomHeaders(
 // Used in merging as a marker for values to omit, because lodash ignores undefineds.
 const OMIT_SYMBOL = Symbol('omit-value');
 const SERIALIZED_OMIT = "__mockttp__transform__omit__";
+
+// We play some games to preserve undefined values during serialization, because we differentiate them
+// in some transforms from null/not-present keys.
+const mapOmitToUndefined = <T extends { [key: string]: any }>(
+    input: T
+): { [K in keyof T]: T[K] | undefined } =>
+    _.mapValues(input, (v) =>
+        v === SERIALIZED_OMIT || v === OMIT_SYMBOL
+            ? undefined // Replace our omit placeholders with actual undefineds
+            : v
+    );
 
 export class PassThroughHandler extends Serializable implements RequestHandler {
     readonly type = 'passthrough';
@@ -1509,9 +1526,16 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
             ),
             transformRequest: {
                 ...this.transformRequest,
+                // Body is always serialized as a base64 buffer:
                 replaceBody: !!this.transformRequest?.replaceBody
-                    // Always serialize as a base64 buffer:
                     ? serializeBuffer(asBuffer(this.transformRequest.replaceBody))
+                    : undefined,
+                // Update objects need to capture undefined & null as distict values:
+                updateHeaders: !!this.transformRequest?.updateHeaders
+                    ? JSON.stringify(
+                        this.transformRequest.updateHeaders,
+                        (k, v) => v === undefined ? SERIALIZED_OMIT : v
+                    )
                     : undefined,
                 updateJsonBody: !!this.transformRequest?.updateJsonBody
                     ? JSON.stringify(
@@ -1522,9 +1546,16 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
             },
             transformResponse: {
                 ...this.transformResponse,
+                // Body is always serialized as a base64 buffer:
                 replaceBody: !!this.transformResponse?.replaceBody
-                    // Always serialize as a base64 buffer:
                     ? serializeBuffer(asBuffer(this.transformResponse.replaceBody))
+                    : undefined,
+                // Update objects need to capture undefined & null as distict values:
+                updateHeaders: !!this.transformResponse?.updateHeaders
+                    ? JSON.stringify(
+                        this.transformResponse.updateHeaders,
+                        (k, v) => v === undefined ? SERIALIZED_OMIT : v
+                    )
                     : undefined,
                 updateJsonBody: !!this.transformResponse?.updateJsonBody
                     ? JSON.stringify(
@@ -1581,25 +1612,25 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 ...(data.transformRequest?.replaceBody !== undefined ? {
                     replaceBody: deserializeBuffer(data.transformRequest.replaceBody)
                 } : {}),
-                ...(data.transformRequest?.updateJsonBody !== undefined ? {
-                    updateJsonBody: JSON.parse(
-                        data.transformRequest.updateJsonBody,
-                        (k, v) => v === SERIALIZED_OMIT ? OMIT_SYMBOL : v
-                    )
+                ...(data.transformRequest?.updateHeaders !== undefined ? {
+                    updateHeaders: mapOmitToUndefined(JSON.parse(data.transformRequest.updateHeaders))
                 } : {}),
-            },
+                ...(data.transformRequest?.updateJsonBody !== undefined ? {
+                    updateJsonBody: mapOmitToUndefined(JSON.parse(data.transformRequest.updateJsonBody))
+                } : {}),
+            } as RequestTransform,
             transformResponse: {
                 ...data.transformResponse,
                 ...(data.transformResponse?.replaceBody !== undefined ? {
                     replaceBody: deserializeBuffer(data.transformResponse.replaceBody)
                 } : {}),
+                ...(data.transformResponse?.updateHeaders !== undefined ? {
+                    updateHeaders: mapOmitToUndefined(JSON.parse(data.transformResponse.updateHeaders))
+                } : {}),
                 ...(data.transformResponse?.updateJsonBody !== undefined ? {
-                    updateJsonBody: JSON.parse(
-                        data.transformResponse.updateJsonBody,
-                        (k, v) => v === SERIALIZED_OMIT ? OMIT_SYMBOL : v
-                    )
+                    updateJsonBody: mapOmitToUndefined(JSON.parse(data.transformResponse.updateJsonBody))
                 } : {})
-            },
+            } as ResponseTransform,
             // Backward compat for old clients:
             ...data.forwardToLocation ? {
                 forwarding: { targetHost: data.forwardToLocation }
