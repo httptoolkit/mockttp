@@ -549,7 +549,7 @@ export interface PassThroughHandlerOptions {
     beforeResponse?: (res: PassThroughResponse) => MaybePromise<CallbackResponseResult>;
 }
 
-interface RequestTransform {
+export interface RequestTransform {
 
     /**
      * A replacement HTTP method. Case insensitive.
@@ -597,7 +597,7 @@ interface RequestTransform {
     };
 }
 
-interface ResponseTransform {
+export interface ResponseTransform {
 
     /**
      * A replacement response status code.
@@ -645,7 +645,6 @@ interface ResponseTransform {
     };
 
 }
-
 
 interface SerializedPassThroughData {
     type: 'passthrough';

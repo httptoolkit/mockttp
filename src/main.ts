@@ -20,6 +20,7 @@ import * as completionCheckers from './rules/completion-checkers';
 
 import { RequestRuleData } from './rules/requests/request-rule';
 import { WebSocketRuleData } from './rules/websockets/websocket-rule';
+export { ProxyConfig } from './util/http-agents';
 
 export { RequestRuleData, WebSocketRuleData };
 export { matchers, requestHandlers, webSocketHandlers, completionCheckers };
