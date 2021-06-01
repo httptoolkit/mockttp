@@ -1071,7 +1071,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 reqBodyOverride = await readFile(replaceBodyFromFile, null);
             } else if (updateJsonBody) {
                 const { body: realBody } = await waitForCompletedRequest(clientReq);
-                if (realBody.getJson === undefined) {
+                if (await realBody.getJson() === undefined) {
                     throw new Error("Can't transform non-JSON request body");
                 }
 
@@ -1285,8 +1285,9 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                         resBodyOverride = await readFile(replaceBodyFromFile, null);
                     } else if (updateJsonBody) {
                         const rawBody = await streamToBuffer(serverRes);
-                        const realBody = buildBodyReader(rawBody, serverHeaders)
-                        if (realBody.getJson === undefined) {
+                        const realBody = buildBodyReader(rawBody, serverRes.headers);
+
+                        if (await realBody.getJson() === undefined) {
                             throw new Error("Can't transform non-JSON response body");
                         }
 
