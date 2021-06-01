@@ -139,7 +139,7 @@
     "fetch-ponyfill": "^7.1.0",
     "graphql": "^14.0.2",
     "graphql-subscriptions": "^1.1.0",
-    "http-encoding": "^1.1.0",
+    "http-encoding": "^1.2.0",
     "http2-wrapper": "^2.0.5",
     "lodash": "^4.16.4",
     "native-duplexpair": "^1.0.0",
