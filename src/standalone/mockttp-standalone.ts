@@ -227,7 +227,11 @@ export class MockttpStandalone {
         const mockServerRouter = express.Router();
         this.routers[mockPort] = mockServerRouter;
 
-        mockServerRouter.post('/stop', async (req, res) => {
+        let running = true;
+        const stopServer = async () => {
+            if (!running) return;
+            running = false;
+
             await mockServer.stop();
 
             this.mockServers = _.reject(this.mockServers, mockServer);
@@ -239,7 +243,10 @@ export class MockttpStandalone {
             this.streamServers[mockPort].close();
             this.streamServers[mockPort].emit('close');
             delete this.streamServers[mockPort];
+        };
 
+        mockServerRouter.post('/stop', async (req, res) => {
+            await stopServer();
             res.status(200).send(JSON.stringify({
                 success: true
             }));
@@ -268,6 +275,15 @@ export class MockttpStandalone {
             wsSocket.end();
             serverSocket.end();
         });
+
+        // Handle errors by logging & stopping this server instance
+        const onStreamError = (e: Error) => {
+            console.error("Error in server standalone stream, shutting down mock server");
+            console.error(e);
+            stopServer();
+        };
+        wsSocket.on('error', onStreamError);
+        serverSocket.on('error', onStreamError);
 
         const schema = await this.loadSchema('schema.gql', mockServer, serverSocket);
 
