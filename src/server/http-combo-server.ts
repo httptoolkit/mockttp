@@ -50,6 +50,7 @@ function ifTlsDropped(socket: tls.TLSSocket, errorCallback: () => void) {
         socket.once('data', resolve);
 
         // If you silently close it very quicky, you probably don't trust us
+        socket.once('error', reject);
         socket.once('close', reject);
         socket.once('end', reject);
 

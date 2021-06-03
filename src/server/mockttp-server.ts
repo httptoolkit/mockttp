@@ -399,6 +399,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         // In Node 16+ we don't get an abort event in many cases, just closes, but we know
         // it's aborted because the response is closed with no other result being set.
         rawResponse.once('close', () => setImmediate(abort));
+        request.once('error', () => setImmediate(abort));
 
         this.announceInitialRequestAsync(request);
 
