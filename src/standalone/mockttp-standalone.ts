@@ -18,7 +18,7 @@ import * as ws from 'ws';
 import { graphqlHTTP } from 'express-graphql';
 import { GraphQLSchema, execute, subscribe } from 'graphql';
 import { makeExecutableSchema } from '@graphql-tools/schema';
-import { SubscriptionServer } from 'subscriptions-transport-ws';
+import { SubscriptionServer } from '@httptoolkit/subscriptions-transport-ws';
 import connectWebSocketStream = require('websocket-stream');
 import { Duplex } from 'stream';
 import DuplexPair = require('native-duplexpair');

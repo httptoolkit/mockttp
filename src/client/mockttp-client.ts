@@ -7,7 +7,7 @@ import getFetchPonyfill = require('fetch-ponyfill');
 import _ = require('lodash');
 import * as WebSocket from 'universal-websocket-client';
 import connectWebSocketStream = require('websocket-stream');
-import { SubscriptionClient } from 'subscriptions-transport-ws';
+import { SubscriptionClient } from '@httptoolkit/subscriptions-transport-ws';
 import { Duplex } from 'stream';
 
 const {

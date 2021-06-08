@@ -123,6 +123,7 @@
   "dependencies": {
     "@graphql-tools/schema": "^7.1.5",
     "@httptoolkit/httpolyglot": "^1.0.0",
+    "@httptoolkit/subscriptions-transport-ws": "^0.9.19",
     "@types/cors": "^2.8.6",
     "@types/express": "^4.0.33",
     "@types/node": "^14.14.37",
@@ -148,7 +149,6 @@
     "performance-now": "^2.1.0",
     "portfinder": "^1.0.23",
     "proxy-agent": "^4.0.1",
-    "subscriptions-transport-ws": "^0.9.4",
     "typed-error": "^3.0.2",
     "universal-websocket-client": "^1.0.2",
     "uuid": "^3.1.0",
