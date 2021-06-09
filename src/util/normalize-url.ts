@@ -4,21 +4,8 @@
 
 import * as url from 'url';
 import * as _ from 'lodash';
-import * as normalize from "normalize-url";
 
 import { isAbsoluteProtocollessUrl } from './request-utils';
-
-// Preserved so we can correctly normalize serialized data, for backward compat
-// with legacy servers.
-export const legacyNormalizeUrl =
-    _.memoize(
-        (url: string): string =>
-            normalize(url, {
-                stripWWW: false,
-                removeTrailingSlash: false,
-                removeQueryParameters: [/.*/],
-            })
-    );
 
 /**
  * Normalizes URLs to the form used when matching them.

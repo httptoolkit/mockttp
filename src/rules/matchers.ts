@@ -15,7 +15,7 @@ import {
 } from '../util/request-utils';
 import { Serializable, ClientServerChannel } from "../util/serialization";
 import { MaybePromise } from '../util/type-utils';
-import { normalizeUrl, legacyNormalizeUrl } from '../util/normalize-url';
+import { normalizeUrl } from '../util/normalize-url';
 
 export interface RequestMatcher extends Explainable, Serializable {
     type: keyof typeof MatcherLookup;
@@ -127,13 +127,6 @@ export class SimplePathMatcher extends Serializable implements RequestMatcher {
     explain() {
         return `for ${this.path}`;
     }
-
-    serialize(channel: ClientServerChannel) {
-        return Object.assign(super.serialize(channel), {
-            // For backward compat, will used by older (<0.17) servers
-            normalizedUrl: legacyNormalizeUrl(this.path)
-        });
-    }
 }
 
 export class RegexPathMatcher extends Serializable implements RequestMatcher {
@@ -146,34 +139,19 @@ export class RegexPathMatcher extends Serializable implements RequestMatcher {
     }
 
     matches(request: OngoingRequest) {
-        if (this.regexSource !== undefined) {
-            const absoluteUrl = normalizeUrl(request.url);
-            const urlPath = getPathFromAbsoluteUrl(absoluteUrl);
+        const absoluteUrl = normalizeUrl(request.url);
+        const urlPath = getPathFromAbsoluteUrl(absoluteUrl);
 
-            // Test the matcher against both the path alone & the full URL
-            const urlMatcher = new RegExp(this.regexSource);
-            return urlMatcher.test(absoluteUrl) ||
-                urlMatcher.test(urlPath);
-        } else {
-            const { regexString } = (this as this & { regexString: string });
-
-            // Old client, use old normalization & logic. Without this, old clients that check
-            // example.com$ will fail to match (they should check ...com/$)
-            let urlMatcher = new RegExp(regexString);
-            return urlMatcher.test(legacyNormalizeUrl(request.url));
-        }
+        // Test the matcher against both the path alone & the full URL
+        const urlMatcher = new RegExp(this.regexSource);
+        return urlMatcher.test(absoluteUrl) ||
+            urlMatcher.test(urlPath);
     }
 
     explain() {
         return `matching /${unescapeRegexp(this.regexSource)}/`;
     }
 
-    serialize(channel: ClientServerChannel) {
-        return Object.assign(super.serialize(channel), {
-            // Backward compat for old servers
-            regexString: this.regexSource
-        });
-    }
 }
 
 export class HeaderMatcher extends Serializable implements RequestMatcher {
