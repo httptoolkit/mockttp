@@ -527,7 +527,7 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
         let requestExplanation = await this.explainRequest(request);
         if (this.debug) console.warn(`Unmatched request received: ${requestExplanation}`);
 
-        return `No rules were found matching this request.");
+        return `No rules were found matching this request.
 This request was: ${requestExplanation}
 
 ${(this.requestRules.length > 0 || this.webSocketRules.length > 0)
