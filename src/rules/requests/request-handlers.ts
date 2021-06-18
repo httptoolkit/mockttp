@@ -513,11 +513,11 @@ export interface PassThroughHandlerOptions {
     /**
      * A callback that will be passed the full request before it is passed through,
      * and which returns an object that defines how the the request content should
-     * be changed before it's passed to the upstream server.
+     * be transformed before it's passed to the upstream server.
      *
-     * The callback should return an object that definies how the request
-     * should be changed. All fields on the object are optional. The possible
-     * fields are:
+     * The callback can return an object to define how the request should be changed.
+     * All fields on the object are optional, and returning undefined is equivalent
+     * to returning an empty object (transforming nothing). The possible fields are:
      *
      * - `method` (a replacement HTTP verb, capitalized)
      * - `url` (a full URL to send the request to)
@@ -529,16 +529,16 @@ export interface PassThroughHandlerOptions {
      * - `json` (object, to be sent as a JSON-encoded body, taking precedence
      *   over `body` if both are set)
      */
-    beforeRequest?: (req: CompletedRequest) => MaybePromise<CallbackRequestResult>;
+    beforeRequest?: (req: CompletedRequest) => MaybePromise<CallbackRequestResult | void> | void;
 
     /**
      * A callback that will be passed the full response before it is passed through,
      * and which returns an object that defines how the the response content should
-     * before it's returned to the client.
+     * be transformed before it's returned to the client.
      *
-     * The callback should return an object that definies how the response
-     * should be changed. All fields on the object are optional. The possible
-     * fields are:
+     * The callback can return an object to define how the response should be changed.
+     * All fields on the object are optional, and returning undefined is equivalent
+     * to returning an empty object (transforming nothing). The possible fields are:
      *
      * - `status` (number, will replace the HTTP status code)
      * - `headers` (object with string keys & values, replaces all headers if set)
@@ -546,7 +546,7 @@ export interface PassThroughHandlerOptions {
      * - `json` (object, to be sent as a JSON-encoded body, taking precedence
      *   over `body` if both are set)
      */
-    beforeResponse?: (res: PassThroughResponse) => MaybePromise<CallbackResponseResult>;
+    beforeResponse?: (res: PassThroughResponse) => MaybePromise<CallbackResponseResult | void> | void;
 }
 
 export interface RequestTransform {
@@ -882,8 +882,10 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
     public readonly transformRequest?: RequestTransform;
     public readonly transformResponse?: ResponseTransform;
 
-    public readonly beforeRequest?: (req: CompletedRequest) => MaybePromise<CallbackRequestResult>;
-    public readonly beforeResponse?: (res: PassThroughResponse) => MaybePromise<CallbackResponseResult>;
+    public readonly beforeRequest?: (req: CompletedRequest) =>
+        MaybePromise<CallbackRequestResult | void> | void;
+    public readonly beforeResponse?: (res: PassThroughResponse) =>
+        MaybePromise<CallbackResponseResult | void> | void;
 
     public readonly lookupOptions?: PassThroughLookupOptions;
     public readonly proxyConfig?: ProxyConfig;
@@ -1113,49 +1115,49 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 headers: _.clone(completedRequest.headers)
             });
 
-            if (modifiedReq.response) {
+            if (modifiedReq?.response) {
                 // The callback has provided a full response: don't passthrough at all, just use it.
                 writeResponseFromCallback(modifiedReq.response, clientRes);
                 return;
             }
 
-            method = modifiedReq.method || method;
-            reqUrl = modifiedReq.url || reqUrl;
-            headers = modifiedReq.headers || headers;
+            method = modifiedReq?.method || method;
+            reqUrl = modifiedReq?.url || reqUrl;
+            headers = modifiedReq?.headers || headers;
 
             Object.assign(headers,
                 isH2Downstream
-                    ? getCorrectPseudoheaders(reqUrl, clientReq.headers, modifiedReq.headers)
-                    : { 'host': getCorrectHost(reqUrl, clientReq.headers, modifiedReq.headers) }
+                    ? getCorrectPseudoheaders(reqUrl, clientReq.headers, modifiedReq?.headers)
+                    : { 'host': getCorrectHost(reqUrl, clientReq.headers, modifiedReq?.headers) }
             );
 
-            headersManuallyModified = !!modifiedReq.headers;
+            headersManuallyModified = !!modifiedReq?.headers;
 
             validateCustomHeaders(
                 completedRequest.headers,
-                modifiedReq.headers,
+                modifiedReq?.headers,
                 OVERRIDABLE_REQUEST_PSEUDOHEADERS // These are handled by getCorrectPseudoheaders above
             );
 
-            if (modifiedReq.json) {
+            if (modifiedReq?.json) {
                 headers['content-type'] = 'application/json';
-                reqBodyOverride = asBuffer(JSON.stringify(modifiedReq.json));
+                reqBodyOverride = asBuffer(JSON.stringify(modifiedReq?.json));
             } else {
-                reqBodyOverride = getCallbackResultBody(modifiedReq.body);
+                reqBodyOverride = getCallbackResultBody(modifiedReq?.body);
             }
 
             if (reqBodyOverride !== undefined) {
                 headers['content-length'] = getCorrectContentLength(
                     reqBodyOverride,
                     clientReq.headers,
-                    modifiedReq.headers
+                    modifiedReq?.headers
                 );
             }
             headers = dropUndefinedValues(headers);
 
             // Reparse the new URL, if necessary
-            if (modifiedReq.url) {
-                if (!isAbsoluteUrl(modifiedReq.url)) throw new Error("Overridden request URLs must be absolute");
+            if (modifiedReq?.url) {
+                if (!isAbsoluteUrl(modifiedReq?.url)) throw new Error("Overridden request URLs must be absolute");
                 ({ protocol, hostname, port, path } = url.parse(reqUrl));
             }
         }
@@ -1324,7 +1326,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
 
                     serverHeaders = dropUndefinedValues(serverHeaders);
                 } else if (this.beforeResponse) {
-                    let modifiedRes: CallbackResponseResult;
+                    let modifiedRes: CallbackResponseResult | void;
                     let body: Buffer;
 
                     body = await streamToBuffer(serverRes);
@@ -1338,28 +1340,28 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                         body: buildBodyReader(body, serverHeaders)
                     });
 
-                    validateCustomHeaders(cleanHeaders, modifiedRes.headers);
+                    validateCustomHeaders(cleanHeaders, modifiedRes?.headers);
 
-                    serverStatusCode = modifiedRes.statusCode ||
-                        modifiedRes.status ||
+                    serverStatusCode = modifiedRes?.statusCode ||
+                        modifiedRes?.status ||
                         serverStatusCode;
-                    serverStatusMessage = modifiedRes.statusMessage ||
+                    serverStatusMessage = modifiedRes?.statusMessage ||
                         serverStatusMessage;
 
-                    serverHeaders = modifiedRes.headers || serverHeaders;
+                    serverHeaders = modifiedRes?.headers || serverHeaders;
 
-                    if (modifiedRes.json) {
+                    if (modifiedRes?.json) {
                         serverHeaders['content-type'] = 'application/json';
-                        resBodyOverride = asBuffer(JSON.stringify(modifiedRes.json));
+                        resBodyOverride = asBuffer(JSON.stringify(modifiedRes?.json));
                     } else {
-                        resBodyOverride = getCallbackResultBody(modifiedRes.body);
+                        resBodyOverride = getCallbackResultBody(modifiedRes?.body);
                     }
 
                     if (resBodyOverride !== undefined) {
                         serverHeaders['content-length'] = getCorrectContentLength(
                             resBodyOverride,
                             serverRes.headers,
-                            modifiedRes.headers,
+                            modifiedRes?.headers,
                             method === 'HEAD' // HEAD responses are allowed mismatched content-length
                         );
                     } else {
@@ -1486,30 +1488,32 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
         if (this.beforeRequest) {
             channel.onRequest<
                 BeforePassthroughRequestRequest,
-                CallbackRequestResult
+                CallbackRequestResult | undefined
             >('beforeRequest', async (req) => {
-                const result = withSerializedBodyBuffer(
-                    await this.beforeRequest!(
-                        withDeserializedBodyReader(req.args[0])
-                    )
+                const callbackResult = await this.beforeRequest!(
+                    withDeserializedBodyReader(req.args[0])
                 );
-                if (result.response) {
-                    result.response = withSerializedBodyBuffer(result.response);
+                const serializedResult = callbackResult
+                    ? withSerializedBodyBuffer(callbackResult)
+                    : undefined;
+                if (serializedResult?.response) {
+                    serializedResult.response = withSerializedBodyBuffer(serializedResult.response);
                 }
-                return result;
+                return serializedResult;
             });
         }
 
         if (this.beforeResponse) {
             channel.onRequest<
                 BeforePassthroughResponseRequest,
-                CallbackResponseResult
+                CallbackResponseResult | undefined
             >('beforeResponse', async (req) => {
-                return withSerializedBodyBuffer(
-                    await this.beforeResponse!(
-                        withDeserializedBodyReader(req.args[0])
-                    )
+                const callbackResult = await this.beforeResponse!(
+                    withDeserializedBodyReader(req.args[0])
                 );
+                return callbackResult
+                    ? withSerializedBodyBuffer(callbackResult)
+                    : undefined;
             });
         }
 

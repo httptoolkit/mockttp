@@ -200,6 +200,19 @@ nodeOnly(() => {
                 }).cause.code).to.equal('ECONNRESET');
             });
 
+            it("should be able to run a callback that checks the request's data", async () => {
+                await remoteServer.get('/').thenReply(200, 'GET');
+
+                await server.get(remoteServer.urlFor("/")).thenPassThrough({
+                    beforeRequest: (req) => {
+                        expect(req.method).to.equal('GET');
+                    }
+                });
+
+                let response = await request.get(remoteServer.urlFor("/"));
+                expect(response).to.equal("GET");
+            });
+
             it("should be able to rewrite a request's method", async () => {
                 await remoteServer.get('/').thenReply(200, 'GET');
                 await remoteServer.post('/').thenReply(200, 'POST');
@@ -397,6 +410,22 @@ nodeOnly(() => {
 
                 expect(response.statusCode).to.equal(404);
                 expect(response.body).to.equal('Fake 404');
+            });
+
+            it("should be able to run a callback that checks the response's data", async () => {
+                await remoteServer.get('/').thenReply(200);
+
+                await server.get(remoteServer.urlFor("/")).thenPassThrough({
+                    beforeResponse: (res) => {
+                        expect(res.statusCode).to.equal(200);
+                    }
+                });
+
+                let response = await request.get(remoteServer.urlFor("/"), {
+                    resolveWithFullResponse: true,
+                    simple: false
+                });
+                expect(response.statusCode).to.equal(200);
             });
 
             it("should be able to rewrite a response's status", async () => {
