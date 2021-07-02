@@ -545,6 +545,26 @@ nodeOnly(() => {
                 expect(response).to.equal('real body');
             });
 
+            it("should be able to close the response connection from beforeResponse", async () => {
+                const remoteEndpoint = await remoteServer.get('/').thenReply(200);
+                await server.anyRequest().thenPassThrough({
+                    ignoreHostCertificateErrors: ['localhost'],
+                    beforeResponse: () => 'close'
+                });
+
+                let response: Response | Error = await request.get(remoteServer.url, {
+                    simple: false
+                }).catch((e) => e);
+
+                expect(response).to.be.instanceOf(Error);
+                expect((response as Error & {
+                    cause: { code: string }
+                }).cause.code).to.equal('ECONNRESET');
+
+                const seenRequests = await remoteEndpoint.getSeenRequests();
+                expect(seenRequests.length).to.equal(1); // Request is really sent first though
+            });
+
             it("should return a 500 if the request rewriting fails", async () => {
                 await remoteServer.get('/').thenReply(200, 'text');
 

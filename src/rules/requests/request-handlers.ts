@@ -71,10 +71,14 @@ export interface CallbackRequestResult {
     json?: any;
     body?: string | Buffer;
 
-    response?: CallbackResponseResult | 'close';
+    response?: CallbackResponseResult;
 }
 
-export interface CallbackResponseResult {
+export type CallbackResponseResult =
+    | CallbackResponseMessageResult
+    | 'close';
+
+export interface CallbackResponseMessageResult {
     statusCode?: number;
     status?: number; // exists for backwards compatibility only
     statusMessage?: string;
@@ -142,7 +146,7 @@ interface CallbackRequestMessage {
     ];
 }
 
-function writeResponseFromCallback(result: CallbackResponseResult, response: OngoingResponse) {
+function writeResponseFromCallback(result: CallbackResponseMessageResult, response: OngoingResponse) {
     if (result.json !== undefined) {
         result.headers = _.assign(result.headers || {}, { 'Content-Type': 'application/json' });
         result.body = JSON.stringify(result.json);
@@ -166,7 +170,7 @@ export class CallbackHandler extends Serializable implements RequestHandler {
     readonly type = 'callback';
 
     constructor(
-        public callback: (request: CompletedRequest) => MaybePromise<CallbackResponseResult | 'close'>
+        public callback: (request: CompletedRequest) => MaybePromise<CallbackResponseResult>
     ) {
         super();
     }
@@ -178,7 +182,7 @@ export class CallbackHandler extends Serializable implements RequestHandler {
     async handle(request: OngoingRequest, response: OngoingResponse) {
         let req = await waitForCompletedRequest(request);
 
-        let outResponse: CallbackResponseResult | 'close';
+        let outResponse: CallbackResponseResult;
         try {
             outResponse = await this.callback(req);
         } catch (error) {
@@ -198,7 +202,7 @@ export class CallbackHandler extends Serializable implements RequestHandler {
     serialize(channel: ClientServerChannel): SerializedCallbackHandlerData {
         channel.onRequest<
             CallbackRequestMessage,
-            CallbackResponseResult | 'close'
+            CallbackResponseResult
         >(async (streamMsg) => {
             const request = _.isString(streamMsg.args[0].body)
                 ? withDeserializedBodyReader( // New format: body serialized as base64
@@ -225,7 +229,7 @@ export class CallbackHandler extends Serializable implements RequestHandler {
         const rpcCallback = async (request: CompletedRequest) => {
             const callbackResult = await channel.request<
                 CallbackRequestMessage,
-                WithSerializedBodyBuffer<CallbackResponseResult> | 'close'
+                WithSerializedBodyBuffer<CallbackResponseMessageResult> | 'close'
             >({ args: [
                 (version || -1) >= 2
                     ? withSerializedBodyReader(request)
@@ -547,10 +551,12 @@ export interface PassThroughHandlerOptions {
 
     /**
      * A callback that will be passed the full response before it is passed through,
-     * and which returns an object that defines how the the response content should
+     * and which returns a value that defines how the the response content should
      * be transformed before it's returned to the client.
      *
-     * The callback can return an object to define how the response should be changed.
+     * The callback can either return an object to define how the response should be
+     * changed, or the string 'close' to immediately close the underlying connection.
+     *
      * All fields on the object are optional, and returning undefined is equivalent
      * to returning an empty object (transforming nothing). The possible fields are:
      *
@@ -1360,6 +1366,13 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                         body: buildBodyReader(body, serverHeaders)
                     });
 
+                    if (modifiedRes === 'close') {
+                        // Dump the real response data and kill the client socket:
+                        serverRes.resume();
+                        (clientRes as any).socket.end();
+                        throw new AbortError('Connection closed (intentionally)');
+                    }
+
                     validateCustomHeaders(cleanHeaders, modifiedRes?.headers);
 
                     serverStatusCode = modifiedRes?.statusCode ||
@@ -1513,12 +1526,15 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 const callbackResult = await this.beforeRequest!(
                     withDeserializedBodyReader(req.args[0])
                 );
+
                 const serializedResult = callbackResult
                     ? withSerializedBodyBuffer(callbackResult)
                     : undefined;
+
                 if (serializedResult?.response && typeof serializedResult?.response !== 'string') {
                     serializedResult.response = withSerializedBodyBuffer(serializedResult.response);
                 }
+
                 return serializedResult;
             });
         }
@@ -1531,9 +1547,14 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 const callbackResult = await this.beforeResponse!(
                     withDeserializedBodyReader(req.args[0])
                 );
-                return callbackResult
-                    ? withSerializedBodyBuffer(callbackResult)
-                    : undefined;
+
+                if (typeof callbackResult === 'string') {
+                    return callbackResult;
+                } else if (callbackResult) {
+                    return withSerializedBodyBuffer(callbackResult);
+                } else {
+                    return undefined;
+                }
             });
         }
 
@@ -1595,8 +1616,8 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
     }
 
     static deserialize(data: SerializedPassThroughData, channel: ClientServerChannel): PassThroughHandler {
-        let beforeRequest: ((req: CompletedRequest) => MaybePromise<CallbackRequestResult>) | undefined;
-        let beforeResponse: ((res: PassThroughResponse) => MaybePromise<CallbackResponseResult>) | undefined;
+        let beforeRequest: ((req: CompletedRequest) => MaybePromise<CallbackRequestResult | void>) | undefined;
+        let beforeResponse: ((res: PassThroughResponse) => MaybePromise<CallbackResponseResult | void>) | undefined;
 
         if (data.hasBeforeRequestCallback) {
             beforeRequest = async (req: CompletedRequest) => {
@@ -1608,9 +1629,10 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                         args: [withSerializedBodyReader(req)]
                     })
                 );
+
                 if (result.response && typeof result.response !== 'string') {
                     result.response = withDeserializedBodyBuffer(
-                        result.response as WithSerializedBodyBuffer<CallbackResponseResult>
+                        result.response as WithSerializedBodyBuffer<CallbackResponseMessageResult>
                     );
                 }
 
@@ -1620,12 +1642,18 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
 
         if (data.hasBeforeResponseCallback) {
             beforeResponse = async (res: PassThroughResponse) => {
-                return withDeserializedBodyBuffer(await channel.request<
+                const callbackResult = await channel.request<
                     BeforePassthroughResponseRequest,
-                    WithSerializedBodyBuffer<CallbackResponseResult>
+                    WithSerializedBodyBuffer<CallbackResponseMessageResult> | 'close' | undefined
                 >('beforeResponse', {
                     args: [withSerializedBodyReader(res)]
-                }));
+                })
+
+                if (callbackResult && typeof callbackResult !== 'string') {
+                    return withDeserializedBodyBuffer(callbackResult);
+                } else {
+                    return callbackResult;
+                }
             };
         }
 

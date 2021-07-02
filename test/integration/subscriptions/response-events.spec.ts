@@ -357,6 +357,25 @@ describe("Abort subscriptions", () => {
         expect(seenRequest.id).to.equal(seenAbort.id);
     });
 
+    it("should be sent when a request is intentionally closed by beforeResponse", async () => {
+        let seenRequestPromise = getDeferred<CompletedRequest>();
+        await server.on('request', (r) => seenRequestPromise.resolve(r));
+
+        let seenAbortPromise = getDeferred<InitiatedRequest>();
+        await server.on('abort', (r) => seenAbortPromise.resolve(r));
+
+        await server.get('/mocked-endpoint').thenPassThrough({
+            forwarding: { targetHost: 'example.com' },
+            beforeResponse: () => 'close'
+        });
+
+        fetch(server.urlFor('/mocked-endpoint')).catch(() => {});
+
+        let seenRequest = await seenRequestPromise;
+        let seenAbort = await seenAbortPromise;
+        expect(seenRequest.id).to.equal(seenAbort.id);
+    });
+
     nodeOnly(() => {
         it("should be sent when a request is aborted before completion", async () => {
             let wasRequestSeen = false;
