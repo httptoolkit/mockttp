@@ -305,21 +305,38 @@ describe("Abort subscriptions", () => {
         expect(seenRequest.id).to.equal(seenAbort.id);
     });
 
-    it("should be sent when a request is intentionally reset by a handler", async () => {
+    it("should be sent when a request is intentionally closed by a close handler", async () => {
         let seenRequestPromise = getDeferred<CompletedRequest>();
         await server.on('request', (r) => seenRequestPromise.resolve(r));
 
         let seenAbortPromise = getDeferred<InitiatedRequest>();
         await server.on('abort', (r) => seenAbortPromise.resolve(r));
 
-        await server.post('/mocked-endpoint').thenCloseConnection();
+        await server.get('/mocked-endpoint').thenCloseConnection();
 
-        let abortable = makeAbortableRequest(server, '/mocked-endpoint');
-        nodeOnly(() => (abortable as http.ClientRequest).end('request body'));
+        fetch(server.urlFor('/mocked-endpoint')).catch(() => {});
 
         let seenRequest = await seenRequestPromise;
-        abortable.abort();
+        let seenAbort = await seenAbortPromise;
+        expect(seenRequest.id).to.equal(seenAbort.id);
+    });
 
+    it("should be sent when a request is intentionally closed by beforeRequest", async () => {
+        let seenRequestPromise = getDeferred<CompletedRequest>();
+        await server.on('request', (r) => seenRequestPromise.resolve(r));
+
+        let seenAbortPromise = getDeferred<InitiatedRequest>();
+        await server.on('abort', (r) => seenAbortPromise.resolve(r));
+
+        await server.get('/mocked-endpoint').thenPassThrough({
+            beforeRequest: () => ({
+                response: 'close'
+            })
+        });
+
+        fetch(server.urlFor('/mocked-endpoint')).catch(() => {});
+
+        let seenRequest = await seenRequestPromise;
         let seenAbort = await seenAbortPromise;
         expect(seenRequest.id).to.equal(seenAbort.id);
     });

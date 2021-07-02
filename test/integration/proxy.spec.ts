@@ -412,6 +412,28 @@ nodeOnly(() => {
                 expect(response.body).to.equal('Fake 404');
             });
 
+            it("should be able to edit a request to close the connection directly", async () => {
+                const remoteEndpoint = await remoteServer.get('/').thenReply(200);
+
+                await server.get(remoteServer.urlFor("/")).thenPassThrough({
+                    beforeRequest: () => ({
+                        response: 'close'
+                    })
+                });
+
+                let response: Response | Error = await request.get(remoteServer.url, {
+                    simple: false
+                }).catch((e) => e);
+
+                expect(response).to.be.instanceOf(Error);
+                expect((response as Error & {
+                    cause: { code: string }
+                }).cause.code).to.equal('ECONNRESET');
+
+                const seenRequests = await remoteEndpoint.getSeenRequests();
+                expect(seenRequests.length).to.equal(0);
+            });
+
             it("should be able to run a callback that checks the response's data", async () => {
                 await remoteServer.get('/').thenReply(200);
 

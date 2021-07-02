@@ -71,7 +71,7 @@ export interface CallbackRequestResult {
     json?: any;
     body?: string | Buffer;
 
-    response?: CallbackResponseResult;
+    response?: CallbackResponseResult | 'close';
 }
 
 export interface CallbackResponseResult {
@@ -521,13 +521,14 @@ export interface PassThroughHandlerOptions {
      *
      * - `method` (a replacement HTTP verb, capitalized)
      * - `url` (a full URL to send the request to)
-     * - `response` (a response callback result: if provided this will be used
-     *   directly, the request will not be passed through at all, and any
-     *   beforeResponse callback will never fire)
      * - `headers` (object with string keys & values, replaces all headers if set)
      * - `body` (string or buffer, replaces the body if set)
      * - `json` (object, to be sent as a JSON-encoded body, taking precedence
      *   over `body` if both are set)
+     * - `response` (a response callback result, either a response object or 'close',
+     *   if provided this will be used as an immediately response, the request will
+     *   not be passed through at all, and any beforeResponse callback will never
+     *   fire)
      */
     beforeRequest?: (req: CompletedRequest) => MaybePromise<CallbackRequestResult | void> | void;
 
@@ -1116,9 +1117,15 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
             });
 
             if (modifiedReq?.response) {
-                // The callback has provided a full response: don't passthrough at all, just use it.
-                writeResponseFromCallback(modifiedReq.response, clientRes);
-                return;
+                if (modifiedReq.response === 'close') {
+                    const socket: net.Socket = (<any> clientReq).socket;
+                    socket.end();
+                    throw new AbortError('Connection closed (intentionally)');
+                } else {
+                    // The callback has provided a full response: don't passthrough at all, just use it.
+                    writeResponseFromCallback(modifiedReq.response, clientRes);
+                    return;
+                }
             }
 
             method = modifiedReq?.method || method;
@@ -1496,7 +1503,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 const serializedResult = callbackResult
                     ? withSerializedBodyBuffer(callbackResult)
                     : undefined;
-                if (serializedResult?.response) {
+                if (serializedResult?.response && typeof serializedResult?.response !== 'string') {
                     serializedResult.response = withSerializedBodyBuffer(serializedResult.response);
                 }
                 return serializedResult;
@@ -1588,7 +1595,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                         args: [withSerializedBodyReader(req)]
                     })
                 );
-                if (result.response) {
+                if (result.response && typeof result.response !== 'string') {
                     result.response = withDeserializedBodyBuffer(
                         result.response as WithSerializedBodyBuffer<CallbackResponseResult>
                     );
