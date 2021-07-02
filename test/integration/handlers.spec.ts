@@ -315,6 +315,22 @@ describe("HTTP mock rule handling", function () {
         expect(await response.json()).to.deep.equal({myVar: "foo"});
     });
 
+    it("should allow closing connections with a callback", async () => {
+        await server.get("/mocked-endpoint").thenCallback(() => {
+            return 'close';
+        });
+
+        let response: Response | Error = await fetch(server.urlFor('/mocked-endpoint'))
+            .catch((e) => e);
+
+        expect(response).to.be.instanceOf(Error);
+        if (isNode) {
+            expect((response as any).code).to.equal('ECONNRESET');
+        } else {
+            expect((response as Error).message).to.include('Failed to fetch');
+        }
+    });
+
     it("should return a 500 if a callback handler throws an exception", async () => {
         await server.get("/mocked-endpoint").thenCallback(() => {
             throw new Error('Oh no!');

@@ -321,6 +321,22 @@ describe("Abort subscriptions", () => {
         expect(seenRequest.id).to.equal(seenAbort.id);
     });
 
+    it("should be sent when a request is intentionally closed by a callback handler", async () => {
+        let seenRequestPromise = getDeferred<CompletedRequest>();
+        await server.on('request', (r) => seenRequestPromise.resolve(r));
+
+        let seenAbortPromise = getDeferred<InitiatedRequest>();
+        await server.on('abort', (r) => seenAbortPromise.resolve(r));
+
+        await server.get('/mocked-endpoint').thenCallback(() => 'close');
+
+        fetch(server.urlFor('/mocked-endpoint')).catch(() => {});
+
+        let seenRequest = await seenRequestPromise;
+        let seenAbort = await seenAbortPromise;
+        expect(seenRequest.id).to.equal(seenAbort.id);
+    });
+
     it("should be sent when a request is intentionally closed by beforeRequest", async () => {
         let seenRequestPromise = getDeferred<CompletedRequest>();
         await server.on('request', (r) => seenRequestPromise.resolve(r));

@@ -166,7 +166,7 @@ export class CallbackHandler extends Serializable implements RequestHandler {
     readonly type = 'callback';
 
     constructor(
-        public callback: (request: CompletedRequest) => MaybePromise<CallbackResponseResult>
+        public callback: (request: CompletedRequest) => MaybePromise<CallbackResponseResult | 'close'>
     ) {
         super();
     }
@@ -178,7 +178,7 @@ export class CallbackHandler extends Serializable implements RequestHandler {
     async handle(request: OngoingRequest, response: OngoingResponse) {
         let req = await waitForCompletedRequest(request);
 
-        let outResponse: CallbackResponseResult;
+        let outResponse: CallbackResponseResult | 'close';
         try {
             outResponse = await this.callback(req);
         } catch (error) {
@@ -187,13 +187,18 @@ export class CallbackHandler extends Serializable implements RequestHandler {
             return;
         }
 
-        writeResponseFromCallback(outResponse, response);
+        if (outResponse === 'close') {
+            (request as any).socket.end();
+            throw new AbortError('Connection closed (intentionally)');
+        } else {
+            writeResponseFromCallback(outResponse, response);
+        }
     }
 
     serialize(channel: ClientServerChannel): SerializedCallbackHandlerData {
         channel.onRequest<
             CallbackRequestMessage,
-            CallbackResponseResult
+            CallbackResponseResult | 'close'
         >(async (streamMsg) => {
             const request = _.isString(streamMsg.args[0].body)
                 ? withDeserializedBodyReader( // New format: body serialized as base64
@@ -206,7 +211,11 @@ export class CallbackHandler extends Serializable implements RequestHandler {
 
             const callbackResult = await this.callback.call(null, request);
 
-            return withSerializedBodyBuffer(callbackResult);
+            if (typeof callbackResult === 'string') {
+                return callbackResult;
+            } else {
+                return withSerializedBodyBuffer(callbackResult);
+            }
         });
 
         return { type: this.type, name: this.callback.name, version: 2 };
@@ -214,16 +223,20 @@ export class CallbackHandler extends Serializable implements RequestHandler {
 
     static deserialize({ name, version }: SerializedCallbackHandlerData, channel: ClientServerChannel): CallbackHandler {
         const rpcCallback = async (request: CompletedRequest) => {
-            return withDeserializedBodyBuffer(
-                await channel.request<
-                    CallbackRequestMessage,
-                    WithSerializedBodyBuffer<CallbackResponseResult>
-                >({ args: [
-                    (version || -1) >= 2
-                        ? withSerializedBodyReader(request)
-                        : request // Backward compat: old handlers
-                ] })
-            );
+            const callbackResult = await channel.request<
+                CallbackRequestMessage,
+                WithSerializedBodyBuffer<CallbackResponseResult> | 'close'
+            >({ args: [
+                (version || -1) >= 2
+                    ? withSerializedBodyReader(request)
+                    : request // Backward compat: old handlers
+            ] });
+
+            if (typeof callbackResult === 'string') {
+                return callbackResult;
+            } else {
+                return withDeserializedBodyBuffer(callbackResult);
+            }
         };
         // Pass across the name from the real callback, for explain()
         Object.defineProperty(rpcCallback, "name", { value: name });

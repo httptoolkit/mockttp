@@ -163,8 +163,12 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
      * Call the given callback for any matched requests that are received,
      * and build a response from the result.
      *
-     * The callback should return a response object or a promise for one.
-     * The response object may include various fields to define the response.
+     * The callback should return a response object with the fields below, or
+     * the string 'close' to immediately close the connection. The callback
+     * can be asynchronous, in which case it should return this value wrapped
+     * in a promise.
+     *
+     * Responses object may include various fields to define the response.
      * All fields are optional, with the defaults listed below.
      *
      * Valid fields are:
@@ -185,7 +189,7 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
      * can be used to assert on the requests matched by this rule.
      */
     thenCallback(callback:
-        (request: CompletedRequest) => MaybePromise<CallbackResponseResult>
+        (request: CompletedRequest) => MaybePromise<CallbackResponseResult | 'close'>
     ): Promise<MockedEndpoint> {
         const rule: RequestRuleData = {
             matchers: this.matchers,
