@@ -56,6 +56,7 @@ import {
     deserializeBuffer
 } from "../../util/serialization";
 import { getAgent, ProxyConfig } from '../../util/http-agents';
+import { CachedDns } from '../../util/dns';
 
 // An error that indicates that the handler is aborting the request.
 // This could be intentional, or an upstream server aborting the request.
@@ -910,24 +911,31 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
     public readonly lookupOptions?: PassThroughLookupOptions;
     public readonly proxyConfig?: ProxyConfig;
 
-    private _cacheableLookupInstance: CacheableLookup | undefined;
+    private _cacheableLookupInstance: CacheableLookup | CachedDns | undefined;
     private lookup() {
-        if (!this.lookupOptions) return undefined;
-
-        if (!this._cacheableLookupInstance) {
-            this._cacheableLookupInstance = new CacheableLookup({
-                maxTtl: this.lookupOptions.maxTtl,
-                errorTtl: this.lookupOptions.errorTtl,
-                // As little caching of "use the fallback server" as possible:
-                fallbackDuration: 0
-            });
-
-            if (this.lookupOptions.servers) {
-                this._cacheableLookupInstance.servers = this.lookupOptions.servers;
+        if (!this.lookupOptions) {
+            if (!this._cacheableLookupInstance) {
+                // By default, use 10s caching of hostnames, just to reduce the delay from
+                // endlessly 10ms query delay for 'localhost' with every request.
+                this._cacheableLookupInstance = new CachedDns(10000);
             }
-        }
+            return this._cacheableLookupInstance.lookup;
+        } else {
+            if (!this._cacheableLookupInstance) {
+                this._cacheableLookupInstance = new CacheableLookup({
+                    maxTtl: this.lookupOptions.maxTtl,
+                    errorTtl: this.lookupOptions.errorTtl,
+                    // As little caching of "use the fallback server" as possible:
+                    fallbackDuration: 0
+                });
 
-        return this._cacheableLookupInstance.lookup;
+                if (this.lookupOptions.servers) {
+                    this._cacheableLookupInstance.servers = this.lookupOptions.servers;
+                }
+            }
+
+            return this._cacheableLookupInstance.lookup;
+        }
     }
 
     private outgoingSockets = new Set<net.Socket>();

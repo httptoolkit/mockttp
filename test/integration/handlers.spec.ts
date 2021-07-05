@@ -238,7 +238,7 @@ describe("HTTP mock rule handling", function () {
 
         let result = await Promise.race<any>([
             fetch(server.urlFor('/mocked-endpoint')),
-            delay(500).then(() => 'timed out')
+            delay(100).then(() => 'timed out')
         ])
 
         expect(result).to.equal('timed out');
