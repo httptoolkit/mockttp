@@ -357,11 +357,11 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
     }
 
     public addRequestRules = async (...rules: RequestRuleData[]): Promise<MockedEndpoint[]> => {
-        return this._addRules(rules, false);
+        return this._addRequestRules(rules, false);
     }
 
     public setRequestRules = async (...rules: RequestRuleData[]): Promise<MockedEndpoint[]> => {
-        return this._addRules(rules, true);
+        return this._addRequestRules(rules, true);
     }
 
     public addWebSocketRules = async (...rules: WebSocketRuleData[]): Promise<MockedEndpoint[]> => {
@@ -372,7 +372,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
         return this._addWsRules(rules, true);
     }
 
-    private _addRules = async (
+    private _addRequestRules = async (
         rules: Array<RequestRuleData>,
         reset: boolean
     ): Promise<MockedEndpoint[]> => {
@@ -396,7 +396,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
         const requestName = reset ? 'SetRules' : 'AddRules';
         const mutationName = reset ? 'setRules' : 'addRules';
 
-        let endpoints = (await this.queryMockServer<{ endpoints: Array<{ id: string, explanation?: string }> }>(
+        let { endpoints } = (await this.queryMockServer<{ endpoints: Array<{ id: string, explanation?: string }> }>(
             `mutation ${requestName}($newRules: [MockRule!]!) {
                 endpoints: ${mutationName}(input: $newRules) {
                     id,
@@ -411,11 +411,30 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
                     return serializedData;
                 })
             }
-        )).endpoints;
+        ));
 
         return endpoints.map(({ id, explanation }) =>
             new MockedEndpointClient(id, explanation, this.getEndpointDataGetter(id))
         );
+    }
+
+    setFallbackRequestRule = async (
+        rule: RequestRuleData
+    ): Promise<MockedEndpoint> => {
+        if (!this.mockServerConfig) throw new Error('Cannot add rules before the server is started');
+
+        let { endpoint: { id, explanation } } = (await this.queryMockServer<{ endpoint: { id: string, explanation: string } }>(
+            `mutation SetFallbackRule($fallbackRule: MockRule!) {
+                endpoint: setFallbackRule(input: $fallbackRule) {
+                    id,
+                    explanation
+                }
+            }`, {
+                fallbackRule: serializeRuleData(rule, this.mockServerStream!)
+            }
+        ));
+
+        return new MockedEndpointClient(id, explanation, this.getEndpointDataGetter(id));
     }
 
     private _addWsRules = async (

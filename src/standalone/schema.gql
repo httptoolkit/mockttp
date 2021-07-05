@@ -8,6 +8,7 @@ type Mutation {
     addRule(input: MockRule!): MockedEndpoint!
     addRules(input: [MockRule!]!): [MockedEndpoint!]!
     setRules(input: [MockRule!]!): [MockedEndpoint!]!
+    setFallbackRule(input: MockRule!): MockedEndpoint!
 
     addWebSocketRule(input: WebSocketMockRule!): MockedEndpoint!
     addWebSocketRules(input: [WebSocketMockRule!]!): [MockedEndpoint!]!

@@ -66,6 +66,8 @@ type ExtendedRawRequest = (http.IncomingMessage | http2.Http2ServerRequest) & {
 export default class MockttpServer extends AbstractMockttp implements Mockttp {
 
     private requestRules: RequestRule[] = [];
+    private fallbackRequestRule: RequestRule | undefined;
+
     private webSocketRules: WebSocketRule[] = [];
 
     private httpsOptions: CAOptions | undefined;
@@ -178,6 +180,10 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
     reset() {
         this.requestRules.forEach(r => r.dispose());
         this.requestRules = [];
+
+        this.fallbackRequestRule?.dispose();
+        this.fallbackRequestRule = undefined;
+
         this.webSocketRules.forEach(r => r.dispose());
         this.webSocketRules = [];
 
@@ -218,6 +224,24 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
             this.requestRules.push(rule);
             return new ServerMockedEndpoint(rule);
         }));
+    }
+
+    public setFallbackRequestRule = async (ruleDatum: RequestRuleData): Promise<ServerMockedEndpoint> => {
+        if (this.fallbackRequestRule) throw new Error(
+            'Only one fallback request rule can be registered at any time'
+        );
+
+        const hasNoMatchers = ruleDatum.matchers.length === 0 || (
+            ruleDatum.matchers.length === 1 &&
+            ruleDatum.matchers[0].type === 'wildcard'
+        );
+
+        if (!hasNoMatchers) throw new Error(
+            'Fallback request rules cannot include specific matching configuration'
+        );
+
+        this.fallbackRequestRule = new RequestRule(ruleDatum);
+        return Promise.resolve(new ServerMockedEndpoint(this.fallbackRequestRule));
     }
 
     public setWebSocketRules = (...ruleData: WebSocketRuleData[]): Promise<ServerMockedEndpoint[]> => {
@@ -431,6 +455,8 @@ export default class MockttpServer extends AbstractMockttp implements Mockttp {
             if (nextRule) {
                 if (this.debug) console.log(`Request matched rule: ${nextRule.explain()}`);
                 await nextRule.handle(request, response, this.recordTraffic);
+            } else if (this.fallbackRequestRule) {
+                await this.fallbackRequestRule.handle(request, response, this.recordTraffic);
             } else {
                 await this.sendUnmatchedRequestError(request, response);
             }

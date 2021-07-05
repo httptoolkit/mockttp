@@ -114,6 +114,18 @@ export interface Mockttp {
     anyRequest(): RequestRuleBuilder;
 
     /**
+     * Get a builder for a fallback mock rule that will match any unmatched requests
+     * on any path. A fallback rule will only match if there is no existing rule at
+     * all matching the request, or all existing rules have an explicit limit (like
+     * `once()`) that has been completed.
+     *
+     * Only one unmatched request rule can be registered, and it cannot include any
+     * matchers. In either of these cases, when the final `thenX()` method is called,
+     * a rejected promise will be returned.
+     */
+    unmatchedRequest(): RequestRuleBuilder;
+
+    /**
      * Get a builder for a mock rule that will match GET requests for the given path.
      * If no path is specified, this matches all GET requests.
      *
@@ -563,6 +575,7 @@ export abstract class AbstractMockttp {
         this.addRequestRules(rule).then((rules) => rules[0]);
 
     abstract setRequestRules(...ruleData: RequestRuleData[]): Promise<MockedEndpoint[]>;
+    abstract setFallbackRequestRule(ruleData: RequestRuleData): Promise<MockedEndpoint>;
 
     // Deprecated endpoints for backward compat:
     addRule = (ruleData: RequestRuleData) => this.addRequestRule(ruleData);
@@ -577,6 +590,10 @@ export abstract class AbstractMockttp {
 
     anyRequest(): RequestRuleBuilder {
         return new RequestRuleBuilder(this.addRequestRule);
+    }
+
+    unmatchedRequest(): RequestRuleBuilder {
+        return new RequestRuleBuilder(this.setFallbackRequestRule);
     }
 
     get(url?: string | RegExp): RequestRuleBuilder {

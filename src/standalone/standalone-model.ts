@@ -228,6 +228,9 @@ export function buildStandaloneModel(mockServer: MockttpServer, stream: Duplex):
                     deserializeRuleData(rule, stream)
                 ));
             },
+            setFallbackRule: async (__: any, { input }: { input: Serialized<RequestRuleData> }) => {
+                return mockServer.setFallbackRequestRule(deserializeRuleData(input, stream));
+            },
 
             addWebSocketRule: async (__: any, { input }: { input: Serialized<WebSocketRuleData> }) => {
                 return mockServer.addWebSocketRule(deserializeWebSocketRuleData(input, stream));
