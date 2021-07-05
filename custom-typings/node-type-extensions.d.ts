@@ -92,6 +92,12 @@ declare module "http2" {
         initialSocket?: net.Socket;
     }
 
+    class ServerHttp2Stream {
+        // Treated the same as net.Socket, when we unwrap them in our combo server:
+        lastHopEncrypted?: net.Socket['lastHopEncrypted'];
+        __timingInfo?: net.Socket['__timingInfo'];
+    }
+
     // A constant symbol used in-band in HTTP/2 header objects to list the headers
     // that shouldn't/weren't automatically compressed. Only defined in Node 15+.
     export const sensitiveHeaders: Symbol | undefined;

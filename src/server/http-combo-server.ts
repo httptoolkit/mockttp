@@ -183,12 +183,16 @@ export async function createComboServer(
         }, requestListener);
     }
 
-    server.on('connection', (socket: net.Socket) => {
+    server.on('connection', (socket: net.Socket | http2.ServerHttp2Stream) => {
         socket.__timingInfo = socket.__timingInfo || buildTimingInfo();
 
         // All sockets are initially marked as using unencrypted upstream connections.
         // If TLS is used, this is upgraded to 'true' by secureConnection below.
         socket.lastHopEncrypted = false;
+
+        // For actual sockets, set NODELAY to avoid any buffering whilst streaming. This is
+        // off by default in Node HTTP, but likely to be enabled soon & is default in curl.
+        if ('setNoDelay' in socket) socket.setNoDelay(true);
     });
 
     server.on('secureConnection', (socket: tls.TLSSocket) => {

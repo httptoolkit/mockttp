@@ -1509,6 +1509,9 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
             // We always start upstream connections *immediately*. This might be less efficient, but it
             // ensures that we're accurately mirroring downstream, which has indeed already connected.
             serverReq.flushHeaders();
+
+            // For similar reasons, we don't want any buffering on outgoing data at all if possible:
+            serverReq.setNoDelay(true);
         })().catch((e) => {
             // Catch otherwise-unhandled sync or async errors in the above promise:
             if (serverReq) serverReq.destroy();
