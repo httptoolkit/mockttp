@@ -7,6 +7,7 @@ module.exports = (wallaby) => {
       'src/**/*.ts',
       'src/**/*.gql',
       'test/**/*.ts',
+      { pattern: 'test/fixtures/**/*.pfx', load: false, binary: true },
       'test/fixtures/**/*',
       '!test/**/*.spec.ts'
     ],
