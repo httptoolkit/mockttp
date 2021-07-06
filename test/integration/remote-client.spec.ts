@@ -4,7 +4,7 @@ import * as portfinder from 'portfinder';
 import request = require("request-promise-native");
 import * as WebSocket from 'universal-websocket-client';
 
-import { getLocal, getRemote, getStandalone, Mockttp } from "../..";
+import { getLocal, getRemote, getStandalone, resetStandalone, Mockttp } from "../..";
 import { expect, fetch, nodeOnly, browserOnly } from "../test-utils";
 
 browserOnly(() => {
@@ -329,6 +329,17 @@ nodeOnly(() => {
                 expect(result).to.be.instanceof(Error);
                 expect(result.statusCode).to.equal(503);
                 expect(result.message).to.include("No rules were found matching this request");
+            });
+
+            it("should support explicitly resetting all servers", async () => {
+                await client.get("/mocked-endpoint").thenReply(200, "mocked data");
+
+                await resetStandalone();
+
+                const result = await request.get(client.urlFor("/mocked-endpoint")).catch((e) => e);
+
+                expect(result).to.be.instanceof(Error);
+                expect(result.cause.code).to.equal('ECONNREFUSED');
             });
 
             it("should reject multiple clients trying to control the same port", async () => {

@@ -1,4 +1,4 @@
-import MockttpClient from "./client/mockttp-client";
+import { MockttpClient, resetStandalone } from "./client/mockttp-client";
 
 import { Mockttp, MockttpOptions } from "./mockttp";
 export { Method } from "./types";
@@ -24,3 +24,4 @@ export function getRemote(options: MockttpOptions = {}): Mockttp {
 export function getStandalone(options: any = {}): never {
     throw new Error('Cannot set up a standalone server within a browser');
 }
+export { resetStandalone };

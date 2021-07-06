@@ -63,7 +63,7 @@ type ExtendedRawRequest = (http.IncomingMessage | http2.Http2ServerRequest) & {
  *
  * This class does not work in browsers, as it expects to be able to start HTTP servers.
  */
-export default class MockttpServer extends AbstractMockttp implements Mockttp {
+export class MockttpServer extends AbstractMockttp implements Mockttp {
 
     private requestRules: RequestRule[] = [];
     private fallbackRequestRule: RequestRule | undefined;

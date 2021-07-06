@@ -2,8 +2,8 @@
  * @module Mockttp
  */
 
-import MockttpServer from "./server/mockttp-server";
-import MockttpClient, { MockttpClientOptions } from "./client/mockttp-client";
+import { MockttpServer } from "./server/mockttp-server";
+import { MockttpClient, MockttpClientOptions, resetStandalone } from "./client/mockttp-client";
 import { MockttpStandalone, StandaloneServerOptions } from "./standalone/mockttp-standalone";
 
 import { Mockttp, MockttpOptions } from "./mockttp";
@@ -73,3 +73,5 @@ export function getRemote(options: MockttpClientOptions = {}): Mockttp {
 export function getStandalone(options: StandaloneServerOptions = {}): MockttpStandalone {
     return new MockttpStandalone(options);
 }
+
+export { resetStandalone };

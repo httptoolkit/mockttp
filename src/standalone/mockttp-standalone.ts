@@ -24,7 +24,7 @@ import { Duplex } from 'stream';
 import DuplexPair = require('native-duplexpair');
 
 import { destroyable, DestroyableServer } from "../util/destroyable-server";
-import MockttpServer from "../server/mockttp-server";
+import { MockttpServer } from "../server/mockttp-server";
 import { buildStandaloneModel } from "./standalone-model";
 import { DEFAULT_STANDALONE_PORT } from '../types';
 import { MockttpOptions, PortRange } from '../mockttp';
@@ -77,7 +77,14 @@ export class MockttpStandalone {
     private app = express();
     private server: DestroyableServer | null = null;
 
-    private mockServers: MockttpServer[] = [];
+    private servers: { [port: number]: {
+        router: express.Router,
+        stop: () => Promise<void>,
+
+        mockServer: MockttpServer,
+        subscriptionServer: SubscriptionServer,
+        streamServer: ws.Server
+    } } = { };
 
     constructor(options: StandaloneServerOptions = {}) {
         this.debug = options.debug || false;
@@ -115,7 +122,7 @@ export class MockttpStandalone {
                     options.serverDefaults
                 );
 
-                if (_.isNumber(port) && this.routers[port] != null) {
+                if (_.isNumber(port) && this.servers[port] != null) {
                     res.status(409).json({
                         error: `Cannot start: mock server is already running on port ${port}`
                     });
@@ -135,11 +142,25 @@ export class MockttpStandalone {
             }
         });
 
+        this.app.post('/reset', async (req, res) => {
+            if (this.debug) console.log('Resetting standalone server');
+
+            try {
+                await Promise.all(
+                    Object.values(this.servers).map(({ stop }) => stop())
+                );
+                res.json({ success: true });
+            } catch (e) {
+                res.status(500).json({ error: e?.message || 'Unknown error' });
+            }
+        });
+
+
         // Dynamically route to admin servers ourselves, so we can easily add/remove
         // servers as we see fit later on.
         this.app.use('/server/:port/', (req, res, next) => {
             const serverPort = Number(req.params.port);
-            const serverRouter = this.routers[serverPort];
+            const serverRouter = this.servers[serverPort].router;
 
             if (!serverRouter) {
                 res.status(404).send('Unknown mock server');
@@ -187,9 +208,9 @@ export class MockttpStandalone {
                 if (isMatch) {
                     let port = parseInt(isMatch[1], 10);
 
-                    let wsServer: ws.Server = isSubscriptionRequest ?
-                        (<any> this.subscriptionServers[port])?.wsServer :
-                        this.streamServers[port];
+                    let wsServer: ws.Server = isSubscriptionRequest
+                        ? (<any> this.servers[port]?.subscriptionServer)?.wsServer
+                        : this.servers[port].streamServer;
 
                     if (wsServer) {
                         wsServer.handleUpgrade(req, socket, head, (ws) => {
@@ -207,10 +228,6 @@ export class MockttpStandalone {
         });
     }
 
-    private routers: { [port: number]: express.Router } = { };
-    private subscriptionServers: { [port: number]: SubscriptionServer } = { };
-    private streamServers: { [port: number]: ws.Server } = { };
-
     private async startMockServer(options: MockttpOptions, portConfig?: number | PortRange): Promise<{
         mockPort: number,
         mockServer: MockttpServer
@@ -219,37 +236,30 @@ export class MockttpStandalone {
             // Use debug mode if the client requests it, or if the standalone has it set
             debug: this.debug
         }));
+
         await mockServer.start(portConfig);
-        this.mockServers.push(mockServer);
 
         const mockPort = mockServer.port!;
 
         const mockServerRouter = express.Router();
-        this.routers[mockPort] = mockServerRouter;
 
         let running = true;
         const stopServer = async () => {
             if (!running) return;
             running = false;
 
+            const server = this.servers[mockPort];
+            delete this.servers[mockPort];
+
             await mockServer.stop();
-
-            this.mockServers = _.reject(this.mockServers, mockServer);
-            delete this.routers[mockPort];
-
-            this.subscriptionServers[mockPort].close();
-            delete this.subscriptionServers[mockPort];
-
-            this.streamServers[mockPort].close();
-            this.streamServers[mockPort].emit('close');
-            delete this.streamServers[mockPort];
+            server.subscriptionServer.close();
+            server.streamServer.close();
+            server.streamServer.emit('close');
         };
 
         mockServerRouter.post('/stop', async (req, res) => {
             await stopServer();
-            res.status(200).send(JSON.stringify({
-                success: true
-            }));
+            res.json({ success: true });
         });
 
         // A pair of sockets, representing the 2-way connection between the server & WSs.
@@ -266,12 +276,12 @@ export class MockttpStandalone {
             });
         }
 
-        this.streamServers[mockPort] = new ws.Server({ noServer: true });
-        this.streamServers[mockPort].on('connection', (ws: WebSocket) => {
+        const streamServer = new ws.Server({ noServer: true });
+        streamServer.on('connection', (ws: WebSocket) => {
             let newClientStream = connectWebSocketStream(ws);
             wsSocket.pipe(newClientStream).pipe(wsSocket, { end: false });
         });
-        this.streamServers[mockPort].on('close', () => {
+        streamServer.on('close', () => {
             wsSocket.end();
             serverSocket.end();
         });
@@ -287,13 +297,21 @@ export class MockttpStandalone {
 
         const schema = await this.loadSchema('schema.gql', mockServer, serverSocket);
 
-        this.subscriptionServers[mockPort] = SubscriptionServer.create({
+        const subscriptionServer = SubscriptionServer.create({
             schema, execute, subscribe
         }, {
             noServer: true
         });
 
         mockServerRouter.use(graphqlHTTP({ schema }));
+
+        this.servers[mockPort] = {
+            mockServer,
+            router: mockServerRouter,
+            streamServer,
+            subscriptionServer,
+            stop: stopServer
+        };
 
         return {
             mockPort,
@@ -307,14 +325,14 @@ export class MockttpStandalone {
         return Promise.all([
             this.server.destroy(),
         ].concat(
-            this.mockServers.map((s) => s.stop())
+            Object.values(this.servers).map((s) => s.stop())
         )).then(() => {
             this.server = null;
         });
     }
 
     get activeServerPorts() {
-        return this.mockServers.map(s => s.port);
+        return Object.keys(this.servers);
     }
 }
 

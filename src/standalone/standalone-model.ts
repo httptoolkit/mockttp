@@ -14,7 +14,7 @@ import {
 import type { IResolvers } from "@graphql-tools/utils/Interfaces";
 import { PubSub } from "graphql-subscriptions";
 
-import MockttpServer from "../server/mockttp-server";
+import { MockttpServer } from "../server/mockttp-server";
 import { ServerMockedEndpoint } from "../server/mocked-endpoint";
 import { MockedEndpoint, MockedEndpointData, CompletedRequest, CompletedResponse, ClientError } from "../types";
 import { Serialized } from "../util/serialization";

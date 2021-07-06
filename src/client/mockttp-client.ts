@@ -135,21 +135,92 @@ function normalizeHttpMessage(event: SubscribableEvent, message: any) {
     if (!message.tags) message.tags = [];
 }
 
+async function requestFromStandalone<T>(serverUrl: string, path: string, options?: RequestInit): Promise<T> {
+    const url = `${serverUrl}${path}`;
+
+    let response;
+    try {
+        response = await fetch(url, options);
+    } catch (e) {
+        if (e.code === 'ECONNREFUSED') {
+            throw new ConnectionError(`Failed to connect to standalone server at ${serverUrl}`);
+        } else throw e;
+    }
+
+    if (response.status >= 400) {
+        let body = await response.text();
+
+        let jsonBody: { error?: string } | null = null;
+        try {
+            jsonBody = JSON.parse(body);
+        } catch (e) { }
+
+        if (jsonBody && jsonBody.error) {
+            throw new RequestError(
+                jsonBody.error,
+                response
+            );
+        } else {
+            throw new RequestError(
+                `Request to ${url} failed, with status ${response.status} and response body: ${body}`,
+                response
+            );
+        }
+    } else {
+        return response.json();
+    }
+}
+
+/**
+ * Reset a remote standalone server, shutting down all Mockttp servers controlled by that
+ * standalone server. This is equivalent to calling `client.stop()` for all remote
+ * clients of the target server.
+ *
+ * This can be useful in some rare cases, where a client might fail to reliably tear down
+ * its own server, e.g. in Cypress testing. In this case, it's useful to reset the
+ * standalone server completely remotely without needing access to any previous client
+ * instances, to ensure all servers from previous test runs have been shut down.
+ *
+ * After this is called, behaviour of any previously connected clients is undefined, and
+ * it's likely that they may throw errors or experience other undefined behaviour. Ensure
+ * that `client.stop()` has been called on all active clients before calling this method.
+ */
+ export async function resetStandalone(options: {
+    /**
+    * The full URL to use for a standalone server with remote (or local but browser) client.
+    * When using a local server, this parameter is ignored.
+    */
+   standaloneServerUrl?: string;
+
+   /**
+    * Options to include on all client requests, e.g. to add extra
+    * headers for authentication.
+    */
+   client?: {
+       headers?: { [key: string]: string };
+   }
+} = {}): Promise<void> {
+    const serverUrl = options.standaloneServerUrl || `http://localhost:${DEFAULT_STANDALONE_PORT}`;
+    await requestFromStandalone(serverUrl, '/reset', {
+        ...options.client,
+        method: 'POST'
+    });
+}
+
 /**
  * A Mockttp implementation, controlling a remote Mockttp standalone server.
  *
  * This starts servers by making requests to the remote standalone server, and exposes
  * methods to directly manage them.
  */
-export default class MockttpClient extends AbstractMockttp implements Mockttp {
+export class MockttpClient extends AbstractMockttp implements Mockttp {
 
     private mockServerOptions: RequireProps<MockttpClientOptions, 'cors' | 'standaloneServerUrl'>;
     private mockClientOptions: MockttpClientOptions['client'];
 
     private mockServerConfig: MockServerConfig | undefined;
-    private mockServerStream: Duplex | undefined;
     private mockServerSchema: any;
-
+    private mockServerStream: Duplex | undefined;
     private subscriptionClient: SubscriptionClient | undefined;
 
     constructor(options: MockttpClientOptions = {}) {
@@ -168,48 +239,15 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
         this.mockClientOptions = options.client || {};
     }
 
-    private async requestFromStandalone<T>(path: string, options?: RequestInit): Promise<T> {
-        const url = `${this.mockServerOptions.standaloneServerUrl}${path}`;
-
-        let response;
-        try {
-            response = await fetch(url, mergeClientOptions(options, this.mockClientOptions));
-        } catch (e) {
-            if (e.code === 'ECONNREFUSED') {
-                throw new ConnectionError(`Failed to connect to standalone server at ${this.mockServerOptions.standaloneServerUrl}`);
-            } else throw e;
-        }
-
-        if (response.status >= 400) {
-            let body = await response.text();
-
-            let jsonBody: { error?: string } | null = null;
-            try {
-                jsonBody = JSON.parse(body);
-            } catch (e) { }
-
-            if (jsonBody && jsonBody.error) {
-                throw new RequestError(
-                    jsonBody.error,
-                    response
-                );
-            } else {
-                throw new RequestError(
-                    `Request to ${url} failed, with status ${response.status} and response body: ${body}`,
-                    response
-                );
-            }
-        } else {
-            return response.json();
-        }
-    }
-
     private openStreamToMockServer(config: MockServerConfig): Promise<Duplex> {
         const standaloneStreamServer = this.mockServerOptions.standaloneServerUrl.replace(/^http/, 'ws');
         const stream = connectWebSocketStream(`${standaloneStreamServer}/server/${config.port}/stream`, {
             objectMode: true,
             headers: this.mockClientOptions?.headers
         });
+
+        // When this stream closes, the server is gone and need to shut down.
+        stream.on('close', () => this.completeShutdown());
 
         return new Promise((resolve, reject) => {
             stream.once('connect', () => resolve(stream));
@@ -287,13 +325,17 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
         if (this.mockServerConfig) throw new Error('Server is already started');
 
         const path = portConfig ? `/start?port=${JSON.stringify(portConfig)}` : '/start';
-        let mockServerConfig = await this.requestFromStandalone<MockServerConfig>(path, {
-            method: 'POST',
-            headers: new Headers({
-                'Content-Type': 'application/json'
-            }),
-            body: JSON.stringify(this.mockServerOptions)
-        });
+        let mockServerConfig = await requestFromStandalone<MockServerConfig>(
+            this.mockServerOptions.standaloneServerUrl,
+            path,
+            mergeClientOptions({
+                method: 'POST',
+                headers: new Headers({
+                    'Content-Type': 'application/json'
+                }),
+                body: JSON.stringify(this.mockServerOptions)
+            }, this.mockClientOptions)
+        );
 
         // Also open a stream connection, for 2-way communication we might need later.
         this.mockServerStream = await this.openStreamToMockServer(mockServerConfig);
@@ -317,7 +359,24 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
             method: 'POST'
         });
 
-        this.mockServerConfig = this.mockServerStream = undefined;
+        this.mockServerStream = undefined;
+        this.mockServerSchema = undefined;
+        this.subscriptionClient = undefined;
+        this.mockServerConfig = undefined;
+    }
+
+    // Called when the remote server appears to have closed: shut down directly,
+    // no need to close things up nicely.
+    private completeShutdown(): void {
+        if (!this.mockServerConfig) return;
+
+        try { this.mockServerStream!.end(); } catch (e) { }
+        try { this.subscriptionClient!.close(); } catch (e) { }
+
+        this.mockServerStream = undefined;
+        this.mockServerSchema = undefined;
+        this.subscriptionClient = undefined;
+        this.mockServerConfig = undefined;
     }
 
     private typeHasField(typeName: string, fieldName: string): boolean {
