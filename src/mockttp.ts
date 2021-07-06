@@ -477,12 +477,6 @@ export interface MockttpOptions {
     http2?: true | 'fallback' | false;
 
     /**
-     * The full URL to use for a standalone server with remote (or local but browser) client.
-     * When using a local server, this parameter is ignored.
-     */
-    standaloneServerUrl?: string;
-
-    /**
      * By default, requests that match no rules will receive an explanation of the
      * request & existing rules, followed by some suggested example Mockttp code
      * which could be used to match the rule.

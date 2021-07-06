@@ -77,6 +77,12 @@ type SubscribableEvent =
 
 export interface MockttpClientOptions extends MockttpOptions {
     /**
+     * The full URL to use for a standalone server with remote (or local but browser) client.
+     * When using a local server, this parameter is ignored.
+     */
+    standaloneServerUrl?: string;
+
+    /**
      * Options to include on all client requests, e.g. to add extra
      * headers for authentication.
      */
@@ -157,7 +163,7 @@ export default class MockttpClient extends AbstractMockttp implements Mockttp {
         // Note that 'defaults' above mutates this, so this includes
         // the default parameter values too (and thus the type assertion)
         this.mockServerOptions = _.omit(options, 'client') as RequireProps<
-            MockttpOptions, 'cors' | 'standaloneServerUrl'
+            MockttpClientOptions, 'cors' | 'standaloneServerUrl'
         >
         this.mockClientOptions = options.client || {};
     }
