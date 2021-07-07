@@ -401,10 +401,10 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
         throw new Error("Client-side debug info not implemented.");
     }
 
-    reset = async (): Promise<boolean> => {
-        return (await this.queryMockServer<boolean>(
+    reset = async (): Promise<void> => {
+        return (await this.queryMockServer<void>(
             `mutation Reset {
-                    reset
+                reset
             }`
         ));
     }

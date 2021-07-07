@@ -14,7 +14,7 @@ type Mutation {
     addWebSocketRules(input: [WebSocketMockRule!]!): [MockedEndpoint!]!
     setWebSocketRules(input: [WebSocketMockRule!]!): [MockedEndpoint!]!
 
-    reset: Boolean!
+    reset: Void
 }
 
 type Subscription {
@@ -121,6 +121,7 @@ type Response {
 }
 
 scalar Any
+scalar Void
 scalar Json
 scalar Buffer
 scalar RequestMatcher

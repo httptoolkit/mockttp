@@ -141,6 +141,14 @@ const ScalarResolvers = {
         parseLiteral: parseAnyAst
     }),
 
+    Void: new GraphQLScalarType({
+        name: 'Void',
+        description: 'Nothing at all',
+        serialize: (value: any) => null,
+        parseValue: (input: string): any => null,
+        parseLiteral: (): any => { throw new Error('Void literals are not supported') }
+    }),
+
     Buffer: new GraphQLScalarType({
         name: 'Buffer',
         description: 'A buffer',
@@ -246,10 +254,7 @@ export function buildStandaloneModel(mockServer: MockttpServer, stream: Duplex):
                 ));
             },
 
-            reset: () => {
-                mockServer.reset();
-                return true;
-            }
+            reset: () => mockServer.reset()
         },
 
         Subscription: {
