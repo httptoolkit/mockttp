@@ -160,7 +160,7 @@ export class MockttpStandalone {
         // servers as we see fit later on.
         this.app.use('/server/:port/', (req, res, next) => {
             const serverPort = Number(req.params.port);
-            const serverRouter = this.servers[serverPort].router;
+            const serverRouter = this.servers[serverPort]?.router;
 
             if (!serverRouter) {
                 res.status(404).send('Unknown mock server');
@@ -210,7 +210,7 @@ export class MockttpStandalone {
 
                     let wsServer: ws.Server = isSubscriptionRequest
                         ? (<any> this.servers[port]?.subscriptionServer)?.wsServer
-                        : this.servers[port].streamServer;
+                        : this.servers[port]?.streamServer;
 
                     if (wsServer) {
                         wsServer.handleUpgrade(req, socket, head, (ws) => {
