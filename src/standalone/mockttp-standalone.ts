@@ -51,9 +51,7 @@ async function strictOriginMatch(
 
     if (_.isArray(expectedOrigin)) {
         return _.some(expectedOrigin, (exp) =>
-            (typeof exp === 'string')
-                ? exp === origin
-                : origin.match(exp)
+            strictOriginMatch(origin, exp)
         );
     }
 
