@@ -31,8 +31,9 @@ nodeOnly(() => {
     describe("Remote node client with a standalone server", function () {
 
         describe("with no configuration", () => {
-            let server = getStandalone();
-            let client = getRemote();
+
+            const server = getStandalone();
+            const client = getRemote();
 
             before(() => server.start());
             after(() => server.stop());
@@ -521,6 +522,45 @@ nodeOnly(() => {
 
                 // Check the standard on() subscriptions work OK too:
                 await expect(client.on('response', () => {})).to.eventually.equal(undefined);
+            });
+        });
+
+        describe("before the mock server is running", () => {
+
+            const standaloneServer = getStandalone();
+
+            beforeEach(() => standaloneServer.start());
+            afterEach(() => standaloneServer.stop());
+
+            it("should expose events for mock server start & stop", async () => {
+                let startedServers: number[] = [];
+                let stoppedServers: number[] = [];
+
+                standaloneServer.on('mock-server-started', (server) => startedServers.push(server.port));
+                standaloneServer.on('mock-server-stopping', (server) => stoppedServers.push(server.port));
+
+                const client1 = getRemote();
+                expect(startedServers).to.deep.equal([]);
+                expect(stoppedServers).to.deep.equal([]);
+
+                await client1.start();
+                const port1 = client1.port;
+                expect(startedServers).to.deep.equal([port1]);
+                expect(stoppedServers).to.deep.equal([]);
+
+                const client2 = getRemote();
+                await client2.start();
+                const port2 = client2.port;
+                expect(startedServers).to.deep.equal([port1, port2]);
+                expect(stoppedServers).to.deep.equal([]);
+
+                await client1.stop();
+                expect(startedServers).to.deep.equal([port1, port2]);
+                expect(stoppedServers).to.deep.equal([port1]);
+
+                await client2.stop();
+                expect(startedServers).to.deep.equal([port1, port2]);
+                expect(stoppedServers).to.deep.equal([port1, port2]);
             });
         });
 

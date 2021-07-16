@@ -20,14 +20,14 @@ import { GraphQLSchema, execute, subscribe } from 'graphql';
 import { makeExecutableSchema } from '@graphql-tools/schema';
 import { SubscriptionServer } from '@httptoolkit/subscriptions-transport-ws';
 import connectWebSocketStream = require('websocket-stream');
-import { Duplex } from 'stream';
+import { Duplex, EventEmitter } from 'stream';
 import DuplexPair = require('native-duplexpair');
 
 import { destroyable, DestroyableServer } from "../util/destroyable-server";
 import { MockttpServer } from "../server/mockttp-server";
 import { buildStandaloneModel } from "./standalone-model";
 import { DEFAULT_STANDALONE_PORT } from '../types';
-import { MockttpOptions, PortRange } from '../mockttp';
+import { Mockttp, MockttpOptions, PortRange } from '../mockttp';
 
 export interface StandaloneServerOptions {
     debug?: boolean;
@@ -71,11 +71,13 @@ async function strictOriginMatch(
 }
 
 export class MockttpStandalone {
+
     private debug: boolean;
     private requiredOrigin: cors.CorsOptions['origin'] | false;
 
     private app = express();
     private server: DestroyableServer | null = null;
+    private eventEmitter = new EventEmitter();
 
     private servers: { [port: number]: {
         router: express.Router,
@@ -180,6 +182,31 @@ export class MockttpStandalone {
         }));
     }
 
+    /**
+     * Subscribe to hear when each mock server is started. The listener is provided the
+     * server instance, which can be used to log server startup, add side-effects that
+     * run elsewhere at startup, or preconfigure every started server.
+     *
+     * This is run synchronously when a server is created, after it has fully started
+     * but before its been returned to remote clients.
+     */
+    on(event: 'mock-server-started', listener: (server: Mockttp) => void): void;
+
+    /**
+     * Subscribe to hear when each mock server is stopped. The listener is provided the
+     * server instance, which can be used to log server shutdown, add side-effects that
+     * run elsewhere at shutdown, or clean up after servers in other ways.
+     *
+     * This is run synchronously immediately before the server is shutdown, whilst all
+     * its state is still available, and before remote clients have had any response to
+     * their request to shut the server down. This is also run before shutdown when the
+     * standalone server itself is cleanly shutdown with `standalone.stop()`.
+     */
+    on(event: 'mock-server-stopping', listener: (server: Mockttp) => void): void;
+    on(event: string, listener: (...args: any) => void): void {
+        this.eventEmitter.on(event, listener);
+    }
+
     async start(
         listenOptions: number | {
             port: number,
@@ -248,6 +275,8 @@ export class MockttpStandalone {
             if (!running) return;
             running = false;
 
+            this.eventEmitter.emit('mock-server-stopping', mockServer);
+
             const server = this.servers[mockPort];
             delete this.servers[mockPort];
 
@@ -312,6 +341,8 @@ export class MockttpStandalone {
             subscriptionServer,
             stop: stopServer
         };
+
+        this.eventEmitter.emit('mock-server-started', mockServer);
 
         return {
             mockPort,
