@@ -1123,7 +1123,8 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 // We always re-encode the body to match the resulting content-encoding header:
                 reqBodyOverride = await encodeBuffer(
                     reqBodyOverride,
-                    (headers['content-encoding'] || '') as SUPPORTED_ENCODING
+                    (headers['content-encoding'] || '') as SUPPORTED_ENCODING,
+                    { level: 1 }
                 );
 
                 headers['content-length'] = getCorrectContentLength(
