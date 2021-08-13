@@ -97,10 +97,6 @@ declare module "http2" {
         lastHopEncrypted?: net.Socket['lastHopEncrypted'];
         __timingInfo?: net.Socket['__timingInfo'];
     }
-
-    // A constant symbol used in-band in HTTP/2 header objects to list the headers
-    // that shouldn't/weren't automatically compressed. Only defined in Node 15+.
-    export const sensitiveHeaders: Symbol | undefined;
 }
 
 declare module "http" {
