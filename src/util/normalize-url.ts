@@ -13,7 +13,7 @@ import { isAbsoluteProtocollessUrl } from './request-utils';
  * This accepts URLs in all three formats: relative, absolute, and protocolless-absolute,
  * and returns them in the same format but normalized.
  */
-export const normalizeUrl =
+export const normalizeUrl: (url: string) => string =
     _.memoize(
         (urlInput: string): string => {
             let parsedUrl: Partial<url.UrlWithStringQuery> | undefined;
