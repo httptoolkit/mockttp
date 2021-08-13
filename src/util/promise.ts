@@ -1,7 +1,3 @@
-/**
- * @module Internal
- */
-
 import { MaybePromise } from "./type-utils";
 
 export async function filter<T>(

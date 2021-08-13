@@ -1,6 +1,3 @@
-/**
- * @module Mockttp
- */
 import { stripIndent } from "common-tags";
 import * as cors from 'cors';
 

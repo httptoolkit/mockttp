@@ -1,7 +1,3 @@
-/**
- * @module Mockttp
- */
-
 /// <reference path="../../custom-typings/asynciterator.d.ts" />
 
 import * as path from 'path';

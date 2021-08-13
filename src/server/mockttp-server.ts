@@ -1,7 +1,3 @@
-/**
- * @module Mockttp
- */
-
 import net = require("net");
 import url = require("url");
 import tls = require("tls");

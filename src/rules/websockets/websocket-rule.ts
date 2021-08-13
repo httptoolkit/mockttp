@@ -1,7 +1,3 @@
-/**
- * @module MockWebsocketRule
- */
-
 import * as _ from 'lodash';
 import uuid = require("uuid/v4");
 import * as net from 'net';

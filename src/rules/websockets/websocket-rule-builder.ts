@@ -1,7 +1,3 @@
-/**
- * @module MockWebsocketRule
- */
-
 import { MockedEndpoint } from "../../types";
 import { WebSocketRuleData } from "./websocket-rule";
 

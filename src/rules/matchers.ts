@@ -1,7 +1,3 @@
-/**
- * @module MockRule
- */
-
 import * as _ from 'lodash';
 import * as url from 'url';
 import { oneLine } from 'common-tags';

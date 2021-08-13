@@ -1,7 +1,3 @@
-/**
- * @module MockRule
- */
-
 import { merge, isString, isBuffer } from "lodash";
 import { Readable } from "stream";
 

@@ -1,7 +1,3 @@
-/**
- * @module Internal
- */
-
 import * as _ from 'lodash';
 import * as net from 'net';
 import { TLSSocket } from 'tls';

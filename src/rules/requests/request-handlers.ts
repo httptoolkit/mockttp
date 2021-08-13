@@ -1,7 +1,3 @@
-/**
- * @module MockRule
- */
-
 import _ = require('lodash');
 import url = require('url');
 import net = require('net');

@@ -1,8 +1,4 @@
 #!/usr/bin/env node
-/**
- * @module Internal
- */
-
 import _ = require('lodash');
 import childProcess = require('child_process');
 import Mockttp = require('../main');

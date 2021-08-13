@@ -1,7 +1,3 @@
-/**
- * @module Internal
- */
-
 import stream = require('stream');
 import http = require('http');
 import { EventEmitter } from 'events';

@@ -1,29 +1,33 @@
-/**
- * @module Mockttp
- */
-
 import { MockttpServer } from "./server/mockttp-server";
 import { MockttpClient, MockttpClientOptions, resetStandalone } from "./client/mockttp-client";
 import { MockttpStandalone, StandaloneServerOptions } from "./standalone/mockttp-standalone";
 
-import { Mockttp, MockttpOptions } from "./mockttp";
+import { Mockttp, MockttpOptions, PortRange } from "./mockttp";
 
 // Export the core type definitions:
-export { Method, InitiatedRequest, CompletedRequest, CompletedResponse, MockedEndpoint } from "./types";
-export { Mockttp };
+export * from "./types";
+export type {
+    Mockttp,
+    MockttpOptions,
+    MockttpClientOptions,
+    StandaloneServerOptions,
+    PortRange
+};
 
 // Export rule data builders & type definitions:
 import * as matchers from './rules/matchers';
 import * as requestHandlers from './rules/requests/request-handlers';
 import * as webSocketHandlers from './rules/websockets/websocket-handlers';
 import * as completionCheckers from './rules/completion-checkers';
+export { matchers, requestHandlers, webSocketHandlers, completionCheckers };
 
 import { RequestRuleData } from './rules/requests/request-rule';
 import { WebSocketRuleData } from './rules/websockets/websocket-rule';
-export { ProxyConfig } from './util/http-agents';
+export type { RequestRuleData, WebSocketRuleData };
+export type { ProxyConfig } from './util/http-agents';
 
-export { RequestRuleData, WebSocketRuleData };
-export { matchers, requestHandlers, webSocketHandlers, completionCheckers };
+export type { RequestRuleBuilder } from "./rules/requests/request-rule-builder";
+export type { WebSocketRuleBuilder } from "./rules/websockets/websocket-rule-builder";
 
 // Old pre-WebSocket names, exported for backward compat:
 export { requestHandlers as handlers, RequestRuleData as MockRuleData };

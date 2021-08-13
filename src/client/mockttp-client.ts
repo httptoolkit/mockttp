@@ -1,7 +1,3 @@
-/**
- * @module Mockttp
- */
-
 import { TypedError } from 'typed-error';
 import getFetchPonyfill = require('fetch-ponyfill');
 import _ = require('lodash');

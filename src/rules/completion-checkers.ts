@@ -1,7 +1,3 @@
-/**
- * @module MockRule
- */
-
 import { Serializable } from '../util/serialization';
 
 export interface RuleCompletionChecker extends Serializable {

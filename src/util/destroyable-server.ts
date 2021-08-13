@@ -1,7 +1,3 @@
-/**
- * @module Internal
- */
-
 import net = require("net");
 
 export interface DestroyableServer extends net.Server {

@@ -1,7 +1,3 @@
-/**
- * @module TLS
- */
-
 import * as _ from 'lodash';
 import * as uuid from 'uuid/v4';
 import * as forge from 'node-forge';

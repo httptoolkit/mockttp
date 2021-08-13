@@ -1,7 +1,3 @@
-/**
- * @module Internal
- */
-
 import { isString } from "lodash";
 
 import { Method } from "../types";

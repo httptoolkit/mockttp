@@ -1,7 +1,3 @@
-/**
- * @module MockWebsocketRule
- */
-
 import * as _ from 'lodash';
 import net = require('net');
 import * as url from 'url';

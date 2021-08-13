@@ -1,7 +1,3 @@
-/**
- * @module Mockttp
- */
-
 import * as util from 'util';
 import { CompletedRequest, MockedEndpoint } from '../types';
 

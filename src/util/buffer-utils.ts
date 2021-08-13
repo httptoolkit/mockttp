@@ -1,11 +1,7 @@
-/**
- * @module Internal
- */
+import * as _ from 'lodash';
+import * as stream from 'stream';
 
- import * as _ from 'lodash';
- import * as stream from 'stream';
-
- import { isNode } from './util';
+import { isNode } from './util';
 
 const MAX_BUFFER_SIZE = isNode
     ? require('buffer').constants.MAX_LENGTH

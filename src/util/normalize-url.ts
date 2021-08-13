@@ -1,7 +1,3 @@
-/**
- * @module Internal
- */
-
 import * as url from 'url';
 import * as _ from 'lodash';
 

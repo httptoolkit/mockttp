@@ -1,7 +1,3 @@
-/**
- * @module Internal
- */
-
 import { MockedEndpointData, MockedEndpoint, CompletedRequest } from "../types";
 
 export class MockedEndpointClient implements MockedEndpoint {
