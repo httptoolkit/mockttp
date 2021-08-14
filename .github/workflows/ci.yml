@@ -24,6 +24,7 @@ jobs:
         if: github.ref == 'refs/heads/master' && matrix.node-version == 'v14.17'
         uses: JamesIves/github-pages-deploy-action@3.6.2
         with:
+          SINGLE_COMMIT: true
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRANCH: gh-pages
           FOLDER: typedoc
