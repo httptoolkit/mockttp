@@ -118,7 +118,7 @@ These examples uses Mocha, Chai and Superagent, but none of those are required: 
 ## Documentation
 
 * [In-depth setup guide](docs/setup.md)
-* [API reference](https://httptoolkit.github.io/mockttp/interfaces/_mockttp_.mockttp.html)
+* [API reference](https://httptoolkit.github.io/mockttp/)
 
 ## Credits
 

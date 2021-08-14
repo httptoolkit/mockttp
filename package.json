@@ -32,7 +32,7 @@
     "prebuild": "rimraf dist/*",
     "build": "npm run build:src && npm run build:doc",
     "build:src": "tsc && cp src/standalone/schema.gql dist/standalone/schema.gql && chmod +x ./dist/standalone/standalone-bin.js",
-    "build:doc": "typedoc --out typedoc/ src/index.ts",
+    "build:doc": "typedoc --treatWarningsAsErrors --listInvalidSymbolLinks --readme docs/api-docs-landing-page.md --out typedoc/ src/main.ts",
     "postbuild:doc": "touch ./typedoc/.nojekyll",
     "test": "npm run build && npm run test:node && npm run test:browser",
     "test:node": "NODE_EXTRA_CA_CERTS=./test/fixtures/test-ca.pem TS_NODE_FILES=true mocha -r ts-node/register 'test/**/*.spec.ts'",

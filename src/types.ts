@@ -252,3 +252,8 @@ export interface ProxyConfig {
     HTTP_PROXY: string;
     HTTPS_PROXY: string;
 }
+
+// A slightly weird one: this is necessary because we export types that inherit from EventEmitter,
+// so the docs include EventEmitter's methods, which @link to this type, that's otherwise not
+// defined in this module. Reexporting the values avoids warnings for that.
+export type defaultMaxListeners = typeof EventEmitter.defaultMaxListeners;
