@@ -59,11 +59,17 @@ export type Serialized<T> = {
 export abstract class Serializable {
     abstract type: string;
 
+    /**
+     * @internal
+     */
     serialize(_channel: ClientServerChannel): unknown {
         // By default, we assume data is transferrable as-is
         return this;
     }
 
+    /**
+     * @internal
+     */
     static deserialize(data: SerializedValue<any>, _channel: ClientServerChannel): any {
         // By default, we assume we just need to assign the right prototype
         return _.create(this.prototype, data);

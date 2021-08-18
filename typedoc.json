@@ -1,0 +1,9 @@
+{
+    "listInvalidSymbolLinks": true,
+    "treatWarningsAsErrors": true,
+    "excludePrivate": true,
+    "excludeProtected": true,
+    "excludeInternal": true,
+    "readme": "docs/api-docs-landing-page.md",
+    "out": "typedoc/"
+}

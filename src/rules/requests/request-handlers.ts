@@ -196,6 +196,9 @@ export class CallbackHandler extends Serializable implements RequestHandler {
         }
     }
 
+    /**
+     * @internal
+     */
     serialize(channel: ClientServerChannel): SerializedCallbackHandlerData {
         channel.onRequest<
             CallbackRequestMessage,
@@ -222,6 +225,9 @@ export class CallbackHandler extends Serializable implements RequestHandler {
         return { type: this.type, name: this.callback.name, version: 2 };
     }
 
+    /**
+     * @internal
+     */
     static deserialize({ name, version }: SerializedCallbackHandlerData, channel: ClientServerChannel): CallbackHandler {
         const rpcCallback = async (request: CompletedRequest) => {
             const callbackResult = await channel.request<
@@ -306,6 +312,9 @@ export class StreamHandler extends Serializable implements RequestHandler {
         }
     }
 
+    /**
+     * @internal
+     */
     serialize(channel: ClientServerChannel): SerializedStreamHandlerData {
         const serializationStream = new Transform({
             objectMode: true,
@@ -342,6 +351,9 @@ export class StreamHandler extends Serializable implements RequestHandler {
         return { type: this.type, status: this.status, headers: this.headers };
     }
 
+    /**
+     * @internal
+     */
     static deserialize(handlerData: SerializedStreamHandlerData, channel: ClientServerChannel): StreamHandler {
         const handlerStream = new Transform({
             objectMode: true,
@@ -1525,6 +1537,9 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
         }));
     }
 
+    /**
+     * @internal
+     */
     serialize(channel: ClientServerChannel): SerializedPassThroughData {
         if (this.beforeRequest) {
             channel.onRequest<
@@ -1623,6 +1638,9 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
         };
     }
 
+    /**
+     * @internal
+     */
     static deserialize(data: SerializedPassThroughData, channel: ClientServerChannel): PassThroughHandler {
         let beforeRequest: ((req: CompletedRequest) => MaybePromise<CallbackRequestResult | void>) | undefined;
         let beforeResponse: ((res: PassThroughResponse) => MaybePromise<CallbackResponseResult | void>) | undefined;

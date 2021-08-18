@@ -383,6 +383,9 @@ export class PassThroughWebSocketHandler extends Serializable implements WebSock
         incomingSocket.on('error', () => upstreamWebSocket.close(1011)); // Internal error
     }
 
+    /**
+     * @internal
+     */
     serialize(): SerializedPassThroughWebSocketData {
         // By default, we assume data is transferrable as-is
         return {
@@ -394,6 +397,9 @@ export class PassThroughWebSocketHandler extends Serializable implements WebSock
         };
     }
 
+    /**
+     * @internal
+     */
     static deserialize(data: SerializedPassThroughWebSocketData): any {
         // By default, we assume we just need to assign the right prototype
         return _.create(this.prototype, {
