@@ -5,7 +5,7 @@ import { RequestRuleBuilder } from "./rules/requests/request-rule-builder";
 import { WebSocketRuleBuilder } from "./rules/websockets/websocket-rule-builder";
 
 import {
-    ProxyConfig,
+    ProxyEnvConfig,
     MockedEndpoint,
     Method,
     CompletedRequest,
@@ -100,7 +100,7 @@ export interface Mockttp {
      * process.env = Object.assign(process.env, mockServer.proxyEnv)
      * ```
      */
-    proxyEnv: ProxyConfig;
+    proxyEnv: ProxyEnvConfig;
 
     /**
      * Get a builder for a mock rule that will match any requests on any path.
@@ -550,7 +550,7 @@ export abstract class AbstractMockttp {
             options.ignoreWebsocketHostCertificateErrors || [];
     }
 
-    get proxyEnv(): ProxyConfig {
+    get proxyEnv(): ProxyEnvConfig {
         return {
             HTTP_PROXY: this.url,
             HTTPS_PROXY: this.url

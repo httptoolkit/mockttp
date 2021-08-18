@@ -248,7 +248,7 @@ export interface Explainable {
     explain(): string;
 }
 
-export interface ProxyConfig {
+export interface ProxyEnvConfig {
     HTTP_PROXY: string;
     HTTPS_PROXY: string;
 }

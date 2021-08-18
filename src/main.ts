@@ -11,6 +11,7 @@ export type {
     MockttpOptions,
     MockttpClientOptions,
     StandaloneServerOptions,
+    MockttpStandalone,
     PortRange
 };
 
@@ -32,8 +33,21 @@ export type { WebSocketRuleBuilder } from "./rules/websockets/websocket-rule-bui
 // Old pre-WebSocket names, exported for backward compat:
 export { requestHandlers as handlers, RequestRuleData as MockRuleData };
 
-// Export TLS utilities:
-export { generateCACertificate, generateSPKIFingerprint } from './util/tls';
+// Export TLS utility methods:
+export {
+    generateCACertificate,
+    generateSPKIFingerprint
+} from './util/tls';
+
+// Export various referenced utility types:
+export type {
+    CAOptions,
+    PEM,
+    HttpsOptions,
+    HttpsPathOptions
+} from './util/tls';
+export type { CachedDns } from './util/dns';
+export type { MaybePromise } from './util/type-utils';
 
 // Export the core API:
 
