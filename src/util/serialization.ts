@@ -4,7 +4,7 @@ import uuid = require('uuid/v4');
 import { encode as encodeBase64 } from 'base64-arraybuffer';
 
 import { MaybePromise, Replace, Omit } from './type-utils';
-import { CompletedBody, Headers } from '../types';
+import { CompletedBody, Headers, OngoingBody } from '../types';
 import { buildBodyReader, isMockttpBody } from './request-utils';
 import { asBuffer } from './buffer-utils';
 
@@ -271,6 +271,14 @@ export function withSerializedBodyReader<T extends {
 }>(input: T): Replace<T, 'body', string> {
     return Object.assign({}, input, {
         body: asBuffer(input.body.buffer).toString('base64')
+    });
+}
+
+export async function withSerializedOngoingBodyReader<T extends {
+    body: OngoingBody
+}>(input: T): Promise<Replace<T, 'body', string>> {
+    return Object.assign({}, input, {
+        body: asBuffer(await input.body.asBuffer()).toString('base64')
     });
 }
 

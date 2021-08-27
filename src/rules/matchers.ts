@@ -9,13 +9,19 @@ import {
     isRelativeUrl,
     getUrlWithoutProtocol
 } from '../util/request-utils';
-import { Serializable, ClientServerChannel } from "../util/serialization";
+import { Serializable, ClientServerChannel, withDeserializedBodyReader, withSerializedOngoingBodyReader } from "../util/serialization";
 import { MaybePromise } from '../util/type-utils';
 import { normalizeUrl } from '../util/normalize-url';
 
 export interface RequestMatcher extends Explainable, Serializable {
     type: keyof typeof MatcherLookup;
     matches(request: OngoingRequest): MaybePromise<boolean>;
+}
+
+export interface SerializedCallbackMatcherData {
+    type: string;
+    name?: string;
+    version?: number;
 }
 
 function unescapeRegexp(input: string): string {
@@ -368,6 +374,68 @@ export class CookieMatcher extends Serializable implements RequestMatcher {
     }
 }
 
+export class CallbackMatcher extends Serializable implements RequestMatcher {
+    readonly type = "callback";
+  
+    constructor(
+        public callback: (request: OngoingRequest) => MaybePromise<boolean>
+        ) {
+        super();
+    }
+  
+    async matches(request: OngoingRequest) {
+        try {
+            return await this.callback(request);
+        } catch (error) {
+            return false;
+        }
+    }
+  
+    explain() {
+        return `matches using provided callback ${
+            this.callback.name ? ` (${this.callback.name})` : ""
+        }`;
+    }
+  
+    /**
+     * @internal
+     */
+    serialize(channel: ClientServerChannel): SerializedCallbackMatcherData {
+      channel.onRequest<OngoingRequest, boolean>(async (streamMsg) => {
+        const request = withDeserializedBodyReader(streamMsg as any);
+
+        const callbackResult = await this.callback.call(null, request as any);
+
+        return callbackResult;
+      });
+  
+      return { type: this.type, name: this.callback.name, version: 1 };
+    }
+  
+    /**
+     * @internal
+     */
+    static deserialize(
+      { name }: SerializedCallbackMatcherData,
+      channel: ClientServerChannel
+    ): CallbackMatcher {
+      const rpcCallback = async (request: OngoingRequest) => {
+        const callbackResult = await channel.request<
+            OngoingRequest,
+            boolean
+        >(await withSerializedOngoingBodyReader(request) as any);
+
+        return callbackResult;
+      };
+      // Pass across the name from the real callback, for explain()
+      Object.defineProperty(rpcCallback, "name", { value: name });
+  
+      // Call the client's callback (via stream), and save a handler on our end for
+      // the response that comes back.
+      return new CallbackMatcher(rpcCallback);
+    }
+}
+
 export const MatcherLookup = {
     'wildcard': WildcardMatcher,
     'method': MethodMatcher,
@@ -384,6 +452,7 @@ export const MatcherLookup = {
     'json-body': JsonBodyMatcher,
     'json-body-matching': JsonBodyFlexibleMatcher,
     'cookie': CookieMatcher,
+    'callback': CallbackMatcher,
 };
 
 export async function matchesAll(req: OngoingRequest, matchers: RequestMatcher[]): Promise<boolean> {
