@@ -1,4 +1,4 @@
-import { getLocal, OngoingRequest } from "../../../dist/main";
+import { CompletedRequest, getLocal } from "../../../dist/main";
 import { expect, fetch } from "../../test-utils";
 
 describe("Request callback matching", function () {
@@ -8,8 +8,8 @@ describe("Request callback matching", function () {
     afterEach(() => server.stop());
 
     it("should match requests with the callback reports true", async () => {
-        let callbackRequest: OngoingRequest | undefined;
-        await server.post('/abc').withCallback((request) => {
+        let callbackRequest: CompletedRequest | undefined;
+        await server.post('/abc').matching((request) => {
             callbackRequest = request;
             return true;
         }).thenReply(200, 'Mocked response');
@@ -22,12 +22,12 @@ describe("Request callback matching", function () {
         await expect(result).to.have.responseText('Mocked response');
         expect(callbackRequest).to.haveOwnProperty('protocol', 'http');
         expect(callbackRequest).to.haveOwnProperty('path', '/abc');
-        expect(await callbackRequest?.body?.asJson()).to.deep.equal({ username: "test", passwd: "test" });
+        expect(await callbackRequest?.body?.getJson()).to.deep.equal({ username: "test", passwd: "test" });
     });
 
     it("should match requests with an async callback", async () => {
-        await server.post('/abc').withCallback(async (request) => {
-            const body = await request?.body?.asJson() as any;
+        await server.post('/abc').matching(async (request) => {
+            const body = await request?.body?.getJson() as any;
             return body?.username === 'test';
         }).thenReply(200, 'Mocked response');
 
@@ -40,7 +40,7 @@ describe("Request callback matching", function () {
     });
 
     it("should not match requests with the callback reports false", async () => {
-        await server.get('/abc').withCallback(() => {
+        await server.get('/abc').matching(() => {
             return false;
         }).thenReply(200, 'Mocked response');
 

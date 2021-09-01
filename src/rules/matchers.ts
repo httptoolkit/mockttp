@@ -2,15 +2,16 @@ import * as _ from 'lodash';
 import * as url from 'url';
 import { oneLine } from 'common-tags';
 
-import { OngoingRequest, Method, Explainable } from "../types";
+import { CompletedRequest, Method, Explainable, OngoingRequest } from "../types";
 import {
     isAbsoluteUrl,
     getPathFromAbsoluteUrl,
     isRelativeUrl,
-    getUrlWithoutProtocol
+    getUrlWithoutProtocol,
+    waitForCompletedRequest
 } from '../util/request-utils';
-import { Serializable, ClientServerChannel, withDeserializedBodyReader, withSerializedOngoingBodyReader } from "../util/serialization";
-import { MaybePromise } from '../util/type-utils';
+import { Serializable, ClientServerChannel, withDeserializedBodyReader, withSerializedBodyReader } from "../util/serialization";
+import { MaybePromise, Replace } from '../util/type-utils';
 import { normalizeUrl } from '../util/normalize-url';
 
 export interface RequestMatcher extends Explainable, Serializable {
@@ -375,43 +376,47 @@ export class CookieMatcher extends Serializable implements RequestMatcher {
 }
 
 export class CallbackMatcher extends Serializable implements RequestMatcher {
-    readonly type = "callback";
-  
+    readonly type = 'callback';
+
     constructor(
-        public callback: (request: OngoingRequest) => MaybePromise<boolean>
+        public callback: (request: CompletedRequest) => MaybePromise<boolean>
         ) {
         super();
     }
-  
+
     async matches(request: OngoingRequest) {
         try {
-            return await this.callback(request);
+            const completedRequest = await waitForCompletedRequest(request);
+
+            return this.callback(completedRequest);
         } catch (error) {
-            return false;
+            console.log('Callback matcher threw an exception');
+            console.error(error);
+            throw error;
         }
     }
-  
+
     explain() {
-        return `matches using provided callback ${
-            this.callback.name ? ` (${this.callback.name})` : ""
+        return `matches using provided callback${
+            this.callback.name ? ` (${this.callback.name})` : ''
         }`;
     }
-  
+
     /**
      * @internal
      */
     serialize(channel: ClientServerChannel): SerializedCallbackMatcherData {
-      channel.onRequest<OngoingRequest, boolean>(async (streamMsg) => {
-        const request = withDeserializedBodyReader(streamMsg as any);
+      channel.onRequest<Replace<CompletedRequest, 'body', string>, boolean>(async (streamMsg) => {
+        const request = withDeserializedBodyReader(streamMsg);
 
-        const callbackResult = await this.callback.call(null, request as any);
+        const callbackResult = await this.callback.call(null, request);
 
         return callbackResult;
       });
-  
+
       return { type: this.type, name: this.callback.name, version: 1 };
     }
-  
+
     /**
      * @internal
      */
@@ -419,17 +424,17 @@ export class CallbackMatcher extends Serializable implements RequestMatcher {
       { name }: SerializedCallbackMatcherData,
       channel: ClientServerChannel
     ): CallbackMatcher {
-      const rpcCallback = async (request: OngoingRequest) => {
-        const callbackResult = await channel.request<
-            OngoingRequest,
+      const rpcCallback = async (request: CompletedRequest) => {
+        const callbackResult = channel.request<
+            Replace<CompletedRequest, 'body', string>,
             boolean
-        >(await withSerializedOngoingBodyReader(request) as any);
+        >(withSerializedBodyReader(request) as any);
 
         return callbackResult;
       };
       // Pass across the name from the real callback, for explain()
-      Object.defineProperty(rpcCallback, "name", { value: name });
-  
+      Object.defineProperty(rpcCallback, 'name', { value: name });
+
       // Call the client's callback (via stream), and save a handler on our end for
       // the response that comes back.
       return new CallbackMatcher(rpcCallback);

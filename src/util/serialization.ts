@@ -274,14 +274,6 @@ export function withSerializedBodyReader<T extends {
     });
 }
 
-export async function withSerializedOngoingBodyReader<T extends {
-    body: OngoingBody
-}>(input: T): Promise<Replace<T, 'body', string>> {
-    return Object.assign({}, input, {
-        body: asBuffer(await input.body.asBuffer()).toString('base64')
-    });
-}
-
 export function withDeserializedBodyReader<T extends { headers: Headers, body: CompletedBody }>(
     input: Replace<T, 'body', string>
 ): T {
