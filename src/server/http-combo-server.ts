@@ -275,6 +275,14 @@ export async function createComboServer(
         copyAddressDetails(res.socket, res.stream);
         copyTimingDetails(res.socket, res.stream);
 
+        // When layering HTTP/2 on JS streams, we have to make sure the JS stream won't autoclose
+        // when the other side does, because the upper HTTP/2 layers want to handle shutdown, so
+        // they end up trying to write a GOAWAY at the same time as the lower stream shuts down,
+        // and we get assertion errors in Node v16.7+.
+        if (res.socket.constructor.name.includes('JSStreamSocket')) {
+            res.socket.allowHalfOpen = true;
+        }
+
         server.emit('connection', res.stream);
     }
 
