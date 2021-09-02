@@ -406,6 +406,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         if (this.debug) console.log(`Handling request for ${rawRequest.url}`);
 
         const request = this.preprocessRequest(rawRequest);
+        await waitForCompletedRequest(request); // Block for the body before response
 
         let result: 'responded' | 'aborted' | null = null;
         const abort = () => {
@@ -451,10 +452,13 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             if (nextRule) {
                 if (this.debug) console.log(`Request matched rule: ${nextRule.explain()}`);
                 await nextRule.handle(request, response, this.recordTraffic);
+                console.log("Request handled");
             } else if (this.fallbackRequestRule) {
                 await this.fallbackRequestRule.handle(request, response, this.recordTraffic);
+                console.log("Request handled by fallback rule");
             } else {
                 await this.sendUnmatchedRequestError(request, response);
+                console.log("Request handled with unmatched response");
             }
             result = result || 'responded';
         } catch (e) {

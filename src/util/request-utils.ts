@@ -148,8 +148,12 @@ const parseBodyStream = (bodyStream: stream.Readable, maxSize: number, getHeader
             if (!bufferPromise) {
                 bufferPromise = streamToBuffer(bodyStream, maxSize);
 
+                console.log("Body promise created");
                 bufferPromise
-                    .then((buffer) => completedBuffer = buffer)
+                    .then((buffer) => {
+                        completedBuffer = buffer;
+                        console.log("Body promise completed");
+                    })
                     .catch(() => {}); // If we get no body, completedBuffer stays null
             }
             return bufferPromise;

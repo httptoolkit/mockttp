@@ -3,7 +3,7 @@ import { expect, fetch, URLSearchParams, Headers, isNode } from "../test-utils";
 import * as _ from "lodash";
 import { Readable } from "stream";
 
-describe("Mockttp explanation messages", function () {
+describe.only("Mockttp explanation messages", function () {
     let server = getLocal();
 
     beforeEach(() => server.start());
