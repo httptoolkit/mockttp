@@ -18,7 +18,7 @@ jobs:
       - run: npm install -g npm@6
 
       - run: npm install --no-package-lock
-      - run: npm run ci-tests
+      - run: xvfb-run npm run ci-tests
 
       - name: Deploy docs
         if: github.ref == 'refs/heads/master' && matrix.node-version == 'v14.17'

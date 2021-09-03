@@ -58,7 +58,7 @@ module.exports = function(config) {
         port: 9876,
         logLevel: config.LOG_INFO,
 
-        browsers: ['ChromeHeadlessWithCert'],
+        browsers: ['ChromeWithCert'],
         customLaunchers: {
             ChromeHeadlessWithCert: {
                 base: 'ChromeHeadless',
