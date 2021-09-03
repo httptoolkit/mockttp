@@ -44,7 +44,27 @@ function getGlobalFetch() {
 
 let fetchImplementation = isNode ? getFetchPonyfill() : getGlobalFetch();
 
-export const fetch = fetchImplementation.fetch;
+const asyncLogWrap = (fn: any, name: string) => {
+    return async function (this: any) {
+        console.log(`Test ${name}...`, Date.now());
+        const result = await fn.apply(this, arguments);
+        console.log(`Test ${name} completed`, Date.now());
+        return result;
+    }
+}
+
+let globalId = 0;
+
+export const fetch = async function (this: any) {
+    const id = globalId++;
+    const start = Date.now();
+    console.log(`Test fetch ${id}: ${start}`);
+    const result = await (window.fetch as any)(...arguments);
+    console.log(`Test fetch ${id} complete. Duration: ${Date.now() - start}`);
+    result.json = asyncLogWrap(result.json, ".json()");
+    result.text = asyncLogWrap(result.text, ".text()");
+    return result;
+} as typeof fetchImplementation.fetch;
 
 // All a bit convoluted, so we don't shadow the global vars,
 // and we can still use those to define these in the browser
