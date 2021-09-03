@@ -4,6 +4,9 @@ import * as _ from "lodash";
 import { Readable } from "stream";
 
 describe.only("Mockttp explanation messages", function () {
+
+    this.timeout(5000);
+
     let server = getLocal();
 
     beforeEach(() => server.start());

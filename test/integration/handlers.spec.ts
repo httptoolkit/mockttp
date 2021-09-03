@@ -5,6 +5,9 @@ import { getLocal } from "../..";
 import { expect, fetch, isNode, isWeb, delay, headersToObject } from "../test-utils";
 
 describe.only("HTTP mock rule handling", function () {
+
+    this.timeout(5000);
+
     let server = getLocal({
         cors: isNode
             ? false

@@ -183,6 +183,8 @@ export async function createComboServer(
         }, requestListener);
     }
 
+    (server as any)._httpServer.keepAliveTimeout = 100;
+
     server.on('connection', (socket: net.Socket | http2.ServerHttp2Stream) => {
         socket.__timingInfo = socket.__timingInfo || buildTimingInfo();
 
