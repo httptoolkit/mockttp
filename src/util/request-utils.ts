@@ -317,12 +317,18 @@ export function buildAbortedRequest(request: OngoingRequest): InitiatedRequest {
  * Build a completed request: the external representation of a request
  * that's been completely received (but not necessarily replied to).
  */
-export async function waitForCompletedRequest(request: OngoingRequest): Promise<CompletedRequest> {
-    const body = await waitForBody(request.body, request.headers);
-    request.timingEvents.bodyReceivedTimestamp = request.timingEvents.bodyReceivedTimestamp || now();
+export function waitForCompletedRequest(request: OngoingRequest): Promise<CompletedRequest> {
+    if (!request._completedRequestPromise) {
+        request._completedRequestPromise = (async () => {
+            const body = await waitForBody(request.body, request.headers);
+            request.timingEvents.bodyReceivedTimestamp = request.timingEvents.bodyReceivedTimestamp || now();
 
-    const requestData = buildInitiatedRequest(request);
-    return Object.assign(requestData, { body, headers: cleanUpHeaders(request.headers) });
+            const requestData = buildInitiatedRequest(request);
+            return Object.assign(requestData, { body, headers: cleanUpHeaders(request.headers) });
+        })();
+    }
+
+    return request._completedRequestPromise;
 }
 
 export function trackResponse(

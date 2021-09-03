@@ -76,6 +76,7 @@ export interface TlsTimingEvents {
 export interface OngoingRequest extends Request, EventEmitter {
     body: OngoingBody;
     timingEvents: TimingEvents;
+    _completedRequestPromise?: Promise<CompletedRequest>;
 }
 
 export interface OngoingBody {
