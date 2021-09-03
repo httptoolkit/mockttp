@@ -4,7 +4,8 @@ import { PassThrough } from 'stream';
 import { getLocal } from "../..";
 import { expect, fetch, isNode, isWeb, delay, headersToObject } from "../test-utils";
 
-describe("HTTP mock rule handling", function () {
+describe.only("HTTP mock rule handling", function () {
+
     let server = getLocal({
         cors: isNode
             ? false
