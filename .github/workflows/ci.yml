@@ -20,6 +20,19 @@ jobs:
       - run: npm install --no-package-lock
       - run: npm run ci-tests
 
+      - uses: actions/upload-artifact@v2
+        if: failure()
+        with:
+          name: failing-netlog.json
+          path: netlog.json
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: successful-netlog.json
+          path: netlog.json
+          if-no-files-found: error
+
       - name: Deploy docs
         if: github.ref == 'refs/heads/master' && matrix.node-version == 'v14.17'
         uses: JamesIves/github-pages-deploy-action@3.6.2
