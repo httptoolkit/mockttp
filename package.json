@@ -34,13 +34,13 @@
     "build:src": "tsc && cp src/standalone/schema.gql dist/standalone/schema.gql && chmod +x ./dist/standalone/standalone-bin.js",
     "build:doc": "typedoc src/main.ts",
     "postbuild:doc": "touch ./typedoc/.nojekyll",
-    "test": "npm run build && npm run test:node && npm run test:browser",
+    "test": "npm run build:src && npm run test:browser",
     "test:node": "NODE_EXTRA_CA_CERTS=./test/fixtures/test-ca.pem TS_NODE_FILES=true mocha -r ts-node/register 'test/**/*.spec.ts'",
     "test:browser": "npm run with-standalone -- karma start",
     "test:browser:debug": "npm run with-standalone -- karma start --single-run=false --browsers ChromeWithCert",
     "standalone": "npm run build && node -e 'require(\".\").getStandalone({ debug: true }).start()'",
     "with-standalone": "TS_NODE_FILES=true ts-node ./src/standalone/standalone-bin.ts -c ",
-    "ci-tests": "npm run test && catch-uncommitted",
+    "ci-tests": "npm run test",
     "prepack": "npm run build"
   },
   "repository": {
