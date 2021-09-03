@@ -63,7 +63,11 @@ module.exports = function(config) {
             ChromeHeadlessWithCert: {
                 base: 'ChromeHeadless',
                 // This is the fingerprint for the test-ca.pem CA cert
-                flags: ['--ignore-certificate-errors-spki-list=dV1LxiEDeQEtLjeMCGZ4ON7Mu1TvULkgt/kg1DGk/vM=']
+                flags: [
+                    '--ignore-certificate-errors-spki-list=dV1LxiEDeQEtLjeMCGZ4ON7Mu1TvULkgt/kg1DGk/vM=',
+                    '--log-net-log=./netlog.json',
+                    '--net-log-level=0'
+                ]
             },
             // Used for debugging (npm run test:browser:debug)
             ChromeWithCert: {
