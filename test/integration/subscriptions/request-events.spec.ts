@@ -35,6 +35,7 @@ const INCONSISTENT_HEADERS = [
     // Security headers only available in new Chrome versions:
     'sec-ch-ua',
     'sec-ch-ua-mobile',
+    'sec-ch-ua-platform',
     'sec-fetch-dest',
     'sec-fetch-mode',
     'sec-fetch-site',
