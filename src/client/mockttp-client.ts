@@ -277,6 +277,7 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
         let response = await fetch(url, mergeClientOptions(options, this.mockClientOptions));
 
         if (response.status >= 400) {
+            if (this.debug) console.error(`Remote client server request failed with status ${response.status}`);
             throw new RequestError(
                 `Request to ${url} failed, with status ${response.status}`,
                 response
@@ -304,6 +305,7 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
                 return data as T;
             }
         } catch (e) {
+            if (this.debug) console.error(`Remote client query error: ${e}`);
             let graphQLErrors: Error[] | undefined = undefined;
             try {
                 graphQLErrors = (await e.response.json()).errors;
@@ -319,6 +321,7 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
 
     async start(portConfig?: number | PortRange): Promise<void> {
         if (this.mockServerConfig) throw new Error('Server is already started');
+        if (this.debug) console.log(`Starting remote mock server on port ${portConfig}`);
 
         const path = portConfig ? `/start?port=${JSON.stringify(portConfig)}` : '/start';
         let mockServerConfig = await requestFromStandalone<MockServerConfig>(
@@ -344,10 +347,13 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
 
         // Load the schema on server start, so we can check for feature support
         this.mockServerSchema = (await this.queryMockServer<any>(introspectionQuery)).__schema;
+
+        if (this.debug) console.log('Started remote mock server');
     }
 
     async stop(): Promise<void> {
         if (!this.mockServerConfig) return;
+        if (this.debug) console.log('Stopping remote mock server');
 
         this.mockServerStream!.end();
         this.subscriptionClient!.close();
@@ -365,6 +371,7 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
     // no need to close things up nicely.
     private completeShutdown(): void {
         if (!this.mockServerConfig) return;
+        if (this.debug) console.log('Remote mock server shut down, disconnecting');
 
         try { this.mockServerStream!.end(); } catch (e) { }
         try { this.subscriptionClient!.close(); } catch (e) { }
@@ -606,7 +613,10 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
         if (
             !queryResultName ||
             !this.typeHasField('Subscription', queryResultName)
-        ) return Promise.resolve();
+        ) {
+            console.warn(`Remote client cannot subscribe to unrecognized event ${event}`);
+            return Promise.resolve();
+        }
 
         // Note the typeHasField checks - these are a quick hack for backward compatibility,
         // introspecting the server schema to avoid requesting fields that don't exist on old servers.
