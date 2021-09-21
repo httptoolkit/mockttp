@@ -1,5 +1,7 @@
 {
-    "listInvalidSymbolLinks": true,
+    "validation": {
+        "invalidLink": true
+    },
     "treatWarningsAsErrors": true,
     "excludePrivate": true,
     "excludeProtected": true,
