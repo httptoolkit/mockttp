@@ -29,6 +29,7 @@ export interface StandaloneServerOptions {
     debug?: boolean;
     serverDefaults?: MockttpOptions;
     corsOptions?: cors.CorsOptions & { strict?: boolean };
+    webSocketKeepAlive?: number;
 }
 
 async function strictOriginMatch(
@@ -68,6 +69,7 @@ export class MockttpStandalone {
 
     private debug: boolean;
     private requiredOrigin: cors.CorsOptions['origin'] | false;
+    private webSocketKeepAlive: number | undefined;
 
     private app = express();
     private server: DestroyableServer | null = null;
@@ -85,6 +87,8 @@ export class MockttpStandalone {
     constructor(options: StandaloneServerOptions = {}) {
         this.debug = options.debug || false;
         if (this.debug) console.log('Standalone server started in debug mode');
+
+        this.webSocketKeepAlive = options.webSocketKeepAlive || undefined;
 
         this.app.use(cors(options.corsOptions));
 
@@ -304,6 +308,19 @@ export class MockttpStandalone {
             let newClientStream = connectWebSocketStream(ws);
             wsSocket.pipe(newClientStream).pipe(wsSocket, { end: false });
         });
+
+        if (this.webSocketKeepAlive) {
+            // If we have a keep-alive set, send the client a ping frame every Xms to
+            // try and stop closes (especially by browsers) due to inactivity.
+            const streamServerKeepAlive = setInterval(() => {
+                streamServer.clients.forEach((client) => {
+                    if (client.readyState !== ws.OPEN) return;
+                    client.ping(() => {});
+                });
+            }, this.webSocketKeepAlive);
+            streamServer.on('close', () => clearInterval(streamServerKeepAlive));
+        }
+
         streamServer.on('close', () => {
             wsSocket.end();
             serverSocket.end();
@@ -321,7 +338,10 @@ export class MockttpStandalone {
         const schema = await this.loadSchema('schema.gql', mockServer, serverSocket);
 
         const subscriptionServer = SubscriptionServer.create({
-            schema, execute, subscribe
+            schema,
+            execute,
+            subscribe,
+            keepAlive: this.webSocketKeepAlive
         }, {
             noServer: true
         });
