@@ -1,5 +1,6 @@
 import _ = require('lodash');
 import url = require('url');
+import type dns = require('dns');
 import net = require('net');
 import tls = require('tls');
 import http = require('http');
@@ -52,7 +53,7 @@ import {
     deserializeBuffer
 } from "../../util/serialization";
 import { getAgent, ProxyConfig } from '../../util/http-agents';
-import { CachedDns } from '../../util/dns';
+import { CachedDns, DnsLookupFunction } from '../../util/dns';
 
 // An error that indicates that the handler is aborting the request.
 // This could be intentional, or an upstream server aborting the request.
@@ -920,7 +921,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
     public readonly proxyConfig?: ProxyConfig;
 
     private _cacheableLookupInstance: CacheableLookup | CachedDns | undefined;
-    private lookup() {
+    private lookup(): DnsLookupFunction {
         if (!this.lookupOptions) {
             if (!this._cacheableLookupInstance) {
                 // By default, use 10s caching of hostnames, just to reduce the delay from
@@ -1281,7 +1282,8 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 family,
                 path,
                 headers,
-                lookup: this.lookup(),
+                lookup: this.lookup() as typeof dns.lookup,
+                // ^ Cast required to handle __promisify__ type hack in the official Node types
                 agent,
                 minVersion: strictHttpsChecks ? tls.DEFAULT_MIN_VERSION : 'TLSv1', // Allow TLSv1, if !strict
                 rejectUnauthorized: strictHttpsChecks,

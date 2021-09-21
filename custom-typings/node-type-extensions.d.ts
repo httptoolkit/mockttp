@@ -98,12 +98,3 @@ declare module "http2" {
         __timingInfo?: net.Socket['__timingInfo'];
     }
 }
-
-declare module "http" {
-    import * as dns from 'dns';
-
-    interface ClientRequestArgs {
-        // __promisify__ here is a type hack, causes problems, so we strip it
-        lookup?: Omit<typeof dns.lookup, '__promisify__'>;
-    }
-}
