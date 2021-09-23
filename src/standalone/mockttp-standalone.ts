@@ -296,10 +296,10 @@ export class MockttpStandalone {
 
         if (this.debug) {
             serverSocket.on('data', (d: any) => {
-                console.debug('Streaming data to WS clients:', d.toString());
+                console.log('Streaming data from WS clients:', d.toString());
             });
             wsSocket.on('data', (d: any) => {
-                console.debug('Streaming data from WS clients:', d.toString());
+                console.log('Streaming data to WS clients:', d.toString());
             });
         }
 
