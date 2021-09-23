@@ -9,13 +9,12 @@ import corsGate = require('cors-gate');
 import * as http from 'http';
 import * as net from 'net';
 import * as bodyParser from 'body-parser';
-import * as ws from 'ws';
+import * as Ws from 'ws';
 
 import { graphqlHTTP } from 'express-graphql';
 import { GraphQLSchema, execute, subscribe } from 'graphql';
 import { makeExecutableSchema } from '@graphql-tools/schema';
 import { SubscriptionServer } from '@httptoolkit/subscriptions-transport-ws';
-import connectWebSocketStream = require('websocket-stream');
 import { Duplex, EventEmitter } from 'stream';
 import DuplexPair = require('native-duplexpair');
 
@@ -81,7 +80,7 @@ export class MockttpStandalone {
 
         mockServer: MockttpServer,
         subscriptionServer: SubscriptionServer,
-        streamServer: ws.Server
+        streamServer: Ws.Server
     } } = { };
 
     constructor(options: StandaloneServerOptions = {}) {
@@ -233,7 +232,7 @@ export class MockttpStandalone {
                 if (isMatch) {
                     let port = parseInt(isMatch[1], 10);
 
-                    let wsServer: ws.Server = isSubscriptionRequest
+                    let wsServer: Ws.Server = isSubscriptionRequest
                         ? (<any> this.servers[port]?.subscriptionServer)?.wsServer
                         : this.servers[port]?.streamServer;
 
@@ -303,10 +302,16 @@ export class MockttpStandalone {
             });
         }
 
-        const streamServer = new ws.Server({ noServer: true });
-        streamServer.on('connection', (ws: WebSocket) => {
-            let newClientStream = connectWebSocketStream(ws);
+        const streamServer = new Ws.Server({ noServer: true });
+        streamServer.on('connection', (ws) => {
+            let newClientStream = Ws.createWebSocketStream(ws, {});
             wsSocket.pipe(newClientStream).pipe(wsSocket, { end: false });
+            newClientStream.on('error', (e) => wsSocket.destroy(e));
+        });
+
+        streamServer.on('close', () => {
+            wsSocket.end();
+            serverSocket.end();
         });
 
         if (this.webSocketKeepAlive) {
@@ -314,17 +319,12 @@ export class MockttpStandalone {
             // try and stop closes (especially by browsers) due to inactivity.
             const streamServerKeepAlive = setInterval(() => {
                 streamServer.clients.forEach((client) => {
-                    if (client.readyState !== ws.OPEN) return;
+                    if (client.readyState !== Ws.OPEN) return;
                     client.ping(() => {});
                 });
             }, this.webSocketKeepAlive);
             streamServer.on('close', () => clearInterval(streamServerKeepAlive));
         }
-
-        streamServer.on('close', () => {
-            wsSocket.end();
-            serverSocket.end();
-        });
 
         // Handle errors by logging & stopping this server instance
         const onStreamError = (e: Error) => {
