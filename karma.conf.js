@@ -15,7 +15,7 @@ module.exports = function(config) {
         mime: { 'text/x-typescript': ['ts'] },
         webpack: {
             mode: 'development',
-            devtool: 'source-map',
+            devtool: false,
             resolve: {
                 extensions: ['.ts', '.js'],
                 alias: {
@@ -41,6 +41,9 @@ module.exports = function(config) {
                 new webpack.IgnorePlugin(/^dns2$/),
                 new webpack.DefinePlugin({
                     "process.version": '"' + process.version + '"'
+                }),
+                new webpack.SourceMapDevToolPlugin({
+                    test: /\.(ts|js|css)($|\?)/i
                 })
             ],
             output: {
@@ -54,6 +57,14 @@ module.exports = function(config) {
             'src/**/*.ts': ['webpack', 'sourcemap'],
             'test/**/*.ts': ['webpack', 'sourcemap']
         },
+        plugins: [
+            'karma-chrome-launcher',
+            'karma-chai',
+            'karma-mocha',
+            'karma-sourcemap-loader',
+            'karma-webpack',
+            'karma-spec-reporter'
+        ],
         reporters: ['spec'],
         port: 9876,
         logLevel: config.LOG_INFO,
