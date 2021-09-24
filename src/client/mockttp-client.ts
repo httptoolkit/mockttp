@@ -359,6 +359,14 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
         this.subscriptionClient!.close();
         await this.requestFromMockServer('/stop', {
             method: 'POST'
+        }).catch((e) => {
+            if (e instanceof RequestError && e.response.status === 404) {
+                // 404 means it doesn't exist, generally because it was already stopped
+                // by some other parallel shutdown process.
+                return;
+            } else {
+                throw e;
+            }
         });
 
         this.mockServerStream = undefined;
