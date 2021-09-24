@@ -328,6 +328,7 @@ export class MockttpStandalone {
 
         // Handle errors by logging & stopping this server instance
         const onStreamError = (e: Error) => {
+            if (!running) return; // We don't care about connection issues during shutdown
             console.error("Error in server standalone stream, shutting down mock server");
             console.error(e);
             stopServer();
