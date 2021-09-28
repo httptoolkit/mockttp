@@ -135,7 +135,7 @@ export class ClientServerChannel extends Duplex {
             }
 
             if (data.topicId === this.topicId) {
-                if (_.isEqual(data, DISPOSE_MESSAGE)) this.dispose();
+                if (_.isEqual(_.omit(data, 'topicId'), DISPOSE_MESSAGE)) this.dispose();
                 else this.push(data);
             }
         });
