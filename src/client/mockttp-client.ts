@@ -1,7 +1,7 @@
 import { TypedError } from 'typed-error';
 import getFetchPonyfill = require('fetch-ponyfill');
 import _ = require('lodash');
-import * as WebSocket from 'universal-websocket-client';
+import * as WebSocket from 'isomorphic-ws';
 import connectWebSocketStream = require('websocket-stream');
 import { SubscriptionClient } from '@httptoolkit/subscriptions-transport-ws';
 import { Duplex } from 'stream';

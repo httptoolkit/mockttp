@@ -2,7 +2,7 @@ import { PassThrough } from "stream";
 import * as net from 'net';
 import * as portfinder from 'portfinder';
 import request = require("request-promise-native");
-import * as WebSocket from 'universal-websocket-client';
+import * as WebSocket from 'isomorphic-ws';
 
 import { getLocal, getRemote, getStandalone, resetStandalone, Mockttp } from "../..";
 import { expect, fetch, nodeOnly, browserOnly } from "../test-utils";
