@@ -357,7 +357,7 @@ describe("Abort subscriptions", () => {
         expect(seenRequest.id).to.equal(seenAbort.id);
     });
 
-    it("should be sent when a request is intentionally closed by beforeResponse", async () => {
+    it("should be sent when a forwarded request is intentionally closed by beforeResponse", async () => {
         let seenRequestPromise = getDeferred<CompletedRequest>();
         await server.on('request', (r) => seenRequestPromise.resolve(r));
 

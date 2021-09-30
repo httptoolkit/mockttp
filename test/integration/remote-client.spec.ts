@@ -2,10 +2,12 @@ import { PassThrough } from "stream";
 import * as net from 'net';
 import * as portfinder from 'portfinder';
 import request = require("request-promise-native");
-import * as WebSocket from 'isomorphic-ws';
 
-import { getLocal, getRemote, getStandalone, resetStandalone, Mockttp } from "../..";
-import { expect, fetch, nodeOnly, browserOnly } from "../test-utils";
+import * as WebSocket from 'isomorphic-ws';
+import type * as Ws from 'ws';
+
+import { getLocal, getRemote, getStandalone, resetStandalone, Mockttp, CompletedRequest } from "../..";
+import { expect, fetch, nodeOnly, browserOnly, delay, getDeferred } from "../test-utils";
 
 browserOnly(() => {
     describe("Remote browser client with a standalone server", function () {
@@ -529,6 +531,14 @@ nodeOnly(() => {
 
             const standaloneServer = getStandalone();
 
+            const client1 = getRemote();
+            const client2 = getRemote();
+
+            afterEach(() => Promise.all([
+                client1.stop(),
+                client2.stop()
+            ]));
+
             beforeEach(() => standaloneServer.start());
             afterEach(() => standaloneServer.stop());
 
@@ -539,7 +549,6 @@ nodeOnly(() => {
                 standaloneServer.on('mock-server-started', (server) => startedServers.push(server.port));
                 standaloneServer.on('mock-server-stopping', (server) => stoppedServers.push(server.port));
 
-                const client1 = getRemote();
                 expect(startedServers).to.deep.equal([]);
                 expect(stoppedServers).to.deep.equal([]);
 
@@ -548,7 +557,6 @@ nodeOnly(() => {
                 expect(startedServers).to.deep.equal([port1]);
                 expect(stoppedServers).to.deep.equal([]);
 
-                const client2 = getRemote();
                 await client2.start();
                 const port2 = client2.port;
                 expect(startedServers).to.deep.equal([port1, port2]);
@@ -561,6 +569,58 @@ nodeOnly(() => {
                 await client2.stop();
                 expect(startedServers).to.deep.equal([port1, port2]);
                 expect(stoppedServers).to.deep.equal([port1, port2]);
+            });
+
+            it("can handle unexpected subscription disconnections", async () => {
+                await client1.start();
+
+                let seenRequestPromise = getDeferred<CompletedRequest>();
+                await client1.on('request', (r) => seenRequestPromise.resolve(r));
+
+                // Forcefully kill the /subscription websocket connection, so that all
+                // active subscriptions are disconnected:
+                const subWsServer: Ws.Server = (standaloneServer as any)
+                    .servers[client1.port].subscriptionServer.wsServer;
+                subWsServer.clients.forEach((socket: Ws) => socket.terminate());
+                await delay(500); // Wait for the disconnect & subsequent reconnect to complete
+
+                await fetch(client1.urlFor("/mocked-endpoint"));
+
+                // Did the subscription still work?
+                const seenRequest = await seenRequestPromise;
+                expect(seenRequest.url).to.equal(client1.urlFor("/mocked-endpoint"));
+            });
+
+            it("can handle unexpected stream disconnections", async () => {
+                await client1.start();
+
+                await client1.get("/mocked-endpoint").thenCallback(() => {
+                    return { statusCode: 200, body: 'Mock response' }
+                });
+
+                // Forcefully kill the /stream websocket connection, so that dynamic
+                // handlers & matchers are disconnected:
+                const streamWsServer: Ws.Server = (standaloneServer as any)
+                    .servers[client1.port].streamServer;
+                streamWsServer.clients.forEach((socket: Ws) => socket.terminate());
+                await delay(200); // Wait for the disconnect & subsequent reconnect to complete
+
+                const response = await request.get(client1.urlFor("/mocked-endpoint"));
+                expect(response).to.equal("Mock response");
+            });
+
+            it("doesn't reconnect after an intentional reset", async () => {
+                await client1.start();
+                const clientPort = client1.port;
+
+                await resetStandalone();
+                await client2.start(clientPort);
+
+                // Client 1 should be broken now, because it was reset. It should _not_ try to
+                // reconnect and end up taking over client 2's server.
+                await expect(() =>
+                    client1.port
+                ).to.throw('Cannot get port before server is started');
             });
         });
 

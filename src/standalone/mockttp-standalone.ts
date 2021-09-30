@@ -279,6 +279,11 @@ export class MockttpStandalone {
 
             await mockServer.stop();
             server.subscriptionServer.close();
+
+            // Close with code 1000 (purpose is complete - no more streaming happening)
+            server.streamServer.clients.forEach((client) => {
+                client.close(1000);
+            });
             server.streamServer.close();
             server.streamServer.emit('close');
         };
@@ -306,7 +311,14 @@ export class MockttpStandalone {
         streamServer.on('connection', (ws) => {
             let newClientStream = Ws.createWebSocketStream(ws, {});
             wsSocket.pipe(newClientStream).pipe(wsSocket, { end: false });
-            newClientStream.on('error', (e) => wsSocket.destroy(e));
+
+            const unpipe = () => {
+                wsSocket.unpipe(newClientStream);
+                newClientStream.unpipe(wsSocket);
+            };
+
+            newClientStream.on('error', unpipe);
+            wsSocket.on('end', unpipe);
         });
 
         streamServer.on('close', () => {

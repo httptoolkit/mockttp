@@ -1,10 +1,11 @@
+import _ = require('lodash');
+import { Duplex } from 'stream';
+import DuplexPair = require('native-duplexpair');
 import { TypedError } from 'typed-error';
 import getFetchPonyfill = require('fetch-ponyfill');
-import _ = require('lodash');
 import * as WebSocket from 'isomorphic-ws';
 import connectWebSocketStream = require('@httptoolkit/websocket-stream');
 import { SubscriptionClient } from '@httptoolkit/subscriptions-transport-ws';
-import { Duplex } from 'stream';
 
 const {
     /** @hidden */
@@ -13,19 +14,19 @@ const {
     Headers
 } = getFetchPonyfill();
 
-import { MockedEndpoint } from "../types";
-import { Mockttp, AbstractMockttp, MockttpOptions, PortRange } from "../mockttp";
+import { MockedEndpoint, MockedEndpointData, DEFAULT_STANDALONE_PORT } from "../types";
+import { Mockttp, AbstractMockttp, MockttpOptions, PortRange, } from "../mockttp";
+
+import { buildBodyReader } from '../util/request-utils';
+import { RequireProps } from '../util/type-utils';
+import { introspectionQuery } from './introspection-query';
+
 import { MockServerConfig } from "../standalone/mockttp-standalone";
 import { RequestRuleData } from "../rules/requests/request-rule";
 import { WebSocketRuleData } from '../rules/websockets/websocket-rule';
 import { serializeRuleData } from '../rules/rule-serialization';
 
-import { MockedEndpointData, DEFAULT_STANDALONE_PORT } from "../types";
-
 import { MockedEndpointClient } from "./mocked-endpoint-client";
-import { buildBodyReader } from '../util/request-utils';
-import { RequireProps } from '../util/type-utils';
-import { introspectionQuery } from './introspection-query';
 
 export class ConnectionError extends TypedError { }
 
@@ -219,6 +220,8 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
     private mockServerStream: Duplex | undefined;
     private subscriptionClient: SubscriptionClient | undefined;
 
+    private running = false;
+
     constructor(options: MockttpClientOptions = {}) {
         super(_.defaults(options, {
             // Browser clients generally want cors enabled. For other clients, it doesn't hurt.
@@ -235,19 +238,65 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
         this.mockClientOptions = options.client || {};
     }
 
-    private openStreamToMockServer(config: MockServerConfig): Promise<Duplex> {
+    private attachStreamWebsocket(config: MockServerConfig, targetStream: Duplex): Duplex {
         const standaloneStreamServer = this.mockServerOptions.standaloneServerUrl.replace(/^http/, 'ws');
-        const stream = connectWebSocketStream(`${standaloneStreamServer}/server/${config.port}/stream`, {
+        const wsStream = connectWebSocketStream(`${standaloneStreamServer}/server/${config.port}/stream`, {
             objectMode: true,
-            headers: this.mockClientOptions?.headers
+            headers: this.mockClientOptions?.headers // Only used in Node.js (via WS)
         });
 
-        // When this stream closes, the server is gone and need to shut down.
-        stream.on('close', () => this.completeShutdown());
+        let streamConnected = false;
+        wsStream.on('connect', () => {
+            streamConnected = true;
+
+            targetStream.pipe(wsStream);
+            wsStream.pipe(targetStream, { end: false });
+        });
+
+        // We ignore errors, but websocket closure eventually results in reconnect or shutdown
+        wsStream.on('error', (e) => {
+            if (this.debug) console.warn('Mockttp client stream error', e);
+        });
+
+        // When the websocket closes (after connect, either close frame, error, or socket shutdown):
+        wsStream.on('ws-close', (closeEvent) => {
+            targetStream.unpipe(wsStream);
+
+            const serverShutdown = closeEvent.code === 1000;
+            const clientShutdown = this.mockServerConfig === null;
+            if (serverShutdown || clientShutdown) {
+                // Clean shutdown implies the server is gone, and we need to shutdown & cleanup.
+                this.stop();
+            } else if (this.running && streamConnected) {
+                // Unclean shutdown means something has gone wrong somewhere. Try to reconnect.
+                const newStream = this.attachStreamWebsocket(config, targetStream);
+
+                // On a successful connect, business resumes as normal.
+                newStream.on('connect', () =>
+                    console.warn('Reconnected Mockttp client stream')
+                );
+
+                // On a failed reconnect, we just shut down completely.
+                newStream.on('error', () => this.stop());
+            }
+            // If never connected successfully, we do nothing.
+        });
+
+        return wsStream;
+    }
+
+    private openStreamToMockServer(config: MockServerConfig): Promise<Duplex> {
+        // To allow reconnects, we need to not end the client stream when an individual web socket ends.
+        // To make that work, we return a separate stream, which isn't directly connected to the websocket
+        // and doesn't receive WS 'end' events, and then we can swap the WS inputs accordingly.
+        const { socket1: wsTarget, socket2: exposedStream } = new DuplexPair({ objectMode: true });
+
+        const wsStream = this.attachStreamWebsocket(config, wsTarget);
+        wsTarget.on('error', (e) => exposedStream.emit('error', e));
 
         return new Promise((resolve, reject) => {
-            stream.once('connect', () => resolve(stream));
-            stream.once('error', reject);
+            wsStream.once('connect', () => resolve(exposedStream));
+            wsStream.once('error', reject);
         });
     }
 
@@ -266,11 +315,12 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
         });
 
         this.subscriptionClient.onReconnecting(() =>
-            console.warn(`Reconnecting Mockttp subscription client`)
+            console.warn('Reconnecting Mockttp subscription client')
         );
     }
 
     private async requestFromMockServer(path: string, options?: RequestInit): Promise<Response> {
+        // Must check for config, not this.running, or we can't send the /stop request!
         if (!this.mockServerConfig) throw new Error('Not connected to mock server');
 
         let url = `${this.mockServerOptions.standaloneServerUrl}/server/${this.mockServerConfig.port}${path}`;
@@ -348,16 +398,30 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
         // Load the schema on server start, so we can check for feature support
         this.mockServerSchema = (await this.queryMockServer<any>(introspectionQuery)).__schema;
 
+        this.running = true;
+
         if (this.debug) console.log('Started remote mock server');
     }
 
+    // Call when either we want the server to stop, or it appears that the server has already stopped,
+    // and we just want to ensure that's happened and clean everything up.
     async stop(): Promise<void> {
-        if (!this.mockServerConfig) return;
+        if (!this.running) return;
+        this.running = false;
+
         if (this.debug) console.log('Stopping remote mock server');
 
-        this.mockServerStream!.end();
-        this.subscriptionClient!.close();
-        await this.requestFromMockServer('/stop', {
+        try { this.subscriptionClient?.close(); } catch (e) { console.log(e); }
+        this.subscriptionClient = undefined;
+
+        try { this.mockServerStream?.end(); } catch (e) { console.log(e); }
+        this.mockServerStream = undefined;
+
+        await this.requestServerStop();
+    }
+
+    private requestServerStop() {
+        return this.requestFromMockServer('/stop', {
             method: 'POST'
         }).catch((e) => {
             if (e instanceof RequestError && e.response.status === 404) {
@@ -367,27 +431,10 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
             } else {
                 throw e;
             }
+        }).then(() => {
+            this.mockServerSchema = undefined;
+            this.mockServerConfig = undefined;
         });
-
-        this.mockServerStream = undefined;
-        this.mockServerSchema = undefined;
-        this.subscriptionClient = undefined;
-        this.mockServerConfig = undefined;
-    }
-
-    // Called when the remote server appears to have closed: shut down directly,
-    // no need to close things up nicely.
-    private completeShutdown(): void {
-        if (!this.mockServerConfig) return;
-        if (this.debug) console.log('Remote mock server shut down, disconnecting');
-
-        try { this.mockServerStream!.end(); } catch (e) { }
-        try { this.subscriptionClient!.close(); } catch (e) { }
-
-        this.mockServerStream = undefined;
-        this.mockServerSchema = undefined;
-        this.subscriptionClient = undefined;
-        this.mockServerConfig = undefined;
     }
 
     private typeHasField(typeName: string, fieldName: string): boolean {
@@ -421,13 +468,13 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
     }
 
     get url(): string {
-        if (!this.mockServerConfig) throw new Error('Cannot get url before server is started');
+        if (!this.running) throw new Error('Cannot get url before server is started');
 
         return this.mockServerConfig!.mockRoot;
     }
 
     get port(): number {
-        if (!this.mockServerConfig) throw new Error('Cannot get port before server is started');
+        if (!this.running) throw new Error('Cannot get port before server is started');
 
         return this.mockServerConfig!.port;
     }
@@ -452,7 +499,7 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
         rules: Array<RequestRuleData>,
         reset: boolean
     ): Promise<MockedEndpoint[]> => {
-        if (!this.mockServerConfig) throw new Error('Cannot add rules before the server is started');
+        if (!this.running) throw new Error('Cannot add rules before the server is started');
 
         // Backward compat: make Add/SetRules work with servers that only define reset & addRule (singular).
         // Adds a small risk of odd behaviour in the gap between reset & all the rules being added, but it
@@ -497,7 +544,7 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
     setFallbackRequestRule = async (
         rule: RequestRuleData
     ): Promise<MockedEndpoint> => {
-        if (!this.mockServerConfig) throw new Error('Cannot add rules before the server is started');
+        if (!this.running) throw new Error('Cannot add rules before the server is started');
 
         let { endpoint: { id, explanation } } = (await this.queryMockServer<{ endpoint: { id: string, explanation: string } }>(
             `mutation SetFallbackRule($fallbackRule: MockRule!) {
@@ -520,7 +567,7 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
         // Seperate and much simpler than _addRules, because it doesn't have to deal with
         // backward compatibility.
 
-        if (!this.mockServerConfig) throw new Error('Cannot add rules before the server is started');
+        if (!this.running) throw new Error('Cannot add rules before the server is started');
 
         const requestName = (reset ? 'Set' : 'Add') + 'WebSocketRules';
         const mutationName = (reset ? 'set' : 'add') + 'WebSocketRules';
