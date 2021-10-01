@@ -294,6 +294,11 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
         const wsStream = this.attachStreamWebsocket(config, wsTarget);
         wsTarget.on('error', (e) => exposedStream.emit('error', e));
 
+        // These receive a lot of listeners! One channel per matcher, handler & completion checker,
+        // and each adds listeners for data/error/finish/etc. That's OK, it's not generally a leak,
+        // but maybe 100 would be a bit suspicious (unless you have 30+ active rules).
+        exposedStream.setMaxListeners(100);
+
         return new Promise((resolve, reject) => {
             wsStream.once('connect', () => resolve(exposedStream));
             wsStream.once('error', reject);

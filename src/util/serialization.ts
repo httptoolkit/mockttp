@@ -109,8 +109,16 @@ export class ClientServerChannel extends Duplex {
         super({ objectMode: true });
 
         this.topicId = topicId || uuid();
-        rawStream.on('error', (e) => this.destroy(e));
-        rawStream.on('finish', () => this.end());
+        this.rawStream.on('error', this._onRawStreamError);
+        this.rawStream.on('finish', this._onRawStreamFinish);
+    }
+
+    private _onRawStreamError = (error: Error) => {
+        this.destroy(error);
+    };
+
+    private _onRawStreamFinish = () => {
+        this.end();
     }
 
     _write(message: Message, encoding: BufferEncoding, callback: (error?: Error | null) => void) {
@@ -239,11 +247,14 @@ export class ClientServerChannel extends Duplex {
 
         // Only one side needs to send a dispose - we send first if we haven't seen one.
         if (!disposeReceived) this.end(DISPOSE_MESSAGE);
+        else this.end();
 
         // Detach any remaining onRequest handlers:
         this.removeAllListeners('data');
         // Stop receiving upstream messages from the global stream:
         this.rawStream.removeListener('data', this._readFromRawStream);
+        this.rawStream.removeListener('error', this._onRawStreamError);
+        this.rawStream.removeListener('finish', this._onRawStreamFinish);
     }
 }
 
