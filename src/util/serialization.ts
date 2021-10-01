@@ -109,6 +109,8 @@ export class ClientServerChannel extends Duplex {
         super({ objectMode: true });
 
         this.topicId = topicId || uuid();
+        rawStream.on('error', (e) => this.destroy(e));
+        rawStream.on('finish', () => this.end());
     }
 
     _write(message: Message, encoding: BufferEncoding, callback: (error?: Error | null) => void) {
@@ -135,7 +137,7 @@ export class ClientServerChannel extends Duplex {
             }
 
             if (data.topicId === this.topicId) {
-                if (_.isEqual(_.omit(data, 'topicId'), DISPOSE_MESSAGE)) this.dispose();
+                if (_.isEqual(_.omit(data, 'topicId'), DISPOSE_MESSAGE)) this.dispose(true);
                 else this.push(data);
             }
         });
@@ -219,10 +221,12 @@ export class ClientServerChannel extends Duplex {
                     requestId,
                     data: await cb(request.data!)
                 };
+                if (!this.writable) return; // Response too slow - drop it
                 this.write(response);
             } catch (error) {
                 // Make the error serializable:
                 error = _.pick(error, Object.getOwnPropertyNames(error));
+                if (!this.writable) return; // Response too slow - drop it
                 this.write({ requestId, error });
             }
         });
@@ -230,11 +234,14 @@ export class ClientServerChannel extends Duplex {
 
     // Shuts down the channel. Only needs to be called on one side, the other side
     // will be shut down automatically when it receives DISPOSE_MESSAGE.
-    dispose() {
-        this.end(DISPOSE_MESSAGE);
+    dispose(disposeReceived: boolean = false) {
+        this.on('error', () => {}); // Dispose is best effort - we don't care about errors
 
-        // Kill any remaining channel usage:
-        this.removeAllListeners();
+        // Only one side needs to send a dispose - we send first if we haven't seen one.
+        if (!disposeReceived) this.end(DISPOSE_MESSAGE);
+
+        // Detach any remaining onRequest handlers:
+        this.removeAllListeners('data');
         // Stop receiving upstream messages from the global stream:
         this.rawStream.removeListener('data', this._readFromRawStream);
     }
