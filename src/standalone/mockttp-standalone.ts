@@ -233,7 +233,7 @@ export class MockttpStandalone {
                     let port = parseInt(isMatch[1], 10);
 
                     let wsServer: Ws.Server = isSubscriptionRequest
-                        ? (<any> this.servers[port]?.subscriptionServer)?.wsServer
+                        ? this.servers[port]?.subscriptionServer.server
                         : this.servers[port]?.streamServer;
 
                     if (wsServer) {
@@ -326,18 +326,6 @@ export class MockttpStandalone {
             serverSocket.end();
         });
 
-        if (this.webSocketKeepAlive) {
-            // If we have a keep-alive set, send the client a ping frame every Xms to
-            // try and stop closes (especially by browsers) due to inactivity.
-            const streamServerKeepAlive = setInterval(() => {
-                streamServer.clients.forEach((client) => {
-                    if (client.readyState !== Ws.OPEN) return;
-                    client.ping();
-                });
-            }, this.webSocketKeepAlive);
-            streamServer.on('close', () => clearInterval(streamServerKeepAlive));
-        }
-
         // Handle errors by logging & stopping this server instance
         const onStreamError = (e: Error) => {
             if (!running) return; // We don't care about connection issues during shutdown
@@ -360,6 +348,23 @@ export class MockttpStandalone {
         });
 
         mockServerRouter.use(graphqlHTTP({ schema }));
+
+        if (this.webSocketKeepAlive) {
+            // If we have a keep-alive set, send the client a ping frame every Xms to
+            // try and stop closes (especially by browsers) due to inactivity.
+            const webSocketKeepAlive = setInterval(() => {
+                [
+                    ...streamServer.clients,
+                    ...subscriptionServer.server.clients
+                ].forEach((client) => {
+                    if (client.readyState !== Ws.OPEN) return;
+                    client.ping();
+                });
+            }, this.webSocketKeepAlive);
+
+            // We use the stream server's shutdown as an easy proxy event for full shutdown:
+            streamServer.on('close', () => clearInterval(webSocketKeepAlive));
+        }
 
         this.servers[mockPort] = {
             mockServer,

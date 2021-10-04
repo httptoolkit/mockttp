@@ -395,6 +395,43 @@ nodeOnly(() => {
             });
         });
 
+        describe("with keep alive configured", () => {
+            let standaloneServer = getStandalone({
+                webSocketKeepAlive: 50
+            });
+            let client = getRemote();
+
+            before(() => standaloneServer.start());
+            after(() => standaloneServer.stop());
+
+            beforeEach(() => client.start());
+            afterEach(() => client.stop());
+
+            it("should keep the websocket stream alive", async () => {
+                const streamWsServer: Ws.Server = (standaloneServer as any)
+                    .servers[client.port].streamServer;
+
+                expect(streamWsServer.clients.size).to.equal(1);
+                const streamSocket = [...streamWsServer.clients][0];
+
+                // Make sure that we're hearing frequent pongs from server KA pings:
+                await new Promise((resolve) => streamSocket.on('pong', resolve));
+            });
+
+            it("should keep the websocket subscription stream alive", async () => {
+                // We have to subscribe to something to create the websocket:
+                await client.on('request', () => {});
+
+                const subWsServer: Ws.Server = (standaloneServer as any)
+                    .servers[client.port].subscriptionServer.server;
+
+                expect(subWsServer.clients.size).to.equal(1);
+                const subscriptionSocket = [...subWsServer.clients][0];
+
+                // Make sure that we're hearing frequent pongs from server KA pings:
+                await new Promise((resolve) => subscriptionSocket.on('pong', resolve));
+            });
+        });
 
         describe("with strict CORS configured", () => {
             let server = getStandalone({
@@ -580,7 +617,7 @@ nodeOnly(() => {
                 // Forcefully kill the /subscription websocket connection, so that all
                 // active subscriptions are disconnected:
                 const subWsServer: Ws.Server = (standaloneServer as any)
-                    .servers[client1.port].subscriptionServer.wsServer;
+                    .servers[client1.port].subscriptionServer.server;
                 subWsServer.clients.forEach((socket: Ws) => socket.terminate());
                 await delay(500); // Wait for the disconnect & subsequent reconnect to complete
 
