@@ -332,7 +332,7 @@ export class MockttpStandalone {
             const streamServerKeepAlive = setInterval(() => {
                 streamServer.clients.forEach((client) => {
                     if (client.readyState !== Ws.OPEN) return;
-                    client.ping(() => {});
+                    client.ping();
                 });
             }, this.webSocketKeepAlive);
             streamServer.on('close', () => clearInterval(streamServerKeepAlive));

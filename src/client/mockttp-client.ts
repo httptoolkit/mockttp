@@ -241,7 +241,6 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
     private attachStreamWebsocket(config: MockServerConfig, targetStream: Duplex): Duplex {
         const standaloneStreamServer = this.mockServerOptions.standaloneServerUrl.replace(/^http/, 'ws');
         const wsStream = connectWebSocketStream(`${standaloneStreamServer}/server/${config.port}/stream`, {
-            objectMode: true,
             headers: this.mockClientOptions?.headers // Only used in Node.js (via WS)
         });
 
@@ -289,7 +288,7 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
         // To allow reconnects, we need to not end the client stream when an individual web socket ends.
         // To make that work, we return a separate stream, which isn't directly connected to the websocket
         // and doesn't receive WS 'end' events, and then we can swap the WS inputs accordingly.
-        const { socket1: wsTarget, socket2: exposedStream } = new DuplexPair({ objectMode: true });
+        const { socket1: wsTarget, socket2: exposedStream } = new DuplexPair();
 
         const wsStream = this.attachStreamWebsocket(config, wsTarget);
         wsTarget.on('error', (e) => exposedStream.emit('error', e));
