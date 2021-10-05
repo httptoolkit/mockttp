@@ -270,13 +270,17 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
                 // Unclean shutdown means something has gone wrong somewhere. Try to reconnect.
                 const newStream = this.attachStreamWebsocket(config, targetStream);
 
-                // On a successful connect, business resumes as normal.
-                newStream.on('connect', () =>
-                    console.warn('Reconnected Mockttp client stream')
-                );
-
-                // On a failed reconnect, we just shut down completely.
-                newStream.on('error', () => this.stop());
+                new Promise((resolve, reject) => {
+                    newStream.once('connect', resolve);
+                    newStream.once('error', reject);
+                }).then(() => {
+                    // On a successful connect, business resumes as normal.
+                    console.warn('Reconnected Mockttp client stream');
+                }).catch((err) => {
+                    // On a failed reconnect, we just shut down completely.
+                    console.warn('Mockttp client stream reconnection failed, shutting down', err);
+                    this.stop();
+                });
             }
             // If never connected successfully, we do nothing.
         });
