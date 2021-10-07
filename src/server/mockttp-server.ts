@@ -435,18 +435,18 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             abort();
         });
 
-        let nextRulePromise = this.findMatchingRule(this.requestRules, request);
-
-        // Async: once we know what the next rule is, ping a request event
-        nextRulePromise
-            .then((rule) => rule ? rule.id : undefined)
-            .catch(() => undefined)
-            .then((ruleId) => {
-                request.matchedRuleId = ruleId;
-                this.announceCompletedRequestAsync(request);
-            });
-
         try {
+            let nextRulePromise = this.findMatchingRule(this.requestRules, request);
+
+            // Async: once we know what the next rule is, ping a request event
+            nextRulePromise
+                .then((rule) => rule ? rule.id : undefined)
+                .catch(() => undefined)
+                .then((ruleId) => {
+                    request.matchedRuleId = ruleId;
+                    this.announceCompletedRequestAsync(request);
+                });
+
             let nextRule = await nextRulePromise;
             if (nextRule) {
                 if (this.debug) console.log(`Request matched rule: ${nextRule.explain()}`);
@@ -496,9 +496,9 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             socket.destroy();
         });
 
-        let nextRulePromise = this.findMatchingRule(this.webSocketRules, request);
-
         try {
+            let nextRulePromise = this.findMatchingRule(this.webSocketRules, request);
+
             let nextRule = await nextRulePromise;
             if (nextRule) {
                 if (this.debug) console.log(`Websocket matched rule: ${nextRule.explain()}`);

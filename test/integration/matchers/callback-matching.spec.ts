@@ -1,4 +1,4 @@
-import { CompletedRequest, getLocal } from "../../../dist/main";
+import { CompletedRequest, getLocal } from "../../..";
 import { expect, fetch } from "../../test-utils";
 
 describe("Request callback matching", function () {
@@ -47,5 +47,15 @@ describe("Request callback matching", function () {
         let result = await fetch(server.urlFor('/abc'));
 
         await expect(result).to.have.status(503);
+    });
+
+    it("should throw a Matcher exception if the callback throws an error", async () => {
+        await server.get('/abc').matching(() => {
+            throw new Error("Matcher exception");
+        }).thenReply(200, 'Mocked response');
+
+        const result = await fetch(server.urlFor('/abc'));
+
+        await expect(result).to.have.status(500);
     });
 });

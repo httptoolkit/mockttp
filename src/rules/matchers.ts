@@ -385,15 +385,8 @@ export class CallbackMatcher extends Serializable implements RequestMatcher {
     }
 
     async matches(request: OngoingRequest) {
-        try {
-            const completedRequest = await waitForCompletedRequest(request);
-
-            return this.callback(completedRequest);
-        } catch (error) {
-            console.log('Callback matcher threw an exception');
-            console.error(error);
-            throw error;
-        }
+        const completedRequest = await waitForCompletedRequest(request);
+        return this.callback(completedRequest);
     }
 
     explain() {
@@ -461,12 +454,16 @@ export const MatcherLookup = {
 };
 
 export async function matchesAll(req: OngoingRequest, matchers: RequestMatcher[]): Promise<boolean> {
-    return new Promise((resolve, reject) => {
+    return new Promise<boolean>((resolve, reject) => {
         const resultsPromises = matchers.map((matcher) => matcher.matches(req));
 
         resultsPromises.forEach(async (maybePromiseResult) => {
-            const result = await maybePromiseResult;
-            if (!result) resolve(false); // Resolve mismatches immediately
+            try {
+                const result = await maybePromiseResult;
+                if (!result) resolve(false); // Resolve mismatches immediately
+            } catch (e) {
+                reject(e); // Resolve matcher failures immediately
+            }
         });
 
         // Otherwise resolve as normal: all true matches, exceptions reject.
