@@ -35,10 +35,16 @@ export const isLocalIPv6Available = isNode
 
 // We need to normalize ips for comparison, because the same ip may be reported as ::ffff:127.0.0.1
 // and 127.0.0.1 on the two sides of the connection, for the same ip.
-const normalizeIp = (ip: string | undefined) =>
+const normalizeIp = (ip: string | null | undefined) =>
     (ip && ip.startsWith('::ffff:'))
         ? ip.slice('::ffff:'.length)
         : ip;
+
+export const isLocalhostAddress = (host: string | null | undefined) =>
+    host === 'localhost' || // Most common
+    host === '::1' || // IPv6
+    normalizeIp(host)?.match(/^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/); // 127.0.0.0/8 range
+
 
 // Check whether an incoming socket is the other end of one of our outgoing sockets:
 export const isSocketLoop = (outgoingSockets: net.Socket[] | Set<net.Socket>, incomingSocket: net.Socket) =>

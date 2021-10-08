@@ -24,6 +24,7 @@ import {
 import { isHttp2 } from '../../util/request-utils';
 import { streamToBuffer } from '../../util/buffer-utils';
 import { getAgent, ProxyConfig } from '../../util/http-agents';
+import { isLocalhostAddress } from '../../util/socket-util';
 
 export interface WebSocketHandler extends Explainable, Serializable {
     type: keyof typeof WsHandlerLookup;
@@ -268,6 +269,15 @@ export class PassThroughWebSocketHandler extends Serializable implements WebSock
         const reqMessage = req as unknown as http.IncomingMessage;
         const isH2Downstream = isHttp2(req);
         const hostHeaderName = isH2Downstream ? ':authority' : 'host';
+
+        if (isLocalhostAddress(hostname) && req.remoteIpAddress && !isLocalhostAddress(req.remoteIpAddress)) {
+            // If we're proxying localhost traffic from another remote machine, then we should really be proxying
+            // back to that machine, not back to ourselves! Best example is docker containers: if we capture & inspect
+            // their localhost traffic, it should still be sent back into that docker container.
+            hostname = req.remoteIpAddress;
+
+            // We don't update the host header - from the POV of the target, it's still localhost traffic.
+        }
 
         if (this.forwarding) {
             const { targetHost, updateHostHeader } = this.forwarding;

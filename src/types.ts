@@ -41,6 +41,8 @@ export interface Request {
     url: string;
     path: string;
 
+    remoteAddress?: string; // Not set remotely with older servers
+
     // Exists only if a host header is sent. A strong candidate for deprecation
     // in future, since it's not clear that this comes from headers not the URL, and
     // either way it duplicates existing data.

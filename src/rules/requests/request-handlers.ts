@@ -39,7 +39,7 @@ import {
     isMockttpBody
 } from '../../util/request-utils';
 import { streamToBuffer, asBuffer } from '../../util/buffer-utils';
-import { isLocalPortActive, isSocketLoop } from '../../util/socket-util';
+import { isLocalhostAddress, isLocalPortActive, isSocketLoop } from '../../util/socket-util';
 import {
     Serializable,
     ClientServerChannel,
@@ -1038,6 +1038,15 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
         let { protocol, hostname, port, path } = url.parse(reqUrl);
 
         const isH2Downstream = isHttp2(clientReq);
+
+        if (isLocalhostAddress(hostname) && clientReq.remoteAddress && !isLocalhostAddress(clientReq.remoteAddress)) {
+            // If we're proxying localhost traffic from another remote machine, then we should really be proxying
+            // back to that machine, not back to ourselves! Best example is docker containers: if we capture & inspect
+            // their localhost traffic, it should still be sent back into that docker container.
+            hostname = clientReq.remoteAddress;
+
+            // We don't update the host header - from the POV of the target, it's still localhost traffic.
+        }
 
         if (this.forwarding) {
             const { targetHost, updateHostHeader } = this.forwarding;

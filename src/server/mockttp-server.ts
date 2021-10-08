@@ -397,6 +397,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
 
         return Object.assign(req, {
             id,
+            remoteAddress: req.socket.remoteAddress,
             timingEvents,
             tags
         }) as OngoingRequest;
