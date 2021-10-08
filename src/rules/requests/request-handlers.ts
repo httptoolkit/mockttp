@@ -1039,11 +1039,11 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
 
         const isH2Downstream = isHttp2(clientReq);
 
-        if (isLocalhostAddress(hostname) && clientReq.remoteAddress && !isLocalhostAddress(clientReq.remoteAddress)) {
+        if (isLocalhostAddress(hostname) && clientReq.remoteIpAddress && !isLocalhostAddress(clientReq.remoteIpAddress)) {
             // If we're proxying localhost traffic from another remote machine, then we should really be proxying
             // back to that machine, not back to ourselves! Best example is docker containers: if we capture & inspect
             // their localhost traffic, it should still be sent back into that docker container.
-            hostname = clientReq.remoteAddress;
+            hostname = clientReq.remoteIpAddress;
 
             // We don't update the host header - from the POV of the target, it's still localhost traffic.
         }

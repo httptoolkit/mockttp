@@ -397,7 +397,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
 
         return Object.assign(req, {
             id,
-            remoteAddress: req.socket.remoteAddress,
+            remoteIpAddress: req.socket.remoteAddress,
             timingEvents,
             tags
         }) as OngoingRequest;
@@ -696,7 +696,8 @@ ${await this.suggestRule(request)}`
                 protocol: parsedRequest.protocol,
                 url: parsedRequest.url,
                 path: parsedRequest.path,
-                headers: parsedRequest.headers || {}
+                headers: parsedRequest.headers || {},
+                remoteIpAddress: socket.remoteAddress
             };
 
             let response: ClientError['response'];

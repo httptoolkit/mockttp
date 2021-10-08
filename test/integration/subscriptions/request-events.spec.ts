@@ -59,6 +59,10 @@ describe("Request initiated subscriptions", () => {
             expect(seenRequest.protocol).to.equal('http');
             expect(seenRequest.httpVersion).to.equal('1.1');
             expect(seenRequest.url).to.equal(server.urlFor("/mocked-endpoint"));
+            expect(seenRequest.remoteIpAddress).to.be.oneOf([
+                '::ffff:127.0.0.1', // IPv4 localhost
+                '::1' // IPv6 localhost
+            ]);
             expect((seenRequest as any).body).to.equal(undefined); // No body included yet
 
             const matchableHeaders = _.omit(seenRequest.headers, INCONSISTENT_HEADERS);
@@ -181,6 +185,10 @@ describe("Request subscriptions", () => {
             expect(seenRequest.protocol).to.equal('http');
             expect(seenRequest.httpVersion).to.equal('1.1');
             expect(seenRequest.url).to.equal(server.urlFor("/mocked-endpoint"));
+            expect(seenRequest.remoteIpAddress).to.be.oneOf([
+                '::ffff:127.0.0.1', // IPv4 localhost
+                '::1' // IPv6 localhost
+            ]);
             expect(await seenRequest.body.getText()).to.equal('body-text');
             expect(seenRequest.tags).to.deep.equal([]);
         });

@@ -73,6 +73,7 @@ type ClientErrorRequest {
     url: String
     path: String
     headers: Json
+    remoteIpAddress: String!
 }
 
 type InitiatedRequest {
@@ -86,6 +87,7 @@ type InitiatedRequest {
     method: String!
     url: String!
     path: String!
+    remoteIpAddress: String!
     hostname: String
 
     headers: Json!
@@ -102,6 +104,7 @@ type Request {
     method: String!
     url: String!
     path: String!
+    remoteIpAddress: String!
     hostname: String
 
     headers: Json!

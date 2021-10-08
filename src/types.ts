@@ -41,7 +41,7 @@ export interface Request {
     url: string;
     path: string;
 
-    remoteAddress?: string; // Not set remotely with older servers
+    remoteIpAddress?: string; // Not set remotely with older servers
 
     // Exists only if a host header is sent. A strong candidate for deprecation
     // in future, since it's not clear that this comes from headers not the URL, and
@@ -207,6 +207,8 @@ export interface ClientError {
         url?: string;
         path?: string;
         headers: Headers;
+
+        remoteIpAddress?: string;
     };
     response: CompletedResponse | 'aborted';
 }

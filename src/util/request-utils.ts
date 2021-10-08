@@ -287,7 +287,7 @@ export function buildInitiatedRequest(request: OngoingRequest): InitiatedRequest
             'method',
             'url',
             'path',
-            'remoteAddress',
+            'remoteIpAddress',
             'hostname',
             'headers',
             'tags'

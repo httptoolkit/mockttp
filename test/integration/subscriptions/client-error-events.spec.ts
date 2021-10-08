@@ -47,6 +47,11 @@ describe("Client error subscription", () => {
             expect(clientError.request.url).to.equal(server.urlFor("/mocked-endpoint"));
             expect(clientError.request.headers['Host']).to.equal(`localhost:${server.port}`);
 
+            expect(clientError.request.remoteIpAddress).to.be.oneOf([
+                '::ffff:127.0.0.1', // IPv4 localhost
+                '::1' // IPv6 localhost
+            ]);
+
             const response = clientError.response as CompletedResponse;
             expect(response.statusCode).to.equal(431);
             expect(response.statusMessage).to.equal("Request Header Fields Too Large");
