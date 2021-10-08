@@ -404,9 +404,8 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     }
 
     private async handleRequest(rawRequest: ExtendedRawRequest, rawResponse: http.ServerResponse) {
-        if (this.debug) console.log(`Handling request for ${rawRequest.url}`);
-
         const request = this.preprocessRequest(rawRequest);
+        if (this.debug) console.log(`Handling request for ${rawRequest.url}`);
 
         let result: 'responded' | 'aborted' | null = null;
         const abort = () => {
