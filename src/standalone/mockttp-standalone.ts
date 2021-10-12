@@ -298,6 +298,11 @@ export class MockttpStandalone {
         // All server messages are written to serverSocket, and then read from wsSocket and sent
         const { socket1: wsSocket, socket2: serverSocket } = new DuplexPair();
 
+        // This receives a lot of listeners! One channel per matcher, handler & completion checker,
+        // and each adds listeners for data/error/finish/etc. That's OK, it's not generally a leak,
+        // but maybe 100 would be a bit suspicious (unless you have 30+ active rules).
+        serverSocket.setMaxListeners(100);
+
         if (this.debug) {
             serverSocket.on('data', (d: any) => {
                 console.log('Streaming data from WS clients:', d.toString());
