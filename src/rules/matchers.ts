@@ -2,20 +2,27 @@ import * as _ from 'lodash';
 import * as url from 'url';
 import { oneLine } from 'common-tags';
 
-import { OngoingRequest, Method, Explainable } from "../types";
+import { CompletedRequest, Method, Explainable, OngoingRequest } from "../types";
 import {
     isAbsoluteUrl,
     getPathFromAbsoluteUrl,
     isRelativeUrl,
-    getUrlWithoutProtocol
+    getUrlWithoutProtocol,
+    waitForCompletedRequest
 } from '../util/request-utils';
-import { Serializable, ClientServerChannel } from "../util/serialization";
-import { MaybePromise } from '../util/type-utils';
+import { Serializable, ClientServerChannel, withDeserializedBodyReader, withSerializedBodyReader } from "../util/serialization";
+import { MaybePromise, Replace } from '../util/type-utils';
 import { normalizeUrl } from '../util/normalize-url';
 
 export interface RequestMatcher extends Explainable, Serializable {
     type: keyof typeof MatcherLookup;
     matches(request: OngoingRequest): MaybePromise<boolean>;
+}
+
+export interface SerializedCallbackMatcherData {
+    type: string;
+    name?: string;
+    version?: number;
 }
 
 function unescapeRegexp(input: string): string {
@@ -368,6 +375,65 @@ export class CookieMatcher extends Serializable implements RequestMatcher {
     }
 }
 
+export class CallbackMatcher extends Serializable implements RequestMatcher {
+    readonly type = 'callback';
+
+    constructor(
+        public callback: (request: CompletedRequest) => MaybePromise<boolean>
+        ) {
+        super();
+    }
+
+    async matches(request: OngoingRequest) {
+        const completedRequest = await waitForCompletedRequest(request);
+        return this.callback(completedRequest);
+    }
+
+    explain() {
+        return `matches using provided callback${
+            this.callback.name ? ` (${this.callback.name})` : ''
+        }`;
+    }
+
+    /**
+     * @internal
+     */
+    serialize(channel: ClientServerChannel): SerializedCallbackMatcherData {
+      channel.onRequest<Replace<CompletedRequest, 'body', string>, boolean>(async (streamMsg) => {
+        const request = withDeserializedBodyReader(streamMsg);
+
+        const callbackResult = await this.callback.call(null, request);
+
+        return callbackResult;
+      });
+
+      return { type: this.type, name: this.callback.name, version: 1 };
+    }
+
+    /**
+     * @internal
+     */
+    static deserialize(
+      { name }: SerializedCallbackMatcherData,
+      channel: ClientServerChannel
+    ): CallbackMatcher {
+      const rpcCallback = async (request: CompletedRequest) => {
+        const callbackResult = channel.request<
+            Replace<CompletedRequest, 'body', string>,
+            boolean
+        >(withSerializedBodyReader(request) as any);
+
+        return callbackResult;
+      };
+      // Pass across the name from the real callback, for explain()
+      Object.defineProperty(rpcCallback, 'name', { value: name });
+
+      // Call the client's callback (via stream), and save a handler on our end for
+      // the response that comes back.
+      return new CallbackMatcher(rpcCallback);
+    }
+}
+
 export const MatcherLookup = {
     'wildcard': WildcardMatcher,
     'method': MethodMatcher,
@@ -384,15 +450,20 @@ export const MatcherLookup = {
     'json-body': JsonBodyMatcher,
     'json-body-matching': JsonBodyFlexibleMatcher,
     'cookie': CookieMatcher,
+    'callback': CallbackMatcher,
 };
 
 export async function matchesAll(req: OngoingRequest, matchers: RequestMatcher[]): Promise<boolean> {
-    return new Promise((resolve, reject) => {
+    return new Promise<boolean>((resolve, reject) => {
         const resultsPromises = matchers.map((matcher) => matcher.matches(req));
 
         resultsPromises.forEach(async (maybePromiseResult) => {
-            const result = await maybePromiseResult;
-            if (!result) resolve(false); // Resolve mismatches immediately
+            try {
+                const result = await maybePromiseResult;
+                if (!result) resolve(false); // Resolve mismatches immediately
+            } catch (e) {
+                reject(e); // Resolve matcher failures immediately
+            }
         });
 
         // Otherwise resolve as normal: all true matches, exceptions reject.

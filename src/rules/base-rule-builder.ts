@@ -1,6 +1,7 @@
 import { isString } from "lodash";
+import { MaybePromise } from "../main";
 
-import { Method } from "../types";
+import { CompletedRequest, Method } from "../types";
 
 import {
     RuleCompletionChecker,
@@ -27,7 +28,8 @@ import {
     JsonBodyMatcher,
     JsonBodyFlexibleMatcher,
     ExactQueryMatcher,
-    HostMatcher
+    HostMatcher,
+    CallbackMatcher
 } from "./matchers";
 
 /**
@@ -161,6 +163,16 @@ export abstract class BaseRuleBuilder {
      */
     withCookie(cookie: { [key: string]: string }): this {
         this.matchers.push(new CookieMatcher(cookie));
+        return this;
+    }
+
+    /**
+     * Match only requests when the callback returns true
+     */
+    matching(
+        content: (request: CompletedRequest) => MaybePromise<boolean>
+    ): this {
+        this.matchers.push(new CallbackMatcher(content));
         return this;
     }
 

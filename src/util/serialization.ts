@@ -4,7 +4,7 @@ import uuid = require('uuid/v4');
 import { encode as encodeBase64 } from 'base64-arraybuffer';
 
 import { MaybePromise, Replace, Omit } from './type-utils';
-import { CompletedBody, Headers } from '../types';
+import { CompletedBody, Headers, OngoingBody } from '../types';
 import { buildBodyReader, isMockttpBody } from './request-utils';
 import { asBuffer } from './buffer-utils';
 
