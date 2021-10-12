@@ -262,11 +262,13 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
             targetStream.unpipe(wsStream);
 
             const serverShutdown = closeEvent.code === 1000;
-            const clientShutdown = this.mockServerConfig === null;
+            const clientShutdown = this.running === false;
             if (serverShutdown || clientShutdown) {
                 // Clean shutdown implies the server is gone, and we need to shutdown & cleanup.
                 this.stop();
             } else if (this.running && streamConnected) {
+                console.warn('Mockttp client stream unexpectedly disconnected', closeEvent);
+
                 // Unclean shutdown means something has gone wrong somewhere. Try to reconnect.
                 const newStream = this.attachStreamWebsocket(config, targetStream);
 
@@ -275,7 +277,7 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
                     newStream.once('error', reject);
                 }).then(() => {
                     // On a successful connect, business resumes as normal.
-                    console.warn('Reconnected Mockttp client stream');
+                    console.warn('Mockttp client stream reconnected');
                 }).catch((err) => {
                     // On a failed reconnect, we just shut down completely.
                     console.warn('Mockttp client stream reconnection failed, shutting down', err);
