@@ -1,5 +1,15 @@
+import * as semver from 'semver';
+import { AbortController } from 'node-abort-controller';
+
 import { getLocal } from "../..";
-import { expect, fetch, URLSearchParams, Headers } from "../test-utils";
+import {
+    expect,
+    fetch,
+    URLSearchParams,
+    Headers,
+    delay,
+    HTTP_ABORTSIGNAL_SUPPORTED
+} from "../test-utils";
 
 describe("HTTP request spying", function () {
 
@@ -51,6 +61,32 @@ describe("HTTP request spying", function () {
             const endpointMock = await server.get("/mocked-endpoint").thenCloseConnection();
 
             await fetch(server.urlFor("/mocked-endpoint")).catch(() => {});
+
+            const seenRequests = await endpointMock.getSeenRequests();
+            expect(seenRequests.length).to.equal(1);
+            expect(seenRequests[0].url).to.equal(`http://localhost:${server.port}/mocked-endpoint`);
+        });
+
+        it("should let you spy on incoming requests once the response is aborted", async function () {
+            if (!semver.satisfies(process.version, HTTP_ABORTSIGNAL_SUPPORTED)) this.skip();
+
+            const endpointMock = await server.get("/mocked-endpoint").thenTimeout();
+
+            const abortController = new AbortController();
+            fetch(server.urlFor("/mocked-endpoint"), {
+                signal: abortController.signal
+            }).catch(() => {});
+
+            await delay(50); // Make sure the request has been received
+
+            const requestsPending = await Promise.race([
+                endpointMock.getSeenRequests().then(() => false), // If this resolves, all requests are done
+                delay(50).then(() => true), // If this resolves first, we know getSeenRequests is blocked
+            ]);
+
+            expect(requestsPending).to.equal(true);
+
+            abortController.abort();
 
             const seenRequests = await endpointMock.getSeenRequests();
             expect(seenRequests.length).to.equal(1);

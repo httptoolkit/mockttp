@@ -64,7 +64,13 @@ export class WebSocketRule implements WebSocketRule {
         // as promises, which resolve only when the response & request body is complete.
         if (record) {
             this.requests.push(
-                handlerPromise
+                Promise.race([
+                    // When the handler resolves, the request is completed:
+                    handlerPromise,
+                    // If the response is closed before the handler completes (due to aborts, handler
+                    // timeouts, whatever) then that also counts as the request being completed:
+                    new Promise((resolve) => res.on('close', resolve))
+                ])
                 .catch(() => {}) // Ignore handler errors here - we're only tracking the request
                 .then(() => waitForCompletedRequest(req))
             );

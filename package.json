@@ -103,6 +103,7 @@
     "karma-spec-reporter": "0.0.32",
     "karma-webpack": "^4.0.2",
     "mocha": "^8.4.0",
+    "node-abort-controller": "^3.0.1",
     "null-loader": "^3.0.0",
     "opn": "^5.1.0",
     "request": "^2.75.0",
