@@ -47,6 +47,16 @@ describe("HTTP request spying", function () {
             expect(await seenRequests[0].body.getText()).to.equal("a=1&b=2");
         });
 
+        it("should let you spy on incoming requests even if handling throws an error", async () => {
+            const endpointMock = await server.get("/mocked-endpoint").thenCloseConnection();
+
+            await fetch(server.urlFor("/mocked-endpoint")).catch(() => {});
+
+            const seenRequests = await endpointMock.getSeenRequests();
+            expect(seenRequests.length).to.equal(1);
+            expect(seenRequests[0].url).to.equal(`http://localhost:${server.port}/mocked-endpoint`);
+        });
+
         it("should return immutable fixed view of the mock's seen requests so far", async () => {
             const endpointMock = await server.get("/mocked-endpoint").thenReply(200, "mocked data");
 
