@@ -56,22 +56,25 @@ export class WebSocketRule implements WebSocketRule {
     }
 
     handle(req: OngoingRequest, res: net.Socket, head: Buffer, record: boolean): Promise<void> {
-        let completedPromise = (async () => {
-            await this.handler.handle(req, res, head);
-            return waitForCompletedRequest(req);
+        let handlerPromise = (async () => { // Catch (a)sync errors
+            return this.handler.handle(req, res, head);
         })();
 
         // Requests are added to rule.requests as soon as they start being handled,
-        // as promises, which resolve when the response is complete.
+        // as promises, which resolve only when the response & request body is complete.
         if (record) {
-            this.requests.push(completedPromise);
+            this.requests.push(
+                handlerPromise
+                .catch(() => {}) // Ignore handler errors here - we're only tracking the request
+                .then(() => waitForCompletedRequest(req))
+            );
         }
 
         // Even if traffic recording is disabled, the number of matched
         // requests is still tracked
         this.requestCount += 1;
 
-        return completedPromise as Promise<any>;
+        return handlerPromise as Promise<any>;
     }
 
     isComplete(): boolean | null {
