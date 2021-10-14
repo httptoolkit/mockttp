@@ -290,8 +290,9 @@ export async function createComboServer(
 }
 
 function getParentSocket(socket: net.Socket) {
-    if (socket._parent) return socket._parent; // TLS wrapper
-    else return socket.stream; // SocketWrapper
+    return socket._parent || // TLS wrapper
+        socket.stream || // SocketWrapper
+        (socket as any)._handle?._parentWrap?.stream; // HTTP/2 CONNECT'd TLS wrapper
 }
 
 type SocketIsh<MinProps extends keyof net.Socket> =

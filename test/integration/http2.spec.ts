@@ -8,7 +8,7 @@ import * as semver from 'semver';
 import * as fs from 'fs';
 import * as portfinder from 'portfinder';
 
-import { getLocal } from "../..";
+import { CompletedRequest, getLocal } from "../..";
 import {
     expect,
     nodeOnly,
@@ -18,7 +18,8 @@ import {
     destroyable,
     cleanup,
     fetch,
-    H2_TLS_ON_TLS_SUPPORTED
+    H2_TLS_ON_TLS_SUPPORTED,
+    getDeferred
 } from "../test-utils";
 
 browserOnly(() => {
@@ -365,6 +366,54 @@ nodeOnly(() => {
 
                 const responseBody = await getHttp2Body(proxiedRequest);
                 expect(responseBody.toString('utf8')).to.equal("Proxied HTTP2 response!");
+
+                await cleanup(proxiedClient, client);
+            });
+
+            it("should include request metadata in events for proxied HTTP/2 requests", async function() {
+                if (!semver.satisfies(process.version, H2_TLS_ON_TLS_SUPPORTED)) this.skip();
+
+                let seenRequestPromise = getDeferred<CompletedRequest>();
+                await server.on('request', (r) => seenRequestPromise.resolve(r));
+
+                await server.get('https://example.com/mocked-endpoint')
+                    .thenReply(200, "Proxied HTTP2 response!");
+
+                const client = http2.connect(server.url);
+
+                const req = client.request({
+                    ':method': 'CONNECT',
+                    ':authority': 'example.com:443'
+                });
+
+                // Initial response, the proxy has set up our tunnel:
+                const responseHeaders = await getHttp2Response(req);
+                expect(responseHeaders[':status']).to.equal(200);
+
+                // We can now read/write to req as a raw TCP socket to example.com:
+                const proxiedClient = http2.connect('https://example.com', {
+                     // Tunnel this request through the proxy stream
+                    createConnection: () => tls.connect({
+                        socket: req as any,
+                        ALPNProtocols: ['h2']
+                    })
+                });
+
+                const proxiedRequest = proxiedClient.request({
+                    ':path': '/mocked-endpoint'
+                });
+                await getHttp2Response(proxiedRequest);
+                await getHttp2Body(proxiedRequest)
+
+                const seenRequest = await seenRequestPromise;
+                expect(seenRequest.method).to.equal('GET');
+                expect(seenRequest.protocol).to.equal('https');
+                expect(seenRequest.httpVersion).to.equal('2.0');
+                expect(seenRequest.url).to.equal("https://example.com/mocked-endpoint");
+                expect(seenRequest.remoteIpAddress).to.be.oneOf([
+                    '::ffff:127.0.0.1', // IPv4 localhost
+                    '::1' // IPv6 localhost
+                ]);
 
                 await cleanup(proxiedClient, client);
             });
