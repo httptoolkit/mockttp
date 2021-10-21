@@ -6,7 +6,7 @@ import request = require("request-promise-native");
 import * as WebSocket from 'isomorphic-ws';
 import type * as Ws from 'ws';
 
-import { getLocal, getRemote, getStandalone, resetStandalone, Mockttp, CompletedRequest } from "../..";
+import { getLocal, getRemote, getStandalone, resetStandalone, Mockttp, CompletedRequest, MOCKTTP_PARAM_REF } from "../..";
 import { expect, fetch, nodeOnly, browserOnly, delay, getDeferred } from "../test-utils";
 
 browserOnly(() => {
@@ -119,7 +119,7 @@ nodeOnly(() => {
                     });
 
                     const response = await request.get(targetServer.url, {
-                        proxy: client.urlFor("/"),
+                        proxy: client.url,
                         resolveWithFullResponse: true
                     });
 
@@ -264,6 +264,28 @@ nodeOnly(() => {
                         body: ''
                     });
                 });
+
+                it("should support proxy configuration specified by a callback", async () => {
+                    // Remote server sends fixed response:
+                    const targetEndpoint = await targetServer.anyRequest().thenReply(200, "Remote server says hi!");
+
+                    // Mockttp forwards requests via our intermediate proxy (configured with a remote client + callback)
+                    await client.anyRequest().thenPassThrough({
+                        proxyConfig: ({ hostname }) => {
+                            expect(hostname).to.equal('localhost');
+                            return { proxyUrl: targetServer.url }
+                        }
+                    });
+
+                    const response = await request.get(client.urlFor("/test-url"), {
+                        proxy: client.url
+                    });
+
+                    // We get a successful response
+                    expect(response).to.equal("Remote server says hi!");
+                    // And it went via the intermediate proxy
+                    expect((await targetEndpoint.getSeenRequests()).length).to.equal(1);
+                });
             });
 
             it("should successfully mock requests with live streams", async () => {
@@ -392,6 +414,52 @@ nodeOnly(() => {
 
             it("should use the provided configuration by default", async () => {
                 expect(client.url.split('://')[0]).to.equal('https');
+            });
+        });
+
+        describe("with a referenceable standalone server parameters", () => {
+
+            // A function called by the parameter, which we can use to stub out the
+            // parameter itself dynamically.
+            let proxyCallbackCallback: (...args: any) => void;
+
+            let server = getStandalone({
+                serverDefaults: {
+                    https: {
+                        keyPath: './test/fixtures/test-ca.key',
+                        certPath: './test/fixtures/test-ca.pem'
+                    }
+                },
+                ruleParameters: {
+                    // A parameter, which can be referenced later in rule config
+                    proxyCallback: (...args: any) => proxyCallbackCallback(...args)
+                }
+            });
+
+            let client = getRemote();
+
+            before(() => server.start());
+            after(() => server.stop());
+
+            beforeEach(() => client.start());
+            afterEach(() => client.stop());
+
+            it("should use be able to reference proxy callback parameters", async function () {
+                const callbackArgsDeferred = getDeferred<any>();
+                proxyCallbackCallback = (...args: any) => callbackArgsDeferred.resolve(args);
+
+                client.anyRequest().thenPassThrough({
+                    // A reference to the proxyCallback parameter.
+                    proxyConfig: { [MOCKTTP_PARAM_REF]: 'proxyCallback' }
+                });
+
+                await fetch(client.urlFor("/mocked-endpoint"));
+
+                // Check the proxy callback is called with the hostname:
+                const callbackArguments = await callbackArgsDeferred;
+                expect(callbackArguments).to.deep.equal([
+                    { hostname: 'localhost' }
+                ]);
             });
         });
 

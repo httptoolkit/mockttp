@@ -1,8 +1,10 @@
+import * as _ from 'lodash';
 import * as http from 'http';
 import * as https from 'https';
 import ProxyAgent = require('proxy-agent');
 
 import { isNode } from "./util";
+import { MaybePromise } from './type-utils';
 
 const KeepAliveAgents = isNode
     ? { // These are only used (and only available) on the node server side
@@ -44,7 +46,10 @@ export interface ProxyConfig {
     noProxy?: string[];
 }
 
-export function getAgent({
+export type ProxyConfigCallbackParams = { hostname: string };
+export type ProxyConfigCallback = (params: ProxyConfigCallbackParams) => MaybePromise<ProxyConfig | undefined>;
+
+export async function getAgent({
     protocol, hostname, port, tryHttp2, keepAlive, proxyConfig
 }: {
     protocol: 'http:' | 'https:' | 'ws:' | 'wss:' | undefined,
@@ -52,16 +57,22 @@ export function getAgent({
     port: number,
     tryHttp2: boolean,
     keepAlive: boolean
-    proxyConfig: ProxyConfig | undefined,
-}): http.Agent | undefined { // <-- We force this cast for convenience in various different uses later
-    if (proxyConfig && proxyConfig.proxyUrl) {
-        // If there's a (non-empty) proxy configured, use it. We require non-empty because empty strings
-        // will fall back to detecting from the environment, which is likely to behave unexpectedly.
+    proxyConfig: ProxyConfig | ProxyConfigCallback | undefined,
+}): Promise<http.Agent | undefined> { // <-- We force this cast for convenience in various different uses later
+    if (proxyConfig) {
+        if (_.isFunction(proxyConfig)) {
+            proxyConfig = await proxyConfig({ hostname });
+        }
 
-        if (!matchesNoProxy(hostname, port, proxyConfig.noProxy)) {
-            // We notably ignore HTTP/2 upstream in this case: it's complicated to mix that up with proxying
-            // so for now we ignore it entirely.
-            return new ProxyAgent(proxyConfig.proxyUrl) as http.Agent;
+        if (proxyConfig?.proxyUrl) {
+            // If there's a (non-empty) proxy configured, use it. We require non-empty because empty strings
+            // will fall back to detecting from the environment, which is likely to behave unexpectedly.
+
+            if (!matchesNoProxy(hostname, port, proxyConfig.noProxy)) {
+                // We notably ignore HTTP/2 upstream in this case: it's complicated to mix that up with proxying
+                // so for now we ignore it entirely.
+                return new ProxyAgent(proxyConfig.proxyUrl) as http.Agent;
+            }
         }
     }
 

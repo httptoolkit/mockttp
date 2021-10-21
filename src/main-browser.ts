@@ -12,6 +12,8 @@ import * as completionCheckers from './rules/completion-checkers';
 export { matchers, requestHandlers, webSocketHandlers, completionCheckers };
 export { requestHandlers as handlers }; // Backward compat
 
+export { MOCKTTP_PARAM_REF } from './rules/rule-parameters';
+
 // Export the core API:
 export function getLocal(options: MockttpOptions = {}): Mockttp {
     return new MockttpClient(options);

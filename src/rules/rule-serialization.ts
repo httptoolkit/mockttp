@@ -2,6 +2,8 @@ import { Duplex } from "stream";
 
 import { Serialized, serialize, deserialize } from "../util/serialization";
 
+import { RuleParameters } from "./rule-parameters";
+
 import { RequestRuleData } from "./requests/request-rule";
 import { WebSocketRuleData } from "./websockets/websocket-rule";
 
@@ -33,31 +35,41 @@ export function serializeRuleData<
     } as Serialized<DataFormat>;
 };
 
-export function deserializeRuleData(data: Serialized<RequestRuleData>, stream: Duplex): RequestRuleData {
+export function deserializeRuleData(
+    data: Serialized<RequestRuleData>,
+    stream: Duplex,
+    ruleParameters: RuleParameters
+): RequestRuleData {
     return {
         id: data.id,
         matchers: data.matchers.map((m) =>
-            deserialize(m, stream, matchers.MatcherLookup)
+            deserialize(m, stream, ruleParameters, matchers.MatcherLookup)
         ),
-        handler: deserialize(data.handler, stream, HandlerLookup),
+        handler: deserialize(data.handler, stream, ruleParameters, HandlerLookup),
         completionChecker: data.completionChecker && deserialize(
             data.completionChecker,
             stream,
+            ruleParameters,
             completionCheckers.CompletionCheckerLookup
         )
     };
 }
 
-export function deserializeWebSocketRuleData(data: Serialized<WebSocketRuleData>, stream: Duplex): WebSocketRuleData {
+export function deserializeWebSocketRuleData(
+    data: Serialized<WebSocketRuleData>,
+    stream: Duplex,
+    ruleParameters: RuleParameters
+): WebSocketRuleData {
     return {
         id: data.id,
         matchers: data.matchers.map((m) =>
-            deserialize(m, stream, matchers.MatcherLookup)
+            deserialize(m, stream, ruleParameters, matchers.MatcherLookup)
         ),
-        handler: deserialize(data.handler, stream, WsHandlerLookup),
+        handler: deserialize(data.handler, stream, ruleParameters, WsHandlerLookup),
         completionChecker: data.completionChecker && deserialize(
             data.completionChecker,
             stream,
+            ruleParameters,
             completionCheckers.CompletionCheckerLookup
         )
     };

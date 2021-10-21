@@ -25,10 +25,12 @@ export { matchers, requestHandlers, webSocketHandlers, completionCheckers };
 import { RequestRuleData } from './rules/requests/request-rule';
 import { WebSocketRuleData } from './rules/websockets/websocket-rule';
 export type { RequestRuleData, WebSocketRuleData };
-export type { ProxyConfig } from './util/http-agents';
+export type { ProxyConfig, ProxyConfigCallback, ProxyConfigCallbackParams } from './util/http-agents';
 
 export type { RequestRuleBuilder } from "./rules/requests/request-rule-builder";
 export type { WebSocketRuleBuilder } from "./rules/websockets/websocket-rule-builder";
+
+export { MOCKTTP_PARAM_REF, RuleParameterReference } from './rules/rule-parameters';
 
 // Old pre-WebSocket names, exported for backward compat:
 export { requestHandlers as handlers, RequestRuleData as MockRuleData };

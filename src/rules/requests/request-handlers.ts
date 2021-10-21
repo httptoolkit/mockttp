@@ -49,10 +49,15 @@ import {
     withDeserializedBodyBuffer,
     WithSerializedBodyBuffer,
     serializeBuffer,
-    deserializeBuffer
+    deserializeBuffer,
+    SerializedRuleParameterReference,
+    maybeDeserializeParam,
+    maybeSerializeParam
 } from "../../util/serialization";
-import { getAgent, ProxyConfig } from '../../util/http-agents';
+import { getAgent, ProxyConfig, ProxyConfigCallback, ProxyConfigCallbackParams } from '../../util/http-agents';
 import { CachedDns } from '../../util/dns';
+
+import { assertParamDereferenced,RuleParameterReference, RuleParameters } from '../rule-parameters';
 
 // An error that indicates that the handler is aborting the request.
 // This could be intentional, or an upstream server aborting the request.
@@ -494,9 +499,17 @@ export interface PassThroughHandlerOptions {
     };
 
     /**
-     * Upstream proxy configuration: pass through requests via this proxy
+     * Upstream proxy configuration: pass through requests via this proxy.
+     *
+     * If this is undefined, no proxy will be used. To configure a proxy
+     * either a config object can be provided, or a callback which will be
+     * called with an object containing the hostname, and must return a
+     * proxy config object or undefined.
+     *
+     * When using a remote client, this parameter may be passed by reference,
+     * using the name of a rule paramter configured in the standalone server.
      */
-    proxyConfig?: ProxyConfig;
+    proxyConfig?: ProxyConfig | ProxyConfigCallback | RuleParameterReference<ProxyConfig>;
 
     /**
      * Custom DNS options, to allow configuration of the resolver used
@@ -679,7 +692,7 @@ interface SerializedPassThroughData {
     type: 'passthrough';
     forwardToLocation?: string;
     forwarding?: ForwardingOptions;
-    proxyConfig?: ProxyConfig;
+    proxyConfig?: ProxyConfig | SerializedRuleParameterReference<ProxyConfig> | 'callback';
     ignoreHostCertificateErrors?: string[]; // Doesn't match option name, backward compat
     clientCertificateHostMap?: { [host: string]: { pfx: string, passphrase?: string } };
     lookupOptions?: PassThroughLookupOptions;
@@ -916,8 +929,9 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
     public readonly beforeResponse?: (res: PassThroughResponse) =>
         MaybePromise<CallbackResponseResult | void> | void;
 
+    public readonly proxyConfig?: ProxyConfig | ProxyConfigCallback | RuleParameterReference<ProxyConfig>;
+
     public readonly lookupOptions?: PassThroughLookupOptions;
-    public readonly proxyConfig?: ProxyConfig;
 
     private _cacheableLookupInstance: CacheableLookup | CachedDns | undefined;
     private lookup() {
@@ -1243,14 +1257,19 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
             else family = 4;
         }
 
+        // Remote clients might configure a passthrough rule with a parameter reference for the proxy,
+        // delegating proxy config to the standalone server. That's fine initially, but you can't actually
+        // handle a request in that case - make sure our proxyConfig is always dereferenced before use.
+        const proxyConfig = assertParamDereferenced(this.proxyConfig);
+
         // Mirror the keep-alive-ness of the incoming request in our outgoing request
-        const agent = getAgent({
+        const agent = await getAgent({
             protocol: (protocol || undefined) as 'http:' | 'https:' | undefined,
             hostname: hostname!,
             port: effectivePort,
             tryHttp2: shouldTryH2Upstream,
             keepAlive: shouldKeepAlive(clientReq),
-            proxyConfig: this.proxyConfig
+            proxyConfig
         });
 
         if (agent && !('http2' in agent)) {
@@ -1590,13 +1609,24 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
             });
         }
 
+        if (_.isFunction(this.proxyConfig)) {
+            const getProxyConfig = this.proxyConfig as ProxyConfigCallback;
+
+            channel.onRequest<
+                ProxyConfigCallbackParams,
+                ProxyConfig | undefined
+            >('proxyConfig', getProxyConfig);
+        }
+
         return {
             type: this.type,
             ...this.forwarding ? {
                 forwardToLocation: this.forwarding.targetHost,
                 forwarding: this.forwarding
             } : {},
-            proxyConfig: this.proxyConfig,
+            proxyConfig: _.isFunction(this.proxyConfig)
+                ? 'callback'
+                : maybeSerializeParam(this.proxyConfig),
             lookupOptions: this.lookupOptions,
             ignoreHostCertificateErrors: this.ignoreHostHttpsErrors,
             clientCertificateHostMap: _.mapValues(this.clientCertificateHostMap,
@@ -1650,10 +1680,12 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
     /**
      * @internal
      */
-    static deserialize(data: SerializedPassThroughData, channel: ClientServerChannel): PassThroughHandler {
+    static deserialize(
+        data: SerializedPassThroughData,
+        channel: ClientServerChannel,
+        ruleParams?: RuleParameters
+    ): PassThroughHandler {
         let beforeRequest: ((req: CompletedRequest) => MaybePromise<CallbackRequestResult | void>) | undefined;
-        let beforeResponse: ((res: PassThroughResponse) => MaybePromise<CallbackResponseResult | void>) | undefined;
-
         if (data.hasBeforeRequestCallback) {
             beforeRequest = async (req: CompletedRequest) => {
                 const result = withDeserializedBodyBuffer<WithSerializedBodyBuffer<CallbackRequestResult>>(
@@ -1675,6 +1707,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
             };
         }
 
+        let beforeResponse: ((res: PassThroughResponse) => MaybePromise<CallbackResponseResult | void>) | undefined;
         if (data.hasBeforeResponseCallback) {
             beforeResponse = async (res: PassThroughResponse) => {
                 const callbackResult = await channel.request<
@@ -1692,9 +1725,24 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
             };
         }
 
+        let proxyConfig: ProxyConfig | ProxyConfigCallback | RuleParameterReference<ProxyConfig> | undefined;
+        if (data.proxyConfig) {
+            if (data.proxyConfig === 'callback') {
+                proxyConfig = async (options) => {
+                    return await channel.request<
+                        ProxyConfigCallbackParams,
+                        ProxyConfig | undefined
+                    >('proxyConfig', options);
+                };
+            } else {
+                proxyConfig = maybeDeserializeParam(data.proxyConfig, ruleParams);
+            }
+        }
+
         return new PassThroughHandler({
             beforeRequest,
             beforeResponse,
+            proxyConfig,
             transformRequest: {
                 ...data.transformRequest,
                 ...(data.transformRequest?.replaceBody !== undefined ? {
@@ -1724,7 +1772,6 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 forwarding: { targetHost: data.forwardToLocation }
             } : {},
             forwarding: data.forwarding,
-            proxyConfig: data.proxyConfig,
             lookupOptions: data.lookupOptions,
             ignoreHostHttpsErrors: data.ignoreHostCertificateErrors,
             clientCertificateHostMap: _.mapValues(data.clientCertificateHostMap,

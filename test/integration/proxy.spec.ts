@@ -2405,7 +2405,27 @@ nodeOnly(() => {
 
                 await request.get('http://example.com/').catch(() => {});
 
-                // And it didn't use the proxy
+                // And it went via the intermediate proxy
+                expect((await proxyEndpoint.getSeenRequests()).length).to.equal(1);
+            });
+
+            it("should forward traffic through the remote proxy specified by a callback", async () => {
+                // Remote server sends fixed response on this one URL:
+                await remoteServer.get('/test-url').thenReply(200, "Remote server says hi!");
+
+                // Mockttp forwards requests via our intermediate proxy
+                await server.anyRequest().thenPassThrough({
+                    proxyConfig: ({ hostname }) => {
+                        expect(hostname).to.equal('localhost');
+                        return { proxyUrl: intermediateProxy.url }
+                    }
+                });
+
+                const response = await request.get(remoteServer.urlFor("/test-url"));
+
+                // We get a successful response
+                expect(response).to.equal("Remote server says hi!");
+                // And it went via the intermediate proxy
                 expect((await proxyEndpoint.getSeenRequests()).length).to.equal(1);
             });
         });

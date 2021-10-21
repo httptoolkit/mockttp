@@ -23,12 +23,42 @@ import { MockttpServer } from "../server/mockttp-server";
 import { buildStandaloneModel } from "./standalone-model";
 import { DEFAULT_STANDALONE_PORT } from '../types';
 import { Mockttp, MockttpOptions, PortRange } from '../mockttp';
+import { RuleParameters } from '../rules/rule-parameters';
 
 export interface StandaloneServerOptions {
+    /**
+     * Should the standalone server print extra debug information? This enables standalone debugging
+     * only - individual mock server debugging must be enabled separately.
+     */
     debug?: boolean;
-    serverDefaults?: MockttpOptions;
+
+    /**
+     * Set CORS options to limit the sites which can send requests to manage this standalone server.
+     */
     corsOptions?: cors.CorsOptions & { strict?: boolean };
+
+    /**
+     * Set a keep alive frequency in milliseconds for the subscription & stream websockets of each
+     * server, to ensure they remain connected in long-lived connections, especially in browsers which
+     * often close quiet background connections automatically.
+     */
     webSocketKeepAlive?: number;
+
+    /**
+     * Override the default parameters for servers started from this standalone. These values will be
+     * used for each setting that is not explicitly specified by the client when creating the server.
+     */
+    serverDefaults?: MockttpOptions;
+
+    /**
+     * Some rule options can't easily be specified in remote clients, since they need to access
+     * server-side state or Node APIs directly. To handle this, referenceable parameters can
+     * be provided here, and referenced with a `{ [MOCKTTP_PARAM_REF]: <value> }` value in place
+     * of the real parameter in the remote client.
+     */
+    ruleParameters?: {
+        [key: string]: any
+    }
 }
 
 async function strictOriginMatch(
@@ -69,6 +99,7 @@ export class MockttpStandalone {
     private debug: boolean;
     private requiredOrigin: cors.CorsOptions['origin'] | false;
     private webSocketKeepAlive: number | undefined;
+    private ruleParams: RuleParameters;
 
     private app = express();
     private server: DestroyableServer | null = null;
@@ -88,6 +119,7 @@ export class MockttpStandalone {
         if (this.debug) console.log('Standalone server started in debug mode');
 
         this.webSocketKeepAlive = options.webSocketKeepAlive || undefined;
+        this.ruleParams = options.ruleParameters || {};
 
         this.app.use(cors(options.corsOptions));
 
@@ -175,7 +207,7 @@ export class MockttpStandalone {
         return fs.readFile(path.join(__dirname, schemaFilename), 'utf8')
         .then((schemaString) => makeExecutableSchema({
             typeDefs: schemaString,
-            resolvers: buildStandaloneModel(mockServer, stream)
+            resolvers: buildStandaloneModel(mockServer, stream, this.ruleParams)
         }));
     }
 

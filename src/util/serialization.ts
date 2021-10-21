@@ -4,9 +4,16 @@ import uuid = require('uuid/v4');
 import { encode as encodeBase64 } from 'base64-arraybuffer';
 
 import { MaybePromise, Replace, Omit } from './type-utils';
-import { CompletedBody, Headers, OngoingBody } from '../types';
+import { CompletedBody, Headers } from '../types';
 import { buildBodyReader, isMockttpBody } from './request-utils';
 import { asBuffer } from './buffer-utils';
+import {
+    dereferenceParam,
+    isParamReference,
+    MOCKTTP_PARAM_REF,
+    RuleParameterReference,
+    RuleParameters
+} from '../rules/rule-parameters';
 
 export function serialize<T extends Serializable>(
     obj: T,
@@ -22,17 +29,18 @@ export function deserialize<
     T extends SerializedValue<Serializable>,
     C extends {
         new(...args: any): any;
-        deserialize(data: SerializedValue<any>, channel: ClientServerChannel): any
+        deserialize(data: SerializedValue<any>, channel: ClientServerChannel, ruleParams: RuleParameters): any;
     }
 >(
     data: T,
     stream: Duplex,
+    ruleParams: RuleParameters,
     lookup: { [key: string]: C }
 ): InstanceType<C> {
     const type = <keyof typeof lookup> data.type;
     const channel = new ClientServerChannel(stream, data.topicId);
 
-    const deserialized = lookup[type].deserialize(data, channel);
+    const deserialized = lookup[type].deserialize(data, channel, ruleParams);
 
     // Wrap .dispose and ensure the channel is always disposed too.
     const builtinDispose = deserialized.dispose;
@@ -316,4 +324,38 @@ export function withDeserializedBodyBuffer<T extends {
     return <T> Object.assign({}, input as Omit<T, 'body'>, {
         body: Buffer.from(input.body, 'base64')
     })
+}
+
+const SERIALIZED_PARAM_REFERENCE = "__mockttp__param__reference__";
+export type SerializedRuleParameterReference<R> = { [SERIALIZED_PARAM_REFERENCE]: string };
+
+export function maybeSerializeParam<T, R>(value: T | RuleParameterReference<R>): T | SerializedRuleParameterReference<R> {
+    if (isParamReference(value)) {
+        // Swap the symbol for a string, since we can't serialize symbols in JSON:
+        return { [SERIALIZED_PARAM_REFERENCE]: value[MOCKTTP_PARAM_REF] };
+    } else {
+        return value;
+    }
+}
+
+function isSerializedRuleParam(value: any): value is SerializedRuleParameterReference<unknown> {
+    return value && SERIALIZED_PARAM_REFERENCE in value;
+}
+
+export function maybeDeserializeParam<T, R>(
+    value: T | SerializedRuleParameterReference<R>,
+    ruleParams?: RuleParameters
+): T | R | RuleParameterReference<R> {
+    if (isSerializedRuleParam(value)) {
+        const paramRef = {
+            [MOCKTTP_PARAM_REF]: value[SERIALIZED_PARAM_REFERENCE]
+        };
+        if (ruleParams) {
+            return dereferenceParam(paramRef, ruleParams);
+        } else {
+            return paramRef;
+        }
+    } else {
+        return value;
+    }
 }

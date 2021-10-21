@@ -158,7 +158,11 @@ const ScalarResolvers = {
     })
 };
 
-export function buildStandaloneModel(mockServer: MockttpServer, stream: Duplex): IResolvers {
+export function buildStandaloneModel(
+    mockServer: MockttpServer,
+    stream: Duplex,
+    ruleParameters: { [key: string]: any }
+): IResolvers {
     const pubsub = new PubSub();
 
     mockServer.on('request-initiated', (request) => {
@@ -220,33 +224,33 @@ export function buildStandaloneModel(mockServer: MockttpServer, stream: Duplex):
 
         Mutation: {
             addRule: async (__: any, { input }: { input: Serialized<RequestRuleData> }) => {
-                return mockServer.addRule(deserializeRuleData(input, stream));
+                return mockServer.addRule(deserializeRuleData(input, stream, ruleParameters));
             },
             addRules: async (__: any, { input }: { input: Array<Serialized<RequestRuleData>> }) => {
                 return mockServer.addRequestRules(...input.map((rule) =>
-                    deserializeRuleData(rule, stream)
+                    deserializeRuleData(rule, stream, ruleParameters)
                 ));
             },
             setRules: async (__: any, { input }: { input: Array<Serialized<RequestRuleData>> }) => {
                 return mockServer.setRequestRules(...input.map((rule) =>
-                    deserializeRuleData(rule, stream)
+                    deserializeRuleData(rule, stream, ruleParameters)
                 ));
             },
             setFallbackRule: async (__: any, { input }: { input: Serialized<RequestRuleData> }) => {
-                return mockServer.setFallbackRequestRule(deserializeRuleData(input, stream));
+                return mockServer.setFallbackRequestRule(deserializeRuleData(input, stream, ruleParameters));
             },
 
             addWebSocketRule: async (__: any, { input }: { input: Serialized<WebSocketRuleData> }) => {
-                return mockServer.addWebSocketRule(deserializeWebSocketRuleData(input, stream));
+                return mockServer.addWebSocketRule(deserializeWebSocketRuleData(input, stream, ruleParameters));
             },
             addWebSocketRules: async (__: any, { input }: { input: Array<Serialized<WebSocketRuleData>> }) => {
                 return mockServer.addWebSocketRules(...input.map((rule) =>
-                    deserializeWebSocketRuleData(rule, stream)
+                    deserializeWebSocketRuleData(rule, stream, ruleParameters)
                 ));
             },
             setWebSocketRules: async (__: any, { input }: { input: Array<Serialized<WebSocketRuleData>> }) => {
                 return mockServer.setWebSocketRules(...input.map((rule) =>
-                    deserializeWebSocketRuleData(rule, stream)
+                    deserializeWebSocketRuleData(rule, stream, ruleParameters)
                 ));
             },
 
