@@ -1,22 +1,13 @@
 import * as _ from 'lodash';
-import * as http from 'http';
-import * as https from 'https';
-import ProxyAgent = require('proxy-agent');
 
-import { isNode } from "./util";
-import { MaybePromise } from './type-utils';
+import { MaybePromise } from '../util/type-utils';
+import { RuleParameterReference } from './rule-parameters';
 
-const KeepAliveAgents = isNode
-    ? { // These are only used (and only available) on the node server side
-        'http:': new http.Agent({
-            keepAlive: true
-        }),
-        'https:': new https.Agent({
-            keepAlive: true
-        })
-    } : {};
-
-export interface ProxyConfig {
+/**
+ * A ProxySetting is a specific proxy setting to use, which is passed to a proxy agent
+ * who will manage creating a socket for the request (directly, or tunnelled, or whatever).
+ */
+export interface ProxySetting {
     /**
      * The URL for the proxy to forward traffic through.
      *
@@ -46,47 +37,44 @@ export interface ProxyConfig {
     noProxy?: string[];
 }
 
-export type ProxyConfigCallbackParams = { hostname: string };
-export type ProxyConfigCallback = (params: ProxyConfigCallbackParams) => MaybePromise<ProxyConfig | undefined>;
+/**
+ * A ProxySettingSource is a way to calculate the ProxySetting for a given request. It
+ * may be a fixed ProxySetting value, or a callback to get ProxySetting values, or an
+ * array of sources, which should be iterated to get the first usable value
+ */
+export type ProxySettingSource =
+    | ProxySetting
+    | ProxySettingCallback
+    | Array<ProxySettingSource>
+    | undefined;
 
-export async function getAgent({
-    protocol, hostname, port, tryHttp2, keepAlive, proxyConfig
-}: {
-    protocol: 'http:' | 'https:' | 'ws:' | 'wss:' | undefined,
-    hostname: string,
-    port: number,
-    tryHttp2: boolean,
-    keepAlive: boolean
-    proxyConfig: ProxyConfig | ProxyConfigCallback | undefined,
-}): Promise<http.Agent | undefined> { // <-- We force this cast for convenience in various different uses later
-    if (proxyConfig) {
-        if (_.isFunction(proxyConfig)) {
-            proxyConfig = await proxyConfig({ hostname });
+export type ProxySettingCallbackParams = { hostname: string };
+export type ProxySettingCallback = (params: ProxySettingCallbackParams) => MaybePromise<ProxySetting | undefined>;
+
+/**
+ * A ProxyConfig is externally provided config that specifies a ProxySettingSource.
+ * It might be a ProxySettingSource itself, or it might include references to rule
+ * parameters, which must be dereferenced to make it usable as a ProxySettingSource.
+ */
+export type ProxyConfig =
+ | ProxySettingSource
+ | RuleParameterReference<ProxySettingSource>
+ | Array<ProxySettingSource | RuleParameterReference<ProxySettingSource>>;
+
+export async function getProxySetting(
+    configSource: ProxySettingSource,
+    params: ProxySettingCallbackParams
+) {
+    if (_.isFunction(configSource)) return configSource(params);
+    else if (_.isArray(configSource)) {
+        let result: ProxySetting | undefined;
+        for (let configArrayOption of configSource) {
+            result = await getProxySetting(configArrayOption, params);
+            if (result) break;
         }
-
-        if (proxyConfig?.proxyUrl) {
-            // If there's a (non-empty) proxy configured, use it. We require non-empty because empty strings
-            // will fall back to detecting from the environment, which is likely to behave unexpectedly.
-
-            if (!matchesNoProxy(hostname, port, proxyConfig.noProxy)) {
-                // We notably ignore HTTP/2 upstream in this case: it's complicated to mix that up with proxying
-                // so for now we ignore it entirely.
-                return new ProxyAgent(proxyConfig.proxyUrl) as http.Agent;
-            }
-        }
+        return result;
     }
-
-    if (tryHttp2 && (protocol === 'https:' || protocol === 'wss:')) {
-        // H2 wrapper takes multiple agents, uses the appropriate one for the detected protocol.
-        // We notably never use H2 upstream for plaintext, it's rare and we can't use ALPN to detect it.
-        return { https: KeepAliveAgents['https:'], http2: undefined } as any as http.Agent;
-    } else if (keepAlive && protocol !== 'wss:' && protocol !== 'ws:') {
-        // HTTP/1.1 or HTTP/1 with explicit keep-alive
-        return KeepAliveAgents[protocol || 'http:']
-    } else {
-        // HTTP/1 without KA - just send the request with no agent
-        return undefined;
-    }
+    else return configSource;
 }
 
 export const matchesNoProxy = (hostname: string, portNum: number, noProxyValues: string[] | undefined) => {

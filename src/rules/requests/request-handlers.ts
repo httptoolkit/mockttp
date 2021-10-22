@@ -12,6 +12,7 @@ import { Readable, Transform } from 'stream';
 import { stripIndent, oneLine } from 'common-tags';
 import { TypedError } from 'typed-error';
 import { encodeBuffer, SUPPORTED_ENCODING } from 'http-encoding';
+import uuid = require("uuid/v4");
 
 import {
     Headers,
@@ -50,14 +51,22 @@ import {
     WithSerializedBodyBuffer,
     serializeBuffer,
     deserializeBuffer,
-    SerializedRuleParameterReference,
-    maybeDeserializeParam,
-    maybeSerializeParam
+    SerializedProxyConfig,
+    deserializeProxyConfig,
+    serializeProxyConfig
 } from "../../util/serialization";
-import { getAgent, ProxyConfig, ProxyConfigCallback, ProxyConfigCallbackParams } from '../../util/http-agents';
 import { CachedDns } from '../../util/dns';
 
-import { assertParamDereferenced,RuleParameterReference, RuleParameters } from '../rule-parameters';
+import { assertParamDereferenced, RuleParameters } from '../rule-parameters';
+
+import { getAgent } from '../http-agents';
+import {
+    ProxySetting,
+    ProxySettingCallback,
+    ProxySettingCallbackParams,
+    ProxySettingSource,
+    ProxyConfig
+} from '../proxy-config';
 
 // An error that indicates that the handler is aborting the request.
 // This could be intentional, or an upstream server aborting the request.
@@ -502,14 +511,19 @@ export interface PassThroughHandlerOptions {
      * Upstream proxy configuration: pass through requests via this proxy.
      *
      * If this is undefined, no proxy will be used. To configure a proxy
-     * either a config object can be provided, or a callback which will be
-     * called with an object containing the hostname, and must return a
-     * proxy config object or undefined.
+     * provide either:
+     * - a ProxySettings object
+     * - a callback which will be called with an object containing the
+     *   hostname, and must return a ProxySettings object or undefined.
+     * - an array of ProxySettings or callbacks. The array will be
+     *   processed in order, and the first not-undefined ProxySettings
+     *   found will be used.
      *
-     * When using a remote client, this parameter may be passed by reference,
-     * using the name of a rule paramter configured in the standalone server.
+     * When using a remote client, this parameter or individual array
+     * values may be passed by reference, using the name of a rule
+     * parameter configured in the standalone server.
      */
-    proxyConfig?: ProxyConfig | ProxyConfigCallback | RuleParameterReference<ProxyConfig>;
+    proxyConfig?: ProxyConfig;
 
     /**
      * Custom DNS options, to allow configuration of the resolver used
@@ -692,7 +706,7 @@ interface SerializedPassThroughData {
     type: 'passthrough';
     forwardToLocation?: string;
     forwarding?: ForwardingOptions;
-    proxyConfig?: ProxyConfig | SerializedRuleParameterReference<ProxyConfig> | 'callback';
+    proxyConfig?: SerializedProxyConfig;
     ignoreHostCertificateErrors?: string[]; // Doesn't match option name, backward compat
     clientCertificateHostMap?: { [host: string]: { pfx: string, passphrase?: string } };
     lookupOptions?: PassThroughLookupOptions;
@@ -929,7 +943,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
     public readonly beforeResponse?: (res: PassThroughResponse) =>
         MaybePromise<CallbackResponseResult | void> | void;
 
-    public readonly proxyConfig?: ProxyConfig | ProxyConfigCallback | RuleParameterReference<ProxyConfig>;
+    public readonly proxyConfig?: ProxyConfig;
 
     public readonly lookupOptions?: PassThroughLookupOptions;
 
@@ -1260,7 +1274,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
         // Remote clients might configure a passthrough rule with a parameter reference for the proxy,
         // delegating proxy config to the standalone server. That's fine initially, but you can't actually
         // handle a request in that case - make sure our proxyConfig is always dereferenced before use.
-        const proxyConfig = assertParamDereferenced(this.proxyConfig);
+        const proxySettingSource = assertParamDereferenced(this.proxyConfig) as ProxySettingSource;
 
         // Mirror the keep-alive-ness of the incoming request in our outgoing request
         const agent = await getAgent({
@@ -1269,7 +1283,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
             port: effectivePort,
             tryHttp2: shouldTryH2Upstream,
             keepAlive: shouldKeepAlive(clientReq),
-            proxyConfig
+            proxySettingSource
         });
 
         if (agent && !('http2' in agent)) {
@@ -1610,11 +1624,11 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
         }
 
         if (_.isFunction(this.proxyConfig)) {
-            const getProxyConfig = this.proxyConfig as ProxyConfigCallback;
+            const getProxyConfig = this.proxyConfig as ProxySettingCallback;
 
             channel.onRequest<
-                ProxyConfigCallbackParams,
-                ProxyConfig | undefined
+                ProxySettingCallbackParams,
+                ProxySetting | undefined
             >('proxyConfig', getProxyConfig);
         }
 
@@ -1624,9 +1638,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 forwardToLocation: this.forwarding.targetHost,
                 forwarding: this.forwarding
             } : {},
-            proxyConfig: _.isFunction(this.proxyConfig)
-                ? 'callback'
-                : maybeSerializeParam(this.proxyConfig),
+            proxyConfig: serializeProxyConfig(this.proxyConfig, channel),
             lookupOptions: this.lookupOptions,
             ignoreHostCertificateErrors: this.ignoreHostHttpsErrors,
             clientCertificateHostMap: _.mapValues(this.clientCertificateHostMap,
@@ -1683,7 +1695,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
     static deserialize(
         data: SerializedPassThroughData,
         channel: ClientServerChannel,
-        ruleParams?: RuleParameters
+        ruleParams: RuleParameters
     ): PassThroughHandler {
         let beforeRequest: ((req: CompletedRequest) => MaybePromise<CallbackRequestResult | void>) | undefined;
         if (data.hasBeforeRequestCallback) {
@@ -1725,24 +1737,10 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
             };
         }
 
-        let proxyConfig: ProxyConfig | ProxyConfigCallback | RuleParameterReference<ProxyConfig> | undefined;
-        if (data.proxyConfig) {
-            if (data.proxyConfig === 'callback') {
-                proxyConfig = async (options) => {
-                    return await channel.request<
-                        ProxyConfigCallbackParams,
-                        ProxyConfig | undefined
-                    >('proxyConfig', options);
-                };
-            } else {
-                proxyConfig = maybeDeserializeParam(data.proxyConfig, ruleParams);
-            }
-        }
-
         return new PassThroughHandler({
             beforeRequest,
             beforeResponse,
-            proxyConfig,
+            proxyConfig: deserializeProxyConfig(data.proxyConfig, channel, ruleParams),
             transformRequest: {
                 ...data.transformRequest,
                 ...(data.transformRequest?.replaceBody !== undefined ? {

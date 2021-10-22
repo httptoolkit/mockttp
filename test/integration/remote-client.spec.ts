@@ -286,6 +286,43 @@ nodeOnly(() => {
                     // And it went via the intermediate proxy
                     expect((await targetEndpoint.getSeenRequests()).length).to.equal(1);
                 });
+
+                it("should support proxy configuration specified by a proxy config array", async () => {
+                    // Remote server sends fixed response:
+                    const targetEndpoint = await targetServer.anyRequest().thenReply(200, "Remote server says hi!");
+
+                    let firstCallbackCalled = false;
+                    let secondCallbackCalled = false;
+
+                    // Mockttp forwards requests via our intermediate proxy (configured with a remote client + callback)
+                    await client.anyRequest().thenPassThrough({
+                        proxyConfig: [
+                            ({ hostname }) => {
+                                expect(hostname).to.equal('localhost');
+                                firstCallbackCalled = true;
+                                return undefined;
+                            },
+                            ({ hostname }) => {
+                                expect(hostname).to.equal('localhost');
+                                secondCallbackCalled = true;
+                                return { proxyUrl: targetServer.url }
+                            },
+                            () => {
+                                expect.fail("Third callback should not be called");
+                                return undefined;
+                            }
+                        ]
+                    });
+
+                    const response = await request.get(client.urlFor("/test-url"), {
+                        proxy: client.url
+                    });
+
+                    // We get a successful response
+                    expect(response).to.equal("Remote server says hi!");
+                    // And it went via the intermediate proxy
+                    expect((await targetEndpoint.getSeenRequests()).length).to.equal(1);
+                });
             });
 
             it("should successfully mock requests with live streams", async () => {
@@ -460,6 +497,36 @@ nodeOnly(() => {
                 expect(callbackArguments).to.deep.equal([
                     { hostname: 'localhost' }
                 ]);
+            });
+
+            it("should use be able to reference proxy callback parameters in an array", async function () {
+                let callbackCount = 0;
+                proxyCallbackCallback = (...args: any) => {
+                    expect(args).to.deep.equal([{ hostname: 'localhost' }]);
+
+                    callbackCount += 1;
+                    if (callbackCount === 1) {
+                        return undefined;
+                    } else if (callbackCount === 2) {
+                        return { proxyUrl: 'http://invalid-url.test' }
+                    } else if (callbackCount === 3) {
+                        expect.fail("Callback should only be called twice");
+                    }
+                };
+
+                client.anyRequest().thenPassThrough({
+                    // A reference to the proxyCallback parameter.
+                    proxyConfig: [
+                        { [MOCKTTP_PARAM_REF]: 'proxyCallback' }, // => undef
+                        { [MOCKTTP_PARAM_REF]: 'proxyCallback' }, // => setting
+                        { [MOCKTTP_PARAM_REF]: 'proxyCallback' }  // never called, because of previous results
+                    ]
+                });
+
+                await fetch(client.urlFor("/mocked-endpoint"));
+
+                // Check the proxy callback is called with the hostname:
+                expect(callbackCount).to.equal(2);
             });
         });
 

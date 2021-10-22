@@ -8,10 +8,10 @@ import CacheableLookup from 'cacheable-lookup';
 
 import {
     ClientServerChannel,
-    maybeDeserializeParam,
-    maybeSerializeParam,
+    deserializeProxyConfig,
     Serializable,
-    SerializedRuleParameterReference
+    SerializedProxyConfig,
+    serializeProxyConfig
 } from "../../util/serialization";
 
 import {
@@ -27,9 +27,11 @@ import {
 } from '../requests/request-handlers';
 import { isHttp2 } from '../../util/request-utils';
 import { streamToBuffer } from '../../util/buffer-utils';
-import { getAgent, ProxyConfig, ProxyConfigCallback, ProxyConfigCallbackParams } from '../../util/http-agents';
 import { isLocalhostAddress } from '../../util/socket-util';
-import { assertParamDereferenced, RuleParameterReference, RuleParameters } from '../rule-parameters';
+
+import { getAgent } from '../http-agents';
+import { ProxyConfig, ProxySettingSource } from '../proxy-config';
+import { assertParamDereferenced, RuleParameters } from '../rule-parameters';
 
 export interface WebSocketHandler extends Explainable, Serializable {
     type: keyof typeof WsHandlerLookup;
@@ -166,17 +168,22 @@ export interface PassThroughWebSocketHandlerOptions {
     ignoreHostCertificateErrors?: string[];
 
     /**
-     * Upstream proxy configuration: pass through requests via this proxy.
+     * Upstream proxy configuration: pass through websockets via this proxy.
      *
      * If this is undefined, no proxy will be used. To configure a proxy
-     * either a config object can be provided, or a callback which will be
-     * called with an object containing the hostname, and must return a
-     * proxy config object or undefined.
+     * provide either:
+     * - a ProxySettings object
+     * - a callback which will be called with an object containing the
+     *   hostname, and must return a ProxySettings object or undefined.
+     * - an array of ProxySettings or callbacks. The array will be
+     *   processed in order, and the first not-undefined ProxySettings
+     *   found will be used.
      *
-     * When using a remote client, this parameter may be passed by reference,
-     * using the name of a rule paramter configured in the standalone server.
+     * When using a remote client, this parameter or individual array
+     * values may be passed by reference, using the name of a rule
+     * parameter configured in the standalone server.
      */
-    proxyConfig?: ProxyConfig | ProxyConfigCallback | RuleParameterReference<ProxyConfig>;
+    proxyConfig?: ProxyConfig;
 
     /**
      * Custom DNS options, to allow configuration of the resolver used
@@ -190,7 +197,7 @@ export interface PassThroughWebSocketHandlerOptions {
 interface SerializedPassThroughWebSocketData {
     type: 'ws-passthrough';
     forwarding?: ForwardingOptions;
-    proxyConfig?: ProxyConfig | SerializedRuleParameterReference<ProxyConfig> | 'callback';
+    proxyConfig?: SerializedProxyConfig;
     ignoreHostCertificateErrors?: string[]; // Doesn't match option name, backward compat
     lookupOptions?: PassThroughLookupOptions;
 }
@@ -206,7 +213,7 @@ export class PassThroughWebSocketHandler extends Serializable implements WebSock
     // Same lookup configuration as normal request PassThroughHandler:
     public readonly lookupOptions: PassThroughLookupOptions | undefined;
 
-    public readonly proxyConfig?: ProxyConfig | ProxyConfigCallback | RuleParameterReference<ProxyConfig>;
+    public readonly proxyConfig?: ProxyConfig;
 
     private _cacheableLookupInstance: CacheableLookup | undefined;
     private lookup() {
@@ -363,13 +370,13 @@ export class PassThroughWebSocketHandler extends Serializable implements WebSock
             ? parseInt(parsedUrl.port, 10)
             : parsedUrl.protocol == 'wss:' ? 443 : 80;
 
-        const proxyConfig = assertParamDereferenced(this.proxyConfig);
+        const proxySettingSource = assertParamDereferenced(this.proxyConfig) as ProxySettingSource;
 
         const agent = await getAgent({
             protocol: parsedUrl.protocol as 'ws:' | 'wss:',
             hostname: parsedUrl.hostname!,
             port: effectivePort,
-            proxyConfig,
+            proxySettingSource,
             tryHttp2: false, // We don't support websockets over H2 yet
             keepAlive: false // Not a thing for websockets: they take over the whole connection
         });
@@ -412,21 +419,10 @@ export class PassThroughWebSocketHandler extends Serializable implements WebSock
      * @internal
      */
     serialize(channel: ClientServerChannel): SerializedPassThroughWebSocketData {
-        if (_.isFunction(this.proxyConfig)) {
-            const getProxyConfig = this.proxyConfig as ProxyConfigCallback;
-
-            channel.onRequest<
-                ProxyConfigCallbackParams,
-                ProxyConfig | undefined
-            >('proxyConfig', getProxyConfig);
-        }
-
         return {
             type: this.type,
             forwarding: this.forwarding,
-            proxyConfig: _.isFunction(this.proxyConfig)
-                ? 'callback'
-                : maybeSerializeParam(this.proxyConfig),
+            proxyConfig: serializeProxyConfig(this.proxyConfig, channel),
             ignoreHostCertificateErrors: this.ignoreHostHttpsErrors,
             lookupOptions: this.lookupOptions
         };
@@ -438,26 +434,12 @@ export class PassThroughWebSocketHandler extends Serializable implements WebSock
     static deserialize(
         data: SerializedPassThroughWebSocketData,
         channel: ClientServerChannel,
-        ruleParams?: RuleParameters
+        ruleParams: RuleParameters
     ): any {
-        let proxyConfig: ProxyConfig | ProxyConfigCallback | RuleParameterReference<ProxyConfig> | undefined;
-        if (data.proxyConfig) {
-            if (data.proxyConfig === 'callback') {
-                proxyConfig = async (options) => {
-                    return await channel.request<
-                        ProxyConfigCallbackParams,
-                        ProxyConfig | undefined
-                    >('proxyConfig', options);
-                };
-            } else {
-                proxyConfig = maybeDeserializeParam(data.proxyConfig, ruleParams);
-            }
-        }
-
         // By default, we assume we just need to assign the right prototype
         return _.create(this.prototype, {
             ...data,
-            proxyConfig,
+            proxyConfig: deserializeProxyConfig(data.proxyConfig, channel, ruleParams),
             ignoreHostHttpsErrors: data.ignoreHostCertificateErrors
         });
     }

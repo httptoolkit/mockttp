@@ -14,6 +14,12 @@ import {
     RuleParameterReference,
     RuleParameters
 } from '../rules/rule-parameters';
+import {
+    ProxySetting,
+    ProxySettingSource,
+    ProxySettingCallbackParams,
+    ProxyConfig
+} from '../rules/proxy-config';
 
 export function serialize<T extends Serializable>(
     obj: T,
@@ -78,7 +84,11 @@ export abstract class Serializable {
     /**
      * @internal
      */
-    static deserialize(data: SerializedValue<any>, _channel: ClientServerChannel): any {
+    static deserialize(
+        data: SerializedValue<any>,
+        _channel: ClientServerChannel,
+        _ruleParams: RuleParameters
+    ): any {
         // By default, we assume we just need to assign the right prototype
         return _.create(this.prototype, data);
     }
@@ -342,20 +352,65 @@ function isSerializedRuleParam(value: any): value is SerializedRuleParameterRefe
     return value && SERIALIZED_PARAM_REFERENCE in value;
 }
 
-export function maybeDeserializeParam<T, R>(
-    value: T | SerializedRuleParameterReference<R>,
-    ruleParams?: RuleParameters
-): T | R | RuleParameterReference<R> {
+export function ensureParamsDeferenced<T>(
+    value: T | SerializedRuleParameterReference<T>,
+    ruleParams: RuleParameters
+): T {
     if (isSerializedRuleParam(value)) {
         const paramRef = {
             [MOCKTTP_PARAM_REF]: value[SERIALIZED_PARAM_REFERENCE]
         };
-        if (ruleParams) {
-            return dereferenceParam(paramRef, ruleParams);
-        } else {
-            return paramRef;
-        }
+        return dereferenceParam(paramRef, ruleParams);
     } else {
         return value;
+    }
+}
+
+export type SerializedProxyConfig =
+    | ProxySetting
+    | string // Callback id on the serialization channel
+    | undefined
+    | SerializedRuleParameterReference<ProxySettingSource>
+    | Array<SerializedProxyConfig>;
+
+export function serializeProxyConfig(
+    proxyConfig: ProxyConfig,
+    channel: ClientServerChannel
+): SerializedProxyConfig {
+    if (_.isFunction(proxyConfig)) {
+        const callbackId = `proxyConfig-callback-${uuid()}`;
+
+        channel.onRequest<
+            ProxySettingCallbackParams,
+            ProxySetting | undefined
+        >(callbackId, proxyConfig);
+
+        return callbackId;
+    } else if (_.isArray(proxyConfig)) {
+        return proxyConfig.map((config) => serializeProxyConfig(config, channel));
+    } else {
+        return maybeSerializeParam(proxyConfig);
+    }
+}
+
+export function deserializeProxyConfig(
+    proxyConfig: SerializedProxyConfig,
+    channel: ClientServerChannel,
+    ruleParams: RuleParameters
+): ProxySettingSource {
+    if (_.isString(proxyConfig)) {
+        const callbackId = proxyConfig;
+
+        const proxyConfigCallback = async (options: ProxySettingCallbackParams) => {
+            return await channel.request<
+                ProxySettingCallbackParams,
+                ProxySetting | undefined
+            >(callbackId, options);
+        };
+        return proxyConfigCallback;
+    } else if (_.isArray(proxyConfig)) {
+        return proxyConfig.map((config) => deserializeProxyConfig(config, channel, ruleParams));
+    } else {
+        return ensureParamsDeferenced(proxyConfig, ruleParams);
     }
 }

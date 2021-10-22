@@ -1,5 +1,5 @@
 import { expect } from './test-utils';
-import { matchesNoProxy } from '../src/util/http-agents';
+import { matchesNoProxy } from '../src/rules/proxy-config';
 
 describe("No-proxy parsing", () => {
     it("should not match an empty array", () => {

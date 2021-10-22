@@ -25,7 +25,13 @@ export { matchers, requestHandlers, webSocketHandlers, completionCheckers };
 import { RequestRuleData } from './rules/requests/request-rule';
 import { WebSocketRuleData } from './rules/websockets/websocket-rule';
 export type { RequestRuleData, WebSocketRuleData };
-export type { ProxyConfig, ProxyConfigCallback, ProxyConfigCallbackParams } from './util/http-agents';
+export type {
+    ProxyConfig,
+    ProxySetting,
+    ProxySettingSource,
+    ProxySettingCallback,
+    ProxySettingCallbackParams
+} from './rules/proxy-config';
 
 export type { RequestRuleBuilder } from "./rules/requests/request-rule-builder";
 export type { WebSocketRuleBuilder } from "./rules/websockets/websocket-rule-builder";
