@@ -434,6 +434,10 @@ export class MockttpStandalone {
     get activeServerPorts() {
         return Object.keys(this.servers);
     }
+
+    get ruleParameterKeys() {
+        return Object.keys(this.ruleParams);
+    }
 }
 
 export interface MockServerConfig {
