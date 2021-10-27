@@ -219,6 +219,10 @@ export function buildStandaloneModel(
                 if (!endpoint) return null;
 
                 return buildMockedEndpointData(endpoint);
+            },
+
+            ruleParameterKeys: async (): Promise<string[]> => {
+                return Object.keys(ruleParameters);
             }
         },
 

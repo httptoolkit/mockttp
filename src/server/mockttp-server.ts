@@ -272,6 +272,10 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         return withPending.filter(wp => wp.isPending).map(wp => wp.endpoint);
     }
 
+    public async getRuleParameterKeys() {
+        return []; // Local servers never have rule parameters defined
+    }
+
     public on(event: 'request-initiated', callback: (req: InitiatedRequest) => void): Promise<void>;
     public on(event: 'request', callback: (req: CompletedRequest) => void): Promise<void>;
     public on(event: 'response', callback: (req: CompletedResponse) => void): Promise<void>;

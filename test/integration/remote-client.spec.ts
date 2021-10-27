@@ -528,6 +528,14 @@ nodeOnly(() => {
                 // Check the proxy callback is called with the hostname:
                 expect(callbackCount).to.equal(2);
             });
+
+            it("should be able to query the available rule parameters", async function () {
+                const ruleParams = await client.getRuleParameterKeys();
+
+                expect(ruleParams).to.deep.equal([
+                    'proxyCallback'
+                ]);
+            });
         });
 
         describe("with keep alive configured", () => {

@@ -447,6 +447,10 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
         });
     }
 
+    private queryTypeDefined(queryType: string): boolean {
+        return this.typeHasField('Query', queryType);
+    }
+
     private typeHasField(typeName: string, fieldName: string): boolean {
         const type: any = _.find(this.mockServerSchema.types, { name: typeName });
         if (!type) return false;
@@ -634,6 +638,31 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
         return pendingEndpoints.map(e =>
             new MockedEndpointClient(e.id, e.explanation, this.getEndpointDataGetter(e.id))
         );
+    }
+
+    /**
+     * List the names of the rule parameters defined by the standalone server. This can be
+     * used in some advanced use cases to confirm that the parameters a client wishes to
+     * reference are available.
+     *
+     * Only defined for remote clients.
+     */
+    public async getRuleParameterKeys() {
+        if (!this.queryTypeDefined('ruleParameterKeys')) {
+            // If this endpoint isn't supported, that's because parameters aren't supported
+            // at all, so we can safely report that immediately.
+            return [];
+        }
+
+        let result = await this.queryMockServer<{
+            ruleParameterKeys: string[]
+        }>(
+            `query GetRuleParameterNames {
+                ruleParameterKeys
+            }`
+        );
+
+        return result.ruleParameterKeys;
     }
 
     // Exists purely for backward compat with servers that don't support AddRules/SetRules.

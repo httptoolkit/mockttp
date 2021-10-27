@@ -435,6 +435,18 @@ export interface Mockttp {
      * e.g. with .twice()) or which haven't seen at least one request, by default.
      */
     getPendingEndpoints(): Promise<MockedEndpoint[]>;
+
+    /**
+     * List the names of the rule parameters available for rule definitions. These
+     * parameters are defined by the standalone server. This list can be used in some
+     * advanced use cases to confirm beforehand that the parameters a client wishes to
+     * reference are available.
+     *
+     * Only relevant to remote/browser Mockttp usage. Servers created directly without any
+     * standalone server have no rule parameters defined, and so this method will always
+     * return an empty list.
+     */
+    getRuleParameterKeys(): Promise<string[]>;
 }
 
 export interface MockttpOptions {

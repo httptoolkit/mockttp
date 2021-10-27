@@ -2,6 +2,7 @@ type Query {
     mockedEndpoints: [MockedEndpoint!]!
     pendingEndpoints: [MockedEndpoint!]!
     mockedEndpoint(id: ID!): MockedEndpoint
+    ruleParameterKeys: [String!]!
 }
 
 type Mutation {
