@@ -1,7 +1,13 @@
 import * as dns from 'dns';
 
-// A drop-in alternative to dns.lookup, but where results are briefly cached to avoid completely unnecessary lookups,
-// while remaining fairly reactive to actual host file changes etc.
+// We exclude the __promisify__ type hack from the official DNS type, to give us a type
+// that otherwise enforces correctness. We still have to cast past the missing 'field'
+// at the end of the day, but this allows us to avoid that until the last minute without
+// sacrificing any strictness the rest of the time.
+export type DnsLookupFunction = Omit<typeof dns.lookup, '__promisify__'>;
+
+// A drop-in alternative to dns.lookup, but where results are briefly cached to avoid completely
+// unnecessary lookups, while remaining fairly reactive to actual host file changes etc.
 export class CachedDns {
 
     private cache = new Map<string, [address: string | dns.LookupAddress[], family: number]>();
@@ -14,7 +20,7 @@ export class CachedDns {
         return `${hostname}-${options?.all}-${options?.family}-${options?.hints}-${options?.verbatim}`;
     }
 
-    lookup = (...args: Parameters<typeof dns.lookup>) => {
+    lookup: DnsLookupFunction = (...args: Parameters<typeof dns.lookup>) => {
         const [hostname, options] = args.slice(0, -1) as [string, dns.LookupOptions | undefined];
         const cb = args[args.length - 1] as (err: NodeJS.ErrnoException | null, address: string | dns.LookupAddress[], family: number) => void;
 

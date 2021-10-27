@@ -54,7 +54,7 @@ export type {
     HttpsOptions,
     HttpsPathOptions
 } from './util/tls';
-export type { CachedDns } from './util/dns';
+export type { CachedDns, DnsLookupFunction } from './util/dns';
 export type { MaybePromise } from './util/type-utils';
 
 // Export the core API:

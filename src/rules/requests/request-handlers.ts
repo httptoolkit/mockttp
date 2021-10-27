@@ -1,5 +1,6 @@
 import _ = require('lodash');
 import url = require('url');
+import type dns = require('dns');
 import net = require('net');
 import tls = require('tls');
 import http = require('http');
@@ -55,7 +56,7 @@ import {
     deserializeProxyConfig,
     serializeProxyConfig
 } from "../../util/serialization";
-import { CachedDns } from '../../util/dns';
+import { CachedDns, DnsLookupFunction } from '../../util/dns';
 
 import { assertParamDereferenced, RuleParameters } from '../rule-parameters';
 
@@ -948,7 +949,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
     public readonly lookupOptions?: PassThroughLookupOptions;
 
     private _cacheableLookupInstance: CacheableLookup | CachedDns | undefined;
-    private lookup() {
+    private lookup(): DnsLookupFunction {
         if (!this.lookupOptions) {
             if (!this._cacheableLookupInstance) {
                 // By default, use 10s caching of hostnames, just to reduce the delay from
@@ -1323,7 +1324,8 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 family,
                 path,
                 headers,
-                lookup: this.lookup(),
+                lookup: this.lookup() as typeof dns.lookup,
+                // ^ Cast required to handle __promisify__ type hack in the official Node types
                 agent,
                 minVersion: strictHttpsChecks ? tls.DEFAULT_MIN_VERSION : 'TLSv1', // Allow TLSv1, if !strict
                 rejectUnauthorized: strictHttpsChecks,
