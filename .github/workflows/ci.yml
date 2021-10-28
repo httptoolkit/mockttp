@@ -10,6 +10,7 @@ jobs:
         node-version: [12.x, 14.x, v14.17, 16.x, '*']
 
     steps:
+      - run: wget --no-verbose -O /tmp/chrome.deb https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_92.0.4515.159-1_amd64.deb && sudo apt install -y --allow-downgrades /tmp/chrome.deb
       - uses: actions/checkout@v2
 
       - uses: actions/setup-node@v2
