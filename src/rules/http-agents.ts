@@ -1,7 +1,7 @@
 import * as _ from 'lodash';
 import * as http from 'http';
 import * as https from 'https';
-import ProxyAgent = require('proxy-agent');
+import ProxyAgent = require('@httptoolkit/proxy-agent');
 
 import { isNode } from "../util/util";
 import { getProxySetting, matchesNoProxy, ProxySettingSource } from './proxy-config';

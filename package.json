@@ -15,7 +15,7 @@
     "http2": false,
     "http2-wrapper": false,
     "cacheable-lookup": false,
-    "proxy-agent": false
+    "@httptoolkit/proxy-agent": false
   },
   "types": "dist/main.d.ts",
   "bin": {
@@ -124,6 +124,7 @@
   "dependencies": {
     "@graphql-tools/schema": "^7.1.5",
     "@httptoolkit/httpolyglot": "^1.0.0",
+    "@httptoolkit/proxy-agent": "^5.0.1-socks-lookup-fix.0",
     "@httptoolkit/subscriptions-transport-ws": "^0.9.19",
     "@httptoolkit/websocket-stream": "^6.0.0",
     "@types/cors": "^2.8.6",
@@ -147,7 +148,6 @@
     "node-forge": "^0.10.0",
     "performance-now": "^2.1.0",
     "portfinder": "^1.0.23",
-    "proxy-agent": "^5.0.0",
     "typed-error": "^3.0.2",
     "uuid": "^3.1.0",
     "ws": "^7.3.1"

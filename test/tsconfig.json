@@ -8,7 +8,7 @@
             "es2015"
         ],
         "paths": {
-            "proxy-agent": ["../custom-typings/proxy-agent.d.ts"]
+            "@httptoolkit/proxy-agent": ["../custom-typings/proxy-agent.d.ts"]
         }
     },
     "compileOnSave": true,

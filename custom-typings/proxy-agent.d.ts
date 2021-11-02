@@ -1,4 +1,4 @@
-declare module 'proxy-agent' {
+declare module '@httptoolkit/proxy-agent' {
     class ProxyAgent {
         constructor(options: string);
     }
