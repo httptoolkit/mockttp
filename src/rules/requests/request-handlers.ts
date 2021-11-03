@@ -13,7 +13,6 @@ import { Readable, Transform } from 'stream';
 import { stripIndent, oneLine } from 'common-tags';
 import { TypedError } from 'typed-error';
 import { encodeBuffer, SUPPORTED_ENCODING } from 'http-encoding';
-import uuid = require("uuid/v4");
 
 import {
     Headers,
@@ -62,9 +61,6 @@ import { assertParamDereferenced, RuleParameters } from '../rule-parameters';
 
 import { getAgent } from '../http-agents';
 import {
-    ProxySetting,
-    ProxySettingCallback,
-    ProxySettingCallbackParams,
     ProxySettingSource,
     ProxyConfig
 } from '../proxy-config';
@@ -1623,15 +1619,6 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                     return undefined;
                 }
             });
-        }
-
-        if (_.isFunction(this.proxyConfig)) {
-            const getProxyConfig = this.proxyConfig as ProxySettingCallback;
-
-            channel.onRequest<
-                ProxySettingCallbackParams,
-                ProxySetting | undefined
-            >('proxyConfig', getProxyConfig);
         }
 
         return {
