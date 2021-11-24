@@ -9,7 +9,7 @@ describe("Request callback matching", function () {
 
     it("should match requests with the callback reports true", async () => {
         let callbackRequest: CompletedRequest | undefined;
-        await server.post('/abc').matching((request) => {
+        await server.forPost('/abc').matching((request) => {
             callbackRequest = request;
             return true;
         }).thenReply(200, 'Mocked response');
@@ -26,7 +26,7 @@ describe("Request callback matching", function () {
     });
 
     it("should match requests with an async callback", async () => {
-        await server.post('/abc').matching(async (request) => {
+        await server.forPost('/abc').matching(async (request) => {
             const body = await request?.body?.getJson() as any;
             return body?.username === 'test';
         }).thenReply(200, 'Mocked response');
@@ -40,7 +40,7 @@ describe("Request callback matching", function () {
     });
 
     it("should not match requests with the callback reports false", async () => {
-        await server.get('/abc').matching(() => {
+        await server.forGet('/abc').matching(() => {
             return false;
         }).thenReply(200, 'Mocked response');
 
@@ -50,7 +50,7 @@ describe("Request callback matching", function () {
     });
 
     it("should throw a Matcher exception if the callback throws an error", async () => {
-        await server.get('/abc').matching(() => {
+        await server.forGet('/abc').matching(() => {
             throw new Error("Matcher exception");
         }).thenReply(200, 'Mocked response');
 

@@ -602,7 +602,7 @@ ${await this.suggestRule(request)}`
 
         let msg = "You can fix this by adding a rule to match this request, for example:\n"
 
-        msg += `mockServer.${request.method.toLowerCase()}("${request.path}")`;
+        msg += `mockServer.for${_.startCase(request.method.toLowerCase())}("${request.path}")`;
 
         const contentType = request.headers['content-type'];
         let isFormRequest = !!contentType && contentType.indexOf("application/x-www-form-urlencoded") > -1;

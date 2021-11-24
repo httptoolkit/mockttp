@@ -30,14 +30,14 @@ export type PortRange = { startPort: number, endPort: number };
  * const mockServer = require('mockttp').getLocal()
  * ```
  *
- * Call `.start()` to set up a server on a random port, use methods like `.get(url)`,
- * `.post(url)` and `.anyRequest()` to get a {@link RequestRuleBuilder} and start defining
- * mock rules. You can also mock WebSocket requests using `.anyWebSocket()`. Call `.stop()`
+ * Call `.start()` to set up a server on a random port, use `.forX` methods like `.forGet(url)`,
+ * `.forPost(url)` and `.forAnyRequest()` to get a {@link RequestRuleBuilder} and start defining
+ * mock rules. You can also mock WebSocket requests using `.forAnyWebSocket()`. Call `.stop()`
  * when your test is complete. An example:
  *
  * ```
  * await mockServer.start();
- * await mockServer.get('/abc').thenReply(200, "a response");
+ * await mockServer.forGet('/abc').thenReply(200, "a response");
  * // ...Make some requests
  * await mockServer.stop();
  * ```
@@ -107,7 +107,12 @@ export interface Mockttp {
      * Get a builder for a mock rule that will match any requests on any path.
      *
      * This only matches traditional HTTP requests, not websockets, which are handled
-     * separately. To match websockets, use `.anyWebSocket()`.
+     * separately. To match websockets, use `.forAnyWebSocket()`.
+     */
+    forAnyRequest(): RequestRuleBuilder;
+
+    /**
+     * @deprecated Use `.forAnyRequest()` instead.
      */
     anyRequest(): RequestRuleBuilder;
 
@@ -120,6 +125,11 @@ export interface Mockttp {
      * Only one unmatched request rule can be registered, and it cannot include any
      * matchers. In either of these cases, when the final `thenX()` method is called,
      * a rejected promise will be returned.
+     */
+    forUnmatchedRequest(): RequestRuleBuilder;
+
+    /**
+     * @deprecated Use `.forUnmatchedRequest()` instead.
      */
     unmatchedRequest(): RequestRuleBuilder;
 
@@ -141,6 +151,11 @@ export interface Mockttp {
      * - Regular expressions can match the absolute URL: `/^http:\/\/localhost:8000\/abc$/`
      * - Regular expressions can also match the path: `/^\/abc/`
      */
+    forGet(url?: string | RegExp): RequestRuleBuilder;
+
+    /**
+     * @deprecated Use `.forGet()` instead.
+     */
     get(url?: string | RegExp): RequestRuleBuilder;
 
     /**
@@ -160,6 +175,11 @@ export interface Mockttp {
      *   to entire URL, ignoring query params.
      * - Regular expressions can match the absolute URL: `/^http:\/\/localhost:8000\/abc$/`
      * - Regular expressions can also match the path: `/^\/abc/`
+     */
+    forPost(url?: string | RegExp): RequestRuleBuilder;
+
+    /**
+     * @deprecated Use `.forPost()` instead.
      */
     post(url?: string | RegExp): RequestRuleBuilder;
 
@@ -181,6 +201,11 @@ export interface Mockttp {
      * - Regular expressions can match the absolute URL: `/^http:\/\/localhost:8000\/abc$/`
      * - Regular expressions can also match the path: `/^\/abc/`
      */
+    forPut(url?: string | RegExp): RequestRuleBuilder;
+
+    /**
+     * @deprecated Use `.forPut()` instead.
+     */
     put(url?: string | RegExp): RequestRuleBuilder;
 
     /**
@@ -200,6 +225,11 @@ export interface Mockttp {
      *   to entire URL, ignoring query params.
      * - Regular expressions can match the absolute URL: `/^http:\/\/localhost:8000\/abc$/`
      * - Regular expressions can also match the path: `/^\/abc/`
+     */
+    forDelete(url?: string | RegExp): RequestRuleBuilder;
+
+    /**
+     * @deprecated Use `.forDelete()` instead.
      */
     delete(url?: string | RegExp): RequestRuleBuilder;
 
@@ -221,6 +251,11 @@ export interface Mockttp {
      * - Regular expressions can match the absolute URL: `/^http:\/\/localhost:8000\/abc$/`
      * - Regular expressions can also match the path: `/^\/abc/`
      */
+    forPatch(url?: string | RegExp): RequestRuleBuilder;
+
+    /**
+     * @deprecated Use `.forPatch()` instead.
+     */
     patch(url?: string | RegExp): RequestRuleBuilder;
 
     /**
@@ -240,6 +275,11 @@ export interface Mockttp {
      *   to entire URL, ignoring query params.
      * - Regular expressions can match the absolute URL: `/^http:\/\/localhost:8000\/abc$/`
      * - Regular expressions can also match the path: `/^\/abc/`
+     */
+    forHead(url?: string | RegExp): RequestRuleBuilder;
+
+    /**
+     * @deprecated Use `.forHead()` instead.
      */
     head(url?: string | RegExp): RequestRuleBuilder;
 
@@ -270,10 +310,20 @@ export interface Mockttp {
      * but if you're testing in a browser you will need to ensure you mock all OPTIONS
      * requests appropriately so that the browser allows your other requests to be sent.
      */
+    forOptions(url?: string | RegExp): RequestRuleBuilder;
+
+    /**
+     * @deprecated Use `.forOptions()` instead.
+     */
     options(url?: string | RegExp): RequestRuleBuilder;
 
     /**
      * Get a builder for a mock rule that will match all websocket connections.
+     */
+    forAnyWebSocket(): WebSocketRuleBuilder;
+
+    /**
+     * @deprecated Use `.forAnyWebSocket()` instead.
      */
     anyWebSocket(): WebSocketRuleBuilder;
 
@@ -592,39 +642,39 @@ export abstract class AbstractMockttp {
 
     abstract setWebSocketRules(...ruleData: WebSocketRuleData[]): Promise<MockedEndpoint[]>;
 
-    anyRequest(): RequestRuleBuilder {
+    forAnyRequest(): RequestRuleBuilder {
         return new RequestRuleBuilder(this.addRequestRule);
     }
 
-    unmatchedRequest(): RequestRuleBuilder {
+    forUnmatchedRequest(): RequestRuleBuilder {
         return new RequestRuleBuilder(this.setFallbackRequestRule);
     }
 
-    get(url?: string | RegExp): RequestRuleBuilder {
+    forGet(url?: string | RegExp): RequestRuleBuilder {
         return new RequestRuleBuilder(Method.GET, url, this.addRequestRule);
     }
 
-    post(url?: string | RegExp): RequestRuleBuilder {
+    forPost(url?: string | RegExp): RequestRuleBuilder {
         return new RequestRuleBuilder(Method.POST, url, this.addRequestRule);
     }
 
-    put(url?: string | RegExp): RequestRuleBuilder {
+    forPut(url?: string | RegExp): RequestRuleBuilder {
         return new RequestRuleBuilder(Method.PUT, url, this.addRequestRule);
     }
 
-    delete(url?: string | RegExp): RequestRuleBuilder {
+    forDelete(url?: string | RegExp): RequestRuleBuilder {
         return new RequestRuleBuilder(Method.DELETE, url, this.addRequestRule);
     }
 
-    patch(url?: string | RegExp): RequestRuleBuilder {
+    forPatch(url?: string | RegExp): RequestRuleBuilder {
         return new RequestRuleBuilder(Method.PATCH, url, this.addRequestRule);
     }
 
-    head(url?: string | RegExp): RequestRuleBuilder {
+    forHead(url?: string | RegExp): RequestRuleBuilder {
         return new RequestRuleBuilder(Method.HEAD, url, this.addRequestRule);
     }
 
-    options(url?: string | RegExp): RequestRuleBuilder {
+    forOptions(url?: string | RegExp): RequestRuleBuilder {
         if (this.corsOptions) {
             throw new Error(stripIndent`
                 Cannot mock OPTIONS requests with CORS enabled.
@@ -637,8 +687,20 @@ export abstract class AbstractMockttp {
         return new RequestRuleBuilder(Method.OPTIONS, url, this.addRequestRule);
     }
 
-    anyWebSocket(): WebSocketRuleBuilder {
+    forAnyWebSocket(): WebSocketRuleBuilder {
         return new WebSocketRuleBuilder(this.addWebSocketRule);
     }
+
+    // Assorted deprecated aliases, before the forX prefix was added:
+    anyRequest = this.forAnyRequest;
+    unmatchedRequest = this.forUnmatchedRequest;
+    get = this.forGet;
+    post = this.forPost;
+    put = this.forPut;
+    delete = this.forDelete;
+    patch = this.forPatch;
+    head = this.forHead;
+    options = this.forOptions;
+    anyWebSocket = this.forAnyWebSocket;
 
 }

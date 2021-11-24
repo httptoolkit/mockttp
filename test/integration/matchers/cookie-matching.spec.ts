@@ -41,11 +41,11 @@ describe("Cookie matching", function () {
         };
 
         return Promise.all([
-            server.get("/")
+            server.forGet("/")
                 .withCookie({"supercookie": "yummi"})
                 .always()
                 .thenReply(200, "matched cookie", headers),
-            server.get("/")
+            server.forGet("/")
                 .always()
                 .thenReply(200, "did not match cookie", headers)
         ]);

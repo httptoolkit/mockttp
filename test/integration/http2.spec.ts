@@ -48,7 +48,7 @@ browserOnly(() => {
             const expectedProtocol = config.usesHttp2 ? '2.0' : '1.1';
 
             it(`responds to browser requests with HTTP/${expectedProtocol}`, async () => {
-                const mockRule = await server.get('/').thenReply(200);
+                const mockRule = await server.forGet('/').thenReply(200);
 
                 const response = await fetch(server.url);
 
@@ -85,7 +85,7 @@ nodeOnly(() => {
             afterEach(() => server.stop());
 
             it("can respond to direct HTTP/2 requests", async () => {
-                await server.get('/').thenReply(200, "HTTP2 response!");
+                await server.forGet('/').thenReply(200, "HTTP2 response!");
 
                 const client = http2.connect(server.url);
 
@@ -103,7 +103,7 @@ nodeOnly(() => {
             });
 
             it("can respond to proxied HTTP/2 requests", async () => {
-                await server.get('http://example.com/mocked-endpoint')
+                await server.forGet('http://example.com/mocked-endpoint')
                     .thenReply(200, "Proxied HTTP2 response!");
 
                 const client = http2.connect(server.url);
@@ -136,7 +136,7 @@ nodeOnly(() => {
             });
 
             it("can respond to HTTP1-proxied HTTP/2 requests", async () => {
-                await server.get('http://example.com/mocked-endpoint')
+                await server.forGet('http://example.com/mocked-endpoint')
                     .thenReply(200, "Proxied HTTP2 response!");
 
                 // Get an HTTP/1.1 tunnel:
@@ -182,9 +182,9 @@ nodeOnly(() => {
                 afterEach(() => remoteServer.stop());
 
                 it("can forward requests upstream", async () => {
-                    await remoteServer.get('/mocked-endpoint')
+                    await remoteServer.forGet('/mocked-endpoint')
                         .thenReply(200, "Remote HTTP2 response!");
-                    await server.get(remoteServer.urlFor('/mocked-endpoint'))
+                    await server.forGet(remoteServer.urlFor('/mocked-endpoint'))
                         .thenPassThrough();
 
                     const client = http2.connect(server.url);
@@ -217,9 +217,9 @@ nodeOnly(() => {
                 });
 
                 it("reformats forwarded request headers for HTTP/1.1", async () => {
-                    const mockedEndpoint = await remoteServer.get('/mocked-endpoint')
+                    const mockedEndpoint = await remoteServer.forGet('/mocked-endpoint')
                         .thenReply(200, "Remote HTTP2 response!");
-                    await server.get(remoteServer.urlFor('/mocked-endpoint'))
+                    await server.forGet(remoteServer.urlFor('/mocked-endpoint'))
                         .thenPassThrough();
 
                     const client = http2.connect(server.url);
@@ -259,12 +259,12 @@ nodeOnly(() => {
                 });
 
                 it("reformats forwarded response headers for HTTP/1.1", async () => {
-                    await remoteServer.get('/mocked-endpoint')
+                    await remoteServer.forGet('/mocked-endpoint')
                         .thenReply(200, "Remote HTTP2 response!", {
                             'HEADER-KEY': 'HEADER-VALUE',
                             'Connection': 'close'
                         });
-                    await server.get(remoteServer.urlFor('/mocked-endpoint'))
+                    await server.forGet(remoteServer.urlFor('/mocked-endpoint'))
                         .thenPassThrough();
 
                     const client = http2.connect(server.url);
@@ -315,7 +315,7 @@ nodeOnly(() => {
             afterEach(() => server.stop());
 
             it("can respond to direct HTTP/2 requests", async () => {
-                await server.get('/').thenReply(200, "HTTP2 response!");
+                await server.forGet('/').thenReply(200, "HTTP2 response!");
 
                 const client = http2.connect(server.url);
 
@@ -335,7 +335,7 @@ nodeOnly(() => {
             it("can respond to proxied HTTP/2 requests", async function() {
                 if (!semver.satisfies(process.version, H2_TLS_ON_TLS_SUPPORTED)) this.skip();
 
-                await server.get('https://example.com/mocked-endpoint')
+                await server.forGet('https://example.com/mocked-endpoint')
                     .thenReply(200, "Proxied HTTP2 response!");
 
                 const client = http2.connect(server.url);
@@ -376,7 +376,7 @@ nodeOnly(() => {
                 let seenRequestPromise = getDeferred<CompletedRequest>();
                 await server.on('request', (r) => seenRequestPromise.resolve(r));
 
-                await server.get('https://example.com/mocked-endpoint')
+                await server.forGet('https://example.com/mocked-endpoint')
                     .thenReply(200, "Proxied HTTP2 response!");
 
                 const client = http2.connect(server.url);
@@ -421,7 +421,7 @@ nodeOnly(() => {
             it("can respond to HTTP1-proxied HTTP/2 requests", async function() {
                 if (!semver.satisfies(process.version, H2_TLS_ON_TLS_SUPPORTED)) this.skip();
 
-                await server.get('https://example.com/mocked-endpoint')
+                await server.forGet('https://example.com/mocked-endpoint')
                     .thenReply(200, "Proxied HTTP2 response!");
 
                 // Get an HTTP/1.1 tunnel:
@@ -485,7 +485,7 @@ nodeOnly(() => {
                 it("can pass through end-to-end HTTP/2", async function () {
                     if (!semver.satisfies(process.version, H2_TLS_ON_TLS_SUPPORTED)) this.skip();
 
-                    await server.get(`https://localhost:${targetPort}/`)
+                    await server.forGet(`https://localhost:${targetPort}/`)
                         .thenPassThrough({ ignoreHostCertificateErrors: ['localhost'] });
 
                     const client = http2.connect(server.url);

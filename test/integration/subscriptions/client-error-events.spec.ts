@@ -246,7 +246,7 @@ describe("Client error subscription", () => {
             });
 
             it("should report HTTP/2 requests that start with a broken preface", async () => {
-                await server.get('/').thenReply(200, "HTTP2 response!");
+                await server.forGet('/').thenReply(200, "HTTP2 response!");
 
                 const errorPromise = getDeferred<ClientError>();
                 await server.on('client-error', (e) => errorPromise.resolve(e));
@@ -270,7 +270,7 @@ describe("Client error subscription", () => {
             });
 
             it("should report HTTP/2 requests that fail after the preface", async () => {
-                await server.get('/').thenReply(200, "HTTP2 response!");
+                await server.forGet('/').thenReply(200, "HTTP2 response!");
 
                 const errorPromise = getDeferred<ClientError>();
                 await server.on('client-error', (e) => errorPromise.resolve(e));
@@ -308,7 +308,7 @@ describe("Client error subscription", () => {
                 it("should report error responses from HTTP-proxied header overflows", async () => {
                     let errorPromise = getDeferred<ClientError>();
                     await server.on('client-error', (e) => errorPromise.resolve(e));
-                    await server.get("http://example.com/endpoint").thenReply(200, "Mock data");
+                    await server.forGet("http://example.com/endpoint").thenReply(200, "Mock data");
 
                     const response = await fetch("http://example.com/endpoint", <any> {
                         agent: new HttpsProxyAgent({
@@ -342,7 +342,7 @@ describe("Client error subscription", () => {
                 it("should report error responses from HTTPS-proxied header overflows", async () => {
                     let errorPromise = getDeferred<ClientError>();
                     await server.on('client-error', (e) => errorPromise.resolve(e));
-                    await server.get("https://example.com/endpoint").thenReply(200, "Mock data");
+                    await server.forGet("https://example.com/endpoint").thenReply(200, "Mock data");
 
                     const response = await fetch("https://example.com/endpoint", <any> {
                         agent: new HttpsProxyAgent({

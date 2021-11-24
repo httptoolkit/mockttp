@@ -13,15 +13,15 @@ browserOnly(() => {
     describe("Remote browser client with a standalone server", function () {
 
         describe("with a default configuration", () => {
-            let client = getLocal();
+            let mockServer = getLocal();
 
-            beforeEach(() => client.start());
-            afterEach(() => client.stop());
+            beforeEach(() => mockServer.start());
+            afterEach(() => mockServer.stop());
 
             it("should find the standalone server and successfully mock a request", async () => {
-                await client.get("/mocked-endpoint").thenReply(200, "mocked data");
+                await mockServer.forGet("/mocked-endpoint").thenReply(200, "mocked data");
 
-                const response = fetch(client.urlFor("/mocked-endpoint"));
+                const response = fetch(mockServer.urlFor("/mocked-endpoint"));
 
                 await expect(response).to.have.responseText("mocked data");
             });
@@ -35,31 +35,31 @@ nodeOnly(() => {
         describe("with no configuration", () => {
 
             const server = getStandalone();
-            const client = getRemote();
+            const remoteServer = getRemote();
 
             before(() => server.start());
             after(() => server.stop());
 
-            beforeEach(() => client.start());
-            afterEach(() => client.stop());
+            beforeEach(() => remoteServer.start());
+            afterEach(() => remoteServer.stop());
 
             it("should successfully mock a request as normal", async () => {
-                await client.get("/mocked-endpoint").thenReply(200, "mocked data");
+                await remoteServer.forGet("/mocked-endpoint").thenReply(200, "mocked data");
 
-                const response = await request.get(client.urlFor("/mocked-endpoint"));
+                const response = await request.get(remoteServer.urlFor("/mocked-endpoint"));
 
                 expect(response).to.equal("mocked data");
             });
 
             it("should successfully mock requests with live callbacks", async () => {
                 let count = 0;
-                await client.get("/mocked-endpoint").thenCallback((req) => {
+                await remoteServer.forGet("/mocked-endpoint").thenCallback((req) => {
                     return { statusCode: 200, body: `calls: ${++count}` }
                 });
 
-                const response1 = await request.get(client.urlFor("/mocked-endpoint"));
+                const response1 = await request.get(remoteServer.urlFor("/mocked-endpoint"));
                 expect(response1).to.equal("calls: 1");
-                const response2 = await request.get(client.urlFor("/mocked-endpoint"));
+                const response2 = await request.get(remoteServer.urlFor("/mocked-endpoint"));
                 expect(response2).to.equal("calls: 2");
             });
 
@@ -70,13 +70,13 @@ nodeOnly(() => {
                 afterEach(() => targetServer.stop());
 
                 it("should successfully rewrite requests with live callbacks", async () => {
-                    targetServer.post('/different-endpoint').thenCallback(async (req) => ({
+                    targetServer.forPost('/different-endpoint').thenCallback(async (req) => ({
                         statusCode: 200,
                         body: `response, body: ${await req.body.getText()}`,
                         headers: { 'my-header': 'real value' }
                     }));
 
-                    await client.get(targetServer.url).thenPassThrough({
+                    await remoteServer.forGet(targetServer.url).thenPassThrough({
                         beforeRequest: (req) => ({
                             method: 'POST',
                             url: req.url.replace(/\/$/, '/different-endpoint'),
@@ -92,7 +92,7 @@ nodeOnly(() => {
                     });
 
                     const response = await request.get(targetServer.url, {
-                        proxy: client.urlFor("/"),
+                        proxy: remoteServer.urlFor("/"),
                         resolveWithFullResponse: true
                     });
 
@@ -107,8 +107,8 @@ nodeOnly(() => {
                 });
 
                 it("should successfully inject responses with a beforeRequest callback", async () => {
-                    const targetEndpoint = await targetServer.post('/').thenReply(404);
-                    await client.get(targetServer.url).thenPassThrough({
+                    const targetEndpoint = await targetServer.forPost('/').thenReply(404);
+                    await remoteServer.forGet(targetServer.url).thenPassThrough({
                         beforeRequest: (() => ({
                             response: {
                                 statusCode: 200,
@@ -119,7 +119,7 @@ nodeOnly(() => {
                     });
 
                     const response = await request.get(targetServer.url, {
-                        proxy: client.url,
+                        proxy: remoteServer.url,
                         resolveWithFullResponse: true
                     });
 
@@ -136,7 +136,7 @@ nodeOnly(() => {
 
                 it("should successfully replace request & response bodies", async () => {
                     // Echo the incoming request
-                    await targetServer.anyRequest().thenCallback(async (req) => ({
+                    await targetServer.forAnyRequest().thenCallback(async (req) => ({
                         status: 200,
                         json: {
                             url: req.url,
@@ -146,14 +146,14 @@ nodeOnly(() => {
                         }
                     }));
 
-                    await client.post(targetServer.urlFor('/req')).thenPassThrough({
+                    await remoteServer.post(targetServer.urlFor('/req')).thenPassThrough({
                         transformRequest: {
                             replaceBody: 'request-body'
                         }
                     });
 
                     expect(await request.post(targetServer.urlFor('/req'), {
-                        proxy: client.urlFor("/"),
+                        proxy: remoteServer.urlFor("/"),
                         json: true
                     })).to.deep.equal({
                         url: `http://localhost:${targetServer.port}/req`,
@@ -167,14 +167,14 @@ nodeOnly(() => {
                         body: 'request-body'
                     });
 
-                    await client.post(targetServer.urlFor('/res')).thenPassThrough({
+                    await remoteServer.post(targetServer.urlFor('/res')).thenPassThrough({
                         transformResponse: {
                             replaceBody: 'replaced-response-body'
                         }
                     });
 
                     expect(await request.post(targetServer.urlFor('/res'), {
-                        proxy: client.urlFor("/"),
+                        proxy: remoteServer.urlFor("/"),
                         json: true
                     })).to.equal(
                         'replaced-response-body'
@@ -183,7 +183,7 @@ nodeOnly(() => {
 
                 it("should successfully update request & response body JSON", async () => {
                     // Echo the incoming request
-                    await targetServer.anyRequest().thenCallback(async (req) => ({
+                    await targetServer.forAnyRequest().thenCallback(async (req) => ({
                         status: 200,
                         json: {
                             url: req.url,
@@ -193,7 +193,7 @@ nodeOnly(() => {
                         }
                     }));
 
-                    await client.post(targetServer.urlFor('/req')).thenPassThrough({
+                    await remoteServer.post(targetServer.urlFor('/req')).thenPassThrough({
                         transformRequest: {
                             updateHeaders: {
                                 'custom-header': undefined, // Remove
@@ -207,7 +207,7 @@ nodeOnly(() => {
                     });
 
                     expect(await request.post(targetServer.urlFor('/req'), {
-                        proxy: client.urlFor("/"),
+                        proxy: remoteServer.urlFor("/"),
                         json: true,
                         headers: {
                             'custom-header': 'a custom value'
@@ -232,7 +232,7 @@ nodeOnly(() => {
                         })
                     });
 
-                    await client.post(targetServer.urlFor('/res')).thenPassThrough({
+                    await remoteServer.post(targetServer.urlFor('/res')).thenPassThrough({
                         transformResponse: {
                             updateHeaders: {
                                 'custom-header': undefined, // Remove
@@ -246,7 +246,7 @@ nodeOnly(() => {
                     });
 
                     const response = await request.post(targetServer.urlFor('/res'), {
-                        proxy: client.urlFor("/"),
+                        proxy: remoteServer.urlFor("/"),
                         json: true,
                         resolveWithFullResponse: true
                     });
@@ -267,18 +267,18 @@ nodeOnly(() => {
 
                 it("should support proxy configuration specified by a callback", async () => {
                     // Remote server sends fixed response:
-                    const targetEndpoint = await targetServer.anyRequest().thenReply(200, "Remote server says hi!");
+                    const targetEndpoint = await targetServer.forAnyRequest().thenReply(200, "Remote server says hi!");
 
                     // Mockttp forwards requests via our intermediate proxy (configured with a remote client + callback)
-                    await client.anyRequest().thenPassThrough({
+                    await remoteServer.anyRequest().thenPassThrough({
                         proxyConfig: ({ hostname }) => {
                             expect(hostname).to.equal('localhost');
                             return { proxyUrl: targetServer.url }
                         }
                     });
 
-                    const response = await request.get(client.urlFor("/test-url"), {
-                        proxy: client.url
+                    const response = await request.get(remoteServer.urlFor("/test-url"), {
+                        proxy: remoteServer.url
                     });
 
                     // We get a successful response
@@ -289,13 +289,13 @@ nodeOnly(() => {
 
                 it("should support proxy configuration specified by a proxy config array", async () => {
                     // Remote server sends fixed response:
-                    const targetEndpoint = await targetServer.anyRequest().thenReply(200, "Remote server says hi!");
+                    const targetEndpoint = await targetServer.forAnyRequest().thenReply(200, "Remote server says hi!");
 
                     let firstCallbackCalled = false;
                     let secondCallbackCalled = false;
 
                     // Mockttp forwards requests via our intermediate proxy (configured with a remote client + callback)
-                    await client.anyRequest().thenPassThrough({
+                    await remoteServer.anyRequest().thenPassThrough({
                         proxyConfig: [
                             ({ hostname }) => {
                                 expect(hostname).to.equal('localhost');
@@ -314,8 +314,8 @@ nodeOnly(() => {
                         ]
                     });
 
-                    const response = await request.get(client.urlFor("/test-url"), {
-                        proxy: client.url
+                    const response = await request.get(remoteServer.urlFor("/test-url"), {
+                        proxy: remoteServer.url
                     });
 
                     // We get a successful response
@@ -327,15 +327,15 @@ nodeOnly(() => {
 
             it("should successfully mock requests with live streams", async () => {
                 let stream1 = new PassThrough();
-                await client.get('/stream').thenStream(200, stream1);
+                await remoteServer.forGet('/stream').thenStream(200, stream1);
                 let stream2 = new PassThrough();
-                await client.get('/stream').thenStream(200, stream2);
+                await remoteServer.forGet('/stream').thenStream(200, stream2);
 
                 stream1.end('Hello');
                 stream2.end('World');
 
-                let response1 = await fetch(client.urlFor('/stream'));
-                let response2 = await fetch(client.urlFor('/stream'));
+                let response1 = await fetch(remoteServer.urlFor('/stream'));
+                let response2 = await fetch(remoteServer.urlFor('/stream'));
 
                 await expect(response1).to.have.status(200);
                 await expect(response1).to.have.responseText('Hello');
@@ -344,8 +344,8 @@ nodeOnly(() => {
             });
 
             it("should let you verify requests as normal", async () => {
-                const endpointMock = await client.get("/mocked-endpoint").thenReply(200, "mocked data");
-                await request.get(client.urlFor("/mocked-endpoint"));
+                const endpointMock = await remoteServer.forGet("/mocked-endpoint").thenReply(200, "mocked data");
+                await request.get(remoteServer.urlFor("/mocked-endpoint"));
 
                 const seenRequests = await endpointMock.getSeenRequests();
                 expect(seenRequests.length).to.equal(1);
@@ -354,15 +354,15 @@ nodeOnly(() => {
                 expect(seenRequests[0].method).to.equal('GET');
                 expect(seenRequests[0].httpVersion).to.equal('1.1');
                 expect(seenRequests[0].url).to.equal(
-                    client.urlFor("/mocked-endpoint")
+                    remoteServer.urlFor("/mocked-endpoint")
                 );
             });
 
             it("should allow resetting the mock server configured responses", async () => {
-                await client.get("/mocked-endpoint").thenReply(200, "mocked data");
+                await remoteServer.forGet("/mocked-endpoint").thenReply(200, "mocked data");
 
-                await client.reset();
-                const result = await request.get(client.urlFor("/mocked-endpoint")).catch((e) => e);
+                await remoteServer.reset();
+                const result = await request.get(remoteServer.urlFor("/mocked-endpoint")).catch((e) => e);
 
                 expect(result).to.be.instanceof(Error);
                 expect(result.statusCode).to.equal(503);
@@ -370,10 +370,10 @@ nodeOnly(() => {
             });
 
             it("should allow resetting the mock server recorded requests", async () => {
-                const endpointMock = await client.get("/mocked-endpoint").thenReply(200, "mocked data");
-                await request.get(client.urlFor("/mocked-endpoint"));
+                const endpointMock = await remoteServer.forGet("/mocked-endpoint").thenReply(200, "mocked data");
+                await request.get(remoteServer.urlFor("/mocked-endpoint"));
 
-                await client.reset();
+                await remoteServer.reset();
                 const result = await endpointMock.getSeenRequests().catch((e) => e);
 
                 expect(result).to.be.instanceof(Error);
@@ -381,12 +381,12 @@ nodeOnly(() => {
             });
 
             it("should reset the server if a client leaves and rejoins", async () => {
-                await client.get("/mocked-endpoint").thenReply(200, "mocked data");
+                await remoteServer.forGet("/mocked-endpoint").thenReply(200, "mocked data");
 
-                const port = client.port!;
-                await client.stop();
-                await client.start(port);
-                const result = await request.get(client.urlFor("/mocked-endpoint")).catch((e) => e);
+                const port = remoteServer.port!;
+                await remoteServer.stop();
+                await remoteServer.start(port);
+                const result = await request.get(remoteServer.urlFor("/mocked-endpoint")).catch((e) => e);
 
                 expect(result).to.be.instanceof(Error);
                 expect(result.statusCode).to.equal(503);
@@ -394,18 +394,18 @@ nodeOnly(() => {
             });
 
             it("should support explicitly resetting all servers", async () => {
-                await client.get("/mocked-endpoint").thenReply(200, "mocked data");
+                await remoteServer.forGet("/mocked-endpoint").thenReply(200, "mocked data");
 
                 await resetStandalone();
 
-                const result = await request.get(client.urlFor("/mocked-endpoint")).catch((e) => e);
+                const result = await request.get(remoteServer.urlFor("/mocked-endpoint")).catch((e) => e);
 
                 expect(result).to.be.instanceof(Error);
                 expect(result.cause.code).to.equal('ECONNREFUSED');
             });
 
             it("should reject multiple clients trying to control the same port", async () => {
-                const port = client.port!;
+                const port = remoteServer.port!;
 
                 await expect(getRemote().start(port))
                     .to.eventually.be.rejectedWith(`Cannot start: mock server is already running on port ${port}`);
@@ -774,7 +774,7 @@ nodeOnly(() => {
             it("can handle unexpected stream disconnections", async () => {
                 await client1.start();
 
-                await client1.get("/mocked-endpoint").thenCallback(() => {
+                await client1.forGet("/mocked-endpoint").thenCallback(() => {
                     return { statusCode: 200, body: 'Mock response' }
                 });
 

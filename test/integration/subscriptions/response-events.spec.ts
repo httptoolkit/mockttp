@@ -49,7 +49,7 @@ describe("Response subscriptions", () => {
         afterEach(() => server.stop());
 
         it("should notify with response details & body when a response is completed", async () => {
-            server.get('/mocked-endpoint').thenReply(200, 'Mock response', {
+            server.forGet('/mocked-endpoint').thenReply(200, 'Mock response', {
                 'x-extra-header': 'present'
             });
 
@@ -77,7 +77,7 @@ describe("Response subscriptions", () => {
         it("should expose ungzipped bodies as .text", async () => {
             const body = zlib.gzipSync('Mock response');
 
-            server.get('/mocked-endpoint').thenReply(200, body, {
+            server.forGet('/mocked-endpoint').thenReply(200, body, {
                 'content-encoding': 'gzip'
             });
 
@@ -94,7 +94,7 @@ describe("Response subscriptions", () => {
         it("should expose un-deflated bodies as .text", async () => {
             const body = zlib.deflateSync('Mock response');
 
-            server.get('/mocked-endpoint').thenReply(200, body, {
+            server.forGet('/mocked-endpoint').thenReply(200, body, {
                 'content-encoding': 'deflate'
             });
 
@@ -111,7 +111,7 @@ describe("Response subscriptions", () => {
         it("should expose un-raw-deflated bodies as .text", async () => {
             const body = zlib.deflateRawSync('Mock response');
 
-            server.get('/mocked-endpoint').thenReply(200, body, {
+            server.forGet('/mocked-endpoint').thenReply(200, body, {
                 'content-encoding': 'deflate'
             });
 
@@ -126,7 +126,7 @@ describe("Response subscriptions", () => {
         });
 
         it("should include an id that matches the request event", async () => {
-            server.get('/mocked-endpoint').thenReply(200);
+            server.forGet('/mocked-endpoint').thenReply(200);
 
             let seenRequestPromise = getDeferred<CompletedRequest>();
             let seenResponsePromise = getDeferred<CompletedResponse>();
@@ -175,7 +175,7 @@ describe("Response subscriptions", () => {
         afterEach(() => server.stop());
 
         it("should include tiny bodies in response events", async () => {
-            server.get('/mocked-endpoint').thenReply(200, 'TinyResp', {
+            server.forGet('/mocked-endpoint').thenReply(200, 'TinyResp', {
                 'x-extra-header': 'present'
             });
 
@@ -190,7 +190,7 @@ describe("Response subscriptions", () => {
         });
 
         it("should not include the body in the response event", async () => {
-            server.get('/mocked-endpoint').thenReply(200, 'Large response body', {
+            server.forGet('/mocked-endpoint').thenReply(200, 'Large response body', {
                 'x-extra-header': 'present'
             });
 
@@ -219,7 +219,7 @@ describe("Response subscriptions", () => {
         afterEach(() => server.stop());
 
         it("should notify with response details & body when a response is completed", async () => {
-            server.get('/mocked-endpoint').thenReply(200, 'Mock response', {
+            server.forGet('/mocked-endpoint').thenReply(200, 'Mock response', {
                 'x-extra-header': 'present'
             });
 
@@ -256,7 +256,7 @@ describe("Abort subscriptions", () => {
     it("should not be sent for successful requests", async () => {
         let seenAbortPromise = getDeferred<InitiatedRequest>();
         await server.on('abort', (r) => seenAbortPromise.resolve(r));
-        await server.get('/mocked-endpoint').thenReply(200);
+        await server.forGet('/mocked-endpoint').thenReply(200);
 
         await fetch(server.urlFor("/mocked-endpoint"));
 
@@ -273,7 +273,7 @@ describe("Abort subscriptions", () => {
         let seenAbortPromise = getDeferred<InitiatedRequest>();
         await server.on('abort', (r) => seenAbortPromise.resolve(r));
 
-        await server.post('/mocked-endpoint').thenCallback(() => delay(500).then(() => ({})));
+        await server.forPost('/mocked-endpoint').thenCallback(() => delay(500).then(() => ({})));
 
         let abortable = makeAbortableRequest(server, '/mocked-endpoint');
         nodeOnly(() => (abortable as http.ClientRequest).end('request body'));
@@ -293,7 +293,7 @@ describe("Abort subscriptions", () => {
         let seenAbortPromise = getDeferred<InitiatedRequest>();
         await server.on('abort', (r) => seenAbortPromise.resolve(r));
 
-        await server.post('/mocked-endpoint').thenTimeout();
+        await server.forPost('/mocked-endpoint').thenTimeout();
 
         let abortable = makeAbortableRequest(server, '/mocked-endpoint');
         nodeOnly(() => (abortable as http.ClientRequest).end('request body'));
@@ -312,7 +312,7 @@ describe("Abort subscriptions", () => {
         let seenAbortPromise = getDeferred<InitiatedRequest>();
         await server.on('abort', (r) => seenAbortPromise.resolve(r));
 
-        await server.get('/mocked-endpoint').thenCloseConnection();
+        await server.forGet('/mocked-endpoint').thenCloseConnection();
 
         fetch(server.urlFor('/mocked-endpoint')).catch(() => {});
 
@@ -328,7 +328,7 @@ describe("Abort subscriptions", () => {
         let seenAbortPromise = getDeferred<InitiatedRequest>();
         await server.on('abort', (r) => seenAbortPromise.resolve(r));
 
-        await server.get('/mocked-endpoint').thenCallback(() => 'close');
+        await server.forGet('/mocked-endpoint').thenCallback(() => 'close');
 
         fetch(server.urlFor('/mocked-endpoint')).catch(() => {});
 
@@ -344,7 +344,7 @@ describe("Abort subscriptions", () => {
         let seenAbortPromise = getDeferred<InitiatedRequest>();
         await server.on('abort', (r) => seenAbortPromise.resolve(r));
 
-        await server.get('/mocked-endpoint').thenPassThrough({
+        await server.forGet('/mocked-endpoint').thenPassThrough({
             beforeRequest: () => ({
                 response: 'close'
             })
@@ -364,7 +364,7 @@ describe("Abort subscriptions", () => {
         let seenAbortPromise = getDeferred<InitiatedRequest>();
         await server.on('abort', (r) => seenAbortPromise.resolve(r));
 
-        await server.get('/mocked-endpoint').thenPassThrough({
+        await server.forGet('/mocked-endpoint').thenPassThrough({
             forwarding: { targetHost: 'example.com' },
             beforeResponse: () => 'close'
         });
@@ -419,7 +419,7 @@ describe("Abort subscriptions", () => {
                 let seenResponsePromise = getDeferred<CompletedResponse>();
                 await server.on('response', (r) => seenResponsePromise.resolve(r));
 
-                await server.anyRequest().thenForwardTo(`http://localhost:8901`);
+                await server.forAnyRequest().thenForwardTo(`http://localhost:8901`);
 
                 fetch(server.urlFor("/mocked-endpoint")).catch(() => {});
 
@@ -438,7 +438,7 @@ describe("Abort subscriptions", () => {
                 let seenResponsePromise = getDeferred<CompletedResponse>();
                 await server.on('response', (r) => seenResponsePromise.resolve(r));
 
-                await server.anyRequest().thenPassThrough({
+                await server.forAnyRequest().thenPassThrough({
                     proxyConfig: { proxyUrl: `http://localhost:8901` }
                 });
 
@@ -461,7 +461,7 @@ describe("Abort subscriptions", () => {
         let seenResponsePromise = getDeferred<CompletedResponse>();
         await server.on('response', (r) => seenResponsePromise.resolve(r));
 
-        await server.post('/mocked-endpoint').thenCallback((req) => delay(500).then(() => ({})));
+        await server.forPost('/mocked-endpoint').thenCallback((req) => delay(500).then(() => ({})));
 
         let abortable = makeAbortableRequest(server, '/mocked-endpoint');
         nodeOnly(() => (abortable as http.ClientRequest).end('request body'));
@@ -482,7 +482,7 @@ describe("Abort subscriptions", () => {
         let seenAbortPromise = getDeferred<InitiatedRequest>();
         await server.on('abort', (r) => seenAbortPromise.resolve(r));
 
-        await server.post('/mocked-endpoint').thenCallback(() => delay(500).then(() => ({})));
+        await server.forPost('/mocked-endpoint').thenCallback(() => delay(500).then(() => ({})));
 
         let abortable = makeAbortableRequest(server, '/mocked-endpoint');
         nodeOnly(() => (abortable as http.ClientRequest).end('request body'));

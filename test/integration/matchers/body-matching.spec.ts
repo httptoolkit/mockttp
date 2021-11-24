@@ -13,7 +13,7 @@ describe("Body matching", function () {
     describe("for exact strings", () => {
 
         beforeEach(async () => {
-            await server.post("/")
+            await server.forPost("/")
                 .withBody('should-match')
                 .thenReply(200, 'matched');
         });
@@ -59,7 +59,7 @@ describe("Body matching", function () {
     describe("for regexes", () => {
 
         beforeEach(async () => {
-            await server.post("/")
+            await server.forPost("/")
                 .withBody(/"username": "test"/gi)
                 .thenReply(200, 'matched');
         });
@@ -88,7 +88,7 @@ describe("Body matching", function () {
     describe("for included strings", () => {
 
         beforeEach(async () => {
-            await server.post("/")
+            await server.forPost("/")
                 .withBodyIncluding('should-match')
                 .thenReply(200, 'matched');
         });
@@ -146,7 +146,7 @@ describe("Body matching", function () {
     describe("for exact JSON", () => {
 
         beforeEach(async () => {
-            await server.post("/")
+            await server.forPost("/")
                 .withJsonBody({ "username": "test" })
                 .thenReply(200, 'matched');
         });
@@ -183,7 +183,7 @@ describe("Body matching", function () {
     describe("for fuzzy JSON", () => {
 
         beforeEach(async () => {
-            await server.post("/")
+            await server.forPost("/")
                 .withJsonBodyIncluding({ "username": "test", "values": [1] })
                 .thenReply(200, 'matched');
         });
@@ -229,8 +229,8 @@ describe("Body matching", function () {
             this.timeout(500);
 
             it("should short-circuit, not waiting, if another matcher fails", async () => {
-                await server.put().thenReply(201, "Created");
-                await server.post().withBody('should-match').thenReply(400, 'Body matched');
+                await server.forPut().thenReply(201, "Created");
+                await server.forPost().withBody('should-match').thenReply(400, 'Body matched');
 
                 const neverEndingStream = new PassThrough();
                 neverEndingStream.write('some data\n');
@@ -247,8 +247,8 @@ describe("Body matching", function () {
             });
 
             it("should short-circuit, not waiting, if an incomplete matcher matches first", async () => {
-                await server.post().thenReply(201, "Created");
-                await server.post().withBody('should-match').thenReply(400, 'Body matched');
+                await server.forPost().thenReply(201, "Created");
+                await server.forPost().withBody('should-match').thenReply(400, 'Body matched');
 
                 const neverEndingStream = new PassThrough();
                 neverEndingStream.write('some data\n');
@@ -265,8 +265,8 @@ describe("Body matching", function () {
             });
 
             it("should wait, if it really might be the best match", async () => {
-                await server.post().withBody('should-match').thenReply(400, 'Body matched');
-                await server.post().thenReply(201, "Created");
+                await server.forPost().withBody('should-match').thenReply(400, 'Body matched');
+                await server.forPost().thenReply(201, "Created");
 
                 const neverEndingStream = new PassThrough();
                 neverEndingStream.write('some data\n');

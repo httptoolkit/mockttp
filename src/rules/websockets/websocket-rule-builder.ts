@@ -14,7 +14,7 @@ import { BaseRuleBuilder } from "../base-rule-builder";
  * @class WebSocketRuleBuilder
 
  * A builder for defining websocket mock rules. Create one using
- * `.websocket(path)` on a Mockttp instance, then call whatever
+ * `.forAnyWebSocket(path)` on a Mockttp instance, then call whatever
  * methods you'd like here to define more precise matching behaviour,
  * control how the connection is handled, and how many times this
  * rule should be applied.

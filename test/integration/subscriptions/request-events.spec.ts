@@ -196,7 +196,7 @@ describe("Request subscriptions", () => {
         it("should include the matched rule id", async () => {
             let seenRequestPromise = getDeferred<CompletedRequest>();
             await server.on('request', (r) => seenRequestPromise.resolve(r));
-            let endpoint = await server.get('/').thenReply(200);
+            let endpoint = await server.forGet('/').thenReply(200);
 
             fetch(server.urlFor("/"));
 

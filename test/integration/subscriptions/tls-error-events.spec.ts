@@ -129,7 +129,7 @@ describe("TLS error subscriptions", () => {
         it("should be sent for requests from clients that reject the certificate for the upstream server", async () => {
             let seenTlsErrorPromise = getDeferred<TlsRequest>();
             await badServer.on('tls-client-error', (r) => seenTlsErrorPromise.resolve(r));
-            await badServer.anyRequest().thenPassThrough();
+            await badServer.forAnyRequest().thenPassThrough();
 
             await expect(
                 fetch(goodServer.urlFor("/"), <any> {

@@ -8,7 +8,7 @@ describe("Form data matching", function () {
     afterEach(() => server.stop());
 
     beforeEach(async () => {
-        await server.post("/")
+        await server.forPost("/")
               .withForm({ shouldMatch: "yes" })
               .thenReply(200, "matched");
     });

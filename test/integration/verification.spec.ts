@@ -20,14 +20,14 @@ describe("HTTP request spying", function () {
         afterEach(() => server.stop());
 
         it("should show no request details initially", async () => {
-            const endpointMock = await server.get("/mocked-endpoint").thenReply(200, "mocked data");
+            const endpointMock = await server.forGet("/mocked-endpoint").thenReply(200, "mocked data");
 
             const seenRequests = await endpointMock.getSeenRequests();
             expect(seenRequests).to.deep.equal([]);
         });
 
         it("should let you spy on the urls of requests that happened", async () => {
-            const endpointMock = await server.get("/mocked-endpoint").thenReply(200, "mocked data");
+            const endpointMock = await server.forGet("/mocked-endpoint").thenReply(200, "mocked data");
 
             await fetch(server.urlFor("/mocked-endpoint"));
 
@@ -37,7 +37,7 @@ describe("HTTP request spying", function () {
         });
 
         it("should let you spy on the bodies of requests that happened", async () => {
-            const endpointMock = await server.post("/mocked-endpoint")
+            const endpointMock = await server.forPost("/mocked-endpoint")
             .withForm({ a: '1', b: '2' })
             .thenReply(200, "mocked data");
 
@@ -58,7 +58,7 @@ describe("HTTP request spying", function () {
         });
 
         it("should let you spy on incoming requests even if handling throws an error", async () => {
-            const endpointMock = await server.get("/mocked-endpoint").thenCloseConnection();
+            const endpointMock = await server.forGet("/mocked-endpoint").thenCloseConnection();
 
             await fetch(server.urlFor("/mocked-endpoint")).catch(() => {});
 
@@ -70,7 +70,7 @@ describe("HTTP request spying", function () {
         it("should let you spy on incoming requests once the response is aborted", async function () {
             if (!semver.satisfies(process.version, HTTP_ABORTSIGNAL_SUPPORTED)) this.skip();
 
-            const endpointMock = await server.get("/mocked-endpoint").thenTimeout();
+            const endpointMock = await server.forGet("/mocked-endpoint").thenTimeout();
 
             const abortController = new AbortController();
             fetch(server.urlFor("/mocked-endpoint"), {
@@ -94,7 +94,7 @@ describe("HTTP request spying", function () {
         });
 
         it("should return immutable fixed view of the mock's seen requests so far", async () => {
-            const endpointMock = await server.get("/mocked-endpoint").thenReply(200, "mocked data");
+            const endpointMock = await server.forGet("/mocked-endpoint").thenReply(200, "mocked data");
 
             const seenRequests = await endpointMock.getSeenRequests();
 
@@ -113,7 +113,7 @@ describe("HTTP request spying", function () {
         afterEach(() => server.stop());
 
         it("should not record the requests that have been sent", async () => {
-            const endpointMock = await server.get("/mocked-endpoint").thenReply(200, "mocked data");
+            const endpointMock = await server.forGet("/mocked-endpoint").thenReply(200, "mocked data");
 
             await fetch(server.urlFor("/mocked-endpoint"));
 

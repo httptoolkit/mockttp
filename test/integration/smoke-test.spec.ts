@@ -9,7 +9,7 @@ describe("Basic HTTP mocking", function () {
     afterEach(() => server.stop());
 
     it("should mock simple matching GETs", async () => {
-        await server.get("/mocked-endpoint").thenReply(200, "mocked data");
+        await server.forGet("/mocked-endpoint").thenReply(200, "mocked data");
 
         await expect(
             fetch(server.urlFor("/mocked-endpoint"))
@@ -17,7 +17,7 @@ describe("Basic HTTP mocking", function () {
     });
 
     it("should mock request via callback", async () => {
-        await server.post("/callback-endpoint").thenCallback(async (req) => {
+        await server.forPost("/callback-endpoint").thenCallback(async (req) => {
             return { statusCode: 200, body: await req.body.getText() };
         });
 
@@ -30,7 +30,7 @@ describe("Basic HTTP mocking", function () {
     });
 
     it("should reject non-matching requests", async () => {
-        await server.get("/other-endpoint").thenReply(200, "mocked data");
+        await server.forGet("/other-endpoint").thenReply(200, "mocked data");
 
         let result = fetch(server.urlFor("/not-mocked-endpoint"));
 
@@ -40,7 +40,7 @@ describe("Basic HTTP mocking", function () {
 
     nodeOnly(() => {
         it("can proxy requests to made to any other hosts", async () => {
-            await server.get("http://google.com").thenReply(200, "Not really google");
+            await server.forGet("http://google.com").thenReply(200, "Not really google");
 
             let response = fetch("http://google.com", <{}> {
                 agent: new HttpProxyAgent(server.url)

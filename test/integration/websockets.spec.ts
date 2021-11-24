@@ -29,7 +29,7 @@ browserOnly(() => {
 
         it("can be defined and passed through from the browser", async function () {
             // Forward to WS echo fixture, see websocket-test-server.js
-            await mockServer.anyWebSocket().thenForwardTo('ws://localhost:8694');
+            await mockServer.forAnyWebSocket().thenForwardTo('ws://localhost:8694');
 
             const ws = new WebSocket(mockServer.url.replace('http', 'ws'));
 
@@ -419,7 +419,7 @@ nodeOnly(() => {
             });
 
             it("can be passed through untouched", async () => {
-                mockServer.anyWebSocket().thenPassThrough();
+                mockServer.forAnyWebSocket().thenPassThrough();
 
                 const ws = new WebSocket(`ws://localhost:${REAL_WS_SERVER_PORT}`, {
                     agent: new HttpProxyAgent(`http://localhost:${mockServer.port}`)
@@ -450,7 +450,7 @@ nodeOnly(() => {
                 afterEach(() => intermediateProxy.stop());
 
                 it("can be passed through via an upstream proxy", async () => {
-                    await mockServer.anyWebSocket().thenPassThrough({
+                    await mockServer.forAnyWebSocket().thenPassThrough({
                         proxyConfig: {
                             proxyUrl: intermediateProxy.url
                         }
@@ -475,7 +475,7 @@ nodeOnly(() => {
                 });
 
                 it("can skip the upstream proxy when noProxy is used", async () => {
-                    await mockServer.anyWebSocket().thenPassThrough({
+                    await mockServer.forAnyWebSocket().thenPassThrough({
                         proxyConfig: {
                             proxyUrl: intermediateProxy.url,
                             noProxy: ['localhost']
@@ -506,7 +506,7 @@ nodeOnly(() => {
             it("can be passed through with custom DNS resolution", async () => {
                 fixedDnsResponse = '127.0.0.1'; // Send all requests to localhost
 
-                mockServer.anyWebSocket().thenPassThrough({
+                mockServer.forAnyWebSocket().thenPassThrough({
                     lookupOptions: {
                         servers: [`127.0.0.1:${(dnsServer!.address() as any).port}`]
                     }
@@ -529,7 +529,7 @@ nodeOnly(() => {
             });
 
             it("can be redirected elsewhere", async () => {
-                mockServer.anyWebSocket().thenForwardTo(`localhost:${REAL_WS_SERVER_PORT}`);
+                mockServer.forAnyWebSocket().thenForwardTo(`localhost:${REAL_WS_SERVER_PORT}`);
 
                 // Ask for 999 (doesn't exist), and the above will forward you
                 // invisibly to our real WS server elsewhere instead.
@@ -549,7 +549,7 @@ nodeOnly(() => {
             });
 
             it("can be manually blocked", async () => {
-                mockServer.anyWebSocket().thenCloseConnection();
+                mockServer.forAnyWebSocket().thenCloseConnection();
 
                 const ws = new WebSocket(`ws://localhost:${REAL_WS_SERVER_PORT}`, {
                     agent: new HttpProxyAgent(`http://localhost:${mockServer.port}`)
@@ -566,7 +566,7 @@ nodeOnly(() => {
             });
 
             it("can be forced to time out", async () => {
-                mockServer.anyWebSocket().thenTimeout();
+                mockServer.forAnyWebSocket().thenTimeout();
 
                 const ws = new WebSocket(`ws://localhost:${REAL_WS_SERVER_PORT}`, {
                     agent: new HttpProxyAgent(`http://localhost:${mockServer.port}`)

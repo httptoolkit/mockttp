@@ -13,11 +13,11 @@ describe("Mockttp explanation messages", function () {
     afterEach(() => server.stop());
 
     it("should explain fully explain the completion rules used", async () => {
-        await server.get("/endpoint").once().thenReply(200, "1");
-        await server.get("/endpoint").twice().thenReply(200, "2/3");
-        await server.get("/endpoint").thrice().thenReply(200, "4/5/6");
-        await server.get("/endpoint").times(4).thenReply(200, "7/8/9/10");
-        await server.get("/endpoint").always().thenReply(200, "forever");
+        await server.forGet("/endpoint").once().thenReply(200, "1");
+        await server.forGet("/endpoint").twice().thenReply(200, "2/3");
+        await server.forGet("/endpoint").thrice().thenReply(200, "4/5/6");
+        await server.forGet("/endpoint").times(4).thenReply(200, "7/8/9/10");
+        await server.forGet("/endpoint").always().thenReply(200, "forever");
 
         let response = await fetch(server.urlFor("/non-existent-endpoint"));
         let responseText = await response.text();
@@ -32,11 +32,11 @@ Match requests making GETs for /endpoint, and then respond with status 200 and b
     });
 
     it("should explain whether completion rules are completed, or still waiting", async () => {
-        await server.get("/endpoint").once().thenReply(200, "1");
-        await server.get("/endpoint").twice().thenReply(200, "2/3");
-        await server.get("/endpoint").thrice().thenReply(200, "4/5/6");
-        await server.get("/endpoint").times(4).thenReply(200, "7/8/9/10");
-        await server.get("/endpoint").always().thenReply(200, "forever");
+        await server.forGet("/endpoint").once().thenReply(200, "1");
+        await server.forGet("/endpoint").twice().thenReply(200, "2/3");
+        await server.forGet("/endpoint").thrice().thenReply(200, "4/5/6");
+        await server.forGet("/endpoint").times(4).thenReply(200, "7/8/9/10");
+        await server.forGet("/endpoint").always().thenReply(200, "forever");
 
         await Promise.all(
             _.range(8).map(() => fetch(server.urlFor("/endpoint")))
@@ -55,13 +55,13 @@ Match requests making GETs for /endpoint, and then respond with status 200 and b
     });
 
     it("should explain more complex rules", async () => {
-        await server.anyRequest().withHeaders({ 'h': 'v' }).thenStream(200, new Readable());
-        await server.get(/\/endpointA\/\d+/).once().thenReply(200, "nice request!");
-        await server.post("/endpointB").withForm({ key: 'value' }).thenReply(500);
-        await server.post("/endpointC").withJsonBody({ key: 'value' }).thenReply(500);
-        await server.put("/endpointD").withQuery({ a: 1 }).always().thenCloseConnection();
-        await server.put("/endpointE").forHost('abc.com').withExactQuery('?').thenTimeout();
-        await server.anyWebSocket().thenForwardTo("google.com");
+        await server.forAnyRequest().withHeaders({ 'h': 'v' }).thenStream(200, new Readable());
+        await server.forGet(/\/endpointA\/\d+/).once().thenReply(200, "nice request!");
+        await server.forPost("/endpointB").withForm({ key: 'value' }).thenReply(500);
+        await server.forPost("/endpointC").withJsonBody({ key: 'value' }).thenReply(500);
+        await server.forPut("/endpointD").withQuery({ a: 1 }).always().thenCloseConnection();
+        await server.forPut("/endpointE").forHost('abc.com').withExactQuery('?').thenTimeout();
+        await server.forAnyWebSocket().thenForwardTo("google.com");
 
         await fetch(server.urlFor("/endpointA/123"));
         let response = await fetch(server.urlFor("/non-existent-endpoint"));
@@ -81,8 +81,8 @@ Match websockets for anything, and then forward the websocket to google.com.
     });
 
     it("should explain callback handlers", async () => {
-        await server.post("/endpointA").thenCallback(() => ({}));
-        await server.post("/endpointB").thenCallback(function handleRequest() { return {}; });
+        await server.forPost("/endpointA").thenCallback(() => ({}));
+        await server.forPost("/endpointB").thenCallback(function handleRequest() { return {}; });
 
         let response = await fetch(server.urlFor("/non-existent-endpoint"));
         let text = await response.text();
@@ -131,7 +131,7 @@ Match requests making POSTs for /endpointB, and then respond using provided call
         let text = await response.text();
 
         expect(text).to.include(`You can fix this by adding a rule to match this request, for example:
-mockServer.get("/endpoint").thenReply(200, "your response");`);
+mockServer.forGet("/endpoint").thenReply(200, "your response");`);
     });
 
     it("should provide suggestions for new POST rules you could use", async () => {
@@ -149,11 +149,11 @@ mockServer.get("/endpoint").thenReply(200, "your response");`);
         let text = await response.text();
 
         expect(text).to.include(`You can fix this by adding a rule to match this request, for example:
-mockServer.post("/endpoint").withForm({"shouldMatch":"yes"}).thenReply(200, "your response");`);
+mockServer.forPost("/endpoint").withForm({"shouldMatch":"yes"}).thenReply(200, "your response");`);
     });
 
     it("should explain why passthrough fails for non-proxy requests", async () => {
-        await server.get("/endpoint").thenPassThrough();
+        await server.forGet("/endpoint").thenPassThrough();
 
         let result = await fetch(server.urlFor("/endpoint"));
 
@@ -169,8 +169,8 @@ as a proxy, instead of making requests to it directly`);
     });
 
     it("should be available when inspecting endpoints", async () => {
-        await server.get("/endpoint").twice().thenReply(200, "first response");
-        await server.get("/endpoint").thenReply(200, "second response");
+        await server.forGet("/endpoint").twice().thenReply(200, "first response");
+        await server.forGet("/endpoint").thenReply(200, "second response");
 
         await fetch(server.urlFor("/endpoint"));
 

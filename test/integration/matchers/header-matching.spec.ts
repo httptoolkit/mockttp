@@ -8,7 +8,7 @@ describe("Header matching", function () {
     afterEach(() => server.stop());
 
     beforeEach(() => {
-        server.get("/")
+        server.forGet("/")
               .withHeaders({ "X-Should-Match": "yes" })
               .thenReply(200, "matched header");
     });

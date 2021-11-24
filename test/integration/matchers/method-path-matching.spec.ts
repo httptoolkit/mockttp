@@ -49,7 +49,7 @@ responses by hand.`);
     });
 
     it("should match requests for a matching relative path", async () => {
-        await server.get('/').thenReply(200, 'Fake file');
+        await server.forGet('/').thenReply(200, 'Fake file');
 
         let result = await fetch(server.urlFor('/'));
 
@@ -59,12 +59,12 @@ responses by hand.`);
     it("should refuse to create a matcher for requests for an empty path", async () => {
         await expect(
             // Wrap, so that both sync/async errors become rejections
-            Promise.resolve().then(() => server.get('').thenReply(200, 'Fake file'))
+            Promise.resolve().then(() => server.forGet('').thenReply(200, 'Fake file'))
         ).to.be.rejectedWith('Invalid URL');
     });
 
     it("should match requests for a matching absolute url", async () => {
-        await server.get(`http://localhost:${server.port}/file.txt`).thenReply(200, 'Fake file');
+        await server.forGet(`http://localhost:${server.port}/file.txt`).thenReply(200, 'Fake file');
 
         let result = await fetch(server.urlFor('/file.txt'));
 
@@ -72,7 +72,7 @@ responses by hand.`);
     });
 
     it("should match requests for a matching absolute protocol-independent url", async () => {
-        await server.get(`localhost:${server.port}/file.txt`).thenReply(200, 'Fake file');
+        await server.forGet(`localhost:${server.port}/file.txt`).thenReply(200, 'Fake file');
 
         let result = await fetch(server.urlFor('/file.txt'));
 
@@ -80,7 +80,7 @@ responses by hand.`);
     });
 
     it("should match requests for a matching absolute URL regardless of a missing trailing slash", async () => {
-        await server.get(`http://localhost:${server.port}`).thenReply(200, 'Root response');
+        await server.forGet(`http://localhost:${server.port}`).thenReply(200, 'Root response');
 
         let result = await fetch(server.urlFor('/'));
 
@@ -88,7 +88,7 @@ responses by hand.`);
     });
 
     it("should match requests for a matching URL including a double initial slash", async () => {
-        await server.get(`http://localhost:${server.port}//abc`).thenReply(200, '//abc response');
+        await server.forGet(`http://localhost:${server.port}//abc`).thenReply(200, '//abc response');
 
         // WHATWG URL parses //abc as an absolute URL with no protocol. This can cause problems. We need to
         // ensure we always treat it as relative, and correctly use the host header for the rest:
@@ -98,7 +98,7 @@ responses by hand.`);
     });
 
     it("should regex match requests for a matching path", async () => {
-        await server.get(/^\/matching-\w+.txt/).thenReply(200, 'Fake file');
+        await server.forGet(/^\/matching-\w+.txt/).thenReply(200, 'Fake file');
 
         let result = await fetch(server.urlFor('/matching-file.txt'));
 
@@ -106,7 +106,7 @@ responses by hand.`);
     });
 
     it("should regex match requests for a URL with trailing slashes included", async () => {
-        await server.get(/localhost:\d+\/$/).thenReply(200, 'Root response');
+        await server.forGet(/localhost:\d+\/$/).thenReply(200, 'Root response');
 
         let result = await fetch(server.urlFor('/'));
 
@@ -114,7 +114,7 @@ responses by hand.`);
     });
 
     it("should regex match requests for a matching full URL", async () => {
-        await server.get(/localhost:\d+\/[\w\-]+.txt/).thenReply(200, 'Fake file');
+        await server.forGet(/localhost:\d+\/[\w\-]+.txt/).thenReply(200, 'Fake file');
 
         let result = await fetch(server.urlFor('/matching-file.txt'));
 
@@ -122,7 +122,7 @@ responses by hand.`);
     });
 
     it("should reject requests for the wrong path", async () => {
-        await server.get("/specific-endpoint").thenReply(200, "mocked data");
+        await server.forGet("/specific-endpoint").thenReply(200, "mocked data");
 
         let result = await fetch(server.url);
 
@@ -130,7 +130,7 @@ responses by hand.`);
     });
 
     it("should reject requests that don't match a regex path", async () => {
-        await server.get(/.*.txt/).thenReply(200, 'Fake file');
+        await server.forGet(/.*.txt/).thenReply(200, 'Fake file');
 
         let result = await fetch(server.urlFor('/non-matching-file.css'));
 
@@ -138,7 +138,7 @@ responses by hand.`);
     });
 
     it("should match requests ignoring the query string", async () => {
-        await server.get('/path').thenReply(200, 'Matched path');
+        await server.forGet('/path').thenReply(200, 'Matched path');
 
         let result = await fetch(server.urlFor('/path?a=b'));
 
@@ -147,7 +147,7 @@ responses by hand.`);
 
     it("should fail if you pass a query string in the path", async () => {
         await expect(
-            () => server.get('/?a=b').thenReply(200, 'Mocked response')
+            () => server.forGet('/?a=b').thenReply(200, 'Mocked response')
         ).to.throw(stripIndent`
             Tried to match a path that contained a query (?a=b). ${''
             }To match query parameters, use .withQuery({"a":"b"}) instead${''
@@ -156,14 +156,14 @@ responses by hand.`);
     });
 
     it("should allowing matching any possible requests", async () => {
-        await server.anyRequest().thenReply(200, "wildcard response");
+        await server.forAnyRequest().thenReply(200, "wildcard response");
 
         await expect(fetch(server.urlFor('/any-old-endpoint'))).to.have.responseText('wildcard response');
     });
 
     it("should allowing matching any requests by method", async () => {
-        await server.get().thenReply(200, "get wildcard");
-        await server.post().thenReply(200, "post wildcard");
+        await server.forGet().thenReply(200, "get wildcard");
+        await server.forPost().thenReply(200, "post wildcard");
 
         await expect(
             fetch(server.urlFor('/anything'), { method: 'POST' })

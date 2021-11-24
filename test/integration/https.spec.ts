@@ -18,17 +18,17 @@ describe("An HTTPS server", () => {
         });
 
         it("can handle HTTPS requests", async () => {
-            await server.get('/').thenReply(200, "Super secure response");
+            await server.forGet('/').thenReply(200, "Super secure response");
             return expect(fetch(server.url)).to.have.responseText("Super secure response");
         });
 
         it("can handle HTTP requests", async () => {
-            await server.get('/').thenReply(200, "Super secure response");
+            await server.forGet('/').thenReply(200, "Super secure response");
             return expect(fetch(server.url.replace('https', 'http'))).to.have.responseText("Super secure response");
         });
 
         it("matches HTTPS requests against protocol-less URL matchers", async () => {
-            await server.get(`localhost:${server.port}/file.txt`).thenReply(200, 'Fake file');
+            await server.forGet(`localhost:${server.port}/file.txt`).thenReply(200, 'Fake file');
 
             let result = await fetch(server.urlFor('/file.txt'));
 

@@ -23,7 +23,7 @@ import { BaseRuleBuilder } from "../base-rule-builder";
  * @class RequestRuleBuilder
 
  * A builder for defining mock rules. Create one using a method like
- * `.get(path)` or `.post(path)` on a Mockttp instance, then call
+ * `.forGet(path)` or `.forPost(path)` on a Mockttp instance, then call
  * whatever methods you'd like here to define more precise request
  * matching behaviour, control how the request is handled, and how
  * many times this rule should be applied.
@@ -122,7 +122,7 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
      * extra headers.
      *
      * This method is shorthand for:
-     * server.get(...).thenReply(status, JSON.stringify(data), { 'Content-Type': 'application/json' })
+     * server.forGet(...).thenReply(status, JSON.stringify(data), { 'Content-Type': 'application/json' })
      *
      * Calling this method registers the rule with the server, so it
      * starts to handle requests.

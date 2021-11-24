@@ -10,7 +10,7 @@ describe("Fallback rules", () => {
     afterEach(() => server.stop());
 
     it("should return an explanation if no fallback rule is specifically configured", async () => {
-        await server.get('/specific-endpoint').thenReply(404, "Mock error response");
+        await server.forGet('/specific-endpoint').thenReply(404, "Mock error response");
 
         let response = await fetch(server.urlFor("/unmocked-endpoint"));
 
@@ -19,8 +19,8 @@ describe("Fallback rules", () => {
     });
 
     it("should match any unmatched requests", async () => {
-        await server.get('/specific-endpoint').thenReply(404, "Mock error response");
-        await server.unmatchedRequest().thenReply(200, "Fallback response");
+        await server.forGet('/specific-endpoint').thenReply(404, "Mock error response");
+        await server.forUnmatchedRequest().thenReply(200, "Fallback response");
 
         let response = await fetch(server.urlFor("/unmocked-endpoint"));
 
@@ -29,8 +29,8 @@ describe("Fallback rules", () => {
     });
 
     it("should defer to non-fallback rules if present", async () => {
-        await server.get('/specific-endpoint').thenReply(404, "Mock error response");
-        await server.unmatchedRequest().thenReply(200, "Fallback response");
+        await server.forGet('/specific-endpoint').thenReply(404, "Mock error response");
+        await server.forUnmatchedRequest().thenReply(200, "Fallback response");
 
         let response = await fetch(server.urlFor("/specific-endpoint"));
 
@@ -39,8 +39,8 @@ describe("Fallback rules", () => {
     });
 
     it("should always defer to non-fallback rules, even if they're already matched", async () => {
-        await server.get('/specific-endpoint').thenReply(404, "Mock error response");
-        await server.unmatchedRequest().thenReply(200, "Fallback response");
+        await server.forGet('/specific-endpoint').thenReply(404, "Mock error response");
+        await server.forUnmatchedRequest().thenReply(200, "Fallback response");
 
         await fetch(server.urlFor("/specific-endpoint"));
         let response = await fetch(server.urlFor("/specific-endpoint"));
@@ -51,8 +51,8 @@ describe("Fallback rules", () => {
     });
 
     it("should not defer to non-fallback rules that are explicitly limited", async () => {
-        await server.get('/specific-endpoint').once().thenReply(404, "Mock error response");
-        await server.unmatchedRequest().thenReply(200, "Fallback response");
+        await server.forGet('/specific-endpoint').once().thenReply(404, "Mock error response");
+        await server.forUnmatchedRequest().thenReply(200, "Fallback response");
 
         let response1 = await fetch(server.urlFor("/specific-endpoint"));
         let response2 = await fetch(server.urlFor("/specific-endpoint"));
@@ -66,8 +66,8 @@ describe("Fallback rules", () => {
     });
 
     it("should run indefinitely", async () => {
-        await server.get('/specific-endpoint').thenReply(404, "Mock error response");
-        await server.unmatchedRequest().thenReply(200, "Fallback response");
+        await server.forGet('/specific-endpoint').thenReply(404, "Mock error response");
+        await server.forUnmatchedRequest().thenReply(200, "Fallback response");
 
         await fetch(server.urlFor("/unmocked-endpoint"));
         await fetch(server.urlFor("/unmocked-endpoint"));
@@ -80,16 +80,16 @@ describe("Fallback rules", () => {
     });
 
     it("should fail to register if another fallback rule is already in place", async () => {
-        await server.unmatchedRequest().thenReply(200, "Fallback response");
+        await server.forUnmatchedRequest().thenReply(200, "Fallback response");
 
         await expect(
-            server.unmatchedRequest().thenReply(200, "Fallback response")
+            server.forUnmatchedRequest().thenReply(200, "Fallback response")
         ).to.be.rejectedWith('Only one fallback request rule can be registered at any time');
     });
 
     it("should fail to register if a matcher is used", async () => {
         await expect(
-            server.unmatchedRequest().withJsonBody({ 'a': 'b' }).thenReply(200, "Fallback response")
+            server.forUnmatchedRequest().withJsonBody({ 'a': 'b' }).thenReply(200, "Fallback response")
         ).to.be.rejectedWith('Fallback request rules cannot include specific matching configuration');
     });
 });

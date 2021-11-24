@@ -53,16 +53,16 @@ describe("Mockttp", () => {
     beforeEach(() => mockServer.start(8080));
     afterEach(() => mockServer.stop());
 
-    it("lets you mock requests, and assert on the results", async () =>
+    it("lets you mock requests, and assert on the results", async () => {
         // Mock your endpoints
-        await mockServer.get("/mocked-path").thenReply(200, "A mocked response");
+        await mockServer.forGet("/mocked-path").thenReply(200, "A mocked response");
 
         // Make a request
         const response = await superagent.get("http://localhost:8080/mocked-path");
 
         // Assert on the results
         expect(response.text).to.equal("A mocked response");
-    );
+    });
 });
 ```
 
@@ -81,7 +81,7 @@ describe("Mockttp", () => {
     afterEach(() => mockServer.stop());
 
     it("lets you mock without specifying a port, allowing parallel testing", async () => {
-        await mockServer.get("/mocked-endpoint").thenReply(200, "Tip top testing")
+        await mockServer.forGet("/mocked-endpoint").thenReply(200, "Tip top testing");
 
         // Try mockServer.url or .urlFor(path) to get a the dynamic URL for the server's port
         let response = await superagent.get(mockServer.urlFor("/mocked-endpoint"));
@@ -90,7 +90,7 @@ describe("Mockttp", () => {
     });
 
     it("lets you verify the request details the mockttp server receives", async () => {
-        const endpointMock = await mockServer.get("/mocked-endpoint").thenReply(200, "hmm?");
+        const endpointMock = await mockServer.forGet("/mocked-endpoint").thenReply(200, "hmm?");
 
         await superagent.get(mockServer.urlFor("/mocked-endpoint"));
 
@@ -102,7 +102,7 @@ describe("Mockttp", () => {
 
     it("lets you proxy requests made to any other hosts", async () => {
         // Match a full URL instead of just a path to mock proxied requests
-        await mockServer.get("http://google.com").thenReply(200, "I can't believe it's not google!");
+        await mockServer.forGet("http://google.com").thenReply(200, "I can't believe it's not google!");
 
         // One of the many ways to use a proxy - this assumes Node & superagent-proxy.
         // In a browser, you can simply use the browser settings instead.
@@ -113,7 +113,7 @@ describe("Mockttp", () => {
 });
 ```
 
-These examples uses Mocha, Chai and Superagent, but none of those are required: Mockttp will work with any testing tools that can handle promises (and with minor tweaks, many that can't), and can mock requests from any library, tool or device you might care to use.
+These examples use Mocha, Chai and Superagent, but none of those are required: Mockttp will work with any testing tools that can handle promises (and with minor tweaks, many that can't), and can mock requests from any library, tool or device you might care to use.
 
 ## Documentation
 

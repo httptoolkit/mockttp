@@ -18,7 +18,7 @@ describe("HTTP mock rule handling", function () {
     afterEach(() => server.stop());
 
     it("should allow mocking the status code alone", async () => {
-        await server.get("/mocked-endpoint").thenReply(204);
+        await server.forGet("/mocked-endpoint").thenReply(204);
 
         let response = await fetch(server.urlFor("/mocked-endpoint"));
 
@@ -27,7 +27,7 @@ describe("HTTP mock rule handling", function () {
     });
 
     it("should allow mocking the status code & body", async () => {
-        await server.get("/mocked-endpoint").thenReply(200, "mocked data");
+        await server.forGet("/mocked-endpoint").thenReply(200, "mocked data");
 
         let response = await fetch(server.urlFor("/mocked-endpoint"));
 
@@ -35,7 +35,7 @@ describe("HTTP mock rule handling", function () {
     });
 
     it("should set default headers when none are provided", async () => {
-        await server.get("/mocked-endpoint").thenReply(200, "mocked data");
+        await server.forGet("/mocked-endpoint").thenReply(200, "mocked data");
 
         let response = await fetch(server.urlFor("/mocked-endpoint"));
 
@@ -45,7 +45,7 @@ describe("HTTP mock rule handling", function () {
     });
 
     it("should allow mocking the status code, body & headers", async () => {
-        await server.get("/mocked-endpoint").thenReply(200, "mock body", {
+        await server.forGet("/mocked-endpoint").thenReply(200, "mock body", {
             "Content-Type": "text/mocked"
         });
 
@@ -62,7 +62,7 @@ describe("HTTP mock rule handling", function () {
     });
 
     it("should allow mocking the status code, status message, body & headers", async () => {
-        await server.get("/mocked-endpoint").thenReply(200, "mock status", "mock body", {
+        await server.forGet("/mocked-endpoint").thenReply(200, "mock status", "mock body", {
             "Content-Type": "text/mocked"
         });
 
@@ -81,7 +81,7 @@ describe("HTTP mock rule handling", function () {
 
     it("should not allow mocking HTTP/2 pseudoheaders", async function () {
         await expect(() =>
-            server.get("/mocked-endpoint")
+            server.forGet("/mocked-endpoint")
             .thenReply(200, "mock status", "mock body", {
                 ":status": '200'
             })
@@ -89,7 +89,7 @@ describe("HTTP mock rule handling", function () {
     });
 
     it("should allow mocking a binary body with a buffer", async () => {
-        await server.get("/mocked-endpoint").thenReply(200, Buffer.from([72, 105]));
+        await server.forGet("/mocked-endpoint").thenReply(200, Buffer.from([72, 105]));
 
         let response = await fetch(server.urlFor("/mocked-endpoint"));
 
@@ -100,7 +100,7 @@ describe("HTTP mock rule handling", function () {
         this.timeout(10000); // In a browser, this can be slowwww
 
         const bodyBuffer = Buffer.alloc(1024 * 1024 * 10, 'A'.charCodeAt(0));
-        await server.get("/mocked-endpoint").thenReply(200, bodyBuffer);
+        await server.forGet("/mocked-endpoint").thenReply(200, bodyBuffer);
 
         let response = await fetch(server.urlFor("/mocked-endpoint"));
 
@@ -111,7 +111,7 @@ describe("HTTP mock rule handling", function () {
     });
 
     it("should reply with JSON when using the JSON helper", async () => {
-        await server.get('/mocked-endpoint').thenJson(200, { myVar: 'foo' });
+        await server.forGet('/mocked-endpoint').thenJson(200, { myVar: 'foo' });
 
         let response = await fetch(server.urlFor('/mocked-endpoint'));
 
@@ -123,7 +123,7 @@ describe("HTTP mock rule handling", function () {
     });
 
     it("should successfully reply with JSON using the JSON helper with unicode content", async () => {
-        await server.get('/mocked-endpoint').thenJson(200, { myVar: '🐶' });
+        await server.forGet('/mocked-endpoint').thenJson(200, { myVar: '🐶' });
 
         let response = await fetch(server.urlFor('/mocked-endpoint'));
 
@@ -135,7 +135,7 @@ describe("HTTP mock rule handling", function () {
     });
 
     it("should reply with JSON and merge in extra headers when using the JSON helper", async () => {
-        await server.get('/mocked-endpoint').thenJson(200, { myVar: 'foo' },
+        await server.forGet('/mocked-endpoint').thenJson(200, { myVar: 'foo' },
             { 'other-header': 'header-data' }
         );
 
@@ -150,7 +150,7 @@ describe("HTTP mock rule handling", function () {
     });
 
     it("should reply with JSON when using the deprecated JSON helper alias", async () => {
-        await server.get('/mocked-endpoint').thenJSON(200, { myVar: 'foo' },
+        await server.forGet('/mocked-endpoint').thenJSON(200, { myVar: 'foo' },
             { 'other-header': 'header-data' });
 
         let response = await fetch(server.urlFor('/mocked-endpoint'));
@@ -164,7 +164,7 @@ describe("HTTP mock rule handling", function () {
 
     it("should allow streaming a response", async () => {
         let stream = new PassThrough();
-        await server.get('/stream').thenStream(200, stream);
+        await server.forGet('/stream').thenStream(200, stream);
 
         stream.write('Hello\n');
 
@@ -190,7 +190,7 @@ describe("HTTP mock rule handling", function () {
     it("should not allow setting pseudoheaders when streaming a response", async () => {
         let stream = new PassThrough();
         expect(() =>
-            server.get('/stream').thenStream(200, stream, {
+            server.forGet('/stream').thenStream(200, stream, {
                 ':status': '200'
             })
         ).to.throw("Cannot set custom :status pseudoheader values");
@@ -198,7 +198,7 @@ describe("HTTP mock rule handling", function () {
 
     it("should fail clearly when trying to repeat a single stream response", async () => {
         let stream = new PassThrough();
-        await server.get('/stream').thenStream(200, stream);
+        await server.forGet('/stream').thenStream(200, stream);
 
         stream.end('Hello world');
 
@@ -211,9 +211,9 @@ describe("HTTP mock rule handling", function () {
 
     it("should allow multiple streaming responses", async () => {
         let stream1 = new PassThrough();
-        await server.get('/stream').thenStream(200, stream1);
+        await server.forGet('/stream').thenStream(200, stream1);
         let stream2 = new PassThrough();
-        await server.get('/stream').thenStream(200, stream2);
+        await server.forGet('/stream').thenStream(200, stream2);
 
         stream1.end('Hello');
         stream2.end('World');
@@ -228,7 +228,7 @@ describe("HTTP mock rule handling", function () {
     });
 
     it("should allow forcibly closing the connection", async () => {
-        await server.get('/mocked-endpoint').thenCloseConnection();
+        await server.forGet('/mocked-endpoint').thenCloseConnection();
 
         let result = await fetch(server.urlFor('/mocked-endpoint')).catch(e => e);
 
@@ -237,7 +237,7 @@ describe("HTTP mock rule handling", function () {
     });
 
     it("should allow leaving connections to time out", async () => {
-        await server.get('/mocked-endpoint').thenTimeout();
+        await server.forGet('/mocked-endpoint').thenTimeout();
 
         let result = await Promise.race<any>([
             fetch(server.urlFor('/mocked-endpoint')),
@@ -248,7 +248,7 @@ describe("HTTP mock rule handling", function () {
     });
 
     it("should allow mocking the status with a callback", async () => {
-        await server.get("/mocked-endpoint").thenCallback(() => {
+        await server.forGet("/mocked-endpoint").thenCallback(() => {
             return { statusCode: 204, statusMessage: 'all good' }
         });
 
@@ -263,7 +263,7 @@ describe("HTTP mock rule handling", function () {
     });
 
     it("should allow mocking the response body with a callback", async () => {
-        await server.get("/mocked-endpoint").thenCallback(() => {
+        await server.forGet("/mocked-endpoint").thenCallback(() => {
             return { statusCode: 200, body: 'response body' }
         });
 
@@ -277,7 +277,7 @@ describe("HTTP mock rule handling", function () {
     });
 
     it("should allow mocking response headers with a callback", async () => {
-        await server.get("/mocked-endpoint").thenCallback(() => {
+        await server.forGet("/mocked-endpoint").thenCallback(() => {
             return { statusCode: 200, headers: { 'mock-header': 'set' } }
         });
 
@@ -295,7 +295,7 @@ describe("HTTP mock rule handling", function () {
     });
 
     it("should not allow mocking response pseudoheaders with a callback", async () => {
-        await server.get("/mocked-endpoint").thenCallback(() => {
+        await server.forGet("/mocked-endpoint").thenCallback(() => {
             return { statusCode: 200, headers: { ':status': '200' } }
         })
 
@@ -306,7 +306,7 @@ describe("HTTP mock rule handling", function () {
     });
 
     it("should allow mocking body as json with callback", async () => {
-        await server.get("/mocked-endpoint").thenCallback(() => {
+        await server.forGet("/mocked-endpoint").thenCallback(() => {
             return { statusCode: 201, statusMessage: 'all good', json: { myVar: "foo" } }
         });
 
@@ -319,7 +319,7 @@ describe("HTTP mock rule handling", function () {
     });
 
     it("should allow closing connections with a callback", async () => {
-        await server.get("/mocked-endpoint").thenCallback(() => {
+        await server.forGet("/mocked-endpoint").thenCallback(() => {
             return 'close';
         });
 
@@ -335,7 +335,7 @@ describe("HTTP mock rule handling", function () {
     });
 
     it("should return a 500 if a callback handler throws an exception", async () => {
-        await server.get("/mocked-endpoint").thenCallback(() => {
+        await server.forGet("/mocked-endpoint").thenCallback(() => {
             throw new Error('Oh no!');
         });
 
@@ -345,7 +345,7 @@ describe("HTTP mock rule handling", function () {
     });
 
     it("should allow mocking the body with contents from a file", async () => {
-        await server.get('/mocked-endpoint').thenFromFile(200,
+        await server.forGet('/mocked-endpoint').thenFromFile(200,
             path.join(__dirname, '..', 'fixtures', 'response-file.txt')
         );
 
@@ -358,7 +358,7 @@ describe("HTTP mock rule handling", function () {
     });
 
     it("should allow mocking the body with contents from a file, with headers & status message", async () => {
-        await server.get('/mocked-endpoint').thenFromFile(200, "mock status",
+        await server.forGet('/mocked-endpoint').thenFromFile(200, "mock status",
             path.join(__dirname, '..', 'fixtures', 'response-file.txt'),
             { "Content-Type": "text/mocked" }
         );
@@ -378,7 +378,7 @@ describe("HTTP mock rule handling", function () {
 
     it("should not allow setting pseudoheaders when mocking the body from a file", async () => {
         expect(() =>
-            server.get('/mocked-endpoint').thenFromFile(200, "mock status",
+            server.forGet('/mocked-endpoint').thenFromFile(200, "mock status",
                 path.join(__dirname, '..', 'fixtures', 'response-file.txt'),
                 { ':status': '200' }
             )
@@ -386,7 +386,7 @@ describe("HTTP mock rule handling", function () {
     });
 
     it("should return a clear error when mocking the body with contents from a non-existent file", async () => {
-        await server.get('/mocked-endpoint').thenFromFile(200,
+        await server.forGet('/mocked-endpoint').thenFromFile(200,
             path.join(__dirname, '..', 'fixtures', 'non-existent-file.txt')
         );
 
