@@ -75,6 +75,7 @@ type ClientErrorRequest {
     path: String
     headers: Json
     remoteIpAddress: String!
+    remotePort: Int!
 }
 
 type InitiatedRequest {
@@ -89,6 +90,7 @@ type InitiatedRequest {
     url: String!
     path: String!
     remoteIpAddress: String!
+    remotePort: Int!
     hostname: String
 
     headers: Json!
@@ -106,6 +108,7 @@ type Request {
     url: String!
     path: String!
     remoteIpAddress: String!
+    remotePort: Int!
     hostname: String
 
     headers: Json!

@@ -414,6 +414,7 @@ nodeOnly(() => {
                     '::ffff:127.0.0.1', // IPv4 localhost
                     '::1' // IPv6 localhost
                 ]);
+                expect(seenRequest.remotePort).to.be.greaterThan(32768);
 
                 await cleanup(proxiedClient, client);
             });

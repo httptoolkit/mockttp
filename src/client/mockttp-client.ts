@@ -726,6 +726,7 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
                         url,
                         path,
                         ${this.optionalField('InitiatedRequest', 'remoteIpAddress')},
+                        ${this.optionalField('InitiatedRequest', 'remotePort')},
                         hostname,
 
                         headers,
@@ -746,6 +747,7 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
                         url,
                         path,
                         ${this.optionalField('Request', 'remoteIpAddress')},
+                        ${this.optionalField('Request', 'remotePort')},
                         hostname,
 
                         headers,
@@ -817,6 +819,7 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
                             path
                             headers
                             ${this.optionalField('ClientErrorRequest', 'remoteIpAddress')},
+                            ${this.optionalField('ClientErrorRequest', 'remotePort')},
                         }
                         response {
                             id

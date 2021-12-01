@@ -85,12 +85,14 @@ export interface Mockttp {
      * This will throw an error if read before the server is started.
      */
     urlFor(path: string): string;
+
     /**
      * The port the server is running on.
      *
      * This will throw an error if read before the server is started.
      */
     port: number;
+
     /**
      * The environment variables typically needed to use this server as a proxy, in a format you
      * can add to your environment straight away.
