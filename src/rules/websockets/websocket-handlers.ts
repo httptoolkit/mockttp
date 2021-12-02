@@ -32,6 +32,7 @@ import { isLocalhostAddress } from '../../util/socket-util';
 import { getAgent } from '../http-agents';
 import { ProxyConfig, ProxySettingSource } from '../proxy-config';
 import { assertParamDereferenced, RuleParameters } from '../rule-parameters';
+import { MOCKTTP_UPSTREAM_CIPHERS } from '../passthrough-handling';
 
 export interface WebSocketHandler extends Explainable, Serializable {
     type: keyof typeof WsHandlerLookup;
@@ -382,14 +383,17 @@ export class PassThroughWebSocketHandler extends Serializable implements WebSock
         });
 
         const upstreamWebSocket = new WebSocket(wsUrl, {
-            rejectUnauthorized: checkServerCertificate,
             maxPayload: 0,
             agent,
             lookup: this.lookup(),
             headers: _.omitBy(headers, (_v, headerName) =>
                 headerName.toLowerCase().startsWith('sec-websocket') ||
                 headerName.toLowerCase() === 'connection'
-            ) as { [key: string]: string } // Simplify to string - doesn't matter though, only used by http module anyway
+            ) as { [key: string]: string }, // Simplify to string - doesn't matter though, only used by http module anyway
+
+            // TLS options:
+            ciphers: MOCKTTP_UPSTREAM_CIPHERS,
+            rejectUnauthorized: checkServerCertificate
         } as WebSocket.ClientOptions);
 
         upstreamWebSocket.once('open', () => {

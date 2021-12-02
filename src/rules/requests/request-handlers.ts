@@ -64,6 +64,7 @@ import {
     ProxySettingSource,
     ProxyConfig
 } from '../proxy-config';
+import { MOCKTTP_UPSTREAM_CIPHERS } from '../passthrough-handling';
 
 // An error that indicates that the handler is aborting the request.
 // This could be intentional, or an upstream server aborting the request.
@@ -1323,6 +1324,8 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 lookup: this.lookup() as typeof dns.lookup,
                 // ^ Cast required to handle __promisify__ type hack in the official Node types
                 agent,
+                // TLS options:
+                ciphers: MOCKTTP_UPSTREAM_CIPHERS,
                 minVersion: strictHttpsChecks ? tls.DEFAULT_MIN_VERSION : 'TLSv1', // Allow TLSv1, if !strict
                 rejectUnauthorized: strictHttpsChecks,
                 ...clientCert

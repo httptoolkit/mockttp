@@ -733,6 +733,31 @@ nodeOnly(() => {
                     expect(response).to.equal("mocked data");
                 });
 
+                it("should pass through HTTPS with a non-Node.js TLS fingerprint", async function () {
+                    this.retries(3); // Allow some retries, since we need an external service for this
+
+                    await server.forAnyRequest().thenPassThrough();
+
+                    let response = await request.get("https://ja3er.com/json", {
+                        headers: {
+                            // The hash will get recorded with the user agent that's used - we don't want the database
+                            // to fill up with records that make it clear it's Mockttp's fingerprint!
+                            'user-agent': `Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.${
+                                String(Date.now()).slice(-2) // Some very basic randomness
+                            } Safari/537.36`
+                        }
+                    });
+
+                    const ja3Hash = JSON.parse(response).ja3_hash;
+
+                    // Any hash is fine, as long as it's not a super common Node.js hash:
+                    expect(ja3Hash).not.to.be.oneOf([
+                        '5d1b45c217fe17488ef0a688cf2cc497', // Node 10.23
+                        'c4aac137ff0b0ac82f3c138cf174b427', // Node 16.8, 14.17, 12.22
+                        '4c319ebb1fb1ef7937f04ac445bbdf86' // Node 17.0
+                    ]);
+                });
+
                 describe("given an untrusted upstream certificate", () => {
 
                     let badServer: Mockttp;
