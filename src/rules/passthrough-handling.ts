@@ -1,10 +1,10 @@
-import * as crypto from 'crypto';
+import * as tls from 'tls';
 
 // We don't want to use the standard Node.js ciphers as-is, because remote servers can
 // examine the TLS fingerprint to recognize they as coming from Node.js. To anonymize
 // ourselves, we use a ever-so-slightly tweaked cipher config, which ensures we aren't
 // easily recognizeable by default.
-const defaultCiphers = (crypto.constants.defaultCipherList || '').split(':'); // Fallback for browser imports
+const defaultCiphers = (tls as any).DEFAULT_CIPHERS?.split(':') || []; // Standard, but not yet in the types - watch this space. [] included for browser fallback.
 export const MOCKTTP_UPSTREAM_CIPHERS = [
     // We swap the ciphers position 1 & 3. These must be already preferred ciphers,
     // at the top of the list, so this should always be safe. For Node 14, this swaps
