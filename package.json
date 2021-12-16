@@ -124,7 +124,7 @@
   },
   "dependencies": {
     "@graphql-tools/schema": "^7.1.5",
-    "@httptoolkit/httpolyglot": "^1.0.0",
+    "@httptoolkit/httpolyglot": "^2.0.1",
     "@httptoolkit/proxy-agent": "^5.0.1-socks-lookup-fix.0",
     "@httptoolkit/subscriptions-transport-ws": "^0.9.19",
     "@httptoolkit/websocket-stream": "^6.0.0",
