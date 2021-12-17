@@ -1485,10 +1485,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                     }
                 });
 
-                clientRes.writeHead(
-                    serverStatusCode,
-                    serverStatusMessage || clientRes.statusMessage
-                );
+                clientRes.writeHead(serverStatusCode, serverStatusMessage);
 
                 if (resBodyOverride) {
                     // Return the override data to the client:

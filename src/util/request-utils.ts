@@ -402,16 +402,23 @@ export async function waitForCompletedResponse(response: OngoingResponse): Promi
     const body = await waitForBody(response.body, response.getHeaders());
     response.timingEvents.responseSentTimestamp = response.timingEvents.responseSentTimestamp || now();
 
-    return _(response).pick([
+    const completedResponse: CompletedResponse = _(response).pick([
         'id',
         'statusCode',
-        'statusMessage',
         'timingEvents',
         'tags'
     ]).assign({
+        statusMessage: '',
         headers: cleanUpHeaders(response.getHeaders()),
         body: body
     }).valueOf();
+
+    if (!(response instanceof http2.Http2ServerResponse)) {
+        // H2 has no status messages, and generates a warning if you look for one
+        completedResponse.statusMessage = response.statusMessage;
+    }
+
+    return completedResponse;
 }
 
 // Take raw HTTP bytes recieved, have a go at parsing something useful out of them.
