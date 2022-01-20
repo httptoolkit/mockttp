@@ -7,7 +7,7 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [12.x, 14.x, v14.17, 16.x, '*']
+        node-version: [12.x, 14.x, v14.18.3, 16.x, '*']
 
     steps:
       - uses: actions/checkout@v2
@@ -21,7 +21,7 @@ jobs:
       - run: npm run ci-tests
 
       - name: Deploy docs
-        if: github.ref == 'refs/heads/master' && matrix.node-version == 'v14.17'
+        if: github.ref == 'refs/heads/master' && matrix.node-version == 'v14.18.3'
         uses: JamesIves/github-pages-deploy-action@3.6.2
         with:
           SINGLE_COMMIT: true
