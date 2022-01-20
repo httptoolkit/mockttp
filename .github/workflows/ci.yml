@@ -22,11 +22,9 @@ jobs:
 
       - name: Deploy docs
         if: github.ref == 'refs/heads/master' && matrix.node-version == 'v14.18.3'
-        uses: JamesIves/github-pages-deploy-action@3.6.2
+        uses: JamesIves/github-pages-deploy-action@v4.2.2
         with:
-          SINGLE_COMMIT: true
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          BRANCH: gh-pages
-          FOLDER: typedoc
-          CLEAN: true # Automatically remove deleted files from the deploy branch
+          single-commit: true
+          branch: gh-pages
+          folder: typedoc
 
