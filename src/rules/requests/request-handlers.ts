@@ -498,6 +498,17 @@ export interface PassThroughHandlerOptions {
     ignoreHostCertificateErrors?: string[];
 
     /**
+     * An array of additional certificates, which should be trusted as certificate
+     * authorities for upstream hosts, in addition to Node.js's built-in certificate
+     * authorities.
+     *
+     * Each certificate should be an object with either a `cert` key and a string
+     * or buffer value containing the PEM certificate, or a `certPath` key and a
+     * string value containing the local path to the PEM certificate.
+     */
+    trustAdditionalCAs?: Array<{ cert: string | Buffer } | { certPath: string }>;
+
+    /**
      * A mapping of hosts to client certificates to use, in the form of
      * `{ key, cert }` objects (none, by default)
      */
@@ -706,6 +717,7 @@ interface SerializedPassThroughData {
     forwarding?: ForwardingOptions;
     proxyConfig?: SerializedProxyConfig;
     ignoreHostCertificateErrors?: string[]; // Doesn't match option name, backward compat
+    extraCACertificates?: Array<{ cert: string | Buffer } | { certPath: string }>;
     clientCertificateHostMap?: { [host: string]: { pfx: string, passphrase?: string } };
     lookupOptions?: PassThroughLookupOptions;
 
@@ -933,6 +945,28 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
         [host: string]: { pfx: Buffer, passphrase?: string }
     };
 
+    public readonly extraCACertificates: Array<{ cert: string | Buffer } | { certPath: string }> = [];
+
+    private _trustedCACertificates: MaybePromise<Array<string> | undefined>;
+    private async trustedCACertificates(): Promise<Array<string> | undefined> {
+        if (!this.extraCACertificates.length) return undefined;
+
+        if (!this._trustedCACertificates) {
+            this._trustedCACertificates = Promise.all(
+                (tls.rootCertificates as Array<string | Promise<string>>)
+                    .concat(this.extraCACertificates.map(certObject => {
+                        if ('cert' in certObject) {
+                            return certObject.cert.toString('utf8');
+                        } else {
+                            return readFile(certObject.certPath, 'utf8');
+                        }
+                    }))
+            );
+        }
+
+        return this._trustedCACertificates;
+    }
+
     public readonly transformRequest?: RequestTransform;
     public readonly transformResponse?: ResponseTransform;
 
@@ -1001,8 +1035,10 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
         }
 
         this.lookupOptions = options.lookupOptions;
-        this.clientCertificateHostMap = options.clientCertificateHostMap || {};
         this.proxyConfig = options.proxyConfig;
+
+        this.clientCertificateHostMap = options.clientCertificateHostMap || {};
+        this.extraCACertificates = options.trustAdditionalCAs || [];
 
         if (options.beforeRequest && options.transformRequest && !_.isEmpty(options.transformRequest)) {
             throw new Error("BeforeRequest and transformRequest options are mutually exclusive");
@@ -1251,6 +1287,11 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
             this.clientCertificateHostMap[hostname!] ||
             {};
 
+        const trustedCerts = await this.trustedCACertificates();
+        const caConfig = trustedCerts
+            ? { ca: trustedCerts }
+            : {};
+
         // We only do H2 upstream for HTTPS. Http2-wrapper doesn't support H2C, it's rarely used
         // and we can't use ALPN to detect HTTP/2 support cleanly.
         let shouldTryH2Upstream = isH2Downstream && protocol === 'https:';
@@ -1328,7 +1369,8 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                 ciphers: MOCKTTP_UPSTREAM_CIPHERS,
                 minVersion: strictHttpsChecks ? tls.DEFAULT_MIN_VERSION : 'TLSv1', // Allow TLSv1, if !strict
                 rejectUnauthorized: strictHttpsChecks,
-                ...clientCert
+                ...clientCert,
+                ...caConfig
             }, (serverRes) => (async () => {
                 serverRes.on('error', reject);
 
@@ -1630,6 +1672,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
             proxyConfig: serializeProxyConfig(this.proxyConfig, channel),
             lookupOptions: this.lookupOptions,
             ignoreHostCertificateErrors: this.ignoreHostHttpsErrors,
+            extraCACertificates: this.extraCACertificates,
             clientCertificateHostMap: _.mapValues(this.clientCertificateHostMap,
                 ({ pfx, passphrase }) => ({ pfx: serializeBuffer(pfx), passphrase })
             ),
@@ -1761,6 +1804,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
             forwarding: data.forwarding,
             lookupOptions: data.lookupOptions,
             ignoreHostHttpsErrors: data.ignoreHostCertificateErrors,
+            trustAdditionalCAs: data.extraCACertificates,
             clientCertificateHostMap: _.mapValues(data.clientCertificateHostMap,
                 ({ pfx, passphrase }) => ({ pfx: deserializeBuffer(pfx), passphrase })
             ),

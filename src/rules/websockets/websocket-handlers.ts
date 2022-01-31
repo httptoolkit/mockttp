@@ -1,6 +1,7 @@
 import * as _ from 'lodash';
 import net = require('net');
 import * as url from 'url';
+import * as tls from 'tls';
 import * as http from 'http';
 import * as WebSocket from 'ws';
 import { stripIndent } from 'common-tags';
@@ -28,6 +29,8 @@ import {
 import { isHttp2 } from '../../util/request-utils';
 import { streamToBuffer } from '../../util/buffer-utils';
 import { isLocalhostAddress } from '../../util/socket-util';
+import { MaybePromise } from '../../util/type-utils';
+import { readFile } from '../../util/fs';
 
 import { getAgent } from '../http-agents';
 import { ProxyConfig, ProxySettingSource } from '../proxy-config';
@@ -169,6 +172,17 @@ export interface PassThroughWebSocketHandlerOptions {
     ignoreHostCertificateErrors?: string[];
 
     /**
+     * An array of additional certificates, which should be trusted as certificate
+     * authorities for upstream hosts, in addition to Node.js's built-in certificate
+     * authorities.
+     *
+     * Each certificate should be an object with either a `cert` key and a string
+     * or buffer value containing the PEM certificate, or a `certPath` key and a
+     * string value containing the local path to the PEM certificate.
+     */
+    trustAdditionalCAs?: Array<{ cert: string | Buffer } | { certPath: string }>;
+
+    /**
      * Upstream proxy configuration: pass through websockets via this proxy.
      *
      * If this is undefined, no proxy will be used. To configure a proxy
@@ -198,23 +212,45 @@ export interface PassThroughWebSocketHandlerOptions {
 interface SerializedPassThroughWebSocketData {
     type: 'ws-passthrough';
     forwarding?: ForwardingOptions;
+    lookupOptions?: PassThroughLookupOptions;
     proxyConfig?: SerializedProxyConfig;
     ignoreHostCertificateErrors?: string[]; // Doesn't match option name, backward compat
-    lookupOptions?: PassThroughLookupOptions;
+    extraCACertificates?: Array<{ cert: string | Buffer } | { certPath: string }>;
 }
 
 export class PassThroughWebSocketHandler extends Serializable implements WebSocketHandler {
     readonly type = 'ws-passthrough';
 
-    public readonly forwarding?: ForwardingOptions;
-    public readonly ignoreHostHttpsErrors: string[] = [];
-
     private wsServer?: WebSocket.Server;
 
     // Same lookup configuration as normal request PassThroughHandler:
     public readonly lookupOptions: PassThroughLookupOptions | undefined;
-
     public readonly proxyConfig?: ProxyConfig;
+
+    public readonly forwarding?: ForwardingOptions;
+    public readonly ignoreHostHttpsErrors: string[] = [];
+
+    public readonly extraCACertificates: Array<{ cert: string | Buffer } | { certPath: string }> = [];
+
+    private _trustedCACertificates: MaybePromise<Array<string> | undefined>;
+    private async trustedCACertificates(): Promise<Array<string> | undefined> {
+        if (!this.extraCACertificates.length) return undefined;
+
+        if (!this._trustedCACertificates) {
+            this._trustedCACertificates = Promise.all(
+                (tls.rootCertificates as Array<string | Promise<string>>)
+                    .concat(this.extraCACertificates.map(certObject => {
+                        if ('cert' in certObject) {
+                            return certObject.cert.toString('utf8');
+                        } else {
+                            return readFile(certObject.certPath, 'utf8');
+                        }
+                    }))
+            );
+        }
+
+        return this._trustedCACertificates;
+    }
 
     private _cacheableLookupInstance: CacheableLookup | undefined;
     private lookup() {
@@ -367,6 +403,11 @@ export class PassThroughWebSocketHandler extends Serializable implements WebSock
         const checkServerCertificate = !_.includes(this.ignoreHostHttpsErrors, parsedUrl.hostname) &&
             !_.includes(this.ignoreHostHttpsErrors, parsedUrl.host);
 
+        const trustedCerts = await this.trustedCACertificates();
+        const caConfig = trustedCerts
+            ? { ca: trustedCerts }
+            : {};
+
         const effectivePort = !!parsedUrl.port
             ? parseInt(parsedUrl.port, 10)
             : parsedUrl.protocol == 'wss:' ? 443 : 80;
@@ -393,8 +434,9 @@ export class PassThroughWebSocketHandler extends Serializable implements WebSock
 
             // TLS options:
             ciphers: MOCKTTP_UPSTREAM_CIPHERS,
-            rejectUnauthorized: checkServerCertificate
-        } as WebSocket.ClientOptions);
+            rejectUnauthorized: checkServerCertificate,
+            ...caConfig
+        } as WebSocket.ClientOptions & { lookup: any, maxPayload: number });
 
         upstreamWebSocket.once('open', () => {
             // Presumably the below adds an error handler. But what about before we get here?
@@ -426,9 +468,10 @@ export class PassThroughWebSocketHandler extends Serializable implements WebSock
         return {
             type: this.type,
             forwarding: this.forwarding,
+            lookupOptions: this.lookupOptions,
             proxyConfig: serializeProxyConfig(this.proxyConfig, channel),
             ignoreHostCertificateErrors: this.ignoreHostHttpsErrors,
-            lookupOptions: this.lookupOptions
+            extraCACertificates: this.extraCACertificates
         };
     }
 

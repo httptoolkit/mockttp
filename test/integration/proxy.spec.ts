@@ -761,10 +761,17 @@ nodeOnly(() => {
                 describe("given an untrusted upstream certificate", () => {
 
                     let badServer: Mockttp;
-                    const untrustedCACert = generateCACertificate({ bits: 1024 });
+
+                    const certPath = './test/fixtures/untrusted-ca.pem';
+                    const cert = fs.readFileSync(certPath);
 
                     beforeEach(async () => {
-                        badServer = getLocal({ https: await untrustedCACert });
+                        badServer = getLocal({
+                            https: {
+                                keyPath: './test/fixtures/untrusted-ca.key',
+                                certPath
+                            }
+                        });
                         await badServer.start();
                     });
 
@@ -826,6 +833,36 @@ nodeOnly(() => {
                         });
 
                         expect(response.statusCode).to.equal(502);
+                    });
+
+                    it("should allow passing through requests if the certificate is specifically listed", async () => {
+                        await badServer.forAnyRequest().thenReply(200);
+
+                        await server.forAnyRequest().thenPassThrough({
+                            trustAdditionalCAs: [{ cert }]
+                        });
+
+                        let response = await request.get(badServer.url, {
+                            resolveWithFullResponse: true,
+                            simple: false
+                        });
+
+                        expect(response.statusCode).to.equal(200);
+                    });
+
+                    it("should allow passing through requests if the certificate path is specifically listed", async () => {
+                        await badServer.forAnyRequest().thenReply(200);
+
+                        await server.forAnyRequest().thenPassThrough({
+                            trustAdditionalCAs: [{ certPath }]
+                        });
+
+                        let response = await request.get(badServer.url, {
+                            resolveWithFullResponse: true,
+                            simple: false
+                        });
+
+                        expect(response.statusCode).to.equal(200);
                     });
                 });
 
