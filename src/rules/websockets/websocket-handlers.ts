@@ -215,7 +215,7 @@ interface SerializedPassThroughWebSocketData {
     lookupOptions?: PassThroughLookupOptions;
     proxyConfig?: SerializedProxyConfig;
     ignoreHostCertificateErrors?: string[]; // Doesn't match option name, backward compat
-    extraCACertificates?: Array<{ cert: string | Buffer } | { certPath: string }>;
+    extraCACertificates?: Array<{ cert: string } | { certPath: string }>;
 }
 
 export class PassThroughWebSocketHandler extends Serializable implements WebSocketHandler {
@@ -471,7 +471,17 @@ export class PassThroughWebSocketHandler extends Serializable implements WebSock
             lookupOptions: this.lookupOptions,
             proxyConfig: serializeProxyConfig(this.proxyConfig, channel),
             ignoreHostCertificateErrors: this.ignoreHostHttpsErrors,
-            extraCACertificates: this.extraCACertificates
+            extraCACertificates: this.extraCACertificates.map((certObject) => {
+                // We use toString to make sure that buffers always end up as
+                // as UTF-8 string, to avoid serialization issues. Strings are an
+                // easy safe format here, since it's really all just plain-text PEM
+                // under the hood.
+                if ('cert' in certObject) {
+                    return { cert: certObject.cert.toString('utf8') }
+                } else {
+                    return certObject;
+                }
+            }),
         };
     }
 
