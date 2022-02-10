@@ -1,5 +1,5 @@
 import * as _ from 'lodash';
-import uuid = require("uuid/v4");
+import { v4 as uuid } from "uuid";
 
 import { OngoingRequest, CompletedRequest, OngoingResponse, Explainable } from "../../types";
 import { waitForCompletedRequest } from '../../util/request-utils';

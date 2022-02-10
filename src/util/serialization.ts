@@ -1,6 +1,6 @@
 import * as _ from 'lodash';
 import { Duplex } from 'stream';
-import uuid = require('uuid/v4');
+import { v4 as uuid } from "uuid";
 import { encode as encodeBase64 } from 'base64-arraybuffer';
 
 import { MaybePromise, Replace, Omit } from './type-utils';

@@ -1,5 +1,5 @@
 import * as _ from 'lodash';
-import * as uuid from 'uuid/v4';
+import { v4 as uuid } from "uuid";
 import * as forge from 'node-forge';
 
 const { pki, md, util: { encode64 } } = forge;

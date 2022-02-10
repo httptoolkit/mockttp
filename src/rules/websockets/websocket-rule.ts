@@ -1,5 +1,5 @@
 import * as _ from 'lodash';
-import uuid = require("uuid/v4");
+import { v4 as uuid } from "uuid";
 import * as net from 'net';
 
 import {

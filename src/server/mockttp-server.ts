@@ -6,7 +6,7 @@ import http2 = require("http2");
 import { EventEmitter } from "events";
 import portfinder = require("portfinder");
 import connect = require("connect");
-import uuid = require('uuid/v4');
+import { v4 as uuid } from "uuid";
 import cors = require("cors");
 import now = require("performance-now");
 import _ = require("lodash");

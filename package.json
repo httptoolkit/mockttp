@@ -83,7 +83,7 @@
     "@types/semver": "5.5.0",
     "@types/shelljs": "0.8.9",
     "@types/source-map-support": "0.4.2",
-    "@types/uuid": "3.4.5",
+    "@types/uuid": "8.3.4",
     "@types/ws": "7.2.0",
     "agent-base": "^4.2.1",
     "brotli-wasm": "^1.0.0",
@@ -151,7 +151,7 @@
     "performance-now": "^2.1.0",
     "portfinder": "^1.0.23",
     "typed-error": "^3.0.2",
-    "uuid": "^3.1.0",
+    "uuid": "^8.3.2",
     "ws": "^7.3.1"
   }
 }
