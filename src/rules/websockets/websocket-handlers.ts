@@ -496,6 +496,7 @@ export class PassThroughWebSocketHandler extends Serializable implements WebSock
         // By default, we assume we just need to assign the right prototype
         return _.create(this.prototype, {
             ...data,
+            extraCACertificates: data.extraCACertificates || [],
             proxyConfig: deserializeProxyConfig(data.proxyConfig, channel, ruleParams),
             ignoreHostHttpsErrors: data.ignoreHostCertificateErrors
         });
