@@ -18,8 +18,9 @@ import { MockedEndpoint, MockedEndpointData, DEFAULT_ADMIN_SERVER_PORT } from ".
 import { Mockttp, AbstractMockttp, MockttpOptions, PortRange, } from "../mockttp";
 
 import { buildBodyReader } from '../util/request-utils';
-import { RequireProps } from '../util/type-utils';
+import { MaybePromise, RequireProps } from '../util/type-utils';
 import { isErrorLike } from '../util/error';
+import { getDeferred } from '../util/promise';
 
 import { introspectionQuery } from './introspection-query';
 
@@ -238,7 +239,9 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
     private mockServerStream: Duplex | undefined;
     private subscriptionClient: SubscriptionClient | undefined;
 
-    private running = false;
+    // True if server is entirely initialized, false if it's entirely shut down, or a promise
+    // that resolves to one or the other if it's currently changing state.
+    private running: MaybePromise<boolean> = false;
 
     constructor(options: MockttpClientOptions = {}) {
         super(_.defaults(options, {
@@ -283,15 +286,14 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
         });
 
         // When the websocket closes (after connect, either close frame, error, or socket shutdown):
-        wsStream.on('ws-close', (closeEvent) => {
+        wsStream.on('ws-close', async (closeEvent) => {
             targetStream.unpipe(wsStream);
 
             const serverShutdown = closeEvent.code === 1000;
-            const clientShutdown = this.running === false;
-            if (serverShutdown || clientShutdown) {
+            if (serverShutdown) {
                 // Clean shutdown implies the server is gone, and we need to shutdown & cleanup.
                 this.stop();
-            } else if (this.running && streamConnected) {
+            } else if (streamConnected && (await this.running) === true) {
                 console.warn('Mockttp client stream unexpectedly disconnected', closeEvent);
 
                 // Unclean shutdown means something has gone wrong somewhere. Try to reconnect.
@@ -408,54 +410,76 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
     }
 
     async start(portConfig?: number | PortRange): Promise<void> {
-        if (this.mockServerConfig) throw new Error('Server is already started');
+        if (this.mockServerConfig || await this.running) throw new Error('Server is already started');
         if (this.debug) console.log(`Starting remote mock server on port ${portConfig}`);
 
-        const path = portConfig ? `/start?port=${JSON.stringify(portConfig)}` : '/start';
-        let mockServerConfig = await requestFromAdminServer<MockServerConfig>(
-            this.mockServerOptions.adminServerUrl,
-            path,
-            mergeClientOptions({
-                method: 'POST',
-                headers: new Headers({
-                    'Content-Type': 'application/json'
-                }),
-                body: JSON.stringify(this.mockServerOptions)
-            }, this.mockClientOptions)
-        );
+        const startPromise = getDeferred<boolean>();
+        this.running = startPromise.then((result) => {
+            this.running = result;
+            return result;
+        });
 
-        // Also open a stream connection, for 2-way communication we might need later.
-        this.mockServerStream = await this.openStreamToMockServer(mockServerConfig);
+        try {
+            const path = portConfig ? `/start?port=${JSON.stringify(portConfig)}` : '/start';
+            let mockServerConfig = await requestFromAdminServer<MockServerConfig>(
+                this.mockServerOptions.adminServerUrl,
+                path,
+                mergeClientOptions({
+                    method: 'POST',
+                    headers: new Headers({
+                        'Content-Type': 'application/json'
+                    }),
+                    body: JSON.stringify(this.mockServerOptions)
+                }, this.mockClientOptions)
+            );
 
-        // Create a subscription client, preconfigured & ready to connect if on() is called later:
-        this.prepareSubscriptionClientToMockServer(mockServerConfig);
+            // Also open a stream connection, for 2-way communication we might need later.
+            this.mockServerStream = await this.openStreamToMockServer(mockServerConfig);
 
-        // We don't persist the config or resolve this promise until everything is set up
-        this.mockServerConfig = mockServerConfig;
+            // Create a subscription client, preconfigured & ready to connect if on() is called later:
+            this.prepareSubscriptionClientToMockServer(mockServerConfig);
 
-        // Load the schema on server start, so we can check for feature support
-        this.mockServerSchema = (await this.queryMockServer<any>(introspectionQuery)).__schema;
+            // We don't persist the config or resolve this promise until everything is set up
+            this.mockServerConfig = mockServerConfig;
 
-        this.running = true;
+            // Load the schema on server start, so we can check for feature support
+            this.mockServerSchema = (await this.queryMockServer<any>(introspectionQuery)).__schema;
 
-        if (this.debug) console.log('Started remote mock server');
+            startPromise.resolve(true);
+            if (this.debug) console.log('Started remote mock server');
+        } catch (e) {
+            startPromise.resolve(false);
+            throw e;
+        }
     }
 
     // Call when either we want the server to stop, or it appears that the server has already stopped,
     // and we just want to ensure that's happened and clean everything up.
     async stop(): Promise<void> {
-        if (!this.running) return;
-        this.running = false;
+        if (await this.running === false) return; // If stopped or stopping, do nothing.
 
-        if (this.debug) console.log('Stopping remote mock server');
+        const stopPromise = getDeferred<boolean>();
+        this.running = stopPromise.then((result) => {
+            this.running = result;
+            return result;
+        });
 
-        try { this.subscriptionClient?.close(); } catch (e) { console.log(e); }
-        this.subscriptionClient = undefined;
+        try {
+            if (this.debug) console.log('Stopping remote mock server');
 
-        try { this.mockServerStream?.end(); } catch (e) { console.log(e); }
-        this.mockServerStream = undefined;
+            try { this.subscriptionClient?.close(); } catch (e) { console.log(e); }
+            this.subscriptionClient = undefined;
 
-        await this.requestServerStop();
+            try { this.mockServerStream?.end(); } catch (e) { console.log(e); }
+            this.mockServerStream = undefined;
+
+            await this.requestServerStop();
+        } finally {
+            // The client is always stopped (and so restartable) once stopping completes, in all
+            // cases, since it can always be started again to reset it. The promise is just here
+            // so that we successfully handle (and always wait for) parallel stops.
+            stopPromise.resolve(false);
+        }
     }
 
     private requestServerStop() {
@@ -510,13 +534,13 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
     }
 
     get url(): string {
-        if (!this.running) throw new Error('Cannot get url before server is started');
+        if (this.running !== true) throw new Error('Cannot get url before server is started');
 
         return this.mockServerConfig!.mockRoot;
     }
 
     get port(): number {
-        if (!this.running) throw new Error('Cannot get port before server is started');
+        if (this.running !== true) throw new Error('Cannot get port before server is started');
 
         return this.mockServerConfig!.port;
     }
@@ -541,7 +565,7 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
         rules: Array<RequestRuleData>,
         reset: boolean
     ): Promise<MockedEndpoint[]> => {
-        if (!this.running) throw new Error('Cannot add rules before the server is started');
+        if (this.running !== true) throw new Error('Cannot add rules before the server is started');
 
         // Backward compat: make Add/SetRules work with servers that only define reset & addRule (singular).
         // Adds a small risk of odd behaviour in the gap between reset & all the rules being added, but it
@@ -586,7 +610,7 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
     setFallbackRequestRule = async (
         rule: RequestRuleData
     ): Promise<MockedEndpoint> => {
-        if (!this.running) throw new Error('Cannot add rules before the server is started');
+        if (this.running !== true) throw new Error('Cannot add rules before the server is started');
 
         let { endpoint: { id, explanation } } = (await this.queryMockServer<{ endpoint: { id: string, explanation: string } }>(
             `mutation SetFallbackRule($fallbackRule: MockRule!) {
@@ -609,7 +633,7 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
         // Seperate and much simpler than _addRules, because it doesn't have to deal with
         // backward compatibility.
 
-        if (!this.running) throw new Error('Cannot add rules before the server is started');
+        if (this.running !== true) throw new Error('Cannot add rules before the server is started');
 
         const requestName = (reset ? 'Set' : 'Add') + 'WebSocketRules';
         const mutationName = (reset ? 'set' : 'add') + 'WebSocketRules';

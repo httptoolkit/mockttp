@@ -17,6 +17,8 @@ import chaiFetch = require("chai-fetch");
 import * as dns2 from 'dns2'; // Imported here just for types
 
 import { Mockttp } from "..";
+
+export { getDeferred, Deferred } from '../src/util/promise';
 import { destroyable, DestroyableServer } from "../src/util/destroyable-server";
 import { isNode, isWeb, delay } from '../src/util/util';
 export { isNode, isWeb, delay, destroyable, DestroyableServer };
@@ -76,23 +78,6 @@ export function browserOnly(body: Function) {
 
 export function nodeOnly(body: Function) {
     if (isNode) body();
-}
-
-export type Deferred<T> = Promise<T> & {
-    resolve(value: T): void,
-    reject(e: Error): void
-}
-export function getDeferred<T>(): Deferred<T> {
-    let resolveCallback: (value: T) => void;
-    let rejectCallback: (e: Error) => void;
-    let result = <Deferred<T>> new Promise((resolve, reject) => {
-        resolveCallback = resolve;
-        rejectCallback = reject;
-    });
-    result.resolve = resolveCallback!;
-    result.reject = rejectCallback!;
-
-    return result;
 }
 
 const TOO_LONG_HEADER_SIZE = 1024 * (isNode ? 16 : 160) + 1;
