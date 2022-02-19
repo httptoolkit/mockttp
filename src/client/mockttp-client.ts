@@ -19,6 +19,8 @@ import { Mockttp, AbstractMockttp, MockttpOptions, PortRange, } from "../mockttp
 
 import { buildBodyReader } from '../util/request-utils';
 import { RequireProps } from '../util/type-utils';
+import { isErrorLike } from '../util/error';
+
 import { introspectionQuery } from './introspection-query';
 
 import { MockServerConfig } from "../standalone/mockttp-standalone";
@@ -139,7 +141,7 @@ async function requestFromStandalone<T>(serverUrl: string, path: string, options
     try {
         response = await fetch(url, options);
     } catch (e) {
-        if (e.code === 'ECONNREFUSED') {
+        if (isErrorLike(e) && e.code === 'ECONNREFUSED') {
             throw new ConnectionError(`Failed to connect to standalone server at ${serverUrl}`);
         } else throw e;
     }
@@ -366,13 +368,16 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
             }
         } catch (e) {
             if (this.debug) console.error(`Remote client query error: ${e}`);
+
+            if (!(e instanceof RequestError)) throw e;
+
             let graphQLErrors: Error[] | undefined = undefined;
             try {
                 graphQLErrors = (await e.response.json()).errors;
             } catch (e2) {}
 
             if (graphQLErrors) {
-                throw new GraphQLError(e, graphQLErrors);
+                throw new GraphQLError(e.response, graphQLErrors);
             } else {
                 throw e;
             }

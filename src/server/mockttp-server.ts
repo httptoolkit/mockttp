@@ -30,6 +30,7 @@ import { ServerMockedEndpoint } from "./mocked-endpoint";
 import { createComboServer } from "./http-combo-server";
 import { filter } from "../util/promise";
 import { Mutable } from "../util/type-utils";
+import { isErrorLike } from "../util/error";
 
 import {
     parseRequestBody,
@@ -470,15 +471,22 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
                     console.error("Failed to handle request due to abort:", e);
                 }
             } else {
-                console.error("Failed to handle request:", this.debug ? e : e.message);
+                console.error("Failed to handle request:",
+                    this.debug
+                        ? e
+                        : (isErrorLike(e) && e.message) || e
+                );
 
                 // Do whatever we can to tell the client we broke
                 try {
-                    response.writeHead(e.statusCode || 500, e.statusMessage || 'Server error');
+                    response.writeHead(
+                        (isErrorLike(e) && e.statusCode) || 500,
+                        (isErrorLike(e) && e.statusMessage) || 'Server error'
+                    );
                 } catch (e) {}
 
                 try {
-                    response.end(e.toString());
+                    response.end((isErrorLike(e) && e.toString()) || e);
                     result = result || 'responded';
                 } catch (e) {
                     abort();
@@ -520,7 +528,11 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
                     console.error("Failed to handle websocket due to abort:", e);
                 }
             } else {
-                console.error("Failed to handle websocket:", this.debug ? e : e.message);
+                console.error("Failed to handle websocket:",
+                    this.debug
+                    ? e
+                    : (isErrorLike(e) && e.message) || e
+                );
                 this.sendWebSocketErrorResponse(socket, e);
             }
         }
@@ -573,16 +585,19 @@ ${await this.suggestRule(request)}`
         response.end(await this.getUnmatchedRequestExplanation(request));
     }
 
-    private async sendWebSocketErrorResponse(socket: net.Socket, error: Error) {
+    private async sendWebSocketErrorResponse(socket: net.Socket, error: unknown) {
         if (socket.writable) {
             socket.end(
                 'HTTP/1.1 500 Internal Server Error\r\n' +
                 '\r\n' +
-                error.message
+                (isErrorLike(error)
+                    ? error.message ?? error.toString()
+                    : ''
+                )
             );
         }
 
-        socket.destroy(error);
+        socket.destroy(error as Error);
     }
 
     private async explainRequest(request: OngoingRequest): Promise<string> {

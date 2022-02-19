@@ -16,7 +16,7 @@ describe("Method & path request matching", function () {
         methods = methods.filter((m) => m !== 'options');
 
         it('should not allow registering matches for OPTIONS requests by default', () => {
-            let error: Error | null = null;
+            let error: unknown | null = null;
             try {
                 server.options('/');
             } catch (e) {
@@ -24,7 +24,7 @@ describe("Method & path request matching", function () {
             }
 
             expect(error).to.be.instanceof(Error);
-            expect(error!.message).to.include(`Cannot mock OPTIONS requests with CORS enabled.\n
+            expect((error as Error).message).to.include(`Cannot mock OPTIONS requests with CORS enabled.\n
 You can disable CORS by passing { cors: false } to getLocal/getRemote, but this may cause issues \
 connecting to your mock server from browsers, unless you mock all required OPTIONS preflight \
 responses by hand.`);

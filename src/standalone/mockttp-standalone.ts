@@ -19,10 +19,13 @@ import { Duplex, EventEmitter } from 'stream';
 import DuplexPair = require('native-duplexpair');
 
 import { destroyable, DestroyableServer } from "../util/destroyable-server";
-import { MockttpServer } from "../server/mockttp-server";
-import { buildStandaloneModel } from "./standalone-model";
+import { isErrorLike } from '../util/error';
+
 import { DEFAULT_STANDALONE_PORT } from '../types';
 import { Mockttp, MockttpOptions, PortRange } from '../mockttp';
+
+import { MockttpServer } from "../server/mockttp-server";
+import { buildStandaloneModel } from "./standalone-model";
 import { RuleParameters } from '../rules/rule-parameters';
 
 export interface StandaloneServerOptions {
@@ -169,7 +172,9 @@ export class MockttpStandalone {
 
                 res.json(config);
             } catch (e) {
-                res.status(500).json({ error: `Failed to start server: ${e.message || e}` });
+                res.status(500).json({ error: `Failed to start server: ${
+                    (isErrorLike(e) && e.message) || e
+                }` });
             }
         });
 
@@ -182,7 +187,9 @@ export class MockttpStandalone {
                 );
                 res.json({ success: true });
             } catch (e) {
-                res.status(500).json({ error: e?.message || 'Unknown error' });
+                res.status(500).json({
+                    error: (isErrorLike(e) && e.message) || 'Unknown error'
+                });
             }
         });
 

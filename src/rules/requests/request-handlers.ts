@@ -56,6 +56,7 @@ import {
     serializeProxyConfig
 } from "../../util/serialization";
 import { CachedDns, DnsLookupFunction } from '../../util/dns';
+import { ErrorLike, isErrorLike } from '../../util/error';
 
 import { assertParamDereferenced, RuleParameters } from '../rule-parameters';
 
@@ -196,7 +197,7 @@ export class CallbackHandler extends Serializable implements RequestHandler {
             outResponse = await this.callback(req);
         } catch (error) {
             response.writeHead(500, 'Callback handler threw an exception');
-            response.end(error.toString());
+            response.end(isErrorLike(error) ? error.toString() : error);
             return;
         }
 
@@ -1523,7 +1524,9 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
                         // A surprising number of real sites have slightly invalid headers
                         // (e.g. extra spaces). If we hit any, we just drop that header
                         // and print a warning.
-                        console.log(`Error setting header on passthrough response: ${e.message}`);
+                        console.log(`Error setting header on passthrough response: ${
+                            (isErrorLike(e) && e.message) || e
+                        }`);
                     }
                 });
 
@@ -1582,12 +1585,12 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
             clientReq.on('aborted', abortUpstream);
             clientRes.once('finish', () => clientReq.removeListener('aborted', abortUpstream));
 
-            serverReq.on('error', (e: any) => {
+            serverReq.on('error', (e: ErrorLike) => {
                 if ((<any>serverReq).aborted) return;
 
                 // Tag responses, so programmatic examination can react to this
                 // event, without having to parse response data or similar.
-                const tlsAlertMatch = /SSL alert number (\d+)/.exec(e.message);
+                const tlsAlertMatch = /SSL alert number (\d+)/.exec(e.message ?? '');
                 if (tlsAlertMatch) {
                     clientRes.tags.push('passthrough-tls-error:ssl-alert-' + tlsAlertMatch[1]);
                 }
