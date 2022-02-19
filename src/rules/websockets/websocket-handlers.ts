@@ -429,7 +429,8 @@ export class PassThroughWebSocketHandler extends Serializable implements WebSock
             lookup: this.lookup(),
             headers: _.omitBy(headers, (_v, headerName) =>
                 headerName.toLowerCase().startsWith('sec-websocket') ||
-                headerName.toLowerCase() === 'connection'
+                headerName.toLowerCase() === 'connection' ||
+                headerName.toLowerCase() === 'upgrade'
             ) as { [key: string]: string }, // Simplify to string - doesn't matter though, only used by http module anyway
 
             // TLS options:
