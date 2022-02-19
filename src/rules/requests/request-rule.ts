@@ -6,7 +6,8 @@ import { waitForCompletedRequest } from '../../util/request-utils';
 import { MaybePromise } from '../../util/type-utils';
 
 import * as matchers from "../matchers";
-import * as handlers from "./request-handlers";
+import type { RequestHandlerDefinition } from "./request-handler-definitions";
+import type { RequestHandler } from "./request-handlers";
 import * as completionCheckers from "../completion-checkers";
 import { validateMockRuleData } from '../rule-serialization';
 
@@ -24,13 +25,13 @@ export interface RequestRule extends Explainable {
 export interface RequestRuleData {
     id?: string;
     matchers: matchers.RequestMatcher[];
-    handler: handlers.RequestHandler;
+    handler: RequestHandler | RequestHandlerDefinition;
     completionChecker?: completionCheckers.RuleCompletionChecker;
 }
 
 export class RequestRule implements RequestRule {
     private matchers: matchers.RequestMatcher[];
-    private handler: handlers.RequestHandler;
+    private handler: RequestHandler;
     private completionChecker?: completionCheckers.RuleCompletionChecker;
 
     public id: string;
@@ -42,7 +43,14 @@ export class RequestRule implements RequestRule {
 
         this.id = data.id || uuid();
         this.matchers = data.matchers;
-        this.handler = data.handler;
+        if ('handle' in data.handler) {
+            this.handler = data.handler;
+        } else {
+            // For now, we require serializaion/deserialization elsewhere to convert definitions before
+            // handlers to get to here. In future, we may use definitions locally too, and by default in
+            // rule builders, in which case we'll need to somehow convert here automatically.
+            throw new Error('Handler definitions must be turned into real handlers before rule creation');
+        }
         this.completionChecker = data.completionChecker;
     }
 

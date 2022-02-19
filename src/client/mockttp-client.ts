@@ -23,11 +23,11 @@ import { isErrorLike } from '../util/error';
 
 import { introspectionQuery } from './introspection-query';
 
-import { MockServerConfig } from "../admin/mockttp-admin-server";
-import { RequestRuleData } from "../rules/requests/request-rule";
-import { WebSocketRuleData } from '../rules/websockets/websocket-rule';
-import { serializeRuleData } from '../rules/rule-serialization';
+import type { MockServerConfig } from "../admin/mockttp-admin-server";
+import type { RequestRuleData } from "../rules/requests/request-rule";
+import type { WebSocketRuleData } from '../rules/websockets/websocket-rule';
 
+import { serializeRuleData } from '../rules/rule-serialization';
 import { MockedEndpointClient } from "./mocked-endpoint-client";
 
 export class ConnectionError extends TypedError { }

@@ -22,12 +22,22 @@ export type {
 // Export rule data builders & type definitions:
 import * as matchers from './rules/matchers';
 import * as requestHandlers from './rules/requests/request-handlers';
+import * as requestHandlerDefinitions from './rules/requests/request-handler-definitions';
 import * as webSocketHandlers from './rules/websockets/websocket-handlers';
+import * as webSocketHandlerDefinitions from './rules/websockets/websocket-handler-definitions';
 import * as completionCheckers from './rules/completion-checkers';
-export { matchers, requestHandlers, webSocketHandlers, completionCheckers };
 
-import { RequestRuleData } from './rules/requests/request-rule';
-import { WebSocketRuleData } from './rules/websockets/websocket-rule';
+export {
+    matchers,
+    requestHandlers,
+    requestHandlerDefinitions,
+    webSocketHandlers,
+    webSocketHandlerDefinitions,
+    completionCheckers
+};
+
+import type { RequestRuleData } from './rules/requests/request-rule';
+import type { WebSocketRuleData } from './rules/websockets/websocket-rule';
 export type { RequestRuleData, WebSocketRuleData };
 export type {
     ProxyConfig,

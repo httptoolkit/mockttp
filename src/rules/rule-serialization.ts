@@ -1,17 +1,9 @@
 import { Duplex } from "stream";
 
-import { Serialized, serialize, deserialize } from "../util/serialization";
+import { Serialized, serialize } from "../util/serialization";
 
-import { RuleParameters } from "./rule-parameters";
-
-import { RequestRuleData } from "./requests/request-rule";
-import { WebSocketRuleData } from "./websockets/websocket-rule";
-
-import * as matchers from "./matchers";
-import * as completionCheckers from "./completion-checkers";
-
-import { HandlerLookup } from "./requests/request-handlers";
-import { WsHandlerLookup } from './websockets/websocket-handlers';
+import type { RequestRuleData } from "./requests/request-rule";
+import type { WebSocketRuleData } from "./websockets/websocket-rule";
 
 export function validateMockRuleData(data: RequestRuleData | WebSocketRuleData): void {
     if (!data.matchers || data.matchers.length === 0) {
@@ -34,43 +26,3 @@ export function serializeRuleData<
         completionChecker: data.completionChecker && serialize(data.completionChecker, stream)
     } as Serialized<DataFormat>;
 };
-
-export function deserializeRuleData(
-    data: Serialized<RequestRuleData>,
-    stream: Duplex,
-    ruleParameters: RuleParameters
-): RequestRuleData {
-    return {
-        id: data.id,
-        matchers: data.matchers.map((m) =>
-            deserialize(m, stream, ruleParameters, matchers.MatcherLookup)
-        ),
-        handler: deserialize(data.handler, stream, ruleParameters, HandlerLookup),
-        completionChecker: data.completionChecker && deserialize(
-            data.completionChecker,
-            stream,
-            ruleParameters,
-            completionCheckers.CompletionCheckerLookup
-        )
-    };
-}
-
-export function deserializeWebSocketRuleData(
-    data: Serialized<WebSocketRuleData>,
-    stream: Duplex,
-    ruleParameters: RuleParameters
-): WebSocketRuleData {
-    return {
-        id: data.id,
-        matchers: data.matchers.map((m) =>
-            deserialize(m, stream, ruleParameters, matchers.MatcherLookup)
-        ),
-        handler: deserialize(data.handler, stream, ruleParameters, WsHandlerLookup),
-        completionChecker: data.completionChecker && deserialize(
-            data.completionChecker,
-            stream,
-            ruleParameters,
-            completionCheckers.CompletionCheckerLookup
-        )
-    };
-}

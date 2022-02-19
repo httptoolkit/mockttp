@@ -1,8 +1,8 @@
 import * as util from 'util';
-import { CompletedRequest, MockedEndpoint } from '../types';
 
-import { RequestRule } from '../rules/requests/request-rule';
-import { WebSocketRule } from '../rules/websockets/websocket-rule';
+import type { CompletedRequest, MockedEndpoint } from '../types';
+import type { RequestRule } from '../rules/requests/request-rule';
+import type { WebSocketRule } from '../rules/websockets/websocket-rule';
 
 export class ServerMockedEndpoint implements MockedEndpoint {
 

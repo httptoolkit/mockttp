@@ -4,27 +4,18 @@ import * as url from 'url';
 import * as tls from 'tls';
 import * as http from 'http';
 import * as WebSocket from 'ws';
-import { stripIndent } from 'common-tags';
 import CacheableLookup from 'cacheable-lookup';
 
 import {
     ClientServerChannel,
-    deserializeProxyConfig,
-    Serializable,
-    SerializedProxyConfig,
-    serializeProxyConfig
+    deserializeProxyConfig
 } from "../../util/serialization";
 
-import {
-    OngoingRequest,
-    Explainable
-} from "../../types";
+import { OngoingRequest } from "../../types";
 
 import {
     CloseConnectionHandler,
-    TimeoutHandler,
-    ForwardingOptions,
-    PassThroughLookupOptions
+    TimeoutHandler
 } from '../requests/request-handlers';
 import { isHttp2 } from '../../util/request-utils';
 import { streamToBuffer } from '../../util/buffer-utils';
@@ -33,12 +24,19 @@ import { MaybePromise } from '../../util/type-utils';
 import { readFile } from '../../util/fs';
 
 import { getAgent } from '../http-agents';
-import { ProxyConfig, ProxySettingSource } from '../proxy-config';
+import { ProxySettingSource } from '../proxy-config';
 import { assertParamDereferenced, RuleParameters } from '../rule-parameters';
 import { MOCKTTP_UPSTREAM_CIPHERS } from '../passthrough-handling';
 
-export interface WebSocketHandler extends Explainable, Serializable {
-    type: keyof typeof WsHandlerLookup;
+import {
+    PassThroughWebSocketHandlerDefinition,
+    PassThroughWebSocketHandlerOptions,
+    SerializedPassThroughWebSocketData,
+    WebSocketHandlerDefinition,
+    WsHandlerDefinitionLookup,
+} from './websocket-handler-definitions';
+
+export interface WebSocketHandler extends WebSocketHandlerDefinition {
     handle(
         // The incoming upgrade request
         request: OngoingRequest,
@@ -149,88 +147,11 @@ async function mirrorRejection(socket: net.Socket, rejectionResponse: http.Incom
     socket.destroy();
 }
 
-export interface PassThroughWebSocketHandlerOptions {
-    /**
-     * The forwarding configuration for the passthrough rule.
-     * This generally shouldn't be used explicitly unless you're
-     * building rule data by hand. Instead, call `thenPassThrough`
-     * to send data directly or `thenForwardTo` with options to
-     * configure traffic forwarding.
-     */
-    forwarding?: ForwardingOptions,
+export { PassThroughWebSocketHandlerOptions };
 
-    /**
-     * A list of hostnames for which server certificate and TLS version errors
-     * should be ignored (none, by default).
-     */
-    ignoreHostHttpsErrors?: string[];
-
-    /**
-     * Deprecated alias for ignoreHostHttpsErrors.
-     * @deprecated
-     */
-    ignoreHostCertificateErrors?: string[];
-
-    /**
-     * An array of additional certificates, which should be trusted as certificate
-     * authorities for upstream hosts, in addition to Node.js's built-in certificate
-     * authorities.
-     *
-     * Each certificate should be an object with either a `cert` key and a string
-     * or buffer value containing the PEM certificate, or a `certPath` key and a
-     * string value containing the local path to the PEM certificate.
-     */
-    trustAdditionalCAs?: Array<{ cert: string | Buffer } | { certPath: string }>;
-
-    /**
-     * Upstream proxy configuration: pass through websockets via this proxy.
-     *
-     * If this is undefined, no proxy will be used. To configure a proxy
-     * provide either:
-     * - a ProxySettings object
-     * - a callback which will be called with an object containing the
-     *   hostname, and must return a ProxySettings object or undefined.
-     * - an array of ProxySettings or callbacks. The array will be
-     *   processed in order, and the first not-undefined ProxySettings
-     *   found will be used.
-     *
-     * When using a remote client, this parameter or individual array
-     * values may be passed by reference, using the name of a rule
-     * parameter configured in the admin server.
-     */
-    proxyConfig?: ProxyConfig;
-
-    /**
-     * Custom DNS options, to allow configuration of the resolver used
-     * when forwarding requests upstream. Passing any option switches
-     * from using node's default dns.lookup function to using the
-     * cacheable-lookup module, which will cache responses.
-     */
-    lookupOptions?: PassThroughLookupOptions;
-}
-
-interface SerializedPassThroughWebSocketData {
-    type: 'ws-passthrough';
-    forwarding?: ForwardingOptions;
-    lookupOptions?: PassThroughLookupOptions;
-    proxyConfig?: SerializedProxyConfig;
-    ignoreHostCertificateErrors?: string[]; // Doesn't match option name, backward compat
-    extraCACertificates?: Array<{ cert: string } | { certPath: string }>;
-}
-
-export class PassThroughWebSocketHandler extends Serializable implements WebSocketHandler {
-    readonly type = 'ws-passthrough';
+export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefinition {
 
     private wsServer?: WebSocket.Server;
-
-    // Same lookup configuration as normal request PassThroughHandler:
-    public readonly lookupOptions: PassThroughLookupOptions | undefined;
-    public readonly proxyConfig?: ProxyConfig;
-
-    public readonly forwarding?: ForwardingOptions;
-    public readonly ignoreHostHttpsErrors: string[] = [];
-
-    public readonly extraCACertificates: Array<{ cert: string | Buffer } | { certPath: string }> = [];
 
     private _trustedCACertificates: MaybePromise<Array<string> | undefined>;
     private async trustedCACertificates(): Promise<Array<string> | undefined> {
@@ -270,41 +191,6 @@ export class PassThroughWebSocketHandler extends Serializable implements WebSock
         }
 
         return this._cacheableLookupInstance.lookup;
-    }
-
-    constructor(options: PassThroughWebSocketHandlerOptions = {}) {
-        super();
-
-        this.ignoreHostHttpsErrors = options.ignoreHostHttpsErrors ||
-            options.ignoreHostCertificateErrors ||
-            [];
-        if (!Array.isArray(this.ignoreHostHttpsErrors)) {
-            throw new Error("ignoreHostHttpsErrors must be an array");
-        }
-
-        // If a location is provided, and it's not a bare hostname, it must be parseable
-        const { forwarding } = options;
-        if (forwarding && forwarding.targetHost.includes('/')) {
-            const { protocol, hostname, port, path } = url.parse(forwarding.targetHost);
-            if (path && path.trim() !== "/") {
-                const suggestion = url.format({ protocol, hostname, port }) ||
-                    forwarding.targetHost.slice(0, forwarding.targetHost.indexOf('/'));
-                throw new Error(stripIndent`
-                    URLs for forwarding cannot include a path, but "${forwarding.targetHost}" does. ${''
-                    }Did you mean ${suggestion}?
-                `);
-            }
-        }
-        this.forwarding = options.forwarding;
-
-        this.lookupOptions = options.lookupOptions;
-        this.proxyConfig = options.proxyConfig;
-    }
-
-    explain() {
-        return this.forwarding
-            ? `forward the websocket to ${this.forwarding.targetHost}`
-            : 'pass the request through to the target host';
     }
 
     private initializeWsServer() {
@@ -465,30 +351,6 @@ export class PassThroughWebSocketHandler extends Serializable implements WebSock
     /**
      * @internal
      */
-    serialize(channel: ClientServerChannel): SerializedPassThroughWebSocketData {
-        return {
-            type: this.type,
-            forwarding: this.forwarding,
-            lookupOptions: this.lookupOptions,
-            proxyConfig: serializeProxyConfig(this.proxyConfig, channel),
-            ignoreHostCertificateErrors: this.ignoreHostHttpsErrors,
-            extraCACertificates: this.extraCACertificates.map((certObject) => {
-                // We use toString to make sure that buffers always end up as
-                // as UTF-8 string, to avoid serialization issues. Strings are an
-                // easy safe format here, since it's really all just plain-text PEM
-                // under the hood.
-                if ('cert' in certObject) {
-                    return { cert: certObject.cert.toString('utf8') }
-                } else {
-                    return certObject;
-                }
-            }),
-        };
-    }
-
-    /**
-     * @internal
-     */
     static deserialize(
         data: SerializedPassThroughWebSocketData,
         channel: ClientServerChannel,
@@ -506,10 +368,13 @@ export class PassThroughWebSocketHandler extends Serializable implements WebSock
 
 // These two work equally well for HTTP requests as websockets, but it's
 // useful to reexport there here for consistency.
-export { CloseConnectionHandler, TimeoutHandler };
+export {
+    CloseConnectionHandler,
+    TimeoutHandler
+};
 
-export const WsHandlerLookup = {
+export const WsHandlerLookup: typeof WsHandlerDefinitionLookup = {
     'ws-passthrough': PassThroughWebSocketHandler,
     'close-connection': CloseConnectionHandler,
     'timeout': TimeoutHandler
-}
+};

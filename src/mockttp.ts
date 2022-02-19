@@ -1,7 +1,7 @@
 import { stripIndent } from "common-tags";
 import * as cors from 'cors';
 
-import { CAOptions } from './util/tls';
+import type { CAOptions } from './util/tls';
 
 import { RequestRuleBuilder } from "./rules/requests/request-rule-builder";
 import { WebSocketRuleBuilder } from "./rules/websockets/websocket-rule-builder";
@@ -16,8 +16,8 @@ import {
     InitiatedRequest,
     ClientError
 } from "./types";
-import { RequestRuleData } from "./rules/requests/request-rule";
-import { WebSocketRuleData } from "./rules/websockets/websocket-rule";
+import type { RequestRuleData } from "./rules/requests/request-rule";
+import type { WebSocketRuleData } from "./rules/websockets/websocket-rule";
 
 export type PortRange = { startPort: number, endPort: number };
 

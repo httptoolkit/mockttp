@@ -10,17 +10,24 @@ import {
 import type { IResolvers } from "@graphql-tools/utils/Interfaces";
 import { PubSub } from "graphql-subscriptions";
 
-import { MockttpServer } from "../server/mockttp-server";
-import { ServerMockedEndpoint } from "../server/mocked-endpoint";
-import { MockedEndpoint, MockedEndpointData, CompletedRequest, CompletedResponse, ClientError } from "../types";
-import { Serialized } from "../util/serialization";
-import { RequestRuleData } from "../rules/requests/request-rule";
-import { RequestMatcher } from "../rules/matchers";
-import { RequestHandler } from "../rules/requests/request-handlers";
-import { RuleCompletionChecker } from "../rules/completion-checkers";
-import { deserializeRuleData, deserializeWebSocketRuleData } from "../rules/rule-serialization";
-import { WebSocketRuleData } from "../rules/websockets/websocket-rule";
-import { WebSocketHandler } from "../rules/websockets/websocket-handlers";
+import type { MockttpServer } from "../server/mockttp-server";
+import type { ServerMockedEndpoint } from "../server/mocked-endpoint";
+import type {
+    MockedEndpoint,
+    MockedEndpointData,
+    CompletedRequest,
+    CompletedResponse,
+    ClientError
+} from "../types";
+import type { Serialized } from "../util/serialization";
+import type { RequestRuleData } from "../rules/requests/request-rule";
+import type { RequestMatcher } from "../rules/matchers";
+import type { RequestHandler } from "../rules/requests/request-handlers";
+import type { RuleCompletionChecker } from "../rules/completion-checkers";
+import type { WebSocketRuleData } from "../rules/websockets/websocket-rule";
+import type { WebSocketHandler } from "../rules/websockets/websocket-handlers";
+
+import { deserializeRuleData, deserializeWebSocketRuleData } from "../rules/rule-deserialization";
 
 const REQUEST_INITIATED_TOPIC = 'request-initiated';
 const REQUEST_RECEIVED_TOPIC = 'request-received';

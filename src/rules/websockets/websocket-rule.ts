@@ -10,10 +10,12 @@ import {
 import { waitForCompletedRequest } from '../../util/request-utils';
 import { MaybePromise } from '../../util/type-utils';
 
+import { validateMockRuleData } from '../rule-serialization';
+
 import * as matchers from "../matchers";
 import * as completionCheckers from "../completion-checkers";
-import * as handlers from "./websocket-handlers";
-import { validateMockRuleData } from '../rule-serialization';
+import type { WebSocketHandler } from "./websocket-handlers";
+import type { WebSocketHandlerDefinition } from "./websocket-handler-definitions";
 
 // The internal representation of a mocked endpoint
 export interface WebSocketRule extends Explainable {
@@ -29,13 +31,13 @@ export interface WebSocketRule extends Explainable {
 export interface WebSocketRuleData {
     id?: string;
     matchers: matchers.RequestMatcher[];
-    handler: handlers.WebSocketHandler;
+    handler: WebSocketHandler | WebSocketHandlerDefinition;
     completionChecker?: completionCheckers.RuleCompletionChecker;
 }
 
 export class WebSocketRule implements WebSocketRule {
     private matchers: matchers.RequestMatcher[];
-    private handler: handlers.WebSocketHandler;
+    private handler: WebSocketHandler;
     private completionChecker?: completionCheckers.RuleCompletionChecker;
 
     public id: string;
@@ -47,7 +49,14 @@ export class WebSocketRule implements WebSocketRule {
 
         this.id = data.id || uuid();
         this.matchers = data.matchers;
-        this.handler = data.handler;
+        if ('handle' in data.handler) {
+            this.handler = data.handler;
+        } else {
+            // For now, we require serializaion/deserialization elsewhere to convert definitions before
+            // handlers to get to here. In future, we may use definitions locally too, and by default in
+            // rule builders, in which case we'll need to somehow convert here automatically.
+            throw new Error('Handler definitions must be turned into real handlers before rule creation');
+        }
         this.completionChecker = data.completionChecker;
     }
 
