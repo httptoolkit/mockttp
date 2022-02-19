@@ -35,7 +35,7 @@ async function handleArgs(args: string[]) {
 }
 
 async function runCommandWithServer(command: string, debug: boolean, port?: number) {
-    const server = Mockttp.getStandalone({ debug });
+    const server = Mockttp.getAdminServer({ debug });
     await server.start(port);
 
     let realProcess = childProcess.spawn(command, [], {

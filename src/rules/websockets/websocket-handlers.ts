@@ -196,7 +196,7 @@ export interface PassThroughWebSocketHandlerOptions {
      *
      * When using a remote client, this parameter or individual array
      * values may be passed by reference, using the name of a rule
-     * parameter configured in the standalone server.
+     * parameter configured in the admin server.
      */
     proxyConfig?: ProxyConfig;
 

@@ -5,13 +5,13 @@ export type RuleParameters = {
 export const MOCKTTP_PARAM_REF = Symbol('MOCKTTP_PARAM_REF');
 
 /**
- * A reference to a rule parameter defined in the `ruleParameters` standalone server
- * option of the corresponding standalone server.
+ * A reference to a rule parameter defined in the `ruleParameters` admin server
+ * option of the corresponding admin server.
  *
  * Rule parameter references are only valid with a remote client. They can be useful in
- * cases where the standalone server has access to local state or APIs that are not
- * accessible from the remote client, but are useful in rule definitions. This is only
- * supported for some specific parameters where documented explicitly in that rule
+ * cases where the admin server has access to local state or APIs that are not
+ * accessible from the remote client, but which would be  useful in rule definitions. This
+ * is only supported for some specific parameters where documented explicitly in that rule
  * parameter.
  */
 export type RuleParameterReference<R> = {

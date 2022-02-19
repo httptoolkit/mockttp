@@ -21,22 +21,22 @@ import DuplexPair = require('native-duplexpair');
 import { destroyable, DestroyableServer } from "../util/destroyable-server";
 import { isErrorLike } from '../util/error';
 
-import { DEFAULT_STANDALONE_PORT } from '../types';
+import { DEFAULT_ADMIN_SERVER_PORT } from '../types';
 import { Mockttp, MockttpOptions, PortRange } from '../mockttp';
 
 import { MockttpServer } from "../server/mockttp-server";
-import { buildStandaloneModel } from "./standalone-model";
+import { buildAdminServerModel } from "./admin-model";
 import { RuleParameters } from '../rules/rule-parameters';
 
-export interface StandaloneServerOptions {
+export interface AdminServerOptions {
     /**
-     * Should the standalone server print extra debug information? This enables standalone debugging
+     * Should the admin server print extra debug information? This enables admin server debugging
      * only - individual mock server debugging must be enabled separately.
      */
     debug?: boolean;
 
     /**
-     * Set CORS options to limit the sites which can send requests to manage this standalone server.
+     * Set CORS options to limit the sites which can send requests to manage this admin server.
      */
     corsOptions?: cors.CorsOptions & { strict?: boolean };
 
@@ -48,8 +48,8 @@ export interface StandaloneServerOptions {
     webSocketKeepAlive?: number;
 
     /**
-     * Override the default parameters for servers started from this standalone. These values will be
-     * used for each setting that is not explicitly specified by the client when creating the server.
+     * Override the default parameters for servers started from this admin server. These values will be
+     * used for each setting that is not explicitly specified by the client when creating a mock server.
      */
     serverDefaults?: MockttpOptions;
 
@@ -97,7 +97,7 @@ async function strictOriginMatch(
     return false;
 }
 
-export class MockttpStandalone {
+export class MockttpAdminServer {
 
     private debug: boolean;
     private requiredOrigin: cors.CorsOptions['origin'] | false;
@@ -117,9 +117,9 @@ export class MockttpStandalone {
         streamServer: Ws.Server
     } } = { };
 
-    constructor(options: StandaloneServerOptions = {}) {
+    constructor(options: AdminServerOptions = {}) {
         this.debug = options.debug || false;
-        if (this.debug) console.log('Standalone server started in debug mode');
+        if (this.debug) console.log('Admin server started in debug mode');
 
         this.webSocketKeepAlive = options.webSocketKeepAlive || undefined;
         this.ruleParams = options.ruleParameters || {};
@@ -144,7 +144,7 @@ export class MockttpStandalone {
         this.app.use(bodyParser.json({ limit: '50mb' }));
 
         this.app.post('/start', async (req, res) => {
-            if (this.debug) console.log('Standalone starting mock server on port', req.query.port);
+            if (this.debug) console.log('Admin starting mock server on port', req.query.port);
 
             try {
                 const port: number | PortRange | undefined = (typeof req.query.port === 'string')
@@ -179,7 +179,7 @@ export class MockttpStandalone {
         });
 
         this.app.post('/reset', async (req, res) => {
-            if (this.debug) console.log('Resetting standalone server');
+            if (this.debug) console.log('Resetting admin server');
 
             try {
                 await Promise.all(
@@ -214,7 +214,7 @@ export class MockttpStandalone {
         return fs.readFile(path.join(__dirname, schemaFilename), 'utf8')
         .then((schemaString) => makeExecutableSchema({
             typeDefs: schemaString,
-            resolvers: buildStandaloneModel(mockServer, stream, this.ruleParams)
+            resolvers: buildAdminServerModel(mockServer, stream, this.ruleParams)
         }));
     }
 
@@ -236,7 +236,7 @@ export class MockttpStandalone {
      * This is run synchronously immediately before the server is shutdown, whilst all
      * its state is still available, and before remote clients have had any response to
      * their request to shut the server down. This is also run before shutdown when the
-     * standalone server itself is cleanly shutdown with `standalone.stop()`.
+     * admin server itself is cleanly shutdown with `adminServer.stop()`.
      */
     on(event: 'mock-server-stopping', listener: (server: Mockttp) => void): void;
     on(event: string, listener: (...args: any) => void): void {
@@ -247,9 +247,9 @@ export class MockttpStandalone {
         listenOptions: number | {
             port: number,
             host: string
-        } = DEFAULT_STANDALONE_PORT
+        } = DEFAULT_ADMIN_SERVER_PORT
     ) {
-        if (this.server) throw new Error('Standalone server already running');
+        if (this.server) throw new Error('Admin server already running');
 
         await new Promise<void>((resolve, reject) => {
             this.server = destroyable(this.app.listen(listenOptions, resolve));
@@ -296,7 +296,7 @@ export class MockttpStandalone {
         mockServer: MockttpServer
     }> {
         const mockServer = new MockttpServer(_.defaults(options, {
-            // Use debug mode if the client requests it, or if the standalone has it set
+            // Use debug mode if the client requests it, or if the admin has it set
             debug: this.debug
         }));
 
@@ -373,7 +373,7 @@ export class MockttpStandalone {
         // Handle errors by logging & stopping this server instance
         const onStreamError = (e: Error) => {
             if (!running) return; // We don't care about connection issues during shutdown
-            console.error("Error in server standalone stream, shutting down mock server");
+            console.error("Error in admin server stream, shutting down mock server");
             console.error(e);
             stopServer();
         };

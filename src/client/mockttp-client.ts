@@ -14,7 +14,7 @@ const {
     Headers
 } = getFetchPonyfill();
 
-import { MockedEndpoint, MockedEndpointData, DEFAULT_STANDALONE_PORT } from "../types";
+import { MockedEndpoint, MockedEndpointData, DEFAULT_ADMIN_SERVER_PORT } from "../types";
 import { Mockttp, AbstractMockttp, MockttpOptions, PortRange, } from "../mockttp";
 
 import { buildBodyReader } from '../util/request-utils';
@@ -23,7 +23,7 @@ import { isErrorLike } from '../util/error';
 
 import { introspectionQuery } from './introspection-query';
 
-import { MockServerConfig } from "../standalone/mockttp-standalone";
+import { MockServerConfig } from "../admin/mockttp-admin-server";
 import { RequestRuleData } from "../rules/requests/request-rule";
 import { WebSocketRuleData } from '../rules/websockets/websocket-rule';
 import { serializeRuleData } from '../rules/rule-serialization';
@@ -76,8 +76,15 @@ type SubscribableEvent =
 
 export interface MockttpClientOptions extends MockttpOptions {
     /**
-     * The full URL to use for a standalone server with remote (or local but browser) client.
-     * When using a local server, this parameter is ignored.
+     * The full URL to use to connect to a Mockttp admin server when using a
+     * remote (or local but browser) client.
+     *
+     * When using a local server, this option is ignored.
+     */
+    adminServerUrl?: string;
+
+    /**
+     * @deprecated Alias for adminServerUrl option
      */
     standaloneServerUrl?: string;
 
@@ -134,7 +141,7 @@ function normalizeHttpMessage(event: SubscribableEvent, message: any) {
     if (!message.tags) message.tags = [];
 }
 
-async function requestFromStandalone<T>(serverUrl: string, path: string, options?: RequestInit): Promise<T> {
+async function requestFromAdminServer<T>(serverUrl: string, path: string, options?: RequestInit): Promise<T> {
     const url = `${serverUrl}${path}`;
 
     let response;
@@ -142,7 +149,7 @@ async function requestFromStandalone<T>(serverUrl: string, path: string, options
         response = await fetch(url, options);
     } catch (e) {
         if (isErrorLike(e) && e.code === 'ECONNREFUSED') {
-            throw new ConnectionError(`Failed to connect to standalone server at ${serverUrl}`);
+            throw new ConnectionError(`Failed to connect to admin server at ${serverUrl}`);
         } else throw e;
     }
 
@@ -171,50 +178,59 @@ async function requestFromStandalone<T>(serverUrl: string, path: string, options
 }
 
 /**
- * Reset a remote standalone server, shutting down all Mockttp servers controlled by that
- * standalone server. This is equivalent to calling `client.stop()` for all remote
+ * Reset a remote admin server, shutting down all Mockttp servers controlled by that
+ * admin server. This is equivalent to calling `client.stop()` for all remote
  * clients of the target server.
  *
  * This can be useful in some rare cases, where a client might fail to reliably tear down
  * its own server, e.g. in Cypress testing. In this case, it's useful to reset the
- * standalone server completely remotely without needing access to any previous client
+ * admin server completely remotely without needing access to any previous client
  * instances, to ensure all servers from previous test runs have been shut down.
  *
  * After this is called, behaviour of any previously connected clients is undefined, and
  * it's likely that they may throw errors or experience other undefined behaviour. Ensure
  * that `client.stop()` has been called on all active clients before calling this method.
  */
- export async function resetStandalone(options: {
+export async function resetAdminServer(options: {
     /**
-    * The full URL to use for a standalone server with remote (or local but browser) client.
-    * When using a local server, this parameter is ignored.
+     * The full URL to use to connect to the Mockttp admin server that will be reset.
     */
-   standaloneServerUrl?: string;
+    adminServerUrl?: string;
 
-   /**
-    * Options to include on all client requests, e.g. to add extra
-    * headers for authentication.
-    */
-   client?: {
-       headers?: { [key: string]: string };
-   }
+    /**
+     * @deprecated Alias for adminServerUrl option
+     */
+    standaloneServerUrl?: string;
+
+    /**
+     * Options to include on all client requests, e.g. to add extra
+     * headers for authentication.
+     */
+    client?: {
+        headers?: { [key: string]: string };
+    }
 } = {}): Promise<void> {
-    const serverUrl = options.standaloneServerUrl || `http://localhost:${DEFAULT_STANDALONE_PORT}`;
-    await requestFromStandalone(serverUrl, '/reset', {
+    const serverUrl = options.adminServerUrl ||
+        options.standaloneServerUrl ||
+        `http://localhost:${DEFAULT_ADMIN_SERVER_PORT}`;
+    await requestFromAdminServer(serverUrl, '/reset', {
         ...options.client,
         method: 'POST'
     });
 }
 
 /**
- * A Mockttp implementation, controlling a remote Mockttp standalone server.
+ * A Mockttp implementation, controlling a remote Mockttp admin server.
  *
- * This starts servers by making requests to the remote standalone server, and exposes
- * methods to directly manage them.
+ * A MockttpClient supports the exact same Mockttp API as MockttpServer, but rather
+ * than directly using Node.js APIs to start a mock server and rewrite traffic, it
+ * makes calls to a remote admin server to start a mock server and rewrite traffic
+ * there. This is useful to allow proxy configuration from inside browser tests, and
+ * to allow creating mock proxies that run on remote machines.
  */
 export class MockttpClient extends AbstractMockttp implements Mockttp {
 
-    private mockServerOptions: RequireProps<MockttpClientOptions, 'cors' | 'standaloneServerUrl'>;
+    private mockServerOptions: RequireProps<MockttpClientOptions, 'cors' | 'adminServerUrl'>;
     private mockClientOptions: MockttpClientOptions['client'];
 
     private mockServerConfig: MockServerConfig | undefined;
@@ -229,20 +245,27 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
             // Browser clients generally want cors enabled. For other clients, it doesn't hurt.
             // TODO: Maybe detect whether we're in a browser in future
             cors: true,
-            standaloneServerUrl: `http://localhost:${DEFAULT_STANDALONE_PORT}`
         }));
+
+        if (!options.adminServerUrl) {
+            if (options.standaloneServerUrl) {
+                options.adminServerUrl = options.standaloneServerUrl;
+            } else {
+                options.adminServerUrl = `http://localhost:${DEFAULT_ADMIN_SERVER_PORT}`;
+            }
+        }
 
         // Note that 'defaults' above mutates this, so this includes
         // the default parameter values too (and thus the type assertion)
         this.mockServerOptions = _.omit(options, 'client') as RequireProps<
-            MockttpClientOptions, 'cors' | 'standaloneServerUrl'
+            MockttpClientOptions, 'cors' | 'adminServerUrl'
         >
         this.mockClientOptions = options.client || {};
     }
 
     private attachStreamWebsocket(config: MockServerConfig, targetStream: Duplex): Duplex {
-        const standaloneStreamServer = this.mockServerOptions.standaloneServerUrl.replace(/^http/, 'ws');
-        const wsStream = connectWebSocketStream(`${standaloneStreamServer}/server/${config.port}/stream`, {
+        const adminStreamServer = this.mockServerOptions.adminServerUrl.replace(/^http/, 'ws');
+        const wsStream = connectWebSocketStream(`${adminStreamServer}/server/${config.port}/stream`, {
             headers: this.mockClientOptions?.headers // Only used in Node.js (via WS)
         });
 
@@ -313,8 +336,8 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
     }
 
     private prepareSubscriptionClientToMockServer(config: MockServerConfig) {
-        const standaloneWsServer = this.mockServerOptions.standaloneServerUrl.replace(/^http/, 'ws');
-        const subscriptionUrl = `${standaloneWsServer}/server/${config.port}/subscription`;
+        const adminWsServer = this.mockServerOptions.adminServerUrl.replace(/^http/, 'ws');
+        const subscriptionUrl = `${adminWsServer}/server/${config.port}/subscription`;
         this.subscriptionClient = new SubscriptionClient(subscriptionUrl, {
             lazy: true, // Doesn't actually connect until you use subscriptions
             reconnect: true,
@@ -335,7 +358,7 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
         // Must check for config, not this.running, or we can't send the /stop request!
         if (!this.mockServerConfig) throw new Error('Not connected to mock server');
 
-        let url = `${this.mockServerOptions.standaloneServerUrl}/server/${this.mockServerConfig.port}${path}`;
+        let url = `${this.mockServerOptions.adminServerUrl}/server/${this.mockServerConfig.port}${path}`;
         let response = await fetch(url, mergeClientOptions(options, this.mockClientOptions));
 
         if (response.status >= 400) {
@@ -389,8 +412,8 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
         if (this.debug) console.log(`Starting remote mock server on port ${portConfig}`);
 
         const path = portConfig ? `/start?port=${JSON.stringify(portConfig)}` : '/start';
-        let mockServerConfig = await requestFromStandalone<MockServerConfig>(
-            this.mockServerOptions.standaloneServerUrl,
+        let mockServerConfig = await requestFromAdminServer<MockServerConfig>(
+            this.mockServerOptions.adminServerUrl,
             path,
             mergeClientOptions({
                 method: 'POST',
@@ -646,7 +669,7 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
     }
 
     /**
-     * List the names of the rule parameters defined by the standalone server. This can be
+     * List the names of the rule parameters defined by the admin server. This can be
      * used in some advanced use cases to confirm that the parameters a client wishes to
      * reference are available.
      *

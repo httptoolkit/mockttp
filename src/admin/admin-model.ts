@@ -158,7 +158,7 @@ const ScalarResolvers = {
     })
 };
 
-export function buildStandaloneModel(
+export function buildAdminServerModel(
     mockServer: MockttpServer,
     stream: Duplex,
     ruleParameters: { [key: string]: any }

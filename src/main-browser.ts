@@ -1,4 +1,7 @@
-import { MockttpClient, resetStandalone } from "./client/mockttp-client";
+import {
+    MockttpClient,
+    resetAdminServer
+} from "./client/mockttp-client";
 
 import { Mockttp, MockttpOptions } from "./mockttp";
 export { Method } from "./types";
@@ -23,7 +26,12 @@ export function getRemote(options: MockttpOptions = {}): Mockttp {
     return new MockttpClient(options);
 }
 
-export function getStandalone(options: any = {}): never {
-    throw new Error('Cannot set up a standalone server within a browser');
+export function getAdminServer(options: any = {}): never {
+    throw new Error('Cannot set up an admin server within a browser');
 }
-export { resetStandalone };
+
+export {
+    resetAdminServer,
+    getAdminServer as getStandalone,
+    resetAdminServer as resetStandalone
+};

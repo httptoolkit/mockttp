@@ -2,7 +2,12 @@ import stream = require('stream');
 import http = require('http');
 import { EventEmitter } from 'events';
 
-export const DEFAULT_STANDALONE_PORT = 45454;
+export const DEFAULT_ADMIN_SERVER_PORT = 45454;
+
+/**
+ * @deprecated Alias for DEFAULT_ADMIN_SERVER_PORT
+ */
+export const DEFAULT_STANDALONE_PORT = DEFAULT_ADMIN_SERVER_PORT;
 
 export enum Method {
     GET,

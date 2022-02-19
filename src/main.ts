@@ -1,6 +1,10 @@
 import { MockttpServer } from "./server/mockttp-server";
-import { MockttpClient, MockttpClientOptions, resetStandalone } from "./client/mockttp-client";
-import { MockttpStandalone, StandaloneServerOptions } from "./standalone/mockttp-standalone";
+import {
+    MockttpClient,
+    MockttpClientOptions,
+    resetAdminServer
+} from "./client/mockttp-client";
+import { MockttpAdminServer, AdminServerOptions } from "./admin/mockttp-admin-server";
 
 import { Mockttp, MockttpOptions, PortRange } from "./mockttp";
 
@@ -10,8 +14,8 @@ export type {
     Mockttp,
     MockttpOptions,
     MockttpClientOptions,
-    StandaloneServerOptions,
-    MockttpStandalone,
+    AdminServerOptions,
+    MockttpAdminServer,
     PortRange
 };
 
@@ -37,9 +41,6 @@ export type { RequestRuleBuilder } from "./rules/requests/request-rule-builder";
 export type { WebSocketRuleBuilder } from "./rules/websockets/websocket-rule-builder";
 
 export { MOCKTTP_PARAM_REF, RuleParameterReference } from './rules/rule-parameters';
-
-// Old pre-WebSocket names, exported for backward compat:
-export { requestHandlers as handlers, RequestRuleData as MockRuleData };
 
 // Export TLS utility methods:
 export {
@@ -67,7 +68,7 @@ export type { MaybePromise } from './util/type-utils';
  *
  * In node, the mocked servers will run in process and require no further setup.
  *
- * In browsers this is an alias for getRemote. You'll need to start a standalone server
+ * In browsers this is an alias for getRemote. You'll need to start a Mockttp admin server
  * outside your tests before calling this, which will create and manage your fake servers
  * outside the browser.
  */
@@ -76,9 +77,9 @@ export function getLocal(options: MockttpOptions = {}): Mockttp {
 }
 
 /**
- * Get a Mockttp instance, controlled through a Mockttp standalone server.
+ * Get a Mockttp instance, controlled through a Mockttp admin server.
  *
- * This connects to a Mockttp standalone server, and uses that to start
+ * This connects to a Mockttp admin server, and uses that to start
  * and stop mock servers.
  */
 export function getRemote(options: MockttpClientOptions = {}): Mockttp {
@@ -86,18 +87,48 @@ export function getRemote(options: MockttpClientOptions = {}): Mockttp {
 }
 
 /**
- * Get a standalone server, which can be used remotely to create & manage mock servers.
+ * Get a Mockttp admin server, which can be used with a Mockttp remote client to create
+ * & manage Mockttp instances either from remote machines or from local environments
+ * that lack necessary capabilities, e.g. to use Mockttp from inside a browser.
  *
  * This function exists so you can set up these servers programmatically, but for most
  * usage you can just run your tests via the `mockttp` binary, which will automatically
- * start and stop a standalone server for you:
+ * start and stop an admin server for you:
  *
  * ```
  * mockttp -c <your test command>
  * ```
  */
-export function getStandalone(options: StandaloneServerOptions = {}): MockttpStandalone {
-    return new MockttpStandalone(options);
+export function getAdminServer(options: AdminServerOptions = {}): MockttpAdminServer {
+    return new MockttpAdminServer(options);
 }
 
-export { resetStandalone };
+export { resetAdminServer };
+
+// Various old names, still exported (but marked deprecated) for backward compat:
+
+/**
+ * @deprecated alias for requestHandlers
+ */
+ export const handlers = requestHandlers
+/**
+ * @deprecated alias for RequestRuleData
+ */
+export type MockRuleData = RequestRuleData;
+
+/**
+ * @deprecated alias for getAdminServer.
+ */
+ export const getStandalone = getAdminServer;
+/**
+ * @deprecated alias for resetAdminServer
+ */
+export const resetStandalone = resetAdminServer;
+/**
+* @deprecated alias for AdminServerOptions
+*/
+export type StandaloneServerOptions = AdminServerOptions;
+/**
+* @deprecated alias for MockttpAdminServer
+*/
+export type MockttpStandalone = MockttpAdminServer;

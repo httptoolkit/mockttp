@@ -531,7 +531,7 @@ export interface PassThroughHandlerOptions {
      *
      * When using a remote client, this parameter or individual array
      * values may be passed by reference, using the name of a rule
-     * parameter configured in the standalone server.
+     * parameter configured in the admin server.
      */
     proxyConfig?: ProxyConfig;
 
@@ -1312,7 +1312,7 @@ export class PassThroughHandler extends Serializable implements RequestHandler {
         }
 
         // Remote clients might configure a passthrough rule with a parameter reference for the proxy,
-        // delegating proxy config to the standalone server. That's fine initially, but you can't actually
+        // delegating proxy config to the admin server. That's fine initially, but you can't actually
         // handle a request in that case - make sure our proxyConfig is always dereferenced before use.
         const proxySettingSource = assertParamDereferenced(this.proxyConfig) as ProxySettingSource;
 
