@@ -7,7 +7,7 @@ import { MaybePromise } from '../../util/type-utils';
 
 import * as matchers from "../matchers";
 import type { RequestHandlerDefinition } from "./request-handler-definitions";
-import type { RequestHandler } from "./request-handlers";
+import { HandlerLookup, RequestHandler } from "./request-handlers";
 import * as completionCheckers from "../completion-checkers";
 import { validateMockRuleData } from '../rule-serialization';
 
@@ -43,15 +43,18 @@ export class RequestRule implements RequestRule {
 
         this.id = data.id || uuid();
         this.matchers = data.matchers;
+        this.completionChecker = data.completionChecker;
+
         if ('handle' in data.handler) {
             this.handler = data.handler;
         } else {
-            // For now, we require serializaion/deserialization elsewhere to convert definitions before
-            // handlers to get to here. In future, we may use definitions locally too, and by default in
-            // rule builders, in which case we'll need to somehow convert here automatically.
-            throw new Error('Handler definitions must be turned into real handlers before rule creation');
+            // We transform the definition into a real handler, by creating an instance of the raw handler (which is
+            // a subtype of the definition with the same constructor) and copying the fields across.
+            this.handler = Object.assign(
+                Object.create(HandlerLookup[data.handler.type].prototype),
+                data.handler
+            );
         }
-        this.completionChecker = data.completionChecker;
     }
 
     matches(request: OngoingRequest) {

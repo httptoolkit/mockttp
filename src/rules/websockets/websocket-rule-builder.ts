@@ -1,12 +1,12 @@
 import { MockedEndpoint } from "../../types";
-import { WebSocketRuleData } from "./websocket-rule";
+import type { WebSocketRuleData } from "./websocket-rule";
 
 import {
-    PassThroughWebSocketHandler,
-    TimeoutHandler,
-    CloseConnectionHandler,
+    PassThroughWebSocketHandlerDefinition,
+    TimeoutHandlerDefinition,
+    CloseConnectionHandlerDefinition,
     PassThroughWebSocketHandlerOptions
-} from './websocket-handlers';
+} from './websocket-handler-definitions';
 
 import { BaseRuleBuilder } from "../base-rule-builder";
 
@@ -61,7 +61,7 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
         const rule: WebSocketRuleData = {
             matchers: this.matchers,
             completionChecker: this.completionChecker,
-            handler: new PassThroughWebSocketHandler(options)
+            handler: new PassThroughWebSocketHandlerDefinition(options)
         };
 
         return this.addRule(rule);
@@ -98,7 +98,7 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
         const rule: WebSocketRuleData = {
             matchers: this.matchers,
             completionChecker: this.completionChecker,
-            handler: new PassThroughWebSocketHandler({
+            handler: new PassThroughWebSocketHandlerDefinition({
                 ...options,
                 forwarding: {
                     ...options.forwarding,
@@ -126,7 +126,7 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
         const rule: WebSocketRuleData = {
             matchers: this.matchers,
             completionChecker: this.completionChecker,
-            handler: new CloseConnectionHandler()
+            handler: new CloseConnectionHandlerDefinition()
         };
 
         return this.addRule(rule);
@@ -148,7 +148,7 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
         const rule: WebSocketRuleData = {
             matchers: this.matchers,
             completionChecker: this.completionChecker,
-            handler: new TimeoutHandler()
+            handler: new TimeoutHandlerDefinition()
         };
 
         return this.addRule(rule);

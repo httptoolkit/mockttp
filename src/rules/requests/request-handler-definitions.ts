@@ -1,5 +1,6 @@
 import _ = require('lodash');
 import url = require('url');
+import type * as net from 'net';
 import { encode as encodeBase64 } from 'base64-arraybuffer';
 import { Readable, Transform } from 'stream';
 import { stripIndent } from 'common-tags';
@@ -628,6 +629,11 @@ export class PassThroughHandlerDefinition extends Serializable implements Reques
     public readonly proxyConfig?: ProxyConfig;
 
     public readonly lookupOptions?: PassThroughLookupOptions;
+
+    // Used in subclass - awkwardly needs to be initialized here to ensure that its set when using a
+    // handler built from a definition. In future, we could improve this (compose instead of inheritance
+    // to better control handler construction?) but this will do for now.
+    protected outgoingSockets = new Set<net.Socket>();
 
     constructor(options: PassThroughHandlerOptions = {}) {
         super();

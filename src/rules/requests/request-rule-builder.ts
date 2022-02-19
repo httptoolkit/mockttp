@@ -2,19 +2,19 @@ import { merge, isString, isBuffer } from "lodash";
 import { Readable } from "stream";
 
 import { Headers, CompletedRequest, Method, MockedEndpoint } from "../../types";
-import { RequestRuleData } from "./request-rule";
+import type { RequestRuleData } from "./request-rule";
 
 import {
-    SimpleHandler,
-    PassThroughHandler,
-    CallbackHandler,
+    SimpleHandlerDefinition,
+    PassThroughHandlerDefinition,
+    CallbackHandlerDefinition,
     CallbackResponseResult,
-    StreamHandler,
-    CloseConnectionHandler,
-    TimeoutHandler,
+    StreamHandlerDefinition,
+    CloseConnectionHandlerDefinition,
+    TimeoutHandlerDefinition,
     PassThroughHandlerOptions,
-    FileHandler,
-} from "./request-handlers";
+    FileHandlerDefinition,
+} from "./request-handler-definitions";
 import { MaybePromise } from "../../util/type-utils";
 import { byteLength } from "../../util/util";
 import { BaseRuleBuilder } from "../base-rule-builder";
@@ -111,7 +111,7 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
         const rule: RequestRuleData = {
             matchers: this.matchers,
             completionChecker: this.completionChecker,
-            handler: new SimpleHandler(status, statusMessage, data, headers)
+            handler: new SimpleHandlerDefinition(status, statusMessage, data, headers)
         };
 
         return this.addRule(rule);
@@ -143,7 +143,7 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
         const rule: RequestRuleData = {
             matchers: this.matchers,
             completionChecker: this.completionChecker,
-            handler: new SimpleHandler(status, undefined, jsonData, headers)
+            handler: new SimpleHandlerDefinition(status, undefined, jsonData, headers)
         };
 
         return this.addRule(rule);
@@ -190,7 +190,7 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
         const rule: RequestRuleData = {
             matchers: this.matchers,
             completionChecker: this.completionChecker,
-            handler: new CallbackHandler(callback)
+            handler: new CallbackHandlerDefinition(callback)
         }
 
         return this.addRule(rule);
@@ -218,7 +218,7 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
         const rule: RequestRuleData = {
             matchers: this.matchers,
             completionChecker: this.completionChecker,
-            handler: new StreamHandler(status, stream, headers)
+            handler: new StreamHandlerDefinition(status, stream, headers)
         }
 
         return this.addRule(rule);
@@ -266,7 +266,7 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
         const rule: RequestRuleData = {
             matchers: this.matchers,
             completionChecker: this.completionChecker,
-            handler: new FileHandler(status, statusMessage, path, headers)
+            handler: new FileHandlerDefinition(status, statusMessage, path, headers)
         };
 
         return this.addRule(rule);
@@ -293,7 +293,7 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
         const rule: RequestRuleData = {
             matchers: this.matchers,
             completionChecker: this.completionChecker,
-            handler: new PassThroughHandler(options)
+            handler: new PassThroughHandlerDefinition(options)
         };
 
         return this.addRule(rule);
@@ -330,7 +330,7 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
         const rule: RequestRuleData = {
             matchers: this.matchers,
             completionChecker: this.completionChecker,
-            handler: new PassThroughHandler({
+            handler: new PassThroughHandlerDefinition({
                 ...options,
                 forwarding: {
                     ...options.forwarding,
@@ -358,7 +358,7 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
         const rule: RequestRuleData = {
             matchers: this.matchers,
             completionChecker: this.completionChecker,
-            handler: new CloseConnectionHandler()
+            handler: new CloseConnectionHandlerDefinition()
         };
 
         return this.addRule(rule);
@@ -380,7 +380,7 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
         const rule: RequestRuleData = {
             matchers: this.matchers,
             completionChecker: this.completionChecker,
-            handler: new TimeoutHandler()
+            handler: new TimeoutHandlerDefinition()
         };
 
         return this.addRule(rule);

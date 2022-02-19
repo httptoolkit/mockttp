@@ -514,8 +514,6 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
         }
     }
 
-    private outgoingSockets = new Set<net.Socket>();
-
     async handle(clientReq: OngoingRequest, clientRes: OngoingResponse) {
         // Don't let Node add any default standard headers - we want full control
         dropDefaultHeaders(clientRes);

@@ -14,7 +14,7 @@ import { validateMockRuleData } from '../rule-serialization';
 
 import * as matchers from "../matchers";
 import * as completionCheckers from "../completion-checkers";
-import type { WebSocketHandler } from "./websocket-handlers";
+import { WebSocketHandler, WsHandlerLookup } from "./websocket-handlers";
 import type { WebSocketHandlerDefinition } from "./websocket-handler-definitions";
 
 // The internal representation of a mocked endpoint
@@ -52,10 +52,12 @@ export class WebSocketRule implements WebSocketRule {
         if ('handle' in data.handler) {
             this.handler = data.handler;
         } else {
-            // For now, we require serializaion/deserialization elsewhere to convert definitions before
-            // handlers to get to here. In future, we may use definitions locally too, and by default in
-            // rule builders, in which case we'll need to somehow convert here automatically.
-            throw new Error('Handler definitions must be turned into real handlers before rule creation');
+            // We transform the definition into a real handler, by creating an raw instance of the handler (which is
+            // a subtype of the definition with the same constructor) and copying the fields across.
+            this.handler = Object.assign(
+                Object.create(WsHandlerLookup[data.handler.type].prototype),
+                data.handler
+            );
         }
         this.completionChecker = data.completionChecker;
     }
