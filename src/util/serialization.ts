@@ -58,7 +58,7 @@ export function deserialize<
     return deserialized;
 }
 
-type SerializedValue<T> = T & { topicId: string };
+export type SerializedValue<T> = T & { topicId: string };
 
 // Serialized data = data + type + topicId on every prop/prop's array elements
 export type Serialized<T> = {

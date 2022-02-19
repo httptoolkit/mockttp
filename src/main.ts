@@ -1,21 +1,21 @@
+import { Mockttp, MockttpOptions, SubscribableEvent, PortRange } from "./mockttp";
 import { MockttpServer } from "./server/mockttp-server";
 import {
     MockttpClient,
-    MockttpClientOptions,
-    resetAdminServer
+    MockttpClientOptions
 } from "./client/mockttp-client";
-import { MockttpAdminServer, AdminServerOptions } from "./admin/mockttp-admin-server";
-
-import { Mockttp, MockttpOptions, PortRange } from "./mockttp";
+import { MockttpAdminServer, MockttpAdminServerOptions } from "./admin/mockttp-admin-server";
 
 // Export the core type definitions:
 export * from "./types";
 export type {
     Mockttp,
+    MockttpServer,
+    MockttpAdminServer,
     MockttpOptions,
     MockttpClientOptions,
-    AdminServerOptions,
-    MockttpAdminServer,
+    MockttpAdminServerOptions,
+    SubscribableEvent,
     PortRange
 };
 
@@ -36,9 +36,10 @@ export {
     completionCheckers
 };
 
-import type { RequestRuleData } from './rules/requests/request-rule';
-import type { WebSocketRuleData } from './rules/websockets/websocket-rule';
-export type { RequestRuleData, WebSocketRuleData };
+import type { RequestRule, RequestRuleData } from './rules/requests/request-rule';
+import type { WebSocketRule, WebSocketRuleData } from './rules/websockets/websocket-rule';
+
+export type { RequestRule, RequestRuleData, WebSocketRule, WebSocketRuleData };
 export type {
     ProxyConfig,
     ProxySetting,
@@ -51,6 +52,7 @@ export type { RequestRuleBuilder } from "./rules/requests/request-rule-builder";
 export type { WebSocketRuleBuilder } from "./rules/websockets/websocket-rule-builder";
 
 export { MOCKTTP_PARAM_REF, RuleParameterReference } from './rules/rule-parameters';
+export type { ServerMockedEndpoint } from "./server/mocked-endpoint";
 
 // Export TLS utility methods:
 export {
@@ -66,6 +68,7 @@ export type {
     HttpsPathOptions
 } from './util/tls';
 export type { CachedDns, DnsLookupFunction } from './util/dns';
+export type { Serialized, SerializedValue } from './util/serialization';
 export type { MaybePromise } from './util/type-utils';
 
 // Export the core API:
@@ -109,18 +112,31 @@ export function getRemote(options: MockttpClientOptions = {}): Mockttp {
  * mockttp -c <your test command>
  * ```
  */
-export function getAdminServer(options: AdminServerOptions = {}): MockttpAdminServer {
+export function getAdminServer(options: MockttpAdminServerOptions = {}): MockttpAdminServer {
     return new MockttpAdminServer(options);
 }
-
+import { resetAdminServer } from "./client/admin-client";
 export { resetAdminServer };
 
+/**
+ * This API is not yet stable, and is intended for internal use only. It may change in future
+ * in minor versions without warning.
+ *
+ * The pluggable admin components allow composing an admin server and client that are capable
+ * of managing arbitrary mock protocols, including Mockttp but also others, depending on the
+ * admin plugins used.
+ * @category Internal
+ */
+export * as PluggableAdmin from './pluggable-admin';
+
+// ------------------------------------------------------------------------------
 // Various old names, still exported (but marked deprecated) for backward compat:
+// ------------------------------------------------------------------------------
 
 /**
  * @deprecated alias for requestHandlers
  */
- export const handlers = requestHandlers
+export const handlers = requestHandlers
 /**
  * @deprecated alias for RequestRuleData
  */
@@ -129,16 +145,16 @@ export type MockRuleData = RequestRuleData;
 /**
  * @deprecated alias for getAdminServer.
  */
- export const getStandalone = getAdminServer;
+export const getStandalone = getAdminServer;
 /**
  * @deprecated alias for resetAdminServer
  */
 export const resetStandalone = resetAdminServer;
 /**
-* @deprecated alias for AdminServerOptions
-*/
-export type StandaloneServerOptions = AdminServerOptions;
+ * @deprecated alias for MockttpAdminServerOptions
+ */
+export type StandaloneServerOptions = MockttpAdminServerOptions;
 /**
-* @deprecated alias for MockttpAdminServer
-*/
+ * @deprecated alias for MockttpAdminServer
+ */
 export type MockttpStandalone = MockttpAdminServer;

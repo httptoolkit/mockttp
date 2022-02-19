@@ -663,6 +663,15 @@ export interface MockttpOptions {
     maxBodySize?: number;
 }
 
+export type SubscribableEvent =
+    | 'request-initiated'
+    | 'request'
+    | 'response'
+    | 'abort'
+    | 'tls-client-error'
+    | 'tlsClientError' // Deprecated
+    | 'client-error';
+
 /**
  * @hidden
  */
@@ -674,7 +683,10 @@ export abstract class AbstractMockttp {
     protected ignoreWebsocketHostCertificateErrors: string[];
 
     abstract get url(): string;
-    abstract on(event: 'request', callback: (req: CompletedRequest) => void): Promise<void>;
+    abstract on(
+        event: SubscribableEvent,
+        callback: (req: CompletedRequest) => void
+    ): Promise<void>;
 
     constructor(options: MockttpOptions) {
         this.debug = options.debug || false;

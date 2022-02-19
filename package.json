@@ -5,6 +5,7 @@
   "main": "dist/main.js",
   "browser": {
     "dist/main.js": "./dist/main-browser.js",
+    "dist/pluggable-admin.js": "./dist/pluggable-admin-browser.js",
     "dns": false,
     "os": false,
     "fs": false,
@@ -31,7 +32,7 @@
   "scripts": {
     "prebuild": "rimraf dist/*",
     "build": "npm run build:src && npm run build:doc",
-    "build:src": "tsc && cp src/admin/schema.gql dist/admin/schema.gql && chmod +x ./dist/admin/admin-bin.js",
+    "build:src": "tsc && chmod +x ./dist/admin/admin-bin.js",
     "build:doc": "typedoc src/main.ts",
     "postbuild:doc": "touch ./typedoc/.nojekyll",
     "test": "npm run build && npm run test:node && npm run test:browser",
@@ -75,7 +76,7 @@
     "@types/express": "4.17.13",
     "@types/fs-extra": "8.1.0",
     "@types/graphql": "14.5.0",
-    "@types/lodash": "4.14.172",
+    "@types/lodash": "4.14.178",
     "@types/mocha": "8.2.3",
     "@types/native-duplexpair": "^1.0.0",
     "@types/node-forge": "1.0.0",
@@ -143,6 +144,7 @@
     "fetch-ponyfill": "^7.1.0",
     "graphql": "^14.0.2 || ^15.5",
     "graphql-subscriptions": "^1.1.0",
+    "graphql-tag": "^2.12.6",
     "http-encoding": "^1.5.0",
     "http2-wrapper": "2.0.5",
     "lodash": "^4.16.4",

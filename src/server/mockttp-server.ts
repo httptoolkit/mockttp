@@ -499,7 +499,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         }
     }
 
-    async handleWebSocket(rawRequest: ExtendedRawRequest, socket: net.Socket, head: Buffer) {
+    private async handleWebSocket(rawRequest: ExtendedRawRequest, socket: net.Socket, head: Buffer) {
         if (this.debug) console.log(`Handling websocket for ${rawRequest.url}`);
 
         const request = this.preprocessRequest(rawRequest);

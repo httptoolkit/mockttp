@@ -6,7 +6,7 @@ import type { WebSocketRule } from '../rules/websockets/websocket-rule';
 
 export class ServerMockedEndpoint implements MockedEndpoint {
 
-    constructor (private rule: RequestRule | WebSocketRule) {
+    constructor(private rule: RequestRule | WebSocketRule) {
         this.getSeenRequests.bind(this);
     };
 

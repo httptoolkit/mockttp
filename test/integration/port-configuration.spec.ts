@@ -32,11 +32,9 @@ describe("Port selection", function () {
 
         const chosenPort = 10000 + _.random(1000);
         await server1.start(chosenPort);
-        await expect(server2.start(chosenPort)).to.be.rejectedWith(new RegExp(
-            isNode
-            ? "EADDRINUSE"
-            : "already running on port " + chosenPort
-        ));
+        await expect(server2.start(chosenPort)).to.be.rejectedWith(
+            /EADDRINUSE/
+        );
     });
 
     it("should use a port in a range if one is provided", async () => {

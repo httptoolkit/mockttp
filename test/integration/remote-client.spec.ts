@@ -408,7 +408,7 @@ nodeOnly(() => {
                 const port = remoteServer.port!;
 
                 await expect(getRemote().start(port))
-                    .to.eventually.be.rejectedWith(`Cannot start: mock server is already running on port ${port}`);
+                    .to.eventually.be.rejectedWith(`Failed to start mock server: listen EADDRINUSE`);
             });
 
             describe("given another service using a port", () => {
@@ -427,7 +427,7 @@ nodeOnly(() => {
 
                 it("should reject Mockttp clients trying to use that port", async () => {
                     await expect(getRemote().start(port))
-                        .to.eventually.be.rejectedWith(/Failed to start server: listen EADDRINUSE/);
+                        .to.eventually.be.rejectedWith(/Failed to start mock server: listen EADDRINUSE/);
                 });
             });
         });
@@ -551,8 +551,9 @@ nodeOnly(() => {
             afterEach(() => client.stop());
 
             it("should keep the websocket stream alive", async () => {
+                const id = (client as any).adminClient.adminServerId;
                 const streamWsServer: Ws.Server = (standaloneServer as any)
-                    .servers[client.port].streamServer;
+                    .servers[id].streamServer;
 
                 expect(streamWsServer.clients.size).to.equal(1);
                 const streamSocket = [...streamWsServer.clients][0];
@@ -565,8 +566,9 @@ nodeOnly(() => {
                 // We have to subscribe to something to create the websocket:
                 await client.on('request', () => {});
 
+                const id = (client as any).adminClient.adminServerId;
                 const subWsServer: Ws.Server = (standaloneServer as any)
-                    .servers[client.port].subscriptionServer.server;
+                    .servers[id].subscriptionServer.server;
 
                 expect(subWsServer.clients.size).to.equal(1);
                 const subscriptionSocket = [...subWsServer.clients][0];
@@ -691,7 +693,8 @@ nodeOnly(() => {
                 await client.start();
 
                 // Manually send a subscription socket with the right Origin for consistency with above
-                const ws = new WebSocket(`http://localhost:45454/server/${client.port}/subscription`, {
+                const id = (client as any).adminClient.adminServerId;
+                const ws = new WebSocket(`http://localhost:45454/server/${id}/subscription`, {
                     headers: {
                         origin: 'https://example.com'
                     }
@@ -759,8 +762,9 @@ nodeOnly(() => {
 
                 // Forcefully kill the /subscription websocket connection, so that all
                 // active subscriptions are disconnected:
+                const id = (client1 as any).adminClient.adminServerId;
                 const subWsServer: Ws.Server = (standaloneServer as any)
-                    .servers[client1.port].subscriptionServer.server;
+                    .servers[id].subscriptionServer.server;
                 subWsServer.clients.forEach((socket: Ws) => socket.terminate());
                 await delay(500); // Wait for the disconnect & subsequent reconnect to complete
 
@@ -780,8 +784,9 @@ nodeOnly(() => {
 
                 // Forcefully kill the /stream websocket connection, so that dynamic
                 // handlers & matchers are disconnected:
+                const id = (client1 as any).adminClient.adminServerId;
                 const streamWsServer: Ws.Server = (standaloneServer as any)
-                    .servers[client1.port].streamServer;
+                    .servers[id].streamServer;
                 streamWsServer.clients.forEach((socket: Ws) => socket.terminate());
                 await delay(200); // Wait for the disconnect & subsequent reconnect to complete
 
@@ -800,7 +805,7 @@ nodeOnly(() => {
                 // reconnect and end up taking over client 2's server.
                 await expect(() =>
                     client1.port
-                ).to.throw('Cannot get port before server is started');
+                ).to.throw('Metadata is not available until the mock server is started');
             });
         });
 

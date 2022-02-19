@@ -28,6 +28,7 @@ import type { WebSocketRuleData } from "../rules/websockets/websocket-rule";
 import type { WebSocketHandler } from "../rules/websockets/websocket-handlers";
 
 import { deserializeRuleData, deserializeWebSocketRuleData } from "../rules/rule-deserialization";
+import { astToObject } from "./graphql-utils";
 
 const REQUEST_INITIATED_TOPIC = 'request-initiated';
 const REQUEST_RECEIVED_TOPIC = 'request-received';
@@ -35,32 +36,6 @@ const RESPONSE_COMPLETED_TOPIC = 'response-completed';
 const REQUEST_ABORTED_TOPIC = 'request-aborted';
 const TLS_CLIENT_ERROR_TOPIC = 'tls-client-error';
 const CLIENT_ERROR_TOPIC = 'client-error';
-
-function astToObject<T>(ast: ObjectValueNode): T {
-    return <T> _.zipObject(
-        ast.fields.map((f) => f.name.value),
-        ast.fields.map((f) => parseAnyAst(f.value))
-    );
-}
-
-function parseAnyAst(ast: ValueNode): any {
-    switch (ast.kind) {
-        case Kind.OBJECT:
-            return astToObject<any>(ast);
-        case Kind.LIST:
-            return ast.values.map(parseAnyAst);
-        case Kind.BOOLEAN:
-        case Kind.ENUM:
-        case Kind.FLOAT:
-        case Kind.INT:
-        case Kind.STRING:
-            return ast.value;
-        case Kind.NULL:
-            return null;
-        case Kind.VARIABLE:
-            throw new Error("No idea what parsing a 'variable' means");
-    }
-}
 
 async function buildMockedEndpointData(endpoint: ServerMockedEndpoint): Promise<MockedEndpointData> {
     return {
@@ -126,42 +101,6 @@ const ScalarResolvers = {
                 return astToObject<RuleCompletionChecker>(ast);
             } else return null;
         }
-    }),
-
-    Json: new GraphQLScalarType({
-        name: 'Json',
-        description: 'A JSON entity, serialized as a simple JSON string',
-        serialize: (value: any) => JSON.stringify(value),
-        parseValue: (input: string): any => JSON.parse(input),
-        parseLiteral: parseAnyAst
-    }),
-
-    Any: new GraphQLScalarType({
-        name: 'Any',
-        description: 'Wildcard Anything! Here be dragons',
-        serialize: (value: any) => JSON.stringify(value),
-        parseValue: (input: string): any => JSON.parse(input),
-        parseLiteral: parseAnyAst
-    }),
-
-    Void: new GraphQLScalarType({
-        name: 'Void',
-        description: 'Nothing at all',
-        serialize: (value: any) => null,
-        parseValue: (input: string): any => null,
-        parseLiteral: (): any => { throw new Error('Void literals are not supported') }
-    }),
-
-    Buffer: new GraphQLScalarType({
-        name: 'Buffer',
-        description: 'A buffer',
-        serialize: (value: Buffer) => {
-            return value.toString('base64');
-        },
-        parseValue: (input: string) => {
-            return Buffer.from(input, 'base64');
-        },
-        parseLiteral: parseAnyAst
     })
 };
 
@@ -226,10 +165,6 @@ export function buildAdminServerModel(
                 if (!endpoint) return null;
 
                 return buildMockedEndpointData(endpoint);
-            },
-
-            ruleParameterKeys: async (): Promise<string[]> => {
-                return Object.keys(ruleParameters);
             }
         },
 
@@ -263,9 +198,7 @@ export function buildAdminServerModel(
                 return mockServer.setWebSocketRules(...input.map((rule) =>
                     deserializeWebSocketRuleData(rule, stream, ruleParameters)
                 ));
-            },
-
-            reset: () => mockServer.reset()
+            }
         },
 
         Subscription: {

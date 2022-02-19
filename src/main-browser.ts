@@ -1,7 +1,6 @@
-import {
-    MockttpClient,
-    resetAdminServer
-} from "./client/mockttp-client";
+import { MockttpClient } from "./client/mockttp-client";
+import { AdminClient, resetAdminServer } from "./client/admin-client";
+import { MockttpAdminRequestBuilder } from "./client/mockttp-admin-request-builder";
 
 import { Mockttp, MockttpOptions } from "./mockttp";
 export { Method } from "./types";
@@ -63,3 +62,5 @@ export {
     getAdminServer as getStandalone,
     resetAdminServer as resetStandalone
 };
+
+export * as PluggableAdmin from './pluggable-admin';
