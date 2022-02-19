@@ -37,7 +37,7 @@ Mockttp exposes three setup functions: `getLocal`, `getRemote` and `getStandalon
 
     // Before each test, start up the server:
     mockServer.start();
-    
+
     // After each test, stop the server:
     mockServer.stop();
     ```
@@ -65,7 +65,7 @@ Mockttp exposes three setup functions: `getLocal`, `getRemote` and `getStandalon
 
     // Before each test, start a fresh server:
     mockServer.start();
-    
+
     // After each test, stop your server:
     mockServer.stop();
     ```
@@ -132,8 +132,8 @@ How to trust this certificate will depend on your HTTP client & test setup. You 
 * **FireFox**: you'll need to manually create a Firefox profile for your tests, open a browser using that, add the certificate as a CA, and then reuse that profile in later tests.
 * **Other**: most other tools will have their own way of temporarily adding an extra CA. If they don't, they may have an option to disable TLS verification in your tests entirely, or you might be able to trust your CA certificate system-wide (if you do this, ensure the private key never leaves your machine). Both of these come with security risks though, so be very careful, and make sure you know what you're doing first.
 
-(Need to trust your cert in .crt form? Try `openssl x509 -outform der -in your-cert.pem -out your-cert.crt` to convert it from pem) 
+(Need to trust your cert in .crt form? Try `openssl x509 -outform der -in your-cert.pem -out your-cert.crt` to convert it from pem)
 
 ### HTTPS Setup Example
 
-As a full example, take a look at Mockttp's own test configuration. The Mockttp test certificate was generated using the commands above, and is stored in [test/fixtures](https://github.com/httptoolkit/mockttp/tree/master/test/fixtures). It's configured in the mock server in the [https](https://github.com/httptoolkit/mockttp/blob/master/test/integration/https.spec.ts) and [proxy](https://github.com/httptoolkit/mockttp/blob/master/test/integration/proxy.spec.ts) tests, and marked as trusted in Node ([in package.json](https://github.com/httptoolkit/mockttp/blob/master/package.json#L15)) and Chrome ([in the Karma config](https://github.com/httptoolkit/mockttp/blob/master/karma.conf.js#L44)).
+As a full example, take a look at Mockttp's own test configuration. The Mockttp test certificate was generated using the commands above, and is stored in [test/fixtures](https://github.com/httptoolkit/mockttp/tree/main/test/fixtures). It's configured in the mock server in the [https](https://github.com/httptoolkit/mockttp/blob/main/test/integration/https.spec.ts) and [proxy](https://github.com/httptoolkit/mockttp/blob/main/test/integration/proxy.spec.ts) tests, and marked as trusted in Node ([in package.json](https://github.com/httptoolkit/mockttp/blob/main/package.json#L38)) and Chrome ([in the Karma config](https://github.com/httptoolkit/mockttp/blob/main/karma.conf.js#L77)).
