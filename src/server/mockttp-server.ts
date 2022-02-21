@@ -543,7 +543,9 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         request: OngoingRequest
     ): Promise<R | undefined> {
         // Start all rules matching immediately
-        const rulesMatches = rules.map((r) => ({ rule: r, match: r.matches(request) }));
+        const rulesMatches = rules
+            .filter((r) => r.isComplete() !== true) // Skip all rules that are definitely completed
+            .map((r) => ({ rule: r, match: r.matches(request) }));
 
         // Evaluate the matches one by one, and immediately use the first
         for (let { rule, match } of rulesMatches) {
