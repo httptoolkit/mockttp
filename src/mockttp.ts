@@ -53,22 +53,30 @@ export interface Mockttp {
      *
      * If you need to allow port selection, but in a specific range, pass a
      * { startPort, endPort } pair to define the allowed (inclusive) range.
+     *
+     * @category Setup
      */
     start(port?: number | PortRange): Promise<void>;
 
     /**
      * Stop the mock server and reset the rules.
+     *
+     * @category Setup
      */
     stop(): Promise<void>;
 
     /**
      * Enable extra debug output so you can understand exactly what the server is doing.
+     *
+     * @category Setup
      */
     enableDebug(): void;
 
     /**
      * Reset the stored rules. Most of the time it's better to start & stop the server instead,
      * but this can be useful in some special cases.
+     *
+     * @category Setup
      */
     reset(): void;
 
@@ -76,6 +84,8 @@ export interface Mockttp {
      * The root URL of the server.
      *
      * This will throw an error if read before the server is started.
+     *
+     * @category Metadata
      */
     url: string;
 
@@ -83,6 +93,8 @@ export interface Mockttp {
      * The URL for a given path on the server.
      *
      * This will throw an error if read before the server is started.
+     *
+     * @category Metadata
      */
     urlFor(path: string): string;
 
@@ -90,6 +102,8 @@ export interface Mockttp {
      * The port the server is running on.
      *
      * This will throw an error if read before the server is started.
+     *
+     * @category Metadata
      */
     port: number;
 
@@ -102,6 +116,8 @@ export interface Mockttp {
      * ```
      * process.env = Object.assign(process.env, mockServer.proxyEnv)
      * ```
+     *
+     * @category Metadata
      */
     proxyEnv: ProxyEnvConfig;
 
@@ -110,11 +126,14 @@ export interface Mockttp {
      *
      * This only matches traditional HTTP requests, not websockets, which are handled
      * separately. To match websockets, use `.forAnyWebSocket()`.
+     *
+     * @category Mock HTTP requests
      */
     forAnyRequest(): RequestRuleBuilder;
 
     /**
      * @deprecated Use `.forAnyRequest()` instead.
+     * @category Deprecated
      */
     anyRequest(): RequestRuleBuilder;
 
@@ -127,11 +146,14 @@ export interface Mockttp {
      * Only one unmatched request rule can be registered, and it cannot include any
      * matchers. In either of these cases, when the final `thenX()` method is called,
      * a rejected promise will be returned.
+     *
+     * @category Mock HTTP requests
      */
     forUnmatchedRequest(): RequestRuleBuilder;
 
     /**
      * @deprecated Use `.forUnmatchedRequest()` instead.
+     * @category Deprecated
      */
     unmatchedRequest(): RequestRuleBuilder;
 
@@ -152,11 +174,14 @@ export interface Mockttp {
      *   to entire URL, ignoring query params.
      * - Regular expressions can match the absolute URL: `/^http:\/\/localhost:8000\/abc$/`
      * - Regular expressions can also match the path: `/^\/abc/`
+     *
+     * @category Mock HTTP requests
      */
     forGet(url?: string | RegExp): RequestRuleBuilder;
 
     /**
      * @deprecated Use `.forGet()` instead.
+     * @category Deprecated
      */
     get(url?: string | RegExp): RequestRuleBuilder;
 
@@ -177,11 +202,14 @@ export interface Mockttp {
      *   to entire URL, ignoring query params.
      * - Regular expressions can match the absolute URL: `/^http:\/\/localhost:8000\/abc$/`
      * - Regular expressions can also match the path: `/^\/abc/`
+     *
+     * @category Mock HTTP requests
      */
     forPost(url?: string | RegExp): RequestRuleBuilder;
 
     /**
      * @deprecated Use `.forPost()` instead.
+     * @category Deprecated
      */
     post(url?: string | RegExp): RequestRuleBuilder;
 
@@ -202,11 +230,14 @@ export interface Mockttp {
      *   to entire URL, ignoring query params.
      * - Regular expressions can match the absolute URL: `/^http:\/\/localhost:8000\/abc$/`
      * - Regular expressions can also match the path: `/^\/abc/`
+     *
+     * @category Mock HTTP requests
      */
     forPut(url?: string | RegExp): RequestRuleBuilder;
 
     /**
      * @deprecated Use `.forPut()` instead.
+     * @category Deprecated
      */
     put(url?: string | RegExp): RequestRuleBuilder;
 
@@ -227,11 +258,14 @@ export interface Mockttp {
      *   to entire URL, ignoring query params.
      * - Regular expressions can match the absolute URL: `/^http:\/\/localhost:8000\/abc$/`
      * - Regular expressions can also match the path: `/^\/abc/`
+     *
+     * @category Mock HTTP requests
      */
     forDelete(url?: string | RegExp): RequestRuleBuilder;
 
     /**
      * @deprecated Use `.forDelete()` instead.
+     * @category Deprecated
      */
     delete(url?: string | RegExp): RequestRuleBuilder;
 
@@ -252,11 +286,14 @@ export interface Mockttp {
      *   to entire URL, ignoring query params.
      * - Regular expressions can match the absolute URL: `/^http:\/\/localhost:8000\/abc$/`
      * - Regular expressions can also match the path: `/^\/abc/`
+     *
+     * @category Mock HTTP requests
      */
     forPatch(url?: string | RegExp): RequestRuleBuilder;
 
     /**
      * @deprecated Use `.forPatch()` instead.
+     * @category Deprecated
      */
     patch(url?: string | RegExp): RequestRuleBuilder;
 
@@ -277,11 +314,14 @@ export interface Mockttp {
      *   to entire URL, ignoring query params.
      * - Regular expressions can match the absolute URL: `/^http:\/\/localhost:8000\/abc$/`
      * - Regular expressions can also match the path: `/^\/abc/`
+     *
+     * @category Mock HTTP requests
      */
     forHead(url?: string | RegExp): RequestRuleBuilder;
 
     /**
      * @deprecated Use `.forHead()` instead.
+     * @category Deprecated
      */
     head(url?: string | RegExp): RequestRuleBuilder;
 
@@ -311,21 +351,27 @@ export interface Mockttp {
      * You can pass `{cors: false}` to `getLocal`/`getRemote` to disable this behaviour,
      * but if you're testing in a browser you will need to ensure you mock all OPTIONS
      * requests appropriately so that the browser allows your other requests to be sent.
+     *
+     * @category Mock HTTP requests
      */
     forOptions(url?: string | RegExp): RequestRuleBuilder;
 
     /**
      * @deprecated Use `.forOptions()` instead.
+     * @category Deprecated
      */
     options(url?: string | RegExp): RequestRuleBuilder;
 
     /**
      * Get a builder for a mock rule that will match all websocket connections.
+     *
+     * @category Mock websockets
      */
     forAnyWebSocket(): WebSocketRuleBuilder;
 
     /**
      * @deprecated Use `.forAnyWebSocket()` instead.
+     * @category Deprecated
      */
     anyWebSocket(): WebSocketRuleBuilder;
 
@@ -339,6 +385,8 @@ export interface Mockttp {
      * The callback will be called asynchronously from request handling. This function
      * returns a promise, and the callback is not guaranteed to be registered until
      * the promise is resolved.
+     *
+     * @category Events
      */
     on(event: 'request-initiated', callback: (req: InitiatedRequest) => void): Promise<void>;
 
@@ -351,6 +399,8 @@ export interface Mockttp {
      * The callback will be called asynchronously from request handling. This function
      * returns a promise, and the callback is not guaranteed to be registered until
      * the promise is resolved.
+     *
+     * @category Events
      */
     on(event: 'request', callback: (req: CompletedRequest) => void): Promise<void>;
 
@@ -363,6 +413,8 @@ export interface Mockttp {
      * The callback will be called asynchronously from request handling. This function
      * returns a promise, and the callback is not guaranteed to be registered until
      * the promise is resolved.
+     *
+     * @category Events
      */
     on(event: 'response', callback: (req: CompletedResponse) => void): Promise<void>;
 
@@ -376,6 +428,8 @@ export interface Mockttp {
      * The callback will be called asynchronously from request handling. This function
      * returns a promise, and the callback is not guaranteed to be registered until
      * the promise is resolved.
+     *
+     * @category Events
      */
     on(event: 'abort', callback: (req: InitiatedRequest) => void): Promise<void>;
 
@@ -395,6 +449,8 @@ export interface Mockttp {
      * The callback will be called asynchronously from request handling. This function
      * returns a promise, and the callback is not guaranteed to be registered until
      * the promise is resolved.
+     *
+     * @category Events
      */
     on(event: 'tls-client-error', callback: (req: TlsRequest) => void): Promise<void>;
 
@@ -421,6 +477,8 @@ export interface Mockttp {
      * The callback will be called asynchronously from request handling. This function
      * returns a promise, and the callback is not guaranteed to be registered until
      * the promise is resolved.
+     *
+     * @category Events
      */
     on(event: 'client-error', callback: (error: ClientError) => void): Promise<void>;
 
@@ -431,6 +489,8 @@ export interface Mockttp {
      * using RequestRuleBuilder, and is only for special cases. This approach may
      * be necessary if you need to configure all your rules in one place to
      * enable them elsewhere/later.
+     *
+     * @category Manual rule definition
      */
     addRequestRules(...ruleData: RequestRuleData[]): Promise<MockedEndpoint[]>;
 
@@ -442,16 +502,20 @@ export interface Mockttp {
      * using RequestRuleBuilder, and is only for special cases. This approach may
      * be necessary if you need to configure all your rules in one place to
      * enable them elsewhere/later.
+     *
+     * @category Manual rule definition
      */
     setRequestRules(...ruleData: RequestRuleData[]): Promise<MockedEndpoint[]>;
 
     /**
      * @deprecated alias for `addRequestRules`
+     * @category Deprecated
      */
     addRules(...ruleData: RequestRuleData[]): Promise<MockedEndpoint[]>;
 
     /**
      * @deprecated alias for `setRequestRules`
+     * @category Deprecated
      */
     setRules(...ruleData: RequestRuleData[]): Promise<MockedEndpoint[]>;
 
@@ -462,6 +526,8 @@ export interface Mockttp {
      * using RequestRuleBuilder, and is only for special cases. This approach may
      * be necessary if you need to configure all your rules in one place to
      * enable them elsewhere/later.
+     *
+     * @category Manual rule definition
      */
     addWebSocketRules(...ruleData: WebSocketRuleData[]): Promise<MockedEndpoint[]>;
 
@@ -473,11 +539,15 @@ export interface Mockttp {
      * using RequestRuleBuilder, and is only for special cases. This approach may
      * be necessary if you need to configure all your rules in one place to
      * enable them elsewhere/later.
+     *
+     * @category Manual rule definition
      */
     setWebSocketRules(...ruleData: WebSocketRuleData[]): Promise<MockedEndpoint[]>;
 
     /**
      * Returns the set of currently registered mock endpoints.
+     *
+     * @category Metadata
      */
     getMockedEndpoints(): Promise<MockedEndpoint[]>;
 
@@ -485,6 +555,8 @@ export interface Mockttp {
      * Returns the set of registered but pending mock endpoints: endpoints which either
      * haven't seen the specified number of requests (if one was specified
      * e.g. with .twice()) or which haven't seen at least one request, by default.
+     *
+     * @category Metadata
      */
     getPendingEndpoints(): Promise<MockedEndpoint[]>;
 
@@ -497,6 +569,8 @@ export interface Mockttp {
      * Only relevant to remote/browser Mockttp usage. Servers created directly without any
      * admin server will never have rule parameters defined, and so this method will always
      * return an empty list.
+     *
+     * @category Metadata
      */
     getRuleParameterKeys(): Promise<string[]>;
 }

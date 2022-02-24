@@ -67,6 +67,7 @@ export abstract class BaseRuleBuilder {
 
     /**
      * Match only requests sent to the given host
+     * @category Matching
      */
     forHost(host: string): this {
         this.matchers.push(new HostMatcher(host));
@@ -75,6 +76,7 @@ export abstract class BaseRuleBuilder {
 
     /**
      * Match only requests that include the given headers.
+     * @category Matching
      */
     withHeaders(headers: { [key: string]: string }): this {
         this.matchers.push(new HeaderMatcher(headers));
@@ -83,6 +85,7 @@ export abstract class BaseRuleBuilder {
 
     /**
      * Match only requests that include the given query parameters.
+     * @category Matching
      */
     withQuery(query: { [key: string]: string | number | (string | number)[] }): this {
         this.matchers.push(new QueryMatcher(query));
@@ -92,6 +95,7 @@ export abstract class BaseRuleBuilder {
     /**
      * Match only requests that include the exact query string provided.
      * The query string must start with a ? or be entirely empty.
+     * @category Matching
      */
     withExactQuery(query: string): this {
         this.matchers.push(new ExactQueryMatcher(query));
@@ -100,6 +104,7 @@ export abstract class BaseRuleBuilder {
 
     /**
      * Match only requests whose bodies include the given form data.
+     * @category Matching
      */
     withForm(formData: { [key: string]: string }): this {
         this.matchers.push(new FormDataMatcher(formData));
@@ -110,6 +115,7 @@ export abstract class BaseRuleBuilder {
      * Match only requests whose bodies either exactly match the given string
      * (if a string is passed) or whose bodies match a regular expression
      * (if a regex is passed).
+     * @category Matching
      */
     withBody(content: string | RegExp): this {
         this.matchers.push(
@@ -122,6 +128,7 @@ export abstract class BaseRuleBuilder {
 
     /**
      * Match only requests whose bodies include the given string.
+     * @category Matching
      */
     withBodyIncluding(content: string): this {
         this.matchers.push(new RawBodyIncludesMatcher(content));
@@ -134,6 +141,7 @@ export abstract class BaseRuleBuilder {
      *
      * Note that this only tests that the body can be parsed
      * as JSON - it doesn't require a content-type header.
+     * @category Matching
      */
     withJsonBody(json: {}): this {
         this.matchers.push(
@@ -150,6 +158,7 @@ export abstract class BaseRuleBuilder {
      *
      * Note that this only tests that the body can be parsed
      * as JSON - it doesn't require a content-type header.
+     * @category Matching
      */
     withJsonBodyIncluding(json: {}): this {
         this.matchers.push(
@@ -160,6 +169,7 @@ export abstract class BaseRuleBuilder {
 
     /**
      * Match only requests that include the given cookies
+     * @category Matching
      */
     withCookie(cookie: { [key: string]: string }): this {
         this.matchers.push(new CookieMatcher(cookie));
@@ -168,6 +178,7 @@ export abstract class BaseRuleBuilder {
 
     /**
      * Match only requests when the callback returns true
+     * @category Matching
      */
     matching(
         content: (request: CompletedRequest) => MaybePromise<boolean>
@@ -178,6 +189,7 @@ export abstract class BaseRuleBuilder {
 
     /**
      * Run this rule forever, for all matching requests
+     * @category Completion
      */
     always(): this {
         this.completionChecker = new Always();
@@ -186,6 +198,7 @@ export abstract class BaseRuleBuilder {
 
     /**
      * Run this rule only once, for the first matching request
+     * @category Completion
      */
     once(): this {
         this.completionChecker = new Once();
@@ -194,6 +207,7 @@ export abstract class BaseRuleBuilder {
 
     /**
      * Run this rule twice, for the first two matching requests
+     * @category Completion
      */
     twice(): this {
         this.completionChecker = new Twice();
@@ -202,6 +216,7 @@ export abstract class BaseRuleBuilder {
 
     /**
      * Run this rule three times, for the first three matching requests
+     * @category Completion
      */
     thrice(): this {
         this.completionChecker = new Thrice();
@@ -210,6 +225,7 @@ export abstract class BaseRuleBuilder {
 
     /**
      * Run this rule the given number of times, for the first matching requests
+     * @category Completion
      */
     times(n: number): this {
         this.completionChecker = new NTimes(n);

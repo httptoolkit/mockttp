@@ -56,6 +56,8 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
      * Wait for the promise to confirm that the rule has taken effect
      * before sending requests to be matched. The mocked endpoint
      * can be used to assert on the requests matched by this rule.
+     *
+     * @category Responses
      */
     thenPassThrough(options: PassThroughWebSocketHandlerOptions = {}): Promise<MockedEndpoint> {
         const rule: WebSocketRuleData = {
@@ -88,6 +90,8 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
      * Wait for the promise to confirm that the rule has taken effect
      * before sending requests to be matched. The mocked endpoint
      * can be used to assert on the requests matched by this rule.
+     *
+     * @category Responses
      */
     async thenForwardTo(
         forwardToLocation: string,
@@ -121,6 +125,8 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
      * Wait for the promise to confirm that the rule has taken effect
      * before sending requests to be matched. The mocked endpoint
      * can be used to assert on the requests matched by this rule.
+     *
+     * @category Responses
      */
     thenCloseConnection(): Promise<MockedEndpoint> {
         const rule: WebSocketRuleData = {
@@ -143,6 +149,8 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
      * Wait for the promise to confirm that the rule has taken effect
      * before sending requests to be matched. The mocked endpoint
      * can be used to assert on the requests matched by this rule.
+     *
+     * @category Responses
      */
     thenTimeout(): Promise<MockedEndpoint> {
         const rule: WebSocketRuleData = {

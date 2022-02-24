@@ -84,6 +84,8 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
      * Wait for the promise to confirm that the rule has taken effect
      * before sending requests to be matched. The mocked endpoint
      * can be used to assert on the requests matched by this rule.
+     *
+     * @category Responses
      */
     thenReply(status: number, data?: string | Buffer, headers?: Headers): Promise<MockedEndpoint>;
     thenReply(
@@ -131,6 +133,8 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
      * Wait for the promise to confirm that the rule has taken effect
      * before sending requests to be matched. The mocked endpoint
      * can be used to assert on the requests matched by this rule.
+     *
+     * @category Responses
      */
     thenJson(status: number, data: object, headers: Headers = {}): Promise<MockedEndpoint> {
         const jsonData = JSON.stringify(data);
@@ -152,6 +156,7 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
     /**
      * Deprecated alias for thenJson
      * @deprecated
+     * @category Deprecated
      */
     thenJSON = this.thenJson;
 
@@ -183,6 +188,8 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
      * Wait for the promise to confirm that the rule has taken effect
      * before sending requests to be matched. The mocked endpoint
      * can be used to assert on the requests matched by this rule.
+     *
+     * @category Responses
      */
     thenCallback(callback:
         (request: CompletedRequest) => MaybePromise<CallbackResponseResult | 'close'>
@@ -213,6 +220,8 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
      * Wait for the promise to confirm that the rule has taken effect
      * before sending requests to be matched. The mocked endpoint
      * can be used to assert on the requests matched by this rule.
+     *
+     * @category Responses
      */
     thenStream(status: number, stream: Readable, headers?: Headers): Promise<MockedEndpoint> {
         const rule: RequestRuleData = {
@@ -244,6 +253,8 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
      * Wait for the promise to confirm that the rule has taken effect
      * before sending requests to be matched. The mocked endpoint
      * can be used to assert on the requests matched by this rule.
+     *
+     * @category Responses
      */
     thenFromFile(status: number, filePath: string, headers?: Headers): Promise<MockedEndpoint>;
     thenFromFile(status: number, statusMessage: string, filePath: string, headers?: Headers): Promise<MockedEndpoint>
@@ -288,6 +299,8 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
      * Wait for the promise to confirm that the rule has taken effect
      * before sending requests to be matched. The mocked endpoint
      * can be used to assert on the requests matched by this rule.
+     *
+     * @category Responses
      */
     thenPassThrough(options?: PassThroughHandlerOptions): Promise<MockedEndpoint> {
         const rule: RequestRuleData = {
@@ -320,6 +333,8 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
      * Wait for the promise to confirm that the rule has taken effect
      * before sending requests to be matched. The mocked endpoint
      * can be used to assert on the requests matched by this rule.
+     *
+     * @category Responses
      */
     async thenForwardTo(
         forwardToLocation: string,
@@ -353,6 +368,8 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
      * Wait for the promise to confirm that the rule has taken effect
      * before sending requests to be matched. The mocked endpoint
      * can be used to assert on the requests matched by this rule.
+     *
+     * @category Responses
      */
     thenCloseConnection(): Promise<MockedEndpoint> {
         const rule: RequestRuleData = {
@@ -375,6 +392,8 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
      * Wait for the promise to confirm that the rule has taken effect
      * before sending requests to be matched. The mocked endpoint
      * can be used to assert on the requests matched by this rule.
+     *
+     * @category Responses
      */
     thenTimeout(): Promise<MockedEndpoint> {
         const rule: RequestRuleData = {
