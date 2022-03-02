@@ -486,7 +486,7 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
         ));
     }
 
-    public async sendQuery<R>(query: AdminQuery<any, R>): Promise<R> {
+    public async sendQuery<Response, Result = Response>(query: AdminQuery<Response, Result>): Promise<Result> {
         return (await this.sendQueries(query))[0];
     }
 
