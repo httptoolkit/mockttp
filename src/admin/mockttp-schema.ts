@@ -36,16 +36,16 @@ export const MockttpSchema = gql`
 
     input MockRule {
         id: String
-        matchers: [RequestMatcher!]!
-        handler: RequestHandler!
-        completionChecker: RuleCompletionChecker
+        matchers: [Raw!]!
+        handler: Raw!
+        completionChecker: Raw
     }
 
     input WebSocketMockRule {
         id: String
-        matchers: [RequestMatcher!]!
-        handler: WebSocketHandler!
-        completionChecker: RuleCompletionChecker
+        matchers: [Raw!]!
+        handler: Raw!
+        completionChecker: Raw
     }
 
     type TlsRequest {
@@ -126,9 +126,4 @@ export const MockttpSchema = gql`
         headers: Json!
         body: Buffer!
     }
-
-    scalar RequestMatcher
-    scalar RequestHandler
-    scalar WebSocketHandler
-    scalar RuleCompletionChecker
 `;

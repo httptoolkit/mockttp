@@ -530,6 +530,7 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
         }
 
         scalar Void
+        scalar Raw
         scalar Json
         scalar Buffer
     `;
@@ -544,6 +545,16 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
                 reset: () => this.resetPluginsForServer(serverId)
             },
 
+            Raw: new GraphQLScalarType({
+                name: 'Raw',
+                description: 'A raw entity, serialized directly (must be JSON-compatible)',
+                serialize: (value: any) => value,
+                parseValue: (input: string): any => input,
+                parseLiteral: parseAnyAst
+            }),
+
+            // Json exists just for API backward compatibility - all new data should be Raw.
+            // Converting to JSON is pointless, since bodies all contain JSON anyway.
             Json: new GraphQLScalarType({
                 name: 'Json',
                 description: 'A JSON entity, serialized as a simple JSON string',

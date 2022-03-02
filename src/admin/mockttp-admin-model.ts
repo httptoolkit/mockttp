@@ -1,12 +1,6 @@
 import * as _ from "lodash";
 import { Duplex } from "stream";
 
-import {
-  GraphQLScalarType,
-  Kind,
-  ObjectValueNode,
-  ValueNode
-} from "graphql";
 import type { IResolvers } from "@graphql-tools/utils/Interfaces";
 import { PubSub } from "graphql-subscriptions";
 
@@ -21,14 +15,9 @@ import type {
 } from "../types";
 import type { Serialized } from "../util/serialization";
 import type { RequestRuleData } from "../rules/requests/request-rule";
-import type { RequestMatcher } from "../rules/matchers";
-import type { RequestHandler } from "../rules/requests/request-handlers";
-import type { RuleCompletionChecker } from "../rules/completion-checkers";
 import type { WebSocketRuleData } from "../rules/websockets/websocket-rule";
-import type { WebSocketHandler } from "../rules/websockets/websocket-handlers";
 
 import { deserializeRuleData, deserializeWebSocketRuleData } from "../rules/rule-deserialization";
-import { astToObject } from "./graphql-utils";
 
 const REQUEST_INITIATED_TOPIC = 'request-initiated';
 const REQUEST_RECEIVED_TOPIC = 'request-received';
@@ -45,64 +34,6 @@ async function buildMockedEndpointData(endpoint: ServerMockedEndpoint): Promise<
         isPending: await endpoint.isPending()
     };
 }
-
-const ScalarResolvers = {
-    RequestMatcher: new GraphQLScalarType({
-        name: 'RequestMatcher',
-        description: 'Matcher for requests',
-        serialize: (value) => {
-            throw new Error('Matchers are input only values')
-        },
-        parseValue: (v) => v,
-        parseLiteral(ast) {
-            if (ast.kind === Kind.OBJECT) {
-                return astToObject<RequestMatcher>(ast);
-            } else return null;
-        }
-    }),
-
-    RequestHandler: new GraphQLScalarType({
-        name: 'RequestHandler',
-        description: 'Handler for requests',
-        serialize: (value) => {
-            throw new Error('Handlers are input only values')
-        },
-        parseValue: (v) => v,
-        parseLiteral(ast) {
-            if (ast.kind === Kind.OBJECT) {
-                return astToObject<RequestHandler>(ast);
-            } else return null;
-        }
-    }),
-
-    WebSocketHandler: new GraphQLScalarType({
-        name: 'WebSocketHandler',
-        description: 'Handler for websockets',
-        serialize: (value) => {
-            throw new Error('Handlers are input only values')
-        },
-        parseValue: (v) => v,
-        parseLiteral(ast) {
-            if (ast.kind === Kind.OBJECT) {
-                return astToObject<WebSocketHandler>(ast);
-            } else return null;
-        }
-    }),
-
-    RuleCompletionChecker: new GraphQLScalarType({
-        name: 'RuleCompletionChecker',
-        description: 'Completion checkers for requests',
-        serialize: (value) => {
-            throw new Error('Completion checkers are input only values')
-        },
-        parseValue: (v) => v,
-        parseLiteral(ast) {
-            if (ast.kind === Kind.OBJECT) {
-                return astToObject<RuleCompletionChecker>(ast);
-            } else return null;
-        }
-    })
-};
 
 export function buildAdminServerModel(
     mockServer: MockttpServer,
@@ -239,8 +170,6 @@ export function buildAdminServerModel(
                 if (error.response === 'aborted') return undefined;
                 else return error.response;
             }
-        },
-
-        ...ScalarResolvers
+        }
     };
 }
