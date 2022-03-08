@@ -85,7 +85,7 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
         await this.adminClient.start({
             http: {
                 port,
-                serverOptions: this.mockServerOptions
+                options: this.mockServerOptions
             }
         });
 

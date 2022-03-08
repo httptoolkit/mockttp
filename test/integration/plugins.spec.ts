@@ -95,7 +95,7 @@ nodeOnly(() => {
                 myPlugin: {}
             });
 
-            const result = await adminClient.sendQuery({
+            const result = await adminClient.sendQuery<{ extraQueryEndpoint: boolean }, "good" | "bad">({
                 query: gql`
                     query GetTestResult {
                         extraQueryEndpoint
@@ -121,7 +121,7 @@ nodeOnly(() => {
                         schema = "extend type Query { extraQueryEndpoint: Boolean! }"
                         buildResolvers = () => ({ Query: { extraQueryEndpoint: () => true } })
                     },
-                    http: PluggableAdmin.buildMockttpAdminPlugin()
+                    http: PluggableAdmin.MockttpAdminPlugin
                 }
             });
             await adminServer.start();

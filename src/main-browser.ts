@@ -1,6 +1,5 @@
 import { MockttpClient } from "./client/mockttp-client";
-import { AdminClient, resetAdminServer } from "./client/admin-client";
-import { MockttpAdminRequestBuilder } from "./client/mockttp-admin-request-builder";
+import { resetAdminServer } from "./client/admin-client";
 
 import { Mockttp, MockttpOptions } from "./mockttp";
 export { Method } from "./types";

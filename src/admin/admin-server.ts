@@ -51,7 +51,7 @@ export interface AdminServerOptions<Plugins extends { [key: string]: AdminPlugin
      * Override the default parameters for servers started from this admin server. These values will be
      * used for each setting that is not explicitly specified by the client when creating a mock server.
      */
-    serverDefaults?: MockttpOptions;
+    pluginDefaults?: Partial<PluginStartParamsMap<Plugins>>;
 
     /**
      * Some rule options can't easily be specified in remote clients, since they need to access
@@ -160,6 +160,8 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
 
         this.app.use(bodyParser.json({ limit: '50mb' }));
 
+        const defaultPluginStartParams: Partial<PluginStartParamsMap<Plugins>> = options.pluginDefaults ?? {};
+
         this.app.post('/start', async (req, res) => {
             if (this.debug) console.log('Admin starting mock server on port', req.query.port);
 
@@ -170,10 +172,10 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
                 // the HTTP options bare with no wrapper, so we wrap them for backward compat.
                 const isPluginAwareClient = ('plugins' in rawConfig);
 
-                const pluginStartParams = (!isPluginAwareClient
+                const providedPluginStartParams = (!isPluginAwareClient
                     ? { // Backward compat: this means the client is not plugin-aware, and so all options are Mockttp options
                         http: {
-                            serverOptions: _.cloneDeep(rawConfig),
+                            options: _.cloneDeep(rawConfig),
                             port: (typeof req.query.port === 'string')
                                 ? JSON.parse(req.query.port)
                                 : undefined
@@ -181,6 +183,11 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
                     }
                     : rawConfig.plugins
                 ) as PluginStartParamsMap<Plugins>;
+
+                // For each plugin that was specified, we pull default params into their start params.
+                const pluginStartParams = _.mapValues((providedPluginStartParams), (params, pluginId) => {
+                    return _.merge({}, defaultPluginStartParams[pluginId], params);
+                });
 
                 // Backward compat: do an explicit check for HTTP port conflicts
                 const httpPort = (pluginStartParams as { http?: { port: number } }).http?.port;

@@ -11,7 +11,6 @@ export {
     AdminServerOptions
 } from "./admin/admin-server";
 export {
-    buildMockttpAdminPlugin,
     MockttpAdminPlugin,
     MockttpPluginOptions,
     MockttpClientResponse
