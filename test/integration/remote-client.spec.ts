@@ -733,8 +733,12 @@ nodeOnly(() => {
                 let startedServers: number[] = [];
                 let stoppedServers: number[] = [];
 
-                standaloneServer.on('mock-server-started', (server) => startedServers.push(server.port));
-                standaloneServer.on('mock-server-stopping', (server) => stoppedServers.push(server.port));
+                standaloneServer.on('mock-session-started', (session) => {
+                    startedServers.push(session.http.getMockServer().port)
+                });
+                standaloneServer.on('mock-session-stopping', (session) => {
+                    stoppedServers.push(session.http.getMockServer().port)
+                });
 
                 expect(startedServers).to.deep.equal([]);
                 expect(stoppedServers).to.deep.equal([]);
