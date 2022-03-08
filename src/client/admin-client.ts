@@ -171,7 +171,7 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
 
     private adminClientOptions: RequireProps<AdminClientOptions, 'adminServerUrl'>;
 
-    private adminServerId: string | undefined;
+    private adminSessionBaseUrl: string | undefined;
     private adminServerStream: Duplex | undefined;
     private subscriptionClient: SubscriptionClient | undefined;
 
@@ -191,9 +191,9 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
         });
     }
 
-    private attachStreamWebsocket(serverId: string, targetStream: Duplex): Duplex {
-        const adminStreamServer = this.adminClientOptions.adminServerUrl.replace(/^http/, 'ws');
-        const wsStream = connectWebSocketStream(`${adminStreamServer}/server/${serverId}/stream`, {
+    private attachStreamWebsocket(adminSessionBaseUrl: string, targetStream: Duplex): Duplex {
+        const adminSessionBaseWSUrl = adminSessionBaseUrl.replace(/^http/, 'ws');
+        const wsStream = connectWebSocketStream(`${adminSessionBaseWSUrl}/stream`, {
             headers: this.adminClientOptions?.requestOptions?.headers // Only used in Node.js (via WS)
         });
 
@@ -222,7 +222,7 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
                 console.warn('Admin client stream unexpectedly disconnected', closeEvent);
 
                 // Unclean shutdown means something has gone wrong somewhere. Try to reconnect.
-                const newStream = this.attachStreamWebsocket(serverId, targetStream);
+                const newStream = this.attachStreamWebsocket(adminSessionBaseUrl, targetStream);
 
                 new Promise((resolve, reject) => {
                     newStream.once('connect', resolve);
@@ -242,13 +242,13 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
         return wsStream;
     }
 
-    private openStreamToMockServer(serverId: string): Promise<Duplex> {
+    private openStreamToMockServer(adminSessionBaseUrl: string): Promise<Duplex> {
         // To allow reconnects, we need to not end the client stream when an individual web socket ends.
         // To make that work, we return a separate stream, which isn't directly connected to the websocket
         // and doesn't receive WS 'end' events, and then we can swap the WS inputs accordingly.
         const { socket1: wsTarget, socket2: exposedStream } = new DuplexPair();
 
-        const wsStream = this.attachStreamWebsocket(serverId, wsTarget);
+        const wsStream = this.attachStreamWebsocket(adminSessionBaseUrl, wsTarget);
         wsTarget.on('error', (e) => exposedStream.emit('error', e));
 
         // These receive a lot of listeners! One channel per matcher, handler & completion checker,
@@ -262,9 +262,9 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
         });
     }
 
-    private prepareSubscriptionClientToAdminServer(serverId: string) {
-        const adminWsServer = this.adminClientOptions.adminServerUrl.replace(/^http/, 'ws');
-        const subscriptionUrl = `${adminWsServer}/server/${serverId}/subscription`;
+    private prepareSubscriptionClientToAdminServer(adminSessionBaseUrl: string) {
+        const adminSessionBaseWSUrl = adminSessionBaseUrl.replace(/^http/, 'ws');
+        const subscriptionUrl = `${adminSessionBaseWSUrl}/subscription`;
         this.subscriptionClient = new SubscriptionClient(subscriptionUrl, {
             lazy: true, // Doesn't actually connect until you use subscriptions
             reconnect: true,
@@ -282,10 +282,10 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
     }
 
     private async requestFromMockServer(path: string, options?: RequestInit): Promise<Response> {
-        // Must check for id, not this.running, or we can't send the /stop request!
-        if (!this.adminServerId) throw new Error('Not connected to mock server');
+        // Must check for session URL, not this.running, or we can't send the /stop request during shutdown!
+        if (!this.adminSessionBaseUrl) throw new Error('Not connected to mock server');
 
-        let url = `${this.adminClientOptions.adminServerUrl}/server/${this.adminServerId}${path}`;
+        let url = this.adminSessionBaseUrl + path;
         let response = await fetch(url, mergeClientOptions(options, this.adminClientOptions.requestOptions));
 
         if (response.status >= 400) {
@@ -337,7 +337,7 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
     async start(
         pluginStartParams: PluginStartParamsMap<Plugins>
     ): Promise<PluginClientResponsesMap<Plugins>> {
-        if (this.adminServerId || await this.running) throw new Error('Server is already started');
+        if (this.adminSessionBaseUrl || await this.running) throw new Error('Server is already started');
         if (this.debug) console.log(`Starting remote mock server`);
 
         const startPromise = getDeferred<boolean>();
@@ -366,23 +366,31 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
                     }),
                     body: JSON.stringify({
                         plugins: pluginStartParams,
+                        // Include all the Mockttp params at the root too, for backward compat with old admin servers:
                         ...(pluginStartParams.http as MockttpPluginOptions | undefined)
                     })
                 }, this.adminClientOptions.requestOptions)
             );
 
-            const serverId = 'id' in adminServerResponse
+            // Backward compat for old servers
+            const isPluginAwareServer = 'id' in adminServerResponse;
+
+            const sessionId = isPluginAwareServer
                 ? adminServerResponse.id
                 : adminServerResponse.port.toString();
 
+            const adminSessionBaseUrl = `${this.adminClientOptions.adminServerUrl}/${
+                isPluginAwareServer ? 'session' : 'server'
+            }/${sessionId}`
+
             // Also open a stream connection, for 2-way communication we might need later.
-            this.adminServerStream = await this.openStreamToMockServer(serverId);
+            this.adminServerStream = await this.openStreamToMockServer(adminSessionBaseUrl);
 
             // Create a subscription client, preconfigured & ready to connect if on() is called later:
-            this.prepareSubscriptionClientToAdminServer(serverId);
+            this.prepareSubscriptionClientToAdminServer(adminSessionBaseUrl);
 
             // We don't persist the id or resolve the start promise until everything is set up
-            this.adminServerId = serverId;
+            this.adminSessionBaseUrl = adminSessionBaseUrl;
 
             // Load the schema on server start, so we can check for feature support
             this.adminServerSchema = new AdminSchema(
@@ -468,7 +476,7 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
                 throw e;
             }
         }).then(() => {
-            this.adminServerId = undefined;
+            this.adminSessionBaseUrl = undefined;
             this.adminServerSchema = undefined;
             this.adminServerMetadata = undefined;
         });

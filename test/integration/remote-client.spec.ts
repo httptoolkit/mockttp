@@ -538,6 +538,10 @@ nodeOnly(() => {
             });
         });
 
+        function getClientSessionId(client: Mockttp) {
+            return (client as any).adminClient.adminSessionBaseUrl.split('/').slice(-1)[0];
+        }
+
         describe("with keep alive configured", () => {
             let standaloneServer = getStandalone({
                 webSocketKeepAlive: 50
@@ -551,7 +555,7 @@ nodeOnly(() => {
             afterEach(() => client.stop());
 
             it("should keep the websocket stream alive", async () => {
-                const id = (client as any).adminClient.adminServerId;
+                const id = getClientSessionId(client);
                 const streamWsServer: Ws.Server = (standaloneServer as any)
                     .sessions[id].streamServer;
 
@@ -566,7 +570,7 @@ nodeOnly(() => {
                 // We have to subscribe to something to create the websocket:
                 await client.on('request', () => {});
 
-                const id = (client as any).adminClient.adminServerId;
+                const id = getClientSessionId(client);
                 const subWsServer: Ws.Server = (standaloneServer as any)
                     .sessions[id].subscriptionServer.server;
 
@@ -648,7 +652,7 @@ nodeOnly(() => {
 
                 // Manually send a subscription socket with no Origin (can't start an invalid client
                 // and test, because the client fails to start given a bad origin)
-                const ws = new WebSocket(`http://localhost:45454/server/${client.port}/subscription`);
+                const ws = new WebSocket(`http://localhost:45454/session/${client.port}/subscription`);
 
                 await expect(new Promise((resolve, reject) => {
                     ws.addEventListener('open', resolve);
@@ -669,7 +673,7 @@ nodeOnly(() => {
 
                 // Manually send a subscription socket with the wrong Origin (can't start an invalid client
                 // and test, because the client fails to start given a bad origin)
-                const ws = new WebSocket(`http://localhost:45454/server/${client.port}/subscription`, {
+                const ws = new WebSocket(`http://localhost:45454/session/${client.port}/subscription`, {
                     headers: {
                         origin: 'https://twitter.com'
                     }
@@ -693,8 +697,8 @@ nodeOnly(() => {
                 await client.start();
 
                 // Manually send a subscription socket with the right Origin for consistency with above
-                const id = (client as any).adminClient.adminServerId;
-                const ws = new WebSocket(`http://localhost:45454/server/${id}/subscription`, {
+                const id = getClientSessionId(client);
+                const ws = new WebSocket(`http://localhost:45454/session/${id}/subscription`, {
                     headers: {
                         origin: 'https://example.com'
                     }
@@ -762,7 +766,7 @@ nodeOnly(() => {
 
                 // Forcefully kill the /subscription websocket connection, so that all
                 // active subscriptions are disconnected:
-                const id = (client1 as any).adminClient.adminServerId;
+                const id = getClientSessionId(client1);
                 const subWsServer: Ws.Server = (standaloneServer as any)
                     .sessions[id].subscriptionServer.server;
                 subWsServer.clients.forEach((socket: Ws) => socket.terminate());
@@ -784,7 +788,7 @@ nodeOnly(() => {
 
                 // Forcefully kill the /stream websocket connection, so that dynamic
                 // handlers & matchers are disconnected:
-                const id = (client1 as any).adminClient.adminServerId;
+                const id = getClientSessionId(client1);
                 const streamWsServer: Ws.Server = (standaloneServer as any)
                     .sessions[id].streamServer;
                 streamWsServer.clients.forEach((socket: Ws) => socket.terminate());
