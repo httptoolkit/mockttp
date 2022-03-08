@@ -408,7 +408,7 @@ nodeOnly(() => {
                 const port = remoteServer.port!;
 
                 await expect(getRemote().start(port))
-                    .to.eventually.be.rejectedWith(`Failed to start mock server: listen EADDRINUSE`);
+                    .to.eventually.be.rejectedWith(`Failed to start mock session: listen EADDRINUSE`);
             });
 
             describe("given another service using a port", () => {
@@ -427,7 +427,7 @@ nodeOnly(() => {
 
                 it("should reject Mockttp clients trying to use that port", async () => {
                     await expect(getRemote().start(port))
-                        .to.eventually.be.rejectedWith(/Failed to start mock server: listen EADDRINUSE/);
+                        .to.eventually.be.rejectedWith(/Failed to start mock session: listen EADDRINUSE/);
                 });
             });
         });
@@ -553,7 +553,7 @@ nodeOnly(() => {
             it("should keep the websocket stream alive", async () => {
                 const id = (client as any).adminClient.adminServerId;
                 const streamWsServer: Ws.Server = (standaloneServer as any)
-                    .servers[id].streamServer;
+                    .sessions[id].streamServer;
 
                 expect(streamWsServer.clients.size).to.equal(1);
                 const streamSocket = [...streamWsServer.clients][0];
@@ -568,7 +568,7 @@ nodeOnly(() => {
 
                 const id = (client as any).adminClient.adminServerId;
                 const subWsServer: Ws.Server = (standaloneServer as any)
-                    .servers[id].subscriptionServer.server;
+                    .sessions[id].subscriptionServer.server;
 
                 expect(subWsServer.clients.size).to.equal(1);
                 const subscriptionSocket = [...subWsServer.clients][0];
@@ -764,7 +764,7 @@ nodeOnly(() => {
                 // active subscriptions are disconnected:
                 const id = (client1 as any).adminClient.adminServerId;
                 const subWsServer: Ws.Server = (standaloneServer as any)
-                    .servers[id].subscriptionServer.server;
+                    .sessions[id].subscriptionServer.server;
                 subWsServer.clients.forEach((socket: Ws) => socket.terminate());
                 await delay(500); // Wait for the disconnect & subsequent reconnect to complete
 
@@ -786,7 +786,7 @@ nodeOnly(() => {
                 // handlers & matchers are disconnected:
                 const id = (client1 as any).adminClient.adminServerId;
                 const streamWsServer: Ws.Server = (standaloneServer as any)
-                    .servers[id].streamServer;
+                    .sessions[id].streamServer;
                 streamWsServer.clients.forEach((socket: Ws) => socket.terminate());
                 await delay(200); // Wait for the disconnect & subsequent reconnect to complete
 

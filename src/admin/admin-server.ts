@@ -21,7 +21,7 @@ import { isErrorLike } from '../util/error';
 import { objectAllPromise } from '../util/promise';
 
 import { DEFAULT_ADMIN_SERVER_PORT } from '../types';
-import type { Mockttp, MockttpOptions } from '../mockttp';
+import type { Mockttp } from '../mockttp';
 
 import { RuleParameters } from '../rules/rule-parameters';
 import { AdminPlugin, PluginConstructorMap, PluginStartParamsMap } from './admin-plugin-types';
@@ -31,7 +31,7 @@ import { MockttpAdminPlugin } from './mockttp-admin-plugin';
 export interface AdminServerOptions<Plugins extends { [key: string]: AdminPlugin<any, any> }> {
     /**
      * Should the admin server print extra debug information? This enables admin server debugging
-     * only - individual mock server debugging must be enabled separately.
+     * only - individual mock session debugging must be enabled separately.
      */
     debug?: boolean;
 
@@ -42,14 +42,14 @@ export interface AdminServerOptions<Plugins extends { [key: string]: AdminPlugin
 
     /**
      * Set a keep alive frequency in milliseconds for the subscription & stream websockets of each
-     * server, to ensure they remain connected in long-lived connections, especially in browsers which
+     * session, to ensure they remain connected in long-lived connections, especially in browsers which
      * often close quiet background connections automatically.
      */
     webSocketKeepAlive?: number;
 
     /**
-     * Override the default parameters for servers started from this admin server. These values will be
-     * used for each setting that is not explicitly specified by the client when creating a mock server.
+     * Override the default parameters for sessions started from this admin server. These values will be
+     * used for each setting that is not explicitly specified by the client when creating a mock session.
      */
     pluginDefaults?: Partial<PluginStartParamsMap<Plugins>>;
 
@@ -123,14 +123,14 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
 
     private adminPlugins: PluginConstructorMap<Plugins>;
 
-    private servers: { [id: string]: {
+    private sessions: { [id: string]: {
         router: express.Router,
         stop: () => Promise<void>,
 
         subscriptionServer: SubscriptionServer,
         streamServer: Ws.Server,
 
-        serverPlugins: Plugins
+        sessionPlugins: Plugins
     } } = { };
 
     constructor(options: AdminServerOptions<Plugins> = {}) {
@@ -191,7 +191,7 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
 
                 // Backward compat: do an explicit check for HTTP port conflicts
                 const httpPort = (pluginStartParams as { http?: { port: number } }).http?.port;
-                if (_.isNumber(httpPort) && this.servers[httpPort] != null) {
+                if (_.isNumber(httpPort) && this.sessions[httpPort] != null) {
                     res.status(409).json({
                         error: `Cannot start: mock server is already running on port ${httpPort}`
                     });
@@ -206,39 +206,39 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
                     return;
                 }
 
-                const serverPlugins = _.mapValues(pluginStartParams, (__, pluginId: keyof Plugins) => {
+                const sessionPlugins = _.mapValues(pluginStartParams, (__, pluginId: keyof Plugins) => {
                     const PluginType = this.adminPlugins[pluginId];
                     return new PluginType();
                 }) as Plugins;
 
                 // More backward compat: old clients assume that the port is also the management id.
-                const serverId = isPluginAwareClient
+                const sessionId = isPluginAwareClient
                     ? uuid()
-                    : (serverPlugins as any as {
+                    : (sessionPlugins as any as {
                         'http': MockttpAdminPlugin
                     }).http.getMockServer().port.toString();
 
                 const pluginStartResults = await objectAllPromise(
-                    _.mapValues(serverPlugins, (plugin, pluginId: keyof Plugins) =>
+                    _.mapValues(sessionPlugins, (plugin, pluginId: keyof Plugins) =>
                         plugin.start(pluginStartParams[pluginId])
                     )
                 );
 
-                await this.startMockManagementAPI(serverId, serverPlugins);
+                await this.startSessionManagementAPI(sessionId, sessionPlugins);
 
                 if (isPluginAwareClient) {
                     res.json({
-                        id: serverId,
+                        id: sessionId,
                         pluginData: pluginStartResults
                     });
                 } else {
                     res.json({
-                        id: serverId,
+                        id: sessionId,
                         ...(pluginStartResults['http']!)
                     });
                 }
             } catch (e) {
-                res.status(500).json({ error: `Failed to start mock server: ${
+                res.status(500).json({ error: `Failed to start mock session: ${
                     (isErrorLike(e) && e.message) || e
                 }` });
             }
@@ -256,57 +256,60 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
         });
 
 
-        // Dynamically route to admin servers ourselves, so we can easily add/remove
-        // servers as we see fit later on.
-        this.app.use('/server/:id/', (req, res, next) => {
-            const serverId = req.params.id;
-            const serverRouter = this.servers[serverId]?.router;
+        // Dynamically route to mock sessions ourselves, so we can easily add/remove
+        // sessions as we see fit later on.
+        const sessionRequest = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+            const sessionId = req.params.id;
+            const sessionRouter = this.sessions[sessionId]?.router;
 
-            if (!serverRouter) {
-                res.status(404).send('Unknown mock server');
-                console.error(`Request for unknown mock server port: ${serverId}`);
+            if (!sessionRouter) {
+                res.status(404).send('Unknown mock session');
+                console.error(`Request for unknown mock session with id: ${sessionId}`);
                 return;
             }
 
-            serverRouter(req, res, next);
-        });
+            sessionRouter(req, res, next);
+        }
+
+        this.app.use('/session/:id/', sessionRequest);
+        this.app.use('/server/:id/', sessionRequest); // Old URL for backward compat
     }
 
     async resetAdminServer() {
         if (this.debug) console.log('Resetting admin server');
         await Promise.all(
-            Object.values(this.servers).map(({ stop }) => stop())
+            Object.values(this.sessions).map(({ stop }) => stop())
         );
     }
 
     /**
-     * Subscribe to hear when each mock server is started. The listener is provided the
-     * server instance, which can be used to log server startup, add side-effects that
-     * run elsewhere at startup, or preconfigure every started server.
+     * Subscribe to hear when each mock ession is started. The listener is provided the
+     * session plugin data, which can be used to log session startup, add side-effects that
+     * run elsewhere at startup, or preconfigure every started plugin in addition ways.
      *
-     * This is run synchronously when a server is created, after it has fully started
+     * This is run synchronously when a session is created, after it has fully started
      * but before its been returned to remote clients.
      */
-    on(event: 'mocks-started', listener: (plugins: Plugins) => void): void;
+    on(event: 'mock-session-started', listener: (plugins: Plugins) => void): void;
     /**
-     * @deprecated Use on('mocks-started') instead for plugin-aware start() events.
+     * @deprecated Use on('mock-session-started') instead for plugin-aware start() events.
      */
     on(event: 'mock-server-started', listener: (server: Mockttp) => void): void;
 
     /**
-     * Subscribe to hear when a set of mocks is stopped. The listener is provided with
+     * Subscribe to hear when a mock session is stopped. The listener is provided with
      * the state of all plugins that are about to be stopped. This can be used to log
-     * mock server shutdown, add side-effects that run elsewhere at shutdown, or clean
-     * up after servers in other ways.
+     * mock session shutdown, add side-effects that run elsewhere at shutdown, or clean
+     * up after sessions in other ways.
      *
-     * This is run synchronously immediately before the mocks are shutdown, whilst all
-     * their state is still available, and before remote clients have had any response to
+     * This is run synchronously immediately before the session is shutdown, whilst all
+     * its state is still available, and before remote clients have had any response to
      * their request. This is also run before shutdown when the admin server itself is
      * cleanly shutdown with `adminServer.stop()`.
      */
-    on(event: 'mocks-stopping', listener: (plugins: Plugins) => void): void;
+    on(event: 'mock-session-stopping', listener: (plugins: Plugins) => void): void;
     /**
-     * @deprecated Use on('mock-stopping') instead for plugin-aware stop() events.
+     * @deprecated Use on('mock-session-stopping') instead for plugin-aware stop() events.
      */
     on(event: 'mock-server-stopping', listener: (server: Mockttp) => void): void;
     on(event: string, listener: (...args: any) => void): void {
@@ -334,23 +337,23 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
                     return;
                 }
 
-                const isSubscriptionRequest = req.url!.match(/^\/server\/([\w\d\-]+)\/subscription$/);
-                const isStreamRequest = req.url!.match(/^\/server\/([\w\d\-]+)\/stream$/);
+                const isSubscriptionRequest = req.url!.match(/^\/(?:server|session)\/([\w\d\-]+)\/subscription$/);
+                const isStreamRequest = req.url!.match(/^\/(?:server|session)\/([\w\d\-]+)\/stream$/);
                 const isMatch = isSubscriptionRequest || isStreamRequest;
 
                 if (isMatch) {
-                    const serverId = isMatch[1];
+                    const sessionId = isMatch[1];
 
                     let wsServer: Ws.Server = isSubscriptionRequest
-                        ? this.servers[serverId]?.subscriptionServer.server
-                        : this.servers[serverId]?.streamServer;
+                        ? this.sessions[sessionId]?.subscriptionServer.server
+                        : this.sessions[sessionId]?.streamServer;
 
                     if (wsServer) {
                         wsServer.handleUpgrade(req, socket, head, (ws) => {
                             wsServer.emit('connection', ws, req);
                         });
                     } else {
-                        console.warn(`Websocket request for unrecognized mock server: ${serverId}`);
+                        console.warn(`Websocket request for unrecognized mock session: ${sessionId}`);
                         socket.destroy();
                     }
                 } else {
@@ -361,11 +364,11 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
         });
     }
 
-    private async startMockManagementAPI(serverId: string, plugins: Plugins): Promise<void> {
-        const mockServerRouter = express.Router();
+    private async startSessionManagementAPI(sessionId: string, plugins: Plugins): Promise<void> {
+        const mockSessionRouter = express.Router();
 
         let running = true;
-        const stopServer = async () => {
+        const stopSession = async () => {
             if (!running) return;
             running = false;
 
@@ -375,40 +378,40 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
                     (plugins['http'] as MockttpAdminPlugin).getMockServer()
                 );
             }
-            this.eventEmitter.emit('mock-stopping', plugins);
+            this.eventEmitter.emit('mock-session-stopping', plugins);
 
-            const server = this.servers[serverId];
-            delete this.servers[serverId];
+            const session = this.sessions[sessionId];
+            delete this.sessions[sessionId];
 
             await Promise.all(Object.values(plugins).map(plugin => plugin.stop()));
 
-            server.subscriptionServer.close();
+            session.subscriptionServer.close();
 
             // Close with code 1000 (purpose is complete - no more streaming happening)
-            server.streamServer.clients.forEach((client) => {
+            session.streamServer.clients.forEach((client) => {
                 client.close(1000);
             });
-            server.streamServer.close();
-            server.streamServer.emit('close');
+            session.streamServer.close();
+            session.streamServer.emit('close');
         };
 
-        mockServerRouter.post('/stop', async (req, res) => {
-            await stopServer();
+        mockSessionRouter.post('/stop', async (req, res) => {
+            await stopSession();
             res.json({ success: true });
         });
 
-        // A pair of sockets, representing the 2-way connection between the server & WSs.
-        // All websocket messages are written to wsSocket, and then read from serverSocket
-        // All server messages are written to serverSocket, and then read from wsSocket and sent
-        const { socket1: wsSocket, socket2: serverSocket } = new DuplexPair();
+        // A pair of sockets, representing the 2-way connection between the session & WSs.
+        // All websocket messages are written to wsSocket, and then read from sessionSocket
+        // All session messages are written to sessionSocket, and then read from wsSocket and sent
+        const { socket1: wsSocket, socket2: sessionSocket } = new DuplexPair();
 
         // This receives a lot of listeners! One channel per matcher, handler & completion checker,
         // and each adds listeners for data/error/finish/etc. That's OK, it's not generally a leak,
         // but maybe 100 would be a bit suspicious (unless you have 30+ active rules).
-        serverSocket.setMaxListeners(100);
+        sessionSocket.setMaxListeners(100);
 
         if (this.debug) {
-            serverSocket.on('data', (d: any) => {
+            sessionSocket.on('data', (d: any) => {
                 console.log('Streaming data from WS clients:', d.toString());
             });
             wsSocket.on('data', (d: any) => {
@@ -432,18 +435,18 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
 
         streamServer.on('close', () => {
             wsSocket.end();
-            serverSocket.end();
+            sessionSocket.end();
         });
 
-        // Handle errors by logging & stopping this server instance
+        // Handle errors by logging & stopping this session
         const onStreamError = (e: Error) => {
             if (!running) return; // We don't care about connection issues during shutdown
-            console.error("Error in admin server stream, shutting down mock server");
+            console.error("Error in admin server stream, shutting down mock session");
             console.error(e);
-            stopServer();
+            stopSession();
         };
         wsSocket.on('error', onStreamError);
-        serverSocket.on('error', onStreamError);
+        sessionSocket.on('error', onStreamError);
 
         const schema = makeExecutableSchema({
             typeDefs: [
@@ -451,9 +454,9 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
                 ...Object.values(plugins).map(plugin => plugin.schema)
             ],
             resolvers: [
-                this.buildBaseResolvers(serverId),
+                this.buildBaseResolvers(sessionId),
                 ...Object.values(plugins).map(plugin =>
-                    plugin.buildResolvers(serverSocket, this.ruleParams)
+                    plugin.buildResolvers(sessionSocket, this.ruleParams)
                 )
             ]
         });
@@ -467,7 +470,7 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
             noServer: true
         });
 
-        mockServerRouter.use(
+        mockSessionRouter.use(
             graphqlHTTP({
                 schema,
                 customFormatErrorFn: (error) => {
@@ -494,12 +497,12 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
             streamServer.on('close', () => clearInterval(webSocketKeepAlive));
         }
 
-        this.servers[serverId] = {
-            serverPlugins: plugins,
-            router: mockServerRouter,
+        this.sessions[sessionId] = {
+            sessionPlugins: plugins,
+            router: mockSessionRouter,
             streamServer,
             subscriptionServer,
-            stop: stopServer
+            stop: stopSession
         };
 
         if ('http' in plugins) {
@@ -508,7 +511,7 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
                 (plugins['http'] as MockttpAdminPlugin).getMockServer()
             );
         }
-        this.eventEmitter.emit('mocks-started', plugins);
+        this.eventEmitter.emit('mock-session-started', plugins);
     }
 
     stop(): Promise<void> {
@@ -517,7 +520,7 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
         return Promise.all([
             this.server.destroy(),
         ].concat(
-            Object.values(this.servers).map((s) => s.stop())
+            Object.values(this.sessions).map((s) => s.stop())
         )).then(() => {
             this.server = null;
         });
@@ -543,15 +546,15 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
         scalar Buffer
     `;
 
-    private buildBaseResolvers(serverId: string) {
+    private buildBaseResolvers(sessionId: string) {
         return {
             Query: {
                 ruleParameterKeys: () => this.ruleParameterKeys
             },
 
             Mutation: {
-                reset: () => this.resetPluginsForServer(serverId),
-                enableDebug: () => this.enableDebugForServer(serverId)
+                reset: () => this.resetPluginsForSession(sessionId),
+                enableDebug: () => this.enableDebugForSession(sessionId)
             },
 
             Raw: new GraphQLScalarType({
@@ -594,17 +597,17 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
         };
     };
 
-    private resetPluginsForServer(serverId: string) {
+    private resetPluginsForSession(sessionId: string) {
         return Promise.all(
-            Object.values(this.servers[serverId].serverPlugins).map(plugin =>
+            Object.values(this.sessions[sessionId].sessionPlugins).map(plugin =>
                 plugin.reset?.()
             )
         );
     }
 
-    private enableDebugForServer(serverId: string) {
+    private enableDebugForSession(sessionId: string) {
         return Promise.all(
-            Object.values(this.servers[serverId].serverPlugins).map(plugin =>
+            Object.values(this.sessions[sessionId].sessionPlugins).map(plugin =>
                 plugin.enableDebug?.()
             )
         );
@@ -614,9 +617,9 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
      * @deprecated Not plugin-aware, so only returns HTTP results. Exists for backward compatibility only.
      */
     get activeServerPorts() {
-        return Object.values(this.servers).flatMap(({ serverPlugins }) => {
-            if (serverPlugins['http']) {
-                return [(serverPlugins['http'] as any as MockttpAdminPlugin).getMockServer().port];
+        return Object.values(this.sessions).flatMap(({ sessionPlugins }) => {
+            if (sessionPlugins['http']) {
+                return [(sessionPlugins['http'] as any as MockttpAdminPlugin).getMockServer().port];
             }
             else return [];
         });
