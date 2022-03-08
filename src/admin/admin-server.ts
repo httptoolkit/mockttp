@@ -211,18 +211,18 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
                     return new PluginType();
                 }) as Plugins;
 
+                const pluginStartResults = await objectAllPromise(
+                    _.mapValues(sessionPlugins, (plugin, pluginId: keyof Plugins) =>
+                        plugin.start(pluginStartParams[pluginId])
+                    )
+                );
+
                 // More backward compat: old clients assume that the port is also the management id.
                 const sessionId = isPluginAwareClient
                     ? uuid()
                     : (sessionPlugins as any as {
                         'http': MockttpAdminPlugin
                     }).http.getMockServer().port.toString();
-
-                const pluginStartResults = await objectAllPromise(
-                    _.mapValues(sessionPlugins, (plugin, pluginId: keyof Plugins) =>
-                        plugin.start(pluginStartParams[pluginId])
-                    )
-                );
 
                 await this.startSessionManagementAPI(sessionId, sessionPlugins);
 

@@ -26,6 +26,7 @@ import { MockttpPluginOptions } from '../admin/mockttp-admin-plugin';
 import { AdminPlugin, PluginClientResponsesMap, PluginStartParamsMap } from '../admin/admin-plugin-types';
 import { AdminSchema } from './admin-schema';
 import { AdminQuery, getSingleSelectedFieldName } from './admin-query';
+import { MockttpOptions } from '../mockttp';
 
 export class ConnectionError extends TypedError { }
 
@@ -367,7 +368,7 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
                     body: JSON.stringify({
                         plugins: pluginStartParams,
                         // Include all the Mockttp params at the root too, for backward compat with old admin servers:
-                        ...(pluginStartParams.http as MockttpPluginOptions | undefined)
+                        ...(pluginStartParams.http?.options as MockttpOptions | undefined)
                     })
                 }, this.adminClientOptions.requestOptions)
             );
