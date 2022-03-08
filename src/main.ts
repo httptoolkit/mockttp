@@ -136,7 +136,7 @@ export * as PluggableAdmin from './pluggable-admin';
 /**
  * @deprecated alias for requestHandlers
  */
-export const handlers = requestHandlers
+export { requestHandlers as handlers };
 /**
  * @deprecated alias for RequestRuleData
  */
