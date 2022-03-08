@@ -19,7 +19,6 @@ nodeOnly(() => {
                 adminPlugins: {
                     myPlugin: class MyPlugin {
                         start() {}
-                        reset() {}
                         stop() {}
                         schema = "extend type Query { extraQueryEndpoint: Boolean! }"
                         buildResolvers = () => ({ Query: { extraQueryEndpoint: () => true } })
@@ -52,7 +51,6 @@ nodeOnly(() => {
                         start() {
                             return { aMetadataField: true };
                         }
-                        reset() {}
                         stop() {}
                         schema = "extend type Query { endpoint: Boolean! }"
                         buildResolvers = () => ({ Query: { endpoint: () => true } })
@@ -81,7 +79,6 @@ nodeOnly(() => {
                 adminPlugins: {
                     myPlugin: class MyPlugin {
                         start() {}
-                        reset() {}
                         stop() {}
                         schema = "extend type Query { extraQueryEndpoint: Boolean! }"
                         buildResolvers = () => ({ Query: { extraQueryEndpoint: () => true } })
@@ -116,7 +113,6 @@ nodeOnly(() => {
                 adminPlugins: {
                     myPlugin: class MyPlugin {
                         start() {}
-                        reset() {}
                         stop() {}
                         schema = "extend type Query { extraQueryEndpoint: Boolean! }"
                         buildResolvers = () => ({ Query: { extraQueryEndpoint: () => true } })
@@ -153,6 +149,47 @@ nodeOnly(() => {
 
             expect(myPluginResult).to.equal("good");
             expect(mockttpEndpointsResult).to.deep.equal([]);
+        });
+
+        it("should be verbose debuggable", async () => {
+            adminServer = new PluggableAdmin.AdminServer({
+                debug: true,
+                adminPlugins: {
+                    myPlugin: class MyPlugin {
+                        start() {}
+                        stop() {}
+
+                        debug = false;
+                        enableDebug() { this.debug = true; }
+
+                        schema = "extend type Query { isDebuggable: Boolean! }"
+                        buildResolvers = () => ({
+                            Query: {
+                                isDebuggable: () => this.debug
+                            }
+                        })
+                    }
+                }
+            });
+            await adminServer.start();
+
+            adminClient = new PluggableAdmin.AdminClient();
+            await adminClient.start({
+                myPlugin: {}
+            });
+
+            const debuggableQuery = {
+                query: gql`
+                    query GetTestResult {
+                        isDebuggable
+                    }
+                `,
+                transformResponse: ({ isDebuggable }) => isDebuggable,
+            } as PluggableAdmin.AdminQuery<{ isDebuggable: boolean }, boolean>;
+
+            expect(await adminClient.sendQuery(debuggableQuery)).to.equal(false);
+            await adminClient.enableDebug();
+            expect(await adminClient.sendQuery(debuggableQuery)).to.equal(true);
         });
     });
 });

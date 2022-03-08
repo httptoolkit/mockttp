@@ -7,8 +7,9 @@ import { MaybePromise } from "../util/type-utils";
 export interface AdminPlugin<StartParams, ClientResponse> {
     // Called when a /start request is received that references this plugin
     start: (options: StartParams) => MaybePromise<ClientResponse>;
-    reset: () => MaybePromise<void>;
     stop: () => MaybePromise<void>;
+    reset?: () => MaybePromise<void>;
+    enableDebug?: () => void,
     schema: DocumentNode | string;
     buildResolvers: (stream: Duplex, ruleParameters: { [key: string]: any }) => IResolvers
 }

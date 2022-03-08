@@ -163,8 +163,6 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
         const defaultPluginStartParams: Partial<PluginStartParamsMap<Plugins>> = options.pluginDefaults ?? {};
 
         this.app.post('/start', async (req, res) => {
-            if (this.debug) console.log('Admin starting mock server on port', req.query.port);
-
             try {
                 const rawConfig = req.body;
 
@@ -188,6 +186,8 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
                 const pluginStartParams = _.mapValues((providedPluginStartParams), (params, pluginId) => {
                     return _.merge({}, defaultPluginStartParams[pluginId], params);
                 });
+
+                if (this.debug) console.log('Admin server starting mock session with config', pluginStartParams);
 
                 // Backward compat: do an explicit check for HTTP port conflicts
                 const httpPort = (pluginStartParams as { http?: { port: number } }).http?.port;
@@ -526,6 +526,7 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
     private static baseSchema = gql`
         type Mutation {
             reset: Void
+            enableDebug: Void
         }
 
         type Query {
@@ -549,7 +550,8 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
             },
 
             Mutation: {
-                reset: () => this.resetPluginsForServer(serverId)
+                reset: () => this.resetPluginsForServer(serverId),
+                enableDebug: () => this.enableDebugForServer(serverId)
             },
 
             Raw: new GraphQLScalarType({
@@ -595,7 +597,15 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
     private resetPluginsForServer(serverId: string) {
         return Promise.all(
             Object.values(this.servers[serverId].serverPlugins).map(plugin =>
-                plugin.reset()
+                plugin.reset?.()
+            )
+        );
+    }
+
+    private enableDebugForServer(serverId: string) {
+        return Promise.all(
+            Object.values(this.servers[serverId].serverPlugins).map(plugin =>
+                plugin.enableDebug?.()
             )
         );
     }

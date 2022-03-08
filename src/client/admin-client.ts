@@ -474,8 +474,12 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
         });
     }
 
-    public enableDebug(): void {
-        throw new Error("Client-side debug info not implemented.");
+    public enableDebug = async (): Promise<void> => {
+        return (await this.queryMockServer<void>(
+            `mutation EnableDebug {
+                enableDebug
+            }`
+        ));
     }
 
     public reset = async (): Promise<void> => {

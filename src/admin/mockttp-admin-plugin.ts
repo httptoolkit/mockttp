@@ -47,6 +47,10 @@ export class MockttpAdminPlugin implements AdminPlugin<
         return this.mockServer;
     }
 
+    enableDebug() {
+        this.mockServer.enableDebug();
+    }
+
     schema = MockttpSchema;
 
     buildResolvers(stream: Duplex, ruleParameters: { [key: string]: any }) {

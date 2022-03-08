@@ -65,8 +65,8 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
         });
     }
 
-    enableDebug(): void {
-        this.adminClient.enableDebug();
+    enableDebug(): Promise<void> {
+        return this.adminClient.enableDebug();
     }
 
     reset = (): Promise<void> => {
