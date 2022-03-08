@@ -20,6 +20,6 @@ export type {
     AdminQuery,
     QueryContext
 } from "./client/admin-query";
-export { AdminSchema } from "./client/admin-schema";
+export { SchemaIntrospector } from "./client/schema-introspection";
 export { AdminClient, AdminClientOptions } from "./client/admin-client";
 export { MockttpAdminRequestBuilder } from "./client/mockttp-admin-request-builder";

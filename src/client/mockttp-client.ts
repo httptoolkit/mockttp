@@ -89,7 +89,7 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
             }
         });
 
-        this.requestBuilder = new MockttpAdminRequestBuilder(this.adminClient.schema, this.mockServerOptions);
+        this.requestBuilder = new MockttpAdminRequestBuilder(this.adminClient.schema);
     }
 
     stop() {

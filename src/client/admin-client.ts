@@ -21,10 +21,10 @@ import { MaybePromise, RequireProps } from '../util/type-utils';
 import { isErrorLike } from '../util/error';
 import { getDeferred } from '../util/promise';
 
-import { introspectionQuery } from './introspection-query';
+import { introspectionQuery } from './schema-introspection';
 import { MockttpPluginOptions } from '../admin/mockttp-admin-plugin';
 import { AdminPlugin, PluginClientResponsesMap, PluginStartParamsMap } from '../admin/admin-plugin-types';
-import { AdminSchema } from './admin-schema';
+import { SchemaIntrospector } from './schema-introspection';
 import { AdminQuery, getSingleSelectedFieldName } from './admin-query';
 import { MockttpOptions } from '../mockttp';
 
@@ -177,7 +177,7 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
     private subscriptionClient: SubscriptionClient | undefined;
 
     // Metadata from the last start() call, if the server is currently connected:
-    private adminServerSchema: AdminSchema | undefined;
+    private adminServerSchema: SchemaIntrospector | undefined;
     private adminServerMetadata: PluginClientResponsesMap<Plugins> | undefined;
 
     private debug: boolean = false;
@@ -394,7 +394,7 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
             this.adminSessionBaseUrl = adminSessionBaseUrl;
 
             // Load the schema on server start, so we can check for feature support
-            this.adminServerSchema = new AdminSchema(
+            this.adminServerSchema = new SchemaIntrospector(
                 (await this.queryMockServer<any>(introspectionQuery)).__schema
             );
 

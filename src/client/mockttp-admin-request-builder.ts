@@ -7,7 +7,7 @@ import { buildBodyReader } from '../util/request-utils';
 import type { Serialized } from '../util/serialization';
 
 import { AdminQuery } from './admin-query';
-import { AdminSchema } from './admin-schema';
+import { SchemaIntrospector } from './schema-introspection';
 
 import type { RequestRuleData } from "../rules/requests/request-rule";
 import type { WebSocketRuleData } from '../rules/websockets/websocket-rule';
@@ -41,8 +41,7 @@ function normalizeHttpMessage(event: SubscribableEvent, message: any) {
 export class MockttpAdminRequestBuilder {
 
     constructor(
-        private schema: AdminSchema,
-        private mockttpOptions: MockttpOptions = {}
+        private schema: SchemaIntrospector
     ) {}
 
     buildAddRequestRulesQuery(
