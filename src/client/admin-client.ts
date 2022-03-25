@@ -2,7 +2,7 @@ import _ = require('lodash');
 import { Duplex } from 'stream';
 import DuplexPair = require('native-duplexpair');
 import { TypedError } from 'typed-error';
-import { fetch, Headers } from 'cross-fetch';
+import * as CrossFetch from 'cross-fetch';
 import * as WebSocket from 'isomorphic-ws';
 import connectWebSocketStream = require('@httptoolkit/websocket-stream');
 import { SubscriptionClient } from '@httptoolkit/subscriptions-transport-ws';
@@ -20,6 +20,8 @@ import { AdminPlugin, PluginClientResponsesMap, PluginStartParamsMap } from '../
 import { SchemaIntrospector } from './schema-introspection';
 import { AdminQuery, getSingleSelectedFieldName } from './admin-query';
 import { MockttpOptions } from '../mockttp';
+
+const { fetch, Headers } = typeof globalThis.fetch === 'undefined' ? CrossFetch : globalThis;
 
 export class ConnectionError extends TypedError { }
 

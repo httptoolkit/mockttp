@@ -15,6 +15,7 @@
     "https": false,
     "http2": false,
     "http2-wrapper": false,
+    "cross-fetch": false,
     "cacheable-lookup": false,
     "@httptoolkit/proxy-agent": false
   },
