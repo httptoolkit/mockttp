@@ -2,18 +2,11 @@ import _ = require('lodash');
 import { Duplex } from 'stream';
 import DuplexPair = require('native-duplexpair');
 import { TypedError } from 'typed-error';
-import getFetchPonyfill = require('fetch-ponyfill');
+import { fetch, Headers } from 'cross-fetch';
 import * as WebSocket from 'isomorphic-ws';
 import connectWebSocketStream = require('@httptoolkit/websocket-stream');
 import { SubscriptionClient } from '@httptoolkit/subscriptions-transport-ws';
 import { print } from 'graphql';
-
-const {
-    /** @hidden */
-    fetch,
-    /** @hidden */
-    Headers
-} = getFetchPonyfill();
 
 import { DEFAULT_ADMIN_SERVER_PORT } from "../types";
 

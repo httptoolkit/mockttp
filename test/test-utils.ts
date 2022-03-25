@@ -8,7 +8,7 @@ import * as http2 from 'http2';
 import * as http2Wrapper from 'http2-wrapper';
 import * as streams from 'stream';
 import * as URL from 'url';
-import getFetchPonyfill = require("fetch-ponyfill");
+import * as CrossFetch from "cross-fetch";
 
 import chai = require("chai");
 import chaiAsPromised = require("chai-as-promised");
@@ -44,7 +44,7 @@ function getGlobalFetch() {
     };
 }
 
-let fetchImplementation = isNode ? getFetchPonyfill() : getGlobalFetch();
+let fetchImplementation = isNode ? CrossFetch : getGlobalFetch();
 
 export const fetch = fetchImplementation.fetch;
 
