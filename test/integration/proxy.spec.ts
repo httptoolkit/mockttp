@@ -1164,7 +1164,9 @@ nodeOnly(() => {
                     const response = await http2ProxyRequest(server, `https://localhost:${targetPort}/`);
 
                     expect(response.headers[':status']).to.equal(500);
-                    expect(response.body.toString()).to.equal('Error: Cannot set custom :method, :path pseudoheader values');
+                    expect(response.body.toString()).to.match(
+                        /Error: Cannot set custom (:path|:method), (:method|:path) pseudoheader values/
+                    );
                 });
 
                 it("can override the :scheme and :authority pseudoheaders", async () => {
@@ -1190,14 +1192,12 @@ nodeOnly(() => {
                     const response = await http2ProxyRequest(server, `https://localhost:${targetPort}/`);
 
                     expect(response.headers[':status']).to.equal(200);
-                    expect(response.headers['received-headers']).to.equal(
-                        JSON.stringify({
-                            ':authority': 'google.com',
-                            ':scheme': 'magic',
-                            ':path': '/',
-                            ':method': 'GET'
-                        })
-                    );
+                    expect(JSON.parse(response.headers['received-headers'] as string)).to.deep.equal({
+                        ':authority': 'google.com',
+                        ':scheme': 'magic',
+                        ':path': '/',
+                        ':method': 'GET'
+                    });
                 });
 
                 it("rejects custom request pseudoheaders", async () => {
@@ -1335,17 +1335,20 @@ nodeOnly(() => {
                     await server.forAnyRequest().thenPassThrough({
                         ignoreHostCertificateErrors: ['localhost'],
                         beforeResponse: (res) => {
-                            expect(_.omit(res.headers, 'date')).to.deep.equal({
+                            const receivedHeaders = JSON.parse(res.headers['received-headers'] as string);
+
+                            expect(receivedHeaders).to.deep.equal({
+                                ':scheme': 'https',
+                                ':authority': `localhost:${targetPort}`,
+                                ':path': '/',
+                                ':method': 'GET'
+                            });
+
+                            expect(_.omit(res.headers, ['date', 'received-headers'])).to.deep.equal({
                                 ':status': '200',
                                 'received-url': '/',
                                 'received-method': 'GET',
                                 'received-body': '',
-                                'received-headers': JSON.stringify({
-                                    ':scheme': 'https',
-                                    ':authority': `localhost:${targetPort}`,
-                                    ':path': '/',
-                                    ':method': 'GET'
-                                })
                             });
 
                             return {
@@ -1587,8 +1590,8 @@ nodeOnly(() => {
                         const response = await http2ProxyRequest(server, remoteH1Server.url);
 
                         expect(response.headers[':status']).to.equal(500);
-                        expect(response.body.toString()).to.equal(
-                            'TypeError [ERR_INVALID_HTTP_TOKEN]: Header name must be a valid HTTP token [":scheme"]'
+                        expect(response.body.toString()).to.match(
+                            /TypeError \[ERR_INVALID_HTTP_TOKEN\]: Header name must be a valid HTTP token \[":(scheme|authority)"\]/
                         );
                     });
                 });
