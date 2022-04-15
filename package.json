@@ -20,6 +20,34 @@
     "cacheable-lookup": false,
     "@httptoolkit/proxy-agent": false
   },
+  "exports": {
+    ".": {
+      "node": "./dist/main.js",
+      "browser": "./dist/main.browser.js",
+      "default": "./dist/main.browser.js",
+      "types": "./dist/main.d.ts"
+    },
+    "./pluggable-admin": {
+      "node": "./dist/pluggable-admin-api/pluggable-admin.js",
+      "browser": "./dist/pluggable-admin-api/pluggable-admin.browser.js",
+      "default": "./dist/pluggable-admin-api/pluggable-admin.browser.js",
+      "types": "./pluggable-admin-api/pluggable-admin.d.ts"
+    },
+    "./mockttp-pluggable-admin": {
+      "node": "./dist/pluggable-admin-api/mockttp-pluggable-admin.js",
+      "browser": "./dist/pluggable-admin-api/mockttp-pluggable-admin.browser.js",
+      "default": "./dist/pluggable-admin-api/mockttp-pluggable-admin.browser.js",
+      "types": "./pluggable-admin-api/mockttp-pluggable-admin.d.ts"
+    },
+    "./dist/main.js": {
+      "node": "./dist/main.js",
+      "browser": "./dist/main.browser.js",
+      "default": "./dist/main.browser.js"
+    },
+    "./dist/*": {
+      "default": "./dist/*.js"
+    }
+  },
   "types": "dist/main.d.ts",
   "bin": {
     "mockttp": "./dist/admin/admin-bin.js"
