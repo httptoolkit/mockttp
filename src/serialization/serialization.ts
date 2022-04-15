@@ -1,12 +1,8 @@
 import * as _ from 'lodash';
 import { Duplex } from 'stream';
 import { v4 as uuid } from "uuid";
-import { encode as encodeBase64 } from 'base64-arraybuffer';
 
-import { MaybePromise, Replace, Omit } from './type-utils';
-import { CompletedBody, Headers } from '../types';
-import { buildBodyReader, isMockttpBody } from './request-utils';
-import { asBuffer } from './buffer-utils';
+import { MaybePromise } from '../util/type-utils';
 import {
     dereferenceParam,
     isParamReference,
@@ -14,7 +10,7 @@ import {
     RuleParameterReference,
     RuleParameters
 } from '../rules/rule-parameters';
-import {
+import type {
     ProxySetting,
     ProxySettingSource,
     ProxySettingCallbackParams,
@@ -139,6 +135,9 @@ export class ClientServerChannel extends Duplex {
         this.end();
     }
 
+    /**
+     * @internal @hidden
+     */
     _write(message: Message, encoding: BufferEncoding, callback: (error?: Error | null) => void) {
         message.topicId = this.topicId;
         const chunk = JSON.stringify(message) + '\n';
@@ -282,58 +281,6 @@ export function serializeBuffer(buffer: Buffer): string {
 
 export function deserializeBuffer(buffer: string): Buffer {
     return Buffer.from(buffer, 'base64');
-}
-
-export function withSerializedBodyReader<T extends {
-    body: CompletedBody
-}>(input: T): Replace<T, 'body', string> {
-    return Object.assign({}, input, {
-        body: asBuffer(input.body.buffer).toString('base64')
-    });
-}
-
-export function withDeserializedBodyReader<T extends { headers: Headers, body: CompletedBody }>(
-    input: Replace<T, 'body', string>
-): T {
-    return <T> Object.assign({}, input as Omit<T, 'body'>, {
-        body: buildBodyReader(deserializeBuffer(input.body), input.headers)
-    })
-}
-
-export function withSerializedBodyBuffer<T extends {
-    body?: CompletedBody | Buffer | ArrayBuffer | string
-}>(input: T): Replace<T, 'body', string | undefined> {
-    let serializedBody: string | undefined;
-
-    if (!input.body) {
-        serializedBody = undefined;
-    } else if (_.isString(input.body)) {
-        serializedBody = serializeBuffer(asBuffer(input.body));
-    } else if (_.isBuffer(input.body)) {
-        serializedBody = serializeBuffer(input.body as Buffer);
-    } else if (_.isArrayBuffer(input.body) || _.isTypedArray(input.body)) {
-        serializedBody = encodeBase64(input.body as ArrayBuffer);
-    } else if (isMockttpBody(input.body)) {
-        serializedBody = serializeBuffer(asBuffer(input.body.buffer));
-    }
-
-    return Object.assign({}, input, { body: serializedBody });
-}
-
-export type WithSerializedBodyBuffer<T extends { body?: any }> =
-    Replace<T, 'body', string | undefined>;
-
-export function withDeserializedBodyBuffer<T extends {
-    headers?: Headers,
-    body?: Buffer | string | undefined
-}>(
-    input: Replace<T, 'body', string | undefined>
-): T {
-    if (input.body === undefined) return input as T;
-
-    return <T> Object.assign({}, input as Omit<T, 'body'>, {
-        body: Buffer.from(input.body, 'base64')
-    })
 }
 
 const SERIALIZED_PARAM_REFERENCE = "__mockttp__param__reference__";

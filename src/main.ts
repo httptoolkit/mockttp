@@ -51,7 +51,11 @@ export type {
 export type { RequestRuleBuilder } from "./rules/requests/request-rule-builder";
 export type { WebSocketRuleBuilder } from "./rules/websockets/websocket-rule-builder";
 
-export { MOCKTTP_PARAM_REF, RuleParameterReference } from './rules/rule-parameters';
+export {
+    MOCKTTP_PARAM_REF,
+    type RuleParameterReference,
+    type RuleParameters
+} from './rules/rule-parameters';
 export type { ServerMockedEndpoint } from "./server/mocked-endpoint";
 
 // Export TLS utility methods:
@@ -68,7 +72,7 @@ export type {
     HttpsPathOptions
 } from './util/tls';
 export type { CachedDns, DnsLookupFunction } from './util/dns';
-export type { Serialized, SerializedValue } from './util/serialization';
+export type { Serialized, SerializedValue } from './serialization/serialization';
 export type { MaybePromise } from './util/type-utils';
 
 // Export the core API:

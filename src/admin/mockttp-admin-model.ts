@@ -13,7 +13,7 @@ import type {
     CompletedResponse,
     ClientError
 } from "../types";
-import type { Serialized } from "../util/serialization";
+import type { Serialized } from "../serialization/serialization";
 import type { RequestRuleData } from "../rules/requests/request-rule";
 import type { WebSocketRuleData } from "../rules/websockets/websocket-rule";
 

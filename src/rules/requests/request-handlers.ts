@@ -42,12 +42,14 @@ import { streamToBuffer, asBuffer } from '../../util/buffer-utils';
 import { isLocalhostAddress, isLocalPortActive, isSocketLoop } from '../../util/socket-util';
 import {
     ClientServerChannel,
-    withSerializedBodyReader,
-    withDeserializedBodyBuffer,
-    WithSerializedBodyBuffer,
     deserializeBuffer,
     deserializeProxyConfig
-} from "../../util/serialization";
+} from '../../serialization/serialization';
+import {
+    withSerializedBodyReader,
+    withDeserializedBodyBuffer,
+    WithSerializedBodyBuffer
+} from '../../serialization/body-serialization';
 import { CachedDns, DnsLookupFunction } from '../../util/dns';
 import { ErrorLike, isErrorLike } from '../../util/error';
 

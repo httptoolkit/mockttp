@@ -10,7 +10,8 @@ import {
     getUrlWithoutProtocol,
     waitForCompletedRequest
 } from '../util/request-utils';
-import { Serializable, ClientServerChannel, withDeserializedBodyReader, withSerializedBodyReader } from "../util/serialization";
+import { Serializable, ClientServerChannel } from "../serialization/serialization";
+import { withDeserializedBodyReader, withSerializedBodyReader } from '../serialization/body-serialization';
 import { MaybePromise, Replace } from '../util/type-utils';
 import { normalizeUrl } from '../util/normalize-url';
 

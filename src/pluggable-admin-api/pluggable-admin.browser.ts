@@ -5,3 +5,5 @@ export class AdminServer {
 }
 
 export { AdminClient } from "../client/admin-client";
+
+export * as Serialization from '../serialization/serialization';

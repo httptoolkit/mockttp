@@ -18,12 +18,14 @@ import { asBuffer } from '../../util/buffer-utils';
 import {
     Serializable,
     ClientServerChannel,
-    withDeserializedBodyReader,
-    withSerializedBodyBuffer,
     serializeBuffer,
     SerializedProxyConfig,
     serializeProxyConfig
-} from "../../util/serialization";
+} from "../../serialization/serialization";
+import {
+    withDeserializedBodyReader,
+    withSerializedBodyBuffer
+} from '../../serialization/body-serialization';
 import { ProxyConfig } from '../proxy-config';
 
 /*

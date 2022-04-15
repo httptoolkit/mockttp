@@ -9,7 +9,7 @@ import CacheableLookup from 'cacheable-lookup';
 import {
     ClientServerChannel,
     deserializeProxyConfig
-} from "../../util/serialization";
+} from "../../serialization/serialization";
 
 import { OngoingRequest } from "../../types";
 

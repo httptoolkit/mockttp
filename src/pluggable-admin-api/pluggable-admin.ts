@@ -30,3 +30,5 @@ export {
     AdminClient,
     type AdminClientOptions
 } from "../client/admin-client";
+
+export * as Serialization from '../serialization/serialization';

@@ -1,6 +1,6 @@
 import { Duplex } from "stream";
 
-import { Serialized, serialize } from "../util/serialization";
+import { Serialized, serialize } from "../serialization/serialization";
 
 import type { RequestRuleData } from "./requests/request-rule";
 import type { WebSocketRuleData } from "./websockets/websocket-rule";

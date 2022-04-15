@@ -1,4 +1,4 @@
-import { Serializable } from '../util/serialization';
+import { Serializable } from '../serialization/serialization';
 
 export interface RuleCompletionChecker extends Serializable {
     type: keyof typeof CompletionCheckerLookup;

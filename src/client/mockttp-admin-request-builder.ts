@@ -4,7 +4,7 @@ import gql from 'graphql-tag';
 import { MockedEndpoint, MockedEndpointData } from "../types";
 
 import { buildBodyReader } from '../util/request-utils';
-import type { Serialized } from '../util/serialization';
+import type { Serialized } from '../serialization/serialization';
 
 import { AdminQuery } from './admin-query';
 import { SchemaIntrospector } from './schema-introspection';

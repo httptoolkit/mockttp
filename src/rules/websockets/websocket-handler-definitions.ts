@@ -7,7 +7,7 @@ import {
     Serializable,
     SerializedProxyConfig,
     serializeProxyConfig
-} from "../../util/serialization";
+} from "../../serialization/serialization";
 
 import { Explainable } from "../../types";
 
