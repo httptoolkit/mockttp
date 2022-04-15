@@ -53,8 +53,8 @@ export type { WebSocketRuleBuilder } from "./rules/websockets/websocket-rule-bui
 
 export {
     MOCKTTP_PARAM_REF,
-    type RuleParameterReference,
-    type RuleParameters
+    RuleParameterReference,
+    RuleParameters
 } from './rules/rule-parameters';
 export type { ServerMockedEndpoint } from "./server/mocked-endpoint";
 

@@ -18,17 +18,17 @@ export type {
 
 export {
     AdminServer,
-    type AdminServerOptions
+    AdminServerOptions
 } from "../admin/admin-server";
 
 export type {
     AdminQuery,
     QueryContext
 } from "../client/admin-query";
-export type {SchemaIntrospector } from "../client/schema-introspection";
+export type { SchemaIntrospector } from "../client/schema-introspection";
 export {
     AdminClient,
-    type AdminClientOptions
+    AdminClientOptions
 } from "../client/admin-client";
 
 export * as Serialization from '../serialization/serialization';
