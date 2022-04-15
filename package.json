@@ -4,8 +4,9 @@
   "description": "Mock HTTP server for testing HTTP clients and stubbing webservices",
   "main": "dist/main.js",
   "browser": {
-    "dist/main.js": "./dist/main-browser.js",
-    "dist/pluggable-admin.js": "./dist/pluggable-admin-browser.js",
+    "dist/main.js": "./dist/main.browser.js",
+    "dist/pluggable-admin-api/pluggable-admin.js": "./dist/pluggable-admin-api/pluggable-admin.browser.js",
+    "dist/pluggable-admin-api/mockttp-pluggable-admin.js": "./dist/pluggable-admin-api/mockttp-pluggable-admin.browser.js",
     "dns": false,
     "os": false,
     "fs": false,

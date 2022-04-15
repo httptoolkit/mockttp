@@ -12,7 +12,7 @@ import { SchemaIntrospector } from './schema-introspection';
 import type { RequestRuleData } from "../rules/requests/request-rule";
 import type { WebSocketRuleData } from '../rules/websockets/websocket-rule';
 
-import { MockttpOptions, SubscribableEvent } from '../mockttp';
+import { SubscribableEvent } from '../mockttp';
 import { MockedEndpointClient } from "./mocked-endpoint-client";
 import { AdminClient } from './admin-client';
 

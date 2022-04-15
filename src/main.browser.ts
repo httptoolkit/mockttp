@@ -62,4 +62,5 @@ export {
     resetAdminServer as resetStandalone
 };
 
-export * as PluggableAdmin from './pluggable-admin';
+export * as PluggableAdmin from './pluggable-admin-api/pluggable-admin';
+export * as MockttpPluggableAdmin from './pluggable-admin-api/mockttp-pluggable-admin';

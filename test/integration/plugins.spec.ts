@@ -1,5 +1,5 @@
 import gql from "graphql-tag";
-import { PluggableAdmin } from "../..";
+import { PluggableAdmin, MockttpPluggableAdmin } from "../..";
 import { expect, nodeOnly } from "../test-utils";
 
 nodeOnly(() => {
@@ -117,7 +117,7 @@ nodeOnly(() => {
                         schema = "extend type Query { extraQueryEndpoint: Boolean! }"
                         buildResolvers = () => ({ Query: { extraQueryEndpoint: () => true } })
                     },
-                    http: PluggableAdmin.MockttpAdminPlugin
+                    http: MockttpPluggableAdmin.MockttpAdminPlugin
                 }
             });
             await adminServer.start();
@@ -128,7 +128,7 @@ nodeOnly(() => {
                 http: {}
             });
 
-            const mockttpAdminRequestBuilder = new PluggableAdmin.MockttpAdminRequestBuilder(
+            const mockttpAdminRequestBuilder = new MockttpPluggableAdmin.MockttpAdminRequestBuilder(
                 client.schema
             );
 

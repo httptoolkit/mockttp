@@ -122,12 +122,23 @@ export { resetAdminServer };
  * This API is not yet stable, and is intended for internal use only. It may change in future
  * in minor versions without warning.
  *
- * The pluggable admin components allow composing an admin server and client that are capable
- * of managing arbitrary mock protocols, including Mockttp but also others, depending on the
- * admin plugins used.
+ * These generic pluggable admin components allow composing an admin server and client that
+ * are capable of managing arbitrary mock protocols, including Mockttp but also others depending
+ * on the admin plugins used. To use Mockttp, combine this with the MockttpPluggableAdmin API.
  * @category Internal
  */
-export * as PluggableAdmin from './pluggable-admin';
+export * as PluggableAdmin from './pluggable-admin-api/pluggable-admin';
+
+/**
+ * This API is not yet stable, and is intended for internal use only. It may change in future
+ * in minor versions without warning.
+ *
+ * These plugin components can be applied to the PluggableAdmin API to create a remotely
+ * controlable mock management server that can mock HTTP in addition to protocols from
+ * other plugins.
+ * @category Internal
+ */
+export * as MockttpPluggableAdmin from './pluggable-admin-api/mockttp-pluggable-admin';
 
 // ------------------------------------------------------------------------------
 // Various old names, still exported (but marked deprecated) for backward compat:
