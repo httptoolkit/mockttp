@@ -29,7 +29,9 @@ import {
     JsonBodyFlexibleMatcher,
     ExactQueryMatcher,
     HostMatcher,
-    CallbackMatcher
+    CallbackMatcher,
+    HostnameMatcher,
+    PortMatcher
 } from "./matchers";
 
 /**
@@ -66,11 +68,39 @@ export abstract class BaseRuleBuilder {
     protected completionChecker?: RuleCompletionChecker;
 
     /**
-     * Match only requests sent to the given host
+     * Match only requests sent to the given host, i.e. the full hostname plus
+     * port included in the request.
+     *
+     * This can behave somewhat confusingly when matching against the default
+     * ports for a protocol (i.e. 80/443), or when specifying a hostname here
+     * without specifying the port. In those cases it's usually better to use
+     * forHostname and/or forPort instead to explicit match the content you're
+     * interested in.
+     *
      * @category Matching
      */
     forHost(host: string): this {
         this.matchers.push(new HostMatcher(host));
+        return this;
+    }
+
+    /**
+     * Match only requests sent to the given hostname, ignoring the port.
+     *
+     * @category Matching
+     */
+    forHostname(hostname: string): this {
+        this.matchers.push(new HostnameMatcher(hostname));
+        return this;
+    }
+
+    /**
+     * Match only requests sent to the given port.
+     *
+     * @category Matching
+     */
+    forPort(port: number): this {
+        this.matchers.push(new PortMatcher(port));
         return this;
     }
 

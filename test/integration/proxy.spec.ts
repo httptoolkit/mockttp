@@ -22,7 +22,7 @@ import {
     DestroyableServer,
     H2_TLS_ON_TLS_SUPPORTED
 } from "../test-utils";
-import { generateCACertificate, CA } from "../../src/util/tls";
+import { CA } from "../../src/util/tls";
 import { isLocalIPv6Available } from "../../src/util/socket-util";
 import { streamToBuffer } from "../../src/util/buffer-utils";
 

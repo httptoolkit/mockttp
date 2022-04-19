@@ -74,17 +74,87 @@ export class HostMatcher extends Serializable implements RequestMatcher {
             throw new Error("Invalid hostname: hostnames can't contain slashes");
         } else if (host.includes('?')) {
             throw new Error("Invalid hostname: hostnames can't contain query strings");
-        } else if (!host.match(/^([a-zA-Z0-9\-]+\.)*[a-zA-Z0-9\-]+(:\d+)?$/)) {
+        } else if (!host.match(/^([a-zA-Z0-9\-]+\.)*[a-zA-Z0-9\-]+(:\d+)?$/)) { // Port optional
             throw new Error("Hostname is invalid");
         }
     }
 
     matches(request: OngoingRequest) {
-        return new url.URL(request.url).host === this.host;
+        const parsedUrl = new url.URL(request.url);
+
+        if (
+            (this.host.endsWith(':80') && request.protocol === 'http') ||
+            (this.host.endsWith(':443') && request.protocol === 'https')
+        ) {
+            // On default ports, our URL normalization erases an explicit port, so that a
+            // :80 here will never match anything. This handles that case: if you send HTTP
+            // traffic on port 80 then the port is blank, but it should match for 'hostname:80'.
+            return parsedUrl.hostname === this.host.split(':')[0] && parsedUrl.port === '';
+        } else {
+            return parsedUrl.host === this.host;
+        }
     }
 
     explain() {
         return `for host ${this.host}`;
+    }
+}
+
+export class HostnameMatcher extends Serializable implements RequestMatcher {
+    readonly type = 'hostname';
+
+    constructor(
+        public readonly hostname: string
+    ) {
+        super();
+
+        // Validate the hostname. Goal here isn't to catch every bad hostname, but allow
+        // every good hostname, and provide friendly errors for obviously bad hostnames.
+        if (hostname.includes('/')) {
+            throw new Error("Invalid hostname: hostnames can't contain slashes");
+        } else if (hostname.includes('?')) {
+            throw new Error("Invalid hostname: hostnames can't contain query strings");
+        } else if (!hostname.match(/^([a-zA-Z0-9\-]+\.)*[a-zA-Z0-9\-]+$/)) { // No port
+            throw new Error("Hostname is invalid");
+        }
+    }
+
+    matches(request: OngoingRequest) {
+        return new url.URL(request.url).hostname === this.hostname;
+    }
+
+    explain() {
+        return `for hostname ${this.hostname}`;
+    }
+}
+
+export class PortMatcher extends Serializable implements RequestMatcher {
+    readonly type = 'port';
+
+    public port: string;
+
+    constructor(port: number) {
+        super();
+        this.port = port.toString();
+    }
+
+    matches(request: OngoingRequest) {
+        const parsedUrl = new url.URL(request.url);
+
+        if (
+            (this.port === '80' && request.protocol === 'http') ||
+            (this.port === '443' && request.protocol === 'https')
+        ) {
+            // The port is erased during our URL preprocessing if it's the default,
+            // so for those cases we have to match that separately:
+            return parsedUrl.port === '';
+        } else {
+            return new url.URL(request.url).port === this.port;
+        }
+    }
+
+    explain() {
+        return `for port ${this.port}`;
     }
 }
 
@@ -439,6 +509,8 @@ export const MatcherLookup = {
     'wildcard': WildcardMatcher,
     'method': MethodMatcher,
     'host': HostMatcher,
+    'hostname': HostnameMatcher,
+    'port': PortMatcher,
     'simple-path': SimplePathMatcher,
     'regex-path': RegexPathMatcher,
     'header': HeaderMatcher,
