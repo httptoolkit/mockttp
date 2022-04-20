@@ -5,7 +5,8 @@ import * as net from 'net';
 import {
     OngoingRequest,
     CompletedRequest,
-    Explainable
+    Explainable,
+    RulePriority
 } from "../../types";
 import { waitForCompletedRequest } from '../../util/request-utils';
 import { MaybePromise } from '../../util/type-utils';
@@ -30,6 +31,7 @@ export interface WebSocketRule extends Explainable {
 
 export interface WebSocketRuleData {
     id?: string;
+    priority?: number; // Higher is higher, by default 0 is fallback, 1 is normal, must be positive
     matchers: matchers.RequestMatcher[];
     handler: WebSocketHandler | WebSocketHandlerDefinition;
     completionChecker?: completionCheckers.RuleCompletionChecker;
@@ -41,6 +43,7 @@ export class WebSocketRule implements WebSocketRule {
     private completionChecker?: completionCheckers.RuleCompletionChecker;
 
     public id: string;
+    public readonly priority: number;
     public requests: Promise<CompletedRequest>[] = [];
     public requestCount = 0;
 
@@ -48,6 +51,7 @@ export class WebSocketRule implements WebSocketRule {
         validateMockRuleData(data);
 
         this.id = data.id || uuid();
+        this.priority = data.priority ?? RulePriority.DEFAULT;
         this.matchers = data.matchers;
         if ('handle' in data.handler) {
             this.handler = data.handler;

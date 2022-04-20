@@ -20,6 +20,7 @@ export function deserializeRuleData(
 ): RequestRuleData {
     return {
         id: data.id,
+        priority: data.priority,
         matchers: data.matchers.map((m) =>
             deserialize(m, stream, ruleParameters, matchers.MatcherLookup)
         ),

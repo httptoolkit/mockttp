@@ -79,17 +79,23 @@ describe("Fallback rules", () => {
         expect(text).to.equal('Fallback response');
     });
 
-    it("should fail to register if another fallback rule is already in place", async () => {
-        await server.forUnmatchedRequest().thenReply(200, "Fallback response");
+    it("should follow normal execution rules if multiple fallback rules are defined", async () => {
+        await server.forAnyRequest().once().thenReply(200, "Mock rule response");
+        await server.forUnmatchedRequest().thenReply(200, "Fallback response 1");
+        await server.forUnmatchedRequest().thenReply(200, "Fallback response 2");
 
-        await expect(
-            server.forUnmatchedRequest().thenReply(200, "Fallback response")
-        ).to.be.rejectedWith('Only one fallback request rule can be registered at any time');
-    });
+        const responses = await Promise.all([
+            await fetch(server.url),
+            await fetch(server.url),
+            await fetch(server.url),
+            await fetch(server.url)
+        ].map(r => r.text()));
 
-    it("should fail to register if a matcher is used", async () => {
-        await expect(
-            server.forUnmatchedRequest().withJsonBody({ 'a': 'b' }).thenReply(200, "Fallback response")
-        ).to.be.rejectedWith('Fallback request rules cannot include specific matching configuration');
+        expect(responses).to.deep.equal([
+            "Mock rule response",
+            "Fallback response 1",
+            "Fallback response 2",
+            "Fallback response 2"
+        ]);
     });
 });

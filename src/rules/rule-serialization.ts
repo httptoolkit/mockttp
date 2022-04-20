@@ -21,6 +21,7 @@ export function serializeRuleData<
 
     return {
         id: data.id,
+        priority: data.priority,
         matchers: data.matchers.map(m => serialize(m, stream)),
         handler: serialize(data.handler, stream),
         completionChecker: data.completionChecker && serialize(data.completionChecker, stream)

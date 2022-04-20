@@ -1,7 +1,7 @@
 import { isString } from "lodash";
 import { MaybePromise } from "../main";
 
-import { CompletedRequest, Method } from "../types";
+import { CompletedRequest, Method, RulePriority } from "../types";
 
 import {
     RuleCompletionChecker,
@@ -64,8 +64,34 @@ export abstract class BaseRuleBuilder {
         }
     }
 
-    protected matchers: RequestMatcher[] = [];
-    protected completionChecker?: RuleCompletionChecker;
+    private priority: number = RulePriority.DEFAULT;
+    private matchers: RequestMatcher[] = [];
+    private completionChecker?: RuleCompletionChecker;
+
+    protected buildBaseRuleData() {
+        return {
+            priority: this.priority,
+            matchers: this.matchers,
+            completionChecker: this.completionChecker
+        };
+    }
+
+    /**
+     * Set the rule priority. Any matching rule with a higher priority will always
+     * take precedence over a matching lower-priority rule, unless the higher rule
+     * has an explicit completion check (like `.once()`) that has already been
+     * completed.
+     *
+     * The RulePriority enum defines the standard values useful for most cases,
+     * but any positive number may be used for advanced configurations.
+     *
+     * In many cases it may be simpler to use forUnmatchedRequest() to set a fallback
+     * rule explicitly, rather than manually setting the priority here.
+     */
+    asPriority(priority: RulePriority | number): this {
+        this.priority = priority;
+        return this;
+    }
 
     /**
      * Match only requests sent to the given host, i.e. the full hostname plus

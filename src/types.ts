@@ -19,6 +19,11 @@ export enum Method {
     OPTIONS
 }
 
+export enum RulePriority {
+    FALLBACK = 0,
+    DEFAULT = 1
+}
+
 export interface Headers {
     // An arbitrary set of headers that are known to
     // only ever appear once (for valid requests).

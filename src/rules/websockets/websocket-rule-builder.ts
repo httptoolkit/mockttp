@@ -61,8 +61,7 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
      */
     thenPassThrough(options: PassThroughWebSocketHandlerOptions = {}): Promise<MockedEndpoint> {
         const rule: WebSocketRuleData = {
-            matchers: this.matchers,
-            completionChecker: this.completionChecker,
+            ...this.buildBaseRuleData(),
             handler: new PassThroughWebSocketHandlerDefinition(options)
         };
 
@@ -100,8 +99,7 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
         } = {}
     ): Promise<MockedEndpoint> {
         const rule: WebSocketRuleData = {
-            matchers: this.matchers,
-            completionChecker: this.completionChecker,
+            ...this.buildBaseRuleData(),
             handler: new PassThroughWebSocketHandlerDefinition({
                 ...options,
                 forwarding: {
@@ -130,8 +128,7 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
      */
     thenCloseConnection(): Promise<MockedEndpoint> {
         const rule: WebSocketRuleData = {
-            matchers: this.matchers,
-            completionChecker: this.completionChecker,
+            ...this.buildBaseRuleData(),
             handler: new CloseConnectionHandlerDefinition()
         };
 
@@ -154,8 +151,7 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
      */
     thenTimeout(): Promise<MockedEndpoint> {
         const rule: WebSocketRuleData = {
-            matchers: this.matchers,
-            completionChecker: this.completionChecker,
+            ...this.buildBaseRuleData(),
             handler: new TimeoutHandlerDefinition()
         };
 

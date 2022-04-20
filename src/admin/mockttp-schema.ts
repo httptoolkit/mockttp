@@ -36,6 +36,7 @@ export const MockttpSchema = gql`
 
     input MockRule {
         id: String
+        priority: Int
         matchers: [Raw!]!
         handler: Raw!
         completionChecker: Raw
@@ -43,6 +44,7 @@ export const MockttpSchema = gql`
 
     input WebSocketMockRule {
         id: String
+        priority: Int
         matchers: [Raw!]!
         handler: Raw!
         completionChecker: Raw

@@ -20,7 +20,8 @@ import {
     TlsRequest,
     ClientError,
     TimingEvents,
-    OngoingBody
+    OngoingBody,
+    MockedEndpoint
 } from "../types";
 import { CAOptions } from '../util/tls';
 import { DestroyableServer } from "../util/destroyable-server";
@@ -62,10 +63,8 @@ type ExtendedRawRequest = (http.IncomingMessage | http2.Http2ServerRequest) & {
  */
 export class MockttpServer extends AbstractMockttp implements Mockttp {
 
-    private requestRules: RequestRule[] = [];
-    private fallbackRequestRule: RequestRule | undefined;
-
-    private webSocketRules: WebSocketRule[] = [];
+    private requestRuleSets: { [priority: number]: RequestRule[] } = {};
+    private webSocketRuleSets: { [priority: number]: WebSocketRule[] } = {};
 
     private httpsOptions: CAOptions | undefined;
     private isHttp2Enabled: true | false | 'fallback';
@@ -175,14 +174,11 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     }
 
     reset() {
-        this.requestRules.forEach(r => r.dispose());
-        this.requestRules = [];
+        Object.values(this.requestRuleSets).flat().forEach(r => r.dispose());
+        this.requestRuleSets = [];
 
-        this.fallbackRequestRule?.dispose();
-        this.fallbackRequestRule = undefined;
-
-        this.webSocketRules.forEach(r => r.dispose());
-        this.webSocketRules = [];
+        Object.values(this.webSocketRuleSets).flat().forEach(r => r.dispose());
+        this.webSocketRuleSets = [];
 
         this.debug = this.initialDebugSetting;
     }
@@ -209,56 +205,69 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         return this.address.port;
     }
 
+    private addToRuleSets<R extends RequestRule | WebSocketRule>(
+        ruleSets: { [priority: number]: R[] },
+        rule: R
+    ) {
+        ruleSets[rule.priority] ??= [];
+        ruleSets[rule.priority].push(rule);
+    }
+
     public setRequestRules = (...ruleData: RequestRuleData[]): Promise<ServerMockedEndpoint[]> => {
-        this.requestRules.forEach(r => r.dispose());
-        this.requestRules = ruleData.map((ruleDatum) => new RequestRule(ruleDatum));
-        return Promise.resolve(this.requestRules.map(r => new ServerMockedEndpoint(r)));
+        Object.values(this.requestRuleSets).flat().forEach(r => r.dispose());
+
+        const rules = ruleData.map((ruleDatum) => new RequestRule(ruleDatum));
+        this.requestRuleSets = _.groupBy(rules, r => r.priority);
+
+        return Promise.resolve(rules.map(r => new ServerMockedEndpoint(r)));
     }
 
     public addRequestRules = (...ruleData: RequestRuleData[]): Promise<ServerMockedEndpoint[]> => {
         return Promise.resolve(ruleData.map((ruleDatum) => {
             const rule = new RequestRule(ruleDatum);
-            this.requestRules.push(rule);
+            this.addToRuleSets(this.requestRuleSets, rule);
             return new ServerMockedEndpoint(rule);
         }));
     }
 
-    public setFallbackRequestRule = async (ruleDatum: RequestRuleData): Promise<ServerMockedEndpoint> => {
-        if (this.fallbackRequestRule) throw new Error(
-            'Only one fallback request rule can be registered at any time'
-        );
+    /**
+     * This method is deprecated, but still exists and preserves the previous implementation behaviour
+     * of allowing only one rule to be configured. This no longer applies to fallback rules defined
+     * elsewhere, either using forUnmatchedRequest() or raw rule data with priority 0, and exists
+     * here only for backward compatibility.
+     *
+     * @deprecated Use setRequestRules instead with 'priority: 0' rule data instead
+     */
+    public setFallbackRequestRule = (ruleData: RequestRuleData): Promise<MockedEndpoint> => {
+        if (this.requestRuleSets[0]?.length) {
+            throw new Error("Only one fallback request rule can be registered at any time");
+        }
 
-        const hasNoMatchers = ruleDatum.matchers.length === 0 || (
-            ruleDatum.matchers.length === 1 &&
-            ruleDatum.matchers[0].type === 'wildcard'
-        );
-
-        if (!hasNoMatchers) throw new Error(
-            'Fallback request rules cannot include specific matching configuration'
-        );
-
-        this.fallbackRequestRule = new RequestRule(ruleDatum);
-        return Promise.resolve(new ServerMockedEndpoint(this.fallbackRequestRule));
+        return this.addRequestRules({ ...ruleData, priority: 0 })
+            .then((rules) => rules[0]);
     }
 
     public setWebSocketRules = (...ruleData: WebSocketRuleData[]): Promise<ServerMockedEndpoint[]> => {
-        this.webSocketRules.forEach(r => r.dispose());
-        this.webSocketRules = ruleData.map((ruleDatum) => new WebSocketRule(ruleDatum));
-        return Promise.resolve(this.webSocketRules.map(r => new ServerMockedEndpoint(r)));
+        Object.values(this.webSocketRuleSets).flat().forEach(r => r.dispose());
+
+        const rules = ruleData.map((ruleDatum) => new WebSocketRule(ruleDatum));
+        this.webSocketRuleSets = _.groupBy(rules, r => r.priority);
+
+        return Promise.resolve(rules.map(r => new ServerMockedEndpoint(r)));
     }
 
     public addWebSocketRules = (...ruleData: WebSocketRuleData[]): Promise<ServerMockedEndpoint[]> => {
         return Promise.resolve(ruleData.map((ruleDatum) => {
             const rule = new WebSocketRule(ruleDatum);
-            this.webSocketRules.push(rule);
+            (this.webSocketRuleSets[rule.priority] ??= []).push(rule);
             return new ServerMockedEndpoint(rule);
         }));
     }
 
     public async getMockedEndpoints(): Promise<ServerMockedEndpoint[]> {
         return [
-            ...this.requestRules.map(r => new ServerMockedEndpoint(r)),
-            ...this.webSocketRules.map(r => new ServerMockedEndpoint(r))
+            ...Object.values(this.requestRuleSets).flatMap(rules => rules.map(r => new ServerMockedEndpoint(r))),
+            ...Object.values(this.webSocketRuleSets).flatMap(rules => rules.map(r => new ServerMockedEndpoint(r)))
         ];
     }
 
@@ -442,7 +451,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         });
 
         try {
-            let nextRulePromise = this.findMatchingRule(this.requestRules, request);
+            let nextRulePromise = this.findMatchingRule(this.requestRuleSets, request);
 
             // Async: once we know what the next rule is, ping a request event
             nextRulePromise
@@ -457,8 +466,6 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             if (nextRule) {
                 if (this.debug) console.log(`Request matched rule: ${nextRule.explain()}`);
                 await nextRule.handle(request, response, this.recordTraffic);
-            } else if (this.fallbackRequestRule) {
-                await this.fallbackRequestRule.handle(request, response, this.recordTraffic);
             } else {
                 await this.sendUnmatchedRequestError(request, response);
             }
@@ -510,7 +517,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         });
 
         try {
-            let nextRulePromise = this.findMatchingRule(this.webSocketRules, request);
+            let nextRulePromise = this.findMatchingRule(this.webSocketRuleSets, request);
 
             let nextRule = await nextRulePromise;
             if (nextRule) {
@@ -538,43 +545,58 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         }
     }
 
+    /**
+     * To match rules, we find the first rule (by priority then by set order) which matches and which is
+     * either not complete (has a completion check that's false) or which has no completion check defined
+     * and is the last option at that priority (i.e. by the last option at each priority repeats indefinitely.
+     *
+     * We move down the priority list only when either no rules match at all, or when all matching rules
+     * have explicit completion checks defined that are completed.
+     */
     private async findMatchingRule<R extends WebSocketRule | RequestRule>(
-        rules: Array<R>,
+        ruleSets: { [priority: number]: Array<R> },
         request: OngoingRequest
     ): Promise<R | undefined> {
-        // Start all rules matching immediately
-        const rulesMatches = rules
-            .filter((r) => r.isComplete() !== true) // Skip all rules that are definitely completed
-            .map((r) => ({ rule: r, match: r.matches(request) }));
+        for (let ruleSet of Object.values(ruleSets).reverse()) { // Obj.values returns numeric keys in ascending order
+            // Start all rules matching immediately
+            const rulesMatches = ruleSet
+                .filter((r) => r.isComplete() !== true) // Skip all rules that are definitely completed
+                .map((r) => ({ rule: r, match: r.matches(request) }));
 
-        // Evaluate the matches one by one, and immediately use the first
-        for (let { rule, match } of rulesMatches) {
-            if (await match && rule.isComplete() === false) {
-                // The first matching incomplete rule we find is the one we should use
-                return rule;
+            // Evaluate the matches one by one, and immediately use the first
+            for (let { rule, match } of rulesMatches) {
+                if (await match && rule.isComplete() === false) {
+                    // The first matching incomplete rule we find is the one we should use
+                    return rule;
+                }
             }
+
+            // There are no incomplete & matching rules! One last option: if the last matching rule is
+            // maybe-incomplete (i.e. default completion status but has seen >0 requests) then it should
+            // match anyway. This allows us to add rules and have the last repeat indefinitely.
+            const lastMatchingRule = _.last(await filter(rulesMatches, m => m.match))?.rule;
+            if (!lastMatchingRule || lastMatchingRule.isComplete()) continue; // On to lower priority matches
+            // Otherwise, must be a rule with isComplete === null, i.e. no specific completion check:
+            else return lastMatchingRule;
         }
 
-        // There are no incomplete & matching rules! One last option: if the last matching rule is
-        // maybe-incomplete (i.e. default completion status but has seen >0 requests) then it should
-        // match anyway. This allows us to add rules and have the last repeat indefinitely.
-        const lastMatchingRule = _.last(await filter(rulesMatches, m => m.match))?.rule;
-        if (!lastMatchingRule || lastMatchingRule.isComplete()) return undefined;
-        // Otherwise, must be a rule with isComplete === null, i.e. no specific completion check:
-        else return lastMatchingRule;
+        return undefined; // There are zero valid matching rules at any priority, give up.
     }
 
     private async getUnmatchedRequestExplanation(request: OngoingRequest) {
         let requestExplanation = await this.explainRequest(request);
         if (this.debug) console.warn(`Unmatched request received: ${requestExplanation}`);
 
+        const requestRules = Object.values(this.requestRuleSets).flat();
+        const webSocketRules = Object.values(this.webSocketRuleSets).flat();
+
         return `No rules were found matching this request.
 This request was: ${requestExplanation}
 
-${(this.requestRules.length > 0 || this.webSocketRules.length > 0)
+${(requestRules.length > 0 || webSocketRules.length > 0)
     ? `The configured rules are:
-${this.requestRules.map((rule) => rule.explain()).join("\n")}
-${this.webSocketRules.map((rule) => rule.explain()).join("\n")}
+${requestRules.map((rule) => rule.explain()).join("\n")}
+${webSocketRules.map((rule) => rule.explain()).join("\n")}
 `
     : "There are no rules configured."
 }

@@ -14,7 +14,8 @@ import {
     CompletedResponse,
     TlsRequest,
     InitiatedRequest,
-    ClientError
+    ClientError,
+    RulePriority
 } from "./types";
 import type { RequestRuleData } from "./rules/requests/request-rule";
 import type { WebSocketRuleData } from "./rules/websockets/websocket-rule";
@@ -139,13 +140,11 @@ export interface Mockttp {
 
     /**
      * Get a builder for a fallback mock rule that will match any unmatched requests
-     * on any path. A fallback rule will only match if there is no existing rule at
-     * all matching the request, or all existing rules have an explicit limit (like
-     * `once()`) that has been completed.
+     * on any path.
      *
-     * Only one unmatched request rule can be registered, and it cannot include any
-     * matchers. In either of these cases, when the final `thenX()` method is called,
-     * a rejected promise will be returned.
+     * Fallback rules act like any other rule, but they only match if there is no
+     * existing normal rule that matches the request, or if all existing rules have
+     * an explicit execution limit (like `once()`) that has been completed.
      *
      * @category Mock HTTP requests
      */
@@ -717,12 +716,24 @@ export abstract class AbstractMockttp {
         this.addRequestRules(rule).then((rules) => rules[0]);
 
     abstract setRequestRules(...ruleData: RequestRuleData[]): Promise<MockedEndpoint[]>;
-    abstract setFallbackRequestRule(ruleData: RequestRuleData): Promise<MockedEndpoint>;
 
     // Deprecated endpoints for backward compat:
+    /**
+     * @deprecated Use addRequestRule instead
+     */
     addRule = (ruleData: RequestRuleData) => this.addRequestRule(ruleData);
+    /**
+     * @deprecated Use addRequestRules instead
+     */
     addRules = (...ruleData: RequestRuleData[]) => this.addRequestRules(...ruleData);
+    /**
+     * @deprecated Use setRequestRules instead
+     */
     setRules = (...ruleData: RequestRuleData[]) => this.setRequestRules(...ruleData);
+    /**
+     * @deprecated Use setRequestRules instead with 'priority: 0' rule data instead
+     */
+    abstract setFallbackRequestRule(ruleData: RequestRuleData): Promise<MockedEndpoint>;
 
     abstract addWebSocketRules: (...ruleData: WebSocketRuleData[]) => Promise<MockedEndpoint[]>;
     addWebSocketRule = (rule: WebSocketRuleData) =>
@@ -735,7 +746,8 @@ export abstract class AbstractMockttp {
     }
 
     forUnmatchedRequest(): RequestRuleBuilder {
-        return new RequestRuleBuilder(this.setFallbackRequestRule);
+        return new RequestRuleBuilder(this.addRequestRule)
+            .asPriority(RulePriority.FALLBACK);
     }
 
     forGet(url?: string | RegExp): RequestRuleBuilder {

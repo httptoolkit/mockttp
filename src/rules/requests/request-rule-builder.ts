@@ -111,8 +111,7 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
         }
 
         const rule: RequestRuleData = {
-            matchers: this.matchers,
-            completionChecker: this.completionChecker,
+            ...this.buildBaseRuleData(),
             handler: new SimpleHandlerDefinition(status, statusMessage, data, headers)
         };
 
@@ -145,8 +144,7 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
         }, headers);
 
         const rule: RequestRuleData = {
-            matchers: this.matchers,
-            completionChecker: this.completionChecker,
+            ...this.buildBaseRuleData(),
             handler: new SimpleHandlerDefinition(status, undefined, jsonData, headers)
         };
 
@@ -195,8 +193,7 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
         (request: CompletedRequest) => MaybePromise<CallbackResponseResult | 'close'>
     ): Promise<MockedEndpoint> {
         const rule: RequestRuleData = {
-            matchers: this.matchers,
-            completionChecker: this.completionChecker,
+            ...this.buildBaseRuleData(),
             handler: new CallbackHandlerDefinition(callback)
         }
 
@@ -225,8 +222,7 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
      */
     thenStream(status: number, stream: Readable, headers?: Headers): Promise<MockedEndpoint> {
         const rule: RequestRuleData = {
-            matchers: this.matchers,
-            completionChecker: this.completionChecker,
+            ...this.buildBaseRuleData(),
             handler: new StreamHandlerDefinition(status, stream, headers)
         }
 
@@ -275,8 +271,7 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
         }
 
         const rule: RequestRuleData = {
-            matchers: this.matchers,
-            completionChecker: this.completionChecker,
+            ...this.buildBaseRuleData(),
             handler: new FileHandlerDefinition(status, statusMessage, path, headers)
         };
 
@@ -304,8 +299,7 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
      */
     thenPassThrough(options?: PassThroughHandlerOptions): Promise<MockedEndpoint> {
         const rule: RequestRuleData = {
-            matchers: this.matchers,
-            completionChecker: this.completionChecker,
+            ...this.buildBaseRuleData(),
             handler: new PassThroughHandlerDefinition(options)
         };
 
@@ -343,8 +337,7 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
         } = {}
     ): Promise<MockedEndpoint> {
         const rule: RequestRuleData = {
-            matchers: this.matchers,
-            completionChecker: this.completionChecker,
+            ...this.buildBaseRuleData(),
             handler: new PassThroughHandlerDefinition({
                 ...options,
                 forwarding: {
@@ -373,8 +366,7 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
      */
     thenCloseConnection(): Promise<MockedEndpoint> {
         const rule: RequestRuleData = {
-            matchers: this.matchers,
-            completionChecker: this.completionChecker,
+            ...this.buildBaseRuleData(),
             handler: new CloseConnectionHandlerDefinition()
         };
 
@@ -397,8 +389,7 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
      */
     thenTimeout(): Promise<MockedEndpoint> {
         const rule: RequestRuleData = {
-            matchers: this.matchers,
-            completionChecker: this.completionChecker,
+            ...this.buildBaseRuleData(),
             handler: new TimeoutHandlerDefinition()
         };
 

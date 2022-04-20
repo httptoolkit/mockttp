@@ -1,7 +1,7 @@
 import * as _ from 'lodash';
 import { v4 as uuid } from "uuid";
 
-import { OngoingRequest, CompletedRequest, OngoingResponse, Explainable } from "../../types";
+import { OngoingRequest, CompletedRequest, OngoingResponse, Explainable, RulePriority } from "../../types";
 import { waitForCompletedRequest } from '../../util/request-utils';
 import { MaybePromise } from '../../util/type-utils';
 
@@ -24,6 +24,7 @@ export interface RequestRule extends Explainable {
 
 export interface RequestRuleData {
     id?: string;
+    priority?: number; // Higher is higher, by default 0 is fallback, 1 is normal, must be positive
     matchers: matchers.RequestMatcher[];
     handler: RequestHandler | RequestHandlerDefinition;
     completionChecker?: completionCheckers.RuleCompletionChecker;
@@ -35,6 +36,7 @@ export class RequestRule implements RequestRule {
     private completionChecker?: completionCheckers.RuleCompletionChecker;
 
     public id: string;
+    public readonly priority: number;
     public requests: Promise<CompletedRequest>[] = [];
     public requestCount = 0;
 
@@ -42,6 +44,7 @@ export class RequestRule implements RequestRule {
         validateMockRuleData(data);
 
         this.id = data.id || uuid();
+        this.priority = data.priority ?? RulePriority.DEFAULT;
         this.matchers = data.matchers;
         this.completionChecker = data.completionChecker;
 
