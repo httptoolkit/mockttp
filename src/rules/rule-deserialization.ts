@@ -1,6 +1,6 @@
 import { Duplex } from "stream";
 
-import { Serialized, serialize, deserialize } from "../serialization/serialization";
+import { Serialized, deserialize } from "../serialization/serialization";
 
 import type { RuleParameters } from "./rule-parameters";
 
