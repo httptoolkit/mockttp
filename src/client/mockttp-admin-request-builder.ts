@@ -16,7 +16,7 @@ import { SubscribableEvent } from '../mockttp';
 import { MockedEndpointClient } from "./mocked-endpoint-client";
 import { AdminClient } from './admin-client';
 
-function normalizeHttpMessage(event: SubscribableEvent, message: any) {
+function normalizeHttpMessage(message: any, event?: SubscribableEvent) {
     if (message.timingEvents) {
         // Timing events are serialized as raw JSON
         message.timingEvents = JSON.parse(message.timingEvents);
@@ -312,14 +312,14 @@ export class MockttpAdminRequestBuilder {
                         v === null ? undefined : v
                     );
 
-                    normalizeHttpMessage(event, data.request);
+                    normalizeHttpMessage(data.request, event);
                     if (data.response) {
-                        normalizeHttpMessage(event, data.response);
+                        normalizeHttpMessage(data.response, event);
                     } else {
                         data.response = 'aborted';
                     }
                 } else {
-                    normalizeHttpMessage(event, data);
+                    normalizeHttpMessage(data, event);
                 }
                 return data;
             }
@@ -355,9 +355,7 @@ export class MockttpAdminRequestBuilder {
             const mockedEndpoint = result.mockedEndpoint;
             if (!mockedEndpoint) return null;
 
-            mockedEndpoint.seenRequests.forEach((request: any) => {
-                request.body = buildBodyReader(Buffer.from(request.body, 'base64'), request.headers);
-            });
+            mockedEndpoint.seenRequests.forEach(req => normalizeHttpMessage(req));
 
             return mockedEndpoint;
         }

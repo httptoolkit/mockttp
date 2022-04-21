@@ -2,7 +2,7 @@ import { MockttpClient } from "./client/mockttp-client";
 import { resetAdminServer } from "./client/admin-client";
 
 import { Mockttp, MockttpOptions } from "./mockttp";
-export { Method } from "./types";
+export { Method, RulePriority } from "./types";
 
 // Export rule data builders:
 import * as matchers from './rules/matchers';
