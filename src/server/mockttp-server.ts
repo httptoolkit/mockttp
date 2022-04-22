@@ -181,6 +181,8 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         this.webSocketRuleSets = [];
 
         this.debug = this.initialDebugSetting;
+
+        this.eventEmitter.removeAllListeners();
     }
 
     private get address() {

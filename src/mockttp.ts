@@ -60,7 +60,7 @@ export interface Mockttp {
     start(port?: number | PortRange): Promise<void>;
 
     /**
-     * Stop the mock server and reset the rules.
+     * Stop the mock server and reset all rules and subscriptions.
      *
      * @category Setup
      */
@@ -74,8 +74,8 @@ export interface Mockttp {
     enableDebug(): void;
 
     /**
-     * Reset the stored rules. Most of the time it's better to start & stop the server instead,
-     * but this can be useful in some special cases.
+     * Reset the stored rules and subscriptions. Most of the time it's better to start & stop
+     * the server instead, but this can be useful in some special cases.
      *
      * @category Setup
      */
