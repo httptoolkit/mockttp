@@ -147,7 +147,7 @@ export async function createComboServer(
     options: ComboServerOptions,
     requestListener: (req: http.IncomingMessage, res: http.ServerResponse) => void,
     tlsClientErrorListener: (socket: tls.TLSSocket, req: TlsRequest) => void
-): Promise<DestroyableServer> {
+): Promise<DestroyableServer & net.Server> {
     let server: net.Server;
     if (!options.https) {
         server = httpolyglot.createServer(requestListener);

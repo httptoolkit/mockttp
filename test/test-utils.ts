@@ -173,7 +173,7 @@ export async function startDnsServer(callback: (question: dns2.DnsQuestion) => s
         sendResponse(response);
     }));
 
-    return new Promise<DestroyableServer>((resolve, reject) => {
+    return new Promise<DestroyableServer & net.Server>((resolve, reject) => {
         server.listen(5333, '127.0.0.1');
         server.on('listening', () => resolve(server));
         server.on('error', reject);

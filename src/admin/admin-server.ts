@@ -118,7 +118,7 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
     private ruleParams: RuleParameters;
 
     private app = express();
-    private server: DestroyableServer | null = null;
+    private server: DestroyableServer & http.Server | null = null;
     private eventEmitter = new EventEmitter();
 
     private adminPlugins: PluginConstructorMap<Plugins>;

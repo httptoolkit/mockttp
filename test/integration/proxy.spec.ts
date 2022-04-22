@@ -1,6 +1,7 @@
 import _ = require("lodash");
 import * as path from 'path';
 import * as fs from 'fs-extra';
+import * as net from 'net';
 import * as http from 'http';
 import * as https from 'https';
 import * as http2 from 'http2';
@@ -869,7 +870,7 @@ nodeOnly(() => {
                 describe("given a TLSv1 upstream server", () => {
 
                     let oldServerPort: number;
-                    let oldServer: DestroyableServer;
+                    let oldServer: DestroyableServer & https.Server;
 
                     beforeEach(async () => {
                         const caKey = await fs.readFile('./test/fixtures/test-ca.key');
@@ -954,7 +955,7 @@ nodeOnly(() => {
 
                 describe("talking to a target server that requires a client cert", () => {
                     let authenticatingServerPort: number;
-                    let authenticatingServer: DestroyableServer;
+                    let authenticatingServer: DestroyableServer & https.Server;
 
                     beforeEach(async () => {
                         const key = await fs.readFile('./test/fixtures/test-ca.key');
@@ -1007,7 +1008,7 @@ nodeOnly(() => {
                     if (!semver.satisfies(process.version, H2_TLS_ON_TLS_SUPPORTED)) this.skip();
                 });
 
-                let http2Server: DestroyableServer;
+                let http2Server: DestroyableServer & http2.Http2SecureServer;
                 let targetPort: number;
 
                 beforeEach(async () => {
@@ -2507,7 +2508,7 @@ nodeOnly(() => {
                 fixedDnsResponse = undefined;
             });
 
-            let dnsServer: DestroyableServer | undefined;
+            let dnsServer: (DestroyableServer & net.Server) | undefined;
             let fixedDnsResponse: string | undefined = undefined;
 
             before(async () => {

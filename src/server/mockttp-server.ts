@@ -47,7 +47,7 @@ import {
 } from "../util/request-utils";
 import { AbortError } from "../rules/requests/request-handlers";
 import { WebSocketRuleData, WebSocketRule } from "../rules/websockets/websocket-rule";
-import { PassThroughWebSocketHandler, WebSocketHandler } from "../rules/websockets/websocket-handlers";
+import { PassThroughWebSocketHandler, RejectWebSocketHandler, WebSocketHandler } from "../rules/websockets/websocket-handlers";
 
 type ExtendedRawRequest = (http.IncomingMessage | http2.Http2ServerRequest) & {
     protocol?: string;
@@ -71,7 +71,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     private maxBodySize: number;
 
     private app: connect.Server;
-    private server: DestroyableServer | undefined;
+    private server: DestroyableServer & net.Server | undefined;
 
     private eventEmitter: EventEmitter;
 
@@ -89,11 +89,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         this.maxBodySize = options.maxBodySize ?? Infinity;
         this.eventEmitter = new EventEmitter();
 
-        this.defaultWsHandler = new PassThroughWebSocketHandler({
-            // Support the old (now deprecated) websocket certificate whitelist for default
-            // proxying only. Manually added rules get configured individually.
-            ignoreHostCertificateErrors: this.ignoreWebsocketHostCertificateErrors
-        });
+        this.defaultWsHandler = new RejectWebSocketHandler(503, "Request for unmocked endpoint");
 
         this.app = connect();
 

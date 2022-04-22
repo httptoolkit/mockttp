@@ -622,20 +622,6 @@ export interface MockttpOptions {
     suggestChanges?: boolean;
 
     /**
-     * Specify a list of hostnames and/or specific host:port addresses, for which
-     * certificate errors should be ignored, allowing the use of self-signed or
-     * otherwise invalid WSS certificates.
-     *
-     * This was a temporary API, it's now deprecated, and it will be removed in
-     * future. `anyWebSocket().thenPassThrough({ ignoreHostCertificateErrors: [...] })`
-     * should be used instead, to handle this with a rule in the same way that
-     * HTTP passthrough certificate errors are handled.
-     *
-     * @deprecated Use anyWebSocket to handle websockets explicitly instead.
-     */
-    ignoreWebsocketHostCertificateErrors?: string[];
-
-    /**
      * Record the requests & response for all traffic matched by each rule, and make
      * it available via endpoint.getSeenRequests().
      *
@@ -679,7 +665,6 @@ export abstract class AbstractMockttp {
     protected debug: boolean;
     protected recordTraffic: boolean;
     protected suggestChanges: boolean;
-    protected ignoreWebsocketHostCertificateErrors: string[];
 
     abstract get url(): string;
     abstract on(
@@ -696,8 +681,6 @@ export abstract class AbstractMockttp {
         this.suggestChanges = options.suggestChanges !== undefined
             ? options.suggestChanges
             : true;
-        this.ignoreWebsocketHostCertificateErrors =
-            options.ignoreWebsocketHostCertificateErrors || [];
     }
 
     get proxyEnv(): ProxyEnvConfig {
