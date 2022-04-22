@@ -78,35 +78,6 @@ export class MockttpAdminRequestBuilder {
         };
     }
 
-    buildSetFallbackRequestRuleQuery(
-        rule: Serialized<RequestRuleData>
-    ): AdminQuery<
-        { endpoint: { id: string, explanation: string } },
-        MockedEndpoint
-    > {
-        return {
-            query: gql`
-                mutation SetFallbackRule($fallbackRule: MockRule!) {
-                    endpoint: setFallbackRule(input: $fallbackRule) {
-                        id,
-                        explanation
-                    }
-                }
-            `,
-            variables: {
-                fallbackRule: rule
-            },
-            transformResponse: (response, { adminClient }) => {
-                const { endpoint: { id, explanation } } = response;
-                return new MockedEndpointClient(
-                    id,
-                    explanation,
-                    this.getEndpointDataGetter(adminClient, id)
-                );
-            }
-        };
-    };
-
     buildAddWebSocketRulesQuery(
         rules: Array<Serialized<WebSocketRuleData>>,
         reset: boolean
@@ -196,8 +167,6 @@ export class MockttpAdminRequestBuilder {
     }
 
     public buildSubscriptionRequest<T>(event: SubscribableEvent): AdminQuery<unknown, T> {
-        if (event === 'tlsClientError') event = 'tls-client-error';
-
         // Note the asOptionalField checks - these are a quick hack for backward compatibility,
         // introspecting the server schema to avoid requesting fields that don't exist on old servers.
 
@@ -259,7 +228,6 @@ export class MockttpAdminRequestBuilder {
                     hostname,
 
                     headers,
-                    body,
                     ${this.schema.asOptionalField('Response', 'timingEvents')}
                     ${this.schema.asOptionalField('Response', 'tags')}
                 }

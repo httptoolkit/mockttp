@@ -223,29 +223,6 @@ export const buildBodyReader = (body: Buffer, headers: Headers): CompletedBody =
                 const text = await completedBody.getText();
                 return text ? querystring.parse(text) : undefined;
             });
-        },
-
-        // Deprecated sync properties, for backwards compat. Note that these do not
-        // support new encodings, e.g. Brotli/Zstandard.
-        get decodedBuffer() {
-            return runOrUndefined(() =>
-                decodeBufferSync(this.buffer, headers['content-encoding'])
-            );
-        },
-        get text() {
-            return runOrUndefined(() =>
-                this.decodedBuffer!.toString('utf8')
-            );
-        },
-        get json() {
-            return runOrUndefined(() =>
-                JSON.parse(completedBody.text!)
-            )
-        },
-        get formData() {
-            return runOrUndefined(() =>
-                completedBody.text ? querystring.parse(completedBody.text) : undefined
-            );
         }
     };
 
@@ -305,9 +282,7 @@ export function buildInitiatedRequest(request: OngoingRequest): InitiatedRequest
 export function buildAbortedRequest(request: OngoingRequest): InitiatedRequest {
     const requestData = buildInitiatedRequest(request);
     return Object.assign(requestData, {
-        headers: cleanUpHeaders(request.headers),
-        // Exists for backward compat: really Abort events should have no body at all
-        body: buildBodyReader(Buffer.alloc(0), {})
+        headers: cleanUpHeaders(request.headers)
     });
 }
 

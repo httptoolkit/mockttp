@@ -21,11 +21,6 @@ export interface MockttpClientOptions extends MockttpOptions {
     adminServerUrl?: string;
 
     /**
-     * @deprecated Alias for adminServerUrl option
-     */
-    standaloneServerUrl?: string;
-
-    /**
      * Options to include on all client requests, e.g. to add extra
      * headers for authentication.
      */
@@ -60,7 +55,7 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
         this.mockServerOptions = options;
 
         this.adminClient = new AdminClient({
-            adminServerUrl: options.adminServerUrl || options.standaloneServerUrl,
+            adminServerUrl: options.adminServerUrl,
             requestOptions: options.client
         });
     }
@@ -130,17 +125,6 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
 
         return this.adminClient.sendQuery(
             this.requestBuilder.buildAddRequestRulesQuery(serializedRules, reset)
-        );
-    }
-
-    setFallbackRequestRule = async (
-        rule: RequestRuleData
-    ): Promise<MockedEndpoint> => {
-        if (!this.requestBuilder) throw new Error('Cannot add rules before the server is started');
-
-        const { adminStream } = this.adminClient;
-        return this.adminClient.sendQuery(
-            this.requestBuilder.buildSetFallbackRequestRuleQuery(serializeRuleData(rule, adminStream))
         );
     }
 

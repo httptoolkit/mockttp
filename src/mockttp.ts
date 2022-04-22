@@ -133,12 +133,6 @@ export interface Mockttp {
     forAnyRequest(): RequestRuleBuilder;
 
     /**
-     * @deprecated Use `.forAnyRequest()` instead.
-     * @category Deprecated
-     */
-    anyRequest(): RequestRuleBuilder;
-
-    /**
      * Get a builder for a fallback mock rule that will match any unmatched requests
      * on any path.
      *
@@ -149,12 +143,6 @@ export interface Mockttp {
      * @category Mock HTTP requests
      */
     forUnmatchedRequest(): RequestRuleBuilder;
-
-    /**
-     * @deprecated Use `.forUnmatchedRequest()` instead.
-     * @category Deprecated
-     */
-    unmatchedRequest(): RequestRuleBuilder;
 
     /**
      * Get a builder for a mock rule that will match GET requests for the given path.
@@ -179,12 +167,6 @@ export interface Mockttp {
     forGet(url?: string | RegExp): RequestRuleBuilder;
 
     /**
-     * @deprecated Use `.forGet()` instead.
-     * @category Deprecated
-     */
-    get(url?: string | RegExp): RequestRuleBuilder;
-
-    /**
      * Get a builder for a mock rule that will match POST requests for the given path.
      * If no path is specified, this matches all POST requests.
      *
@@ -205,12 +187,6 @@ export interface Mockttp {
      * @category Mock HTTP requests
      */
     forPost(url?: string | RegExp): RequestRuleBuilder;
-
-    /**
-     * @deprecated Use `.forPost()` instead.
-     * @category Deprecated
-     */
-    post(url?: string | RegExp): RequestRuleBuilder;
 
     /**
      * Get a builder for a mock rule that will match PUT requests for the given path.
@@ -235,12 +211,6 @@ export interface Mockttp {
     forPut(url?: string | RegExp): RequestRuleBuilder;
 
     /**
-     * @deprecated Use `.forPut()` instead.
-     * @category Deprecated
-     */
-    put(url?: string | RegExp): RequestRuleBuilder;
-
-    /**
      * Get a builder for a mock rule that will match DELETE requests for the given path.
      * If no path is specified, this matches all DELETE requests.
      *
@@ -261,12 +231,6 @@ export interface Mockttp {
      * @category Mock HTTP requests
      */
     forDelete(url?: string | RegExp): RequestRuleBuilder;
-
-    /**
-     * @deprecated Use `.forDelete()` instead.
-     * @category Deprecated
-     */
-    delete(url?: string | RegExp): RequestRuleBuilder;
 
     /**
      * Get a builder for a mock rule that will match PATCH requests for the given path.
@@ -291,12 +255,6 @@ export interface Mockttp {
     forPatch(url?: string | RegExp): RequestRuleBuilder;
 
     /**
-     * @deprecated Use `.forPatch()` instead.
-     * @category Deprecated
-     */
-    patch(url?: string | RegExp): RequestRuleBuilder;
-
-    /**
      * Get a builder for a mock rule that will match HEAD requests for the given path.
      * If no path is specified, this matches all HEAD requests.
      *
@@ -317,12 +275,6 @@ export interface Mockttp {
      * @category Mock HTTP requests
      */
     forHead(url?: string | RegExp): RequestRuleBuilder;
-
-    /**
-     * @deprecated Use `.forHead()` instead.
-     * @category Deprecated
-     */
-    head(url?: string | RegExp): RequestRuleBuilder;
 
     /**
      * Get a builder for a mock rule that will match OPTIONS requests for the given path.
@@ -356,23 +308,11 @@ export interface Mockttp {
     forOptions(url?: string | RegExp): RequestRuleBuilder;
 
     /**
-     * @deprecated Use `.forOptions()` instead.
-     * @category Deprecated
-     */
-    options(url?: string | RegExp): RequestRuleBuilder;
-
-    /**
      * Get a builder for a mock rule that will match all websocket connections.
      *
      * @category Mock websockets
      */
     forAnyWebSocket(): WebSocketRuleBuilder;
-
-    /**
-     * @deprecated Use `.forAnyWebSocket()` instead.
-     * @category Deprecated
-     */
-    anyWebSocket(): WebSocketRuleBuilder;
 
     /**
      * Subscribe to hear about request details as soon as the initial request details
@@ -454,12 +394,6 @@ export interface Mockttp {
     on(event: 'tls-client-error', callback: (req: TlsRequest) => void): Promise<void>;
 
     /**
-     * Deprecated alias for tls-client-error event
-     * @deprecated
-     */
-    on(event: 'tlsClientError', callback: (req: TlsRequest) => void): Promise<void>;
-
-    /**
      * Subscribe to hear about requests that fail before successfully sending their
      * initial parameters (the request line & headers). This will fire for requests
      * that drop connections early, send invalid or too-long headers, or aren't
@@ -505,18 +439,6 @@ export interface Mockttp {
      * @category Manual rule definition
      */
     setRequestRules(...ruleData: RequestRuleData[]): Promise<MockedEndpoint[]>;
-
-    /**
-     * @deprecated alias for `addRequestRules`
-     * @category Deprecated
-     */
-    addRules(...ruleData: RequestRuleData[]): Promise<MockedEndpoint[]>;
-
-    /**
-     * @deprecated alias for `setRequestRules`
-     * @category Deprecated
-     */
-    setRules(...ruleData: RequestRuleData[]): Promise<MockedEndpoint[]>;
 
     /**
      * Adds the given websocket rules to the server.
@@ -654,7 +576,6 @@ export type SubscribableEvent =
     | 'response'
     | 'abort'
     | 'tls-client-error'
-    | 'tlsClientError' // Deprecated
     | 'client-error';
 
 /**
@@ -699,24 +620,6 @@ export abstract class AbstractMockttp {
         this.addRequestRules(rule).then((rules) => rules[0]);
 
     abstract setRequestRules(...ruleData: RequestRuleData[]): Promise<MockedEndpoint[]>;
-
-    // Deprecated endpoints for backward compat:
-    /**
-     * @deprecated Use addRequestRule instead
-     */
-    addRule = (ruleData: RequestRuleData) => this.addRequestRule(ruleData);
-    /**
-     * @deprecated Use addRequestRules instead
-     */
-    addRules = (...ruleData: RequestRuleData[]) => this.addRequestRules(...ruleData);
-    /**
-     * @deprecated Use setRequestRules instead
-     */
-    setRules = (...ruleData: RequestRuleData[]) => this.setRequestRules(...ruleData);
-    /**
-     * @deprecated Use setRequestRules instead with 'priority: 0' rule data instead
-     */
-    abstract setFallbackRequestRule(ruleData: RequestRuleData): Promise<MockedEndpoint>;
 
     abstract addWebSocketRules: (...ruleData: WebSocketRuleData[]) => Promise<MockedEndpoint[]>;
     addWebSocketRule = (rule: WebSocketRuleData) =>
@@ -773,17 +676,5 @@ export abstract class AbstractMockttp {
     forAnyWebSocket(): WebSocketRuleBuilder {
         return new WebSocketRuleBuilder(this.addWebSocketRule);
     }
-
-    // Assorted deprecated aliases, before the forX prefix was added:
-    anyRequest = this.forAnyRequest;
-    unmatchedRequest = this.forUnmatchedRequest;
-    get = this.forGet;
-    post = this.forPost;
-    put = this.forPut;
-    delete = this.forDelete;
-    patch = this.forPatch;
-    head = this.forHead;
-    options = this.forOptions;
-    anyWebSocket = this.forAnyWebSocket;
 
 }

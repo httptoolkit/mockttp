@@ -4,11 +4,6 @@ import { EventEmitter } from 'events';
 
 export const DEFAULT_ADMIN_SERVER_PORT = 45454;
 
-/**
- * @deprecated Alias for DEFAULT_ADMIN_SERVER_PORT
- */
-export const DEFAULT_STANDALONE_PORT = DEFAULT_ADMIN_SERVER_PORT;
-
 export enum Method {
     GET,
     POST,
@@ -107,23 +102,11 @@ export interface CompletedBody {
     buffer: Buffer;
 
     /**
-     * @deprecated Use `getDecodedBuffer()` instead with promises, to support
-     * more encodings and improve performance.
-     */
-    decodedBuffer: Buffer | undefined;
-
-    /**
      * The decoded bytes of the response. If no encoding was used, this is the
      * same as `.buffer`. The response is decoded and returned asynchronously
      * as a Promise.
      */
     getDecodedBuffer(): Promise<Buffer | undefined>;
-
-    /**
-     * @deprecated Use `getText()` instead with promises, to support
-     * more encodings and improve performance.
-     */
-    text: string | undefined;
 
     /**
      * The contents of the response, decoded and parsed as a UTF-8 string.
@@ -132,23 +115,11 @@ export interface CompletedBody {
     getText(): Promise<string | undefined>;
 
     /**
-     * @deprecated Use `getJson()` instead with promises, to support
-     * more encodings and improve performance.
-     */
-    json: object | undefined;
-
-    /**
      * The contents of the response, decoded, parsed as UTF-8 string, and
      * then parsed a JSON. The response is decoded and returned asynchronously
      * as a Promise.
      */
     getJson(): Promise<object | undefined>;
-
-    /**
-     * @deprecated Use `getDecodedBuffer()` instead with promises, to support
-     * more encodings and improve performance.
-     */
-    formData: { [key: string]: string | string[] | undefined } | undefined;
 
     /**
      * The contents of the response, decoded, parsed as UTF-8 string, and

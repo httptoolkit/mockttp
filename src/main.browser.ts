@@ -1,5 +1,4 @@
 import { MockttpClient } from "./client/mockttp-client";
-import { resetAdminServer } from "./client/admin-client";
 
 import { Mockttp, MockttpOptions } from "./mockttp";
 export { Method, RulePriority } from "./types";
@@ -32,7 +31,6 @@ export const requestHandlers = {
     'TimeoutHandler': requestHandlerDefinitions.TimeoutHandlerDefinition,
     'HandlerLookup': requestHandlerDefinitions.HandlerDefinitionLookup
 };
-export { requestHandlers as handlers }; // Backward compat
 
 export const webSocketHandlers = {
     'PassThroughWebSocketHandler': webSocketHandlerDefinitions.PassThroughWebSocketHandlerDefinition,
@@ -56,11 +54,7 @@ export function getAdminServer(): never {
     throw new Error('Cannot set up an admin server within a browser');
 }
 
-export {
-    resetAdminServer,
-    getAdminServer as getStandalone,
-    resetAdminServer as resetStandalone
-};
+export { resetAdminServer } from "./client/admin-client";
 
 export * as PluggableAdmin from './pluggable-admin-api/pluggable-admin';
 export * as MockttpPluggableAdmin from './pluggable-admin-api/mockttp-pluggable-admin';

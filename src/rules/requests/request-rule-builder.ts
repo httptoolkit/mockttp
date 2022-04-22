@@ -152,13 +152,6 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
     }
 
     /**
-     * Deprecated alias for thenJson
-     * @deprecated
-     * @category Deprecated
-     */
-    thenJSON = this.thenJson;
-
-    /**
      * Call the given callback for any matched requests that are received,
      * and build a response from the result.
      *

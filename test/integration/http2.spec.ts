@@ -487,7 +487,7 @@ nodeOnly(() => {
                     if (!semver.satisfies(process.version, H2_TLS_ON_TLS_SUPPORTED)) this.skip();
 
                     await server.forGet(`https://localhost:${targetPort}/`)
-                        .thenPassThrough({ ignoreHostCertificateErrors: ['localhost'] });
+                        .thenPassThrough({ ignoreHostHttpsErrors: ['localhost'] });
 
                     const client = http2.connect(server.url);
 

@@ -53,12 +53,6 @@ export interface PassThroughWebSocketHandlerOptions {
     ignoreHostHttpsErrors?: string[];
 
     /**
-     * Deprecated alias for ignoreHostHttpsErrors.
-     * @deprecated
-     */
-    ignoreHostCertificateErrors?: string[];
-
-    /**
      * An array of additional certificates, which should be trusted as certificate
      * authorities for upstream hosts, in addition to Node.js's built-in certificate
      * authorities.
@@ -124,7 +118,6 @@ export class PassThroughWebSocketHandlerDefinition extends Serializable implemen
         super();
 
         this.ignoreHostHttpsErrors = options.ignoreHostHttpsErrors ||
-            options.ignoreHostCertificateErrors ||
             [];
         if (!Array.isArray(this.ignoreHostHttpsErrors)) {
             throw new Error("ignoreHostHttpsErrors must be an array");

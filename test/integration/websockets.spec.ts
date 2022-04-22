@@ -424,7 +424,7 @@ nodeOnly(() => {
                 beforeEach(async () => {
                     await intermediateProxy.start();
                     // Totally neutral WS proxy:
-                    proxyEndpoint = await intermediateProxy.anyWebSocket().thenPassThrough();
+                    proxyEndpoint = await intermediateProxy.forAnyWebSocket().thenPassThrough();
                 });
 
                 afterEach(() => intermediateProxy.stop());

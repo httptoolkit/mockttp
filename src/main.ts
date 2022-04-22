@@ -143,33 +143,3 @@ export * as PluggableAdmin from './pluggable-admin-api/pluggable-admin';
  * @category Internal
  */
 export * as MockttpPluggableAdmin from './pluggable-admin-api/mockttp-pluggable-admin';
-
-// ------------------------------------------------------------------------------
-// Various old names, still exported (but marked deprecated) for backward compat:
-// ------------------------------------------------------------------------------
-
-/**
- * @deprecated alias for requestHandlers
- */
-export { requestHandlers as handlers };
-/**
- * @deprecated alias for RequestRuleData
- */
-export type MockRuleData = RequestRuleData;
-
-/**
- * @deprecated alias for getAdminServer.
- */
-export const getStandalone = getAdminServer;
-/**
- * @deprecated alias for resetAdminServer
- */
-export const resetStandalone = resetAdminServer;
-/**
- * @deprecated alias for MockttpAdminServerOptions
- */
-export type StandaloneServerOptions = MockttpAdminServerOptions;
-/**
- * @deprecated alias for MockttpAdminServer
- */
-export type MockttpStandalone = MockttpAdminServer;

@@ -106,25 +106,6 @@ describe("TLS error subscriptions", () => {
         await expectNoClientErrors();
     });
 
-    it("should be sent for requests that reject the cert, using the deprecated alias", async () => {
-        let seenTlsErrorPromise = getDeferred<TlsRequest>();
-        await badServer.on('tlsClientError', (r) => seenTlsErrorPromise.resolve(r));
-
-        await expect(
-            fetch(badServer.urlFor("/"))
-        ).to.be.rejectedWith(isNode ? /certificate/ : 'Failed to fetch');
-
-        const tlsError = await seenTlsErrorPromise;
-
-        expect(tlsError.failureCause).to.be.oneOf([
-            // Depends on specific client behaviour:
-            'reset', // Node 12+
-            'cert-rejected' // Chrome
-        ]);
-
-        await expectNoClientErrors();
-    });
-
     nodeOnly(() => {
         it("should be sent for requests from clients that reject the certificate for the upstream server", async () => {
             let seenTlsErrorPromise = getDeferred<TlsRequest>();

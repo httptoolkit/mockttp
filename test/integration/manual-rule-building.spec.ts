@@ -1,7 +1,7 @@
 import * as _ from "lodash";
 import * as WebSocket from 'isomorphic-ws';
 
-import { getLocal, matchers, handlers, webSocketHandlers } from "../..";
+import { getLocal, matchers, requestHandlers, webSocketHandlers } from "../..";
 import { expect, fetch } from "../test-utils";
 
 describe("Mockttp rule building", function () {
@@ -13,7 +13,7 @@ describe("Mockttp rule building", function () {
     it("should allow manually adding a single rule", async () => {
         await server.addRequestRules({
             matchers: [new matchers.SimplePathMatcher('/endpoint')],
-            handler: new handlers.SimpleHandler(200, '', 'mock response'),
+            handler: new requestHandlers.SimpleHandler(200, '', 'mock response'),
         });
 
         let response = await fetch(server.urlFor('/endpoint'));
@@ -28,7 +28,7 @@ describe("Mockttp rule building", function () {
         const rule = await server.addRequestRules({
             id: manualId,
             matchers: [new matchers.SimplePathMatcher('/endpoint')],
-            handler: new handlers.SimpleHandler(200, '', 'mock response'),
+            handler: new requestHandlers.SimpleHandler(200, '', 'mock response'),
         });
 
         expect(rule[0].id).to.equal(manualId);
@@ -37,11 +37,11 @@ describe("Mockttp rule building", function () {
     it("should allow repeatedly adding rules", async () => {
         await server.addRequestRules({
             matchers: [new matchers.SimplePathMatcher('/endpoint')],
-            handler: new handlers.SimpleHandler(200, '', 'first mock response'),
+            handler: new requestHandlers.SimpleHandler(200, '', 'first mock response'),
         });
         await server.addRequestRules({
             matchers: [new matchers.SimplePathMatcher('/endpoint')],
-            handler: new handlers.SimpleHandler(200, '', 'second mock response'),
+            handler: new requestHandlers.SimpleHandler(200, '', 'second mock response'),
         });
 
         let firstResponse = await fetch(server.urlFor('/endpoint'));
@@ -56,11 +56,11 @@ describe("Mockttp rule building", function () {
     it("should allow completely replacing rules", async () => {
         await server.addRequestRules({
             matchers: [new matchers.SimplePathMatcher('/endpoint')],
-            handler: new handlers.SimpleHandler(200, '',  'original mock response')
+            handler: new requestHandlers.SimpleHandler(200, '',  'original mock response')
         });
         await server.setRequestRules({
             matchers: [new matchers.SimplePathMatcher('/endpoint')],
-            handler: new handlers.SimpleHandler(200, '', 'replacement mock response')
+            handler: new requestHandlers.SimpleHandler(200, '', 'replacement mock response')
         });
 
         let firstResponse = await fetch(server.urlFor('/endpoint'));
@@ -97,7 +97,7 @@ describe("Mockttp rule building", function () {
         return expect((async () => { // Funky setup to handle sync & async failure for node & browser
             await server.addRequestRules({
                 matchers: [],
-                handler: new handlers.SimpleHandler(200, 'mock response'),
+                handler: new requestHandlers.SimpleHandler(200, 'mock response'),
             })
         })()).to.be.rejectedWith('Cannot create a rule without at least one matcher');
     });

@@ -62,7 +62,11 @@ export function buildAdminServerModel(
 
     mockServer.on('abort', (request) => {
         pubsub.publish(REQUEST_ABORTED_TOPIC, {
-            requestAborted: request
+            requestAborted: Object.assign(request, {
+                // Backward compat: old clients expect this to be present. In future this can be removed
+                // and abort events can switch from Request to InitiatedRequest in the schema.
+                body: Buffer.alloc(0)
+            })
         })
     });
 
@@ -101,7 +105,7 @@ export function buildAdminServerModel(
 
         Mutation: {
             addRule: async (__: any, { input }: { input: Serialized<RequestRuleData> }) => {
-                return mockServer.addRule(deserializeRuleData(input, stream, ruleParameters));
+                return mockServer.addRequestRule(deserializeRuleData(input, stream, ruleParameters));
             },
             addRules: async (__: any, { input }: { input: Array<Serialized<RequestRuleData>> }) => {
                 return mockServer.addRequestRules(...input.map((rule) =>
@@ -114,7 +118,12 @@ export function buildAdminServerModel(
                 ));
             },
             setFallbackRule: async (__: any, { input }: { input: Serialized<RequestRuleData> }) => {
-                return mockServer.setFallbackRequestRule(deserializeRuleData(input, stream, ruleParameters));
+                // Deprecated endpoint, but preserved for API backward compat
+                const ruleData = deserializeRuleData(input, stream, ruleParameters);
+                return mockServer.addRequestRules({
+                    ...ruleData,
+                    priority: 0
+                }).then((rules) => rules[0]);
             },
 
             addWebSocketRule: async (__: any, { input }: { input: Serialized<WebSocketRuleData> }) => {

@@ -6,11 +6,19 @@ import request = require("request-promise-native");
 import * as WebSocket from 'isomorphic-ws';
 import type * as Ws from 'ws';
 
-import { getLocal, getRemote, getStandalone, resetStandalone, Mockttp, CompletedRequest, MOCKTTP_PARAM_REF } from "../..";
+import {
+    getLocal,
+    getRemote,
+    getAdminServer,
+    resetAdminServer,
+    Mockttp,
+    CompletedRequest,
+    MOCKTTP_PARAM_REF
+} from "../..";
 import { expect, fetch, nodeOnly, browserOnly, delay, getDeferred } from "../test-utils";
 
 browserOnly(() => {
-    describe("Remote browser client with a standalone server", function () {
+    describe("Remote browser client with an admin server", function () {
 
         describe("with a default configuration", () => {
             let mockServer = getLocal();
@@ -18,7 +26,7 @@ browserOnly(() => {
             beforeEach(() => mockServer.start());
             afterEach(() => mockServer.stop());
 
-            it("should find the standalone server and successfully mock a request", async () => {
+            it("should find the admin server and successfully mock a request", async () => {
                 await mockServer.forGet("/mocked-endpoint").thenReply(200, "mocked data");
 
                 const response = fetch(mockServer.urlFor("/mocked-endpoint"));
@@ -30,11 +38,11 @@ browserOnly(() => {
 });
 
 nodeOnly(() => {
-    describe("Remote node client with a standalone server", function () {
+    describe("Remote node client with an admin server", function () {
 
         describe("with no configuration", () => {
 
-            const server = getStandalone();
+            const server = getAdminServer();
             const remoteServer = getRemote();
 
             before(() => server.start());
@@ -146,7 +154,7 @@ nodeOnly(() => {
                         }
                     }));
 
-                    await remoteServer.post(targetServer.urlFor('/req')).thenPassThrough({
+                    await remoteServer.forPost(targetServer.urlFor('/req')).thenPassThrough({
                         transformRequest: {
                             replaceBody: 'request-body'
                         }
@@ -167,7 +175,7 @@ nodeOnly(() => {
                         body: 'request-body'
                     });
 
-                    await remoteServer.post(targetServer.urlFor('/res')).thenPassThrough({
+                    await remoteServer.forPost(targetServer.urlFor('/res')).thenPassThrough({
                         transformResponse: {
                             replaceBody: 'replaced-response-body'
                         }
@@ -193,7 +201,7 @@ nodeOnly(() => {
                         }
                     }));
 
-                    await remoteServer.post(targetServer.urlFor('/req')).thenPassThrough({
+                    await remoteServer.forPost(targetServer.urlFor('/req')).thenPassThrough({
                         transformRequest: {
                             updateHeaders: {
                                 'custom-header': undefined, // Remove
@@ -232,7 +240,7 @@ nodeOnly(() => {
                         })
                     });
 
-                    await remoteServer.post(targetServer.urlFor('/res')).thenPassThrough({
+                    await remoteServer.forPost(targetServer.urlFor('/res')).thenPassThrough({
                         transformResponse: {
                             updateHeaders: {
                                 'custom-header': undefined, // Remove
@@ -270,7 +278,7 @@ nodeOnly(() => {
                     const targetEndpoint = await targetServer.forAnyRequest().thenReply(200, "Remote server says hi!");
 
                     // Mockttp forwards requests via our intermediate proxy (configured with a remote client + callback)
-                    await remoteServer.anyRequest().thenPassThrough({
+                    await remoteServer.forAnyRequest().thenPassThrough({
                         proxyConfig: ({ hostname }) => {
                             expect(hostname).to.equal('localhost');
                             return { proxyUrl: targetServer.url }
@@ -295,7 +303,7 @@ nodeOnly(() => {
                     let secondCallbackCalled = false;
 
                     // Mockttp forwards requests via our intermediate proxy (configured with a remote client + callback)
-                    await remoteServer.anyRequest().thenPassThrough({
+                    await remoteServer.forAnyRequest().thenPassThrough({
                         proxyConfig: [
                             ({ hostname }) => {
                                 expect(hostname).to.equal('localhost');
@@ -396,7 +404,7 @@ nodeOnly(() => {
             it("should support explicitly resetting all servers", async () => {
                 await remoteServer.forGet("/mocked-endpoint").thenReply(200, "mocked data");
 
-                await resetStandalone();
+                await resetAdminServer();
 
                 const result = await request.get(remoteServer.urlFor("/mocked-endpoint")).catch((e) => e);
 
@@ -433,7 +441,7 @@ nodeOnly(() => {
         });
 
         describe("with a provided default configuration", () => {
-            let server = getStandalone({
+            let server = getAdminServer({
                 serverDefaults: {
                     https: {
                         keyPath: './test/fixtures/test-ca.key',
@@ -454,13 +462,13 @@ nodeOnly(() => {
             });
         });
 
-        describe("with a referenceable standalone server parameters", () => {
+        describe("with a referenceable admin server parameters", () => {
 
             // A function called by the parameter, which we can use to stub out the
             // parameter itself dynamically.
             let proxyCallbackCallback: (...args: any) => void;
 
-            let server = getStandalone({
+            let server = getAdminServer({
                 serverDefaults: {
                     https: {
                         keyPath: './test/fixtures/test-ca.key',
@@ -485,7 +493,7 @@ nodeOnly(() => {
                 const callbackArgsDeferred = getDeferred<any>();
                 proxyCallbackCallback = (...args: any) => callbackArgsDeferred.resolve(args);
 
-                client.anyRequest().thenPassThrough({
+                client.forAnyRequest().thenPassThrough({
                     // A reference to the proxyCallback parameter.
                     proxyConfig: { [MOCKTTP_PARAM_REF]: 'proxyCallback' }
                 });
@@ -514,7 +522,7 @@ nodeOnly(() => {
                     }
                 };
 
-                client.anyRequest().thenPassThrough({
+                client.forAnyRequest().thenPassThrough({
                     // A reference to the proxyCallback parameter.
                     proxyConfig: [
                         { [MOCKTTP_PARAM_REF]: 'proxyCallback' }, // => undef
@@ -543,20 +551,20 @@ nodeOnly(() => {
         }
 
         describe("with keep alive configured", () => {
-            let standaloneServer = getStandalone({
+            let adminServer = getAdminServer({
                 webSocketKeepAlive: 50
             });
             let client = getRemote();
 
-            before(() => standaloneServer.start());
-            after(() => standaloneServer.stop());
+            before(() => adminServer.start());
+            after(() => adminServer.stop());
 
             beforeEach(() => client.start());
             afterEach(() => client.stop());
 
             it("should keep the websocket stream alive", async () => {
                 const id = getClientSessionId(client);
-                const streamWsServer: Ws.Server = (standaloneServer as any)
+                const streamWsServer: Ws.Server = (adminServer as any)
                     .sessions[id].streamServer;
 
                 expect(streamWsServer.clients.size).to.equal(1);
@@ -571,7 +579,7 @@ nodeOnly(() => {
                 await client.on('request', () => {});
 
                 const id = getClientSessionId(client);
-                const subWsServer: Ws.Server = (standaloneServer as any)
+                const subWsServer: Ws.Server = (adminServer as any)
                     .sessions[id].subscriptionServer.server;
 
                 expect(subWsServer.clients.size).to.equal(1);
@@ -583,7 +591,7 @@ nodeOnly(() => {
         });
 
         describe("with strict CORS configured", () => {
-            let server = getStandalone({
+            let server = getAdminServer({
                 corsOptions: {
                     origin: 'https://example.com',
                     strict: true
@@ -716,7 +724,7 @@ nodeOnly(() => {
 
         describe("before the mock server is running", () => {
 
-            const standaloneServer = getStandalone();
+            const adminServer = getAdminServer();
 
             const client1 = getRemote();
             const client2 = getRemote();
@@ -726,17 +734,17 @@ nodeOnly(() => {
                 client2.stop()
             ]));
 
-            beforeEach(() => standaloneServer.start());
-            afterEach(() => standaloneServer.stop());
+            beforeEach(() => adminServer.start());
+            afterEach(() => adminServer.stop());
 
             it("should expose events for mock server start & stop", async () => {
                 let startedServers: number[] = [];
                 let stoppedServers: number[] = [];
 
-                standaloneServer.on('mock-session-started', (session) => {
+                adminServer.on('mock-session-started', (session) => {
                     startedServers.push(session.http.getMockServer().port)
                 });
-                standaloneServer.on('mock-session-stopping', (session) => {
+                adminServer.on('mock-session-stopping', (session) => {
                     stoppedServers.push(session.http.getMockServer().port)
                 });
 
@@ -771,7 +779,7 @@ nodeOnly(() => {
                 // Forcefully kill the /subscription websocket connection, so that all
                 // active subscriptions are disconnected:
                 const id = getClientSessionId(client1);
-                const subWsServer: Ws.Server = (standaloneServer as any)
+                const subWsServer: Ws.Server = (adminServer as any)
                     .sessions[id].subscriptionServer.server;
                 subWsServer.clients.forEach((socket: Ws) => socket.terminate());
                 await delay(500); // Wait for the disconnect & subsequent reconnect to complete
@@ -793,7 +801,7 @@ nodeOnly(() => {
                 // Forcefully kill the /stream websocket connection, so that dynamic
                 // handlers & matchers are disconnected:
                 const id = getClientSessionId(client1);
-                const streamWsServer: Ws.Server = (standaloneServer as any)
+                const streamWsServer: Ws.Server = (adminServer as any)
                     .sessions[id].streamServer;
                 streamWsServer.clients.forEach((socket: Ws) => socket.terminate());
                 await delay(200); // Wait for the disconnect & subsequent reconnect to complete
@@ -806,7 +814,7 @@ nodeOnly(() => {
                 await client1.start();
                 const clientPort = client1.port;
 
-                await resetStandalone();
+                await resetAdminServer();
                 await client2.start(clientPort);
 
                 // Client 1 should be broken now, because it was reset. It should _not_ try to

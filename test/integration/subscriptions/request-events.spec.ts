@@ -3,7 +3,7 @@ import * as http from 'http';
 
 import {
     getLocal,
-    getStandalone,
+    getAdminServer,
     getRemote,
     InitiatedRequest,
     CompletedRequest
@@ -143,11 +143,11 @@ describe("Request initiated subscriptions", () => {
 
     nodeOnly(() => {
         describe("with a remote client", () => {
-            let standalone = getStandalone();
+            let adminServer = getAdminServer();
             let client = getRemote();
 
-            before(() => standalone.start());
-            after(() => standalone.stop());
+            before(() => adminServer.start());
+            after(() => adminServer.stop());
 
             beforeEach(() => client.start());
             afterEach(() => client.stop());
@@ -267,11 +267,11 @@ describe("Request subscriptions", () => {
 
     nodeOnly(() => {
         describe("with a remote client", () => {
-            let standalone = getStandalone();
+            let adminServer = getAdminServer();
             let client = getRemote();
 
-            before(() => standalone.start());
-            after(() => standalone.stop());
+            before(() => adminServer.start());
+            after(() => adminServer.stop());
 
             beforeEach(() => client.start());
             afterEach(() => client.stop());

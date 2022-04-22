@@ -149,19 +149,6 @@ describe("HTTP mock rule handling", function () {
         expect(await response.json()).to.deep.equal({"myVar":"foo"});
     });
 
-    it("should reply with JSON when using the deprecated JSON helper alias", async () => {
-        await server.forGet('/mocked-endpoint').thenJSON(200, { myVar: 'foo' },
-            { 'other-header': 'header-data' });
-
-        let response = await fetch(server.urlFor('/mocked-endpoint'));
-
-        expect(response.status).to.equal(200);
-        expect(response.statusText).to.equal('OK');
-        expect(response.headers.get('Content-Type')).to.equal('application/json');
-        expect(response.headers.get('Content-Length')).to.equal('15');
-        expect(await response.json()).to.deep.equal({"myVar":"foo"});
-    });
-
     it("should allow streaming a response", async () => {
         let stream = new PassThrough();
         await server.forGet('/stream').thenStream(200, stream);

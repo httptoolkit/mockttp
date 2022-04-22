@@ -9,16 +9,15 @@ describe("Method & path request matching", function () {
     beforeEach(() => server.start());
     afterEach(() => server.stop());
 
-    type Method = 'get' | 'post' | 'put' | 'delete' | 'patch' | 'head' | 'options';
-    let methods: Method[] = [ 'get', 'post', 'put', 'delete', 'patch', 'head', 'options' ];
+    let methods = ['Get', 'Post', 'Put', 'Delete', 'Patch', 'Head', 'Options'] as const;
 
     browserOnly(() => {
-        methods = methods.filter((m) => m !== 'options');
+        methods = methods.filter((m) => m !== 'Options') as any;
 
         it('should not allow registering matches for OPTIONS requests by default', () => {
             let error: unknown | null = null;
             try {
-                server.options('/');
+                server.forOptions('/');
             } catch (e) {
                 error = e;
             }
@@ -31,16 +30,16 @@ responses by hand.`);
         });
     });
 
-    methods.forEach((methodName: Method) => {
+    methods.forEach((methodName) => {
         it(`should match ${methodName.toUpperCase()} requests`, async () => {
-            await server[methodName]('/').thenReply(200, methodName);
+            await server[`for${methodName}`]('/').thenReply(200, methodName);
 
             let result = await fetch(server.url, {
                 method: methodName.toUpperCase(),
             });
 
             await expect(result).to.have.status(200);
-            if (methodName !== 'head') {
+            if (methodName !== 'Head') {
                 await expect(result).to.have.responseText(methodName);
             } else {
                 await expect(result).to.have.responseText('');

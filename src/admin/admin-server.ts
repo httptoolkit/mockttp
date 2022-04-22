@@ -291,10 +291,6 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
      * but before its been returned to remote clients.
      */
     on(event: 'mock-session-started', listener: (plugins: Plugins) => void): void;
-    /**
-     * @deprecated Use on('mock-session-started') instead for plugin-aware start() events.
-     */
-    on(event: 'mock-server-started', listener: (server: Mockttp) => void): void;
 
     /**
      * Subscribe to hear when a mock session is stopped. The listener is provided with
@@ -308,10 +304,6 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
      * cleanly shutdown with `adminServer.stop()`.
      */
     on(event: 'mock-session-stopping', listener: (plugins: Plugins) => void): void;
-    /**
-     * @deprecated Use on('mock-session-stopping') instead for plugin-aware stop() events.
-     */
-    on(event: 'mock-server-stopping', listener: (server: Mockttp) => void): void;
     on(event: string, listener: (...args: any) => void): void {
         this.eventEmitter.on(event, listener);
     }
@@ -372,12 +364,6 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
             if (!running) return;
             running = false;
 
-            if ('http' in plugins) {
-                // Backward compat
-                this.eventEmitter.emit('mock-server-stopping',
-                    (plugins['http'] as MockttpAdminPlugin).getMockServer()
-                );
-            }
             this.eventEmitter.emit('mock-session-stopping', plugins);
 
             const session = this.sessions[sessionId];
@@ -505,12 +491,6 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
             stop: stopSession
         };
 
-        if ('http' in plugins) {
-            // Backward compat
-            this.eventEmitter.emit('mock-server-started',
-                (plugins['http'] as MockttpAdminPlugin).getMockServer()
-            );
-        }
         this.eventEmitter.emit('mock-session-started', plugins);
     }
 
@@ -611,18 +591,6 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
                 plugin.enableDebug?.()
             )
         );
-    }
-
-    /**
-     * @deprecated Not plugin-aware, so only returns HTTP results. Exists for backward compatibility only.
-     */
-    get activeServerPorts() {
-        return Object.values(this.sessions).flatMap(({ sessionPlugins }) => {
-            if (sessionPlugins['http']) {
-                return [(sessionPlugins['http'] as any as MockttpAdminPlugin).getMockServer().port];
-            }
-            else return [];
-        });
     }
 
     get ruleParameterKeys() {

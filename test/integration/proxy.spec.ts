@@ -549,7 +549,7 @@ nodeOnly(() => {
             it("should be able to close the response connection from beforeResponse", async () => {
                 const remoteEndpoint = await remoteServer.forGet('/').thenReply(200);
                 await server.forAnyRequest().thenPassThrough({
-                    ignoreHostCertificateErrors: ['localhost'],
+                    ignoreHostHttpsErrors: ['localhost'],
                     beforeResponse: () => 'close'
                 });
 
@@ -810,7 +810,7 @@ nodeOnly(() => {
                         await badServer.forAnyRequest().thenReply(200);
 
                         await server.forAnyRequest().thenPassThrough({
-                            ignoreHostCertificateErrors: ['localhost']
+                            ignoreHostHttpsErrors: ['localhost']
                         });
 
                         let response = await request.get(badServer.url, {
@@ -825,7 +825,7 @@ nodeOnly(() => {
                         await badServer.forAnyRequest().thenReply(200);
 
                         await server.forGet(badServer.urlFor('/')).thenPassThrough({
-                            ignoreHostCertificateErrors: ['differenthost']
+                            ignoreHostHttpsErrors: ['differenthost']
                         });
 
                         let response = await request.get(badServer.url, {
@@ -986,7 +986,7 @@ nodeOnly(() => {
 
                     it("uses the matching client certificate for the hostname", async () => {
                         await server.forAnyRequest().thenPassThrough({
-                            ignoreHostCertificateErrors: ['localhost'],
+                            ignoreHostHttpsErrors: ['localhost'],
                             clientCertificateHostMap: {
                                 [`localhost:${authenticatingServerPort}`]: {
                                     pfx: await fs.readFile('./test/fixtures/test-ca.pfx'),
@@ -1038,7 +1038,7 @@ nodeOnly(() => {
 
                 it("can pass through requests successfully", async () => {
                     await server.forAnyRequest().thenPassThrough({
-                        ignoreHostCertificateErrors: ['localhost']
+                        ignoreHostHttpsErrors: ['localhost']
                     });
 
                     const response = await http2ProxyRequest(server, `https://localhost:${targetPort}`);
@@ -1050,7 +1050,7 @@ nodeOnly(() => {
 
                 it("can rewrite request URLs en route", async () => {
                     await server.forAnyRequest().thenPassThrough({
-                        ignoreHostCertificateErrors: ['localhost'],
+                        ignoreHostHttpsErrors: ['localhost'],
                         beforeRequest: (req) => {
                             expect(req.url).to.equal(`https://localhost:${targetPort}/initial-path`);
 
@@ -1068,7 +1068,7 @@ nodeOnly(() => {
 
                 it("can change the request method en route", async () => {
                     await server.forAnyRequest().thenPassThrough({
-                        ignoreHostCertificateErrors: ['localhost'],
+                        ignoreHostHttpsErrors: ['localhost'],
                         beforeRequest: (req) => {
                             expect(req.method).to.equal('GET');
                             return { method: 'POST' };
@@ -1083,7 +1083,7 @@ nodeOnly(() => {
 
                 it("can rewrite request headers en route", async () => {
                     await server.forAnyRequest().thenPassThrough({
-                        ignoreHostCertificateErrors: ['localhost'],
+                        ignoreHostHttpsErrors: ['localhost'],
                         beforeRequest: (req) => {
                             expect(req.headers).to.deep.equal({
                                 ':scheme': 'https',
@@ -1110,7 +1110,7 @@ nodeOnly(() => {
 
                 it("can rewrite request headers including :pseudoheaders, as long as they're not custom values", async () => {
                     await server.forAnyRequest().thenPassThrough({
-                        ignoreHostCertificateErrors: ['localhost'],
+                        ignoreHostHttpsErrors: ['localhost'],
                         beforeRequest: (req) => {
                             expect(req.headers).to.deep.equal({
                                 ':scheme': 'https',
@@ -1142,7 +1142,7 @@ nodeOnly(() => {
 
                 it("cannot inject custom request :path or :method pseudoheaders, even if they're correct", async () => {
                     await server.forAnyRequest().thenPassThrough({
-                        ignoreHostCertificateErrors: ['localhost'],
+                        ignoreHostHttpsErrors: ['localhost'],
                         beforeRequest: (req) => {
                             expect(req.headers).to.deep.equal({
                                 ':scheme': 'https',
@@ -1172,7 +1172,7 @@ nodeOnly(() => {
 
                 it("can override the :scheme and :authority pseudoheaders", async () => {
                     await server.forAnyRequest().thenPassThrough({
-                        ignoreHostCertificateErrors: ['localhost'],
+                        ignoreHostHttpsErrors: ['localhost'],
                         beforeRequest: (req) => {
                             expect(req.headers).to.deep.equal({
                                 ':scheme': 'https',
@@ -1203,7 +1203,7 @@ nodeOnly(() => {
 
                 it("rejects custom request pseudoheaders", async () => {
                     await server.forAnyRequest().thenPassThrough({
-                        ignoreHostCertificateErrors: ['localhost'],
+                        ignoreHostHttpsErrors: ['localhost'],
                         beforeRequest: (req) => {
                             expect(req.headers).to.deep.equal({
                                 ':scheme': 'https',
@@ -1229,7 +1229,7 @@ nodeOnly(() => {
 
                 it("can rewrite the request body en route", async () => {
                     await server.forAnyRequest().thenPassThrough({
-                        ignoreHostCertificateErrors: ['localhost'],
+                        ignoreHostHttpsErrors: ['localhost'],
                         beforeRequest: async (req) => {
                             expect(await req.body.getText()).to.equal('initial-body');
 
@@ -1250,7 +1250,7 @@ nodeOnly(() => {
 
                 it("can rewrite the request body as empty en route", async () => {
                     await server.forAnyRequest().thenPassThrough({
-                        ignoreHostCertificateErrors: ['localhost'],
+                        ignoreHostHttpsErrors: ['localhost'],
                         beforeRequest: async (req) => {
                             expect(await req.body.getText()).to.equal('');
 
@@ -1274,7 +1274,7 @@ nodeOnly(() => {
 
                 it("can rewrite the request body with JSON en route", async () => {
                     await server.forAnyRequest().thenPassThrough({
-                        ignoreHostCertificateErrors: ['localhost'],
+                        ignoreHostHttpsErrors: ['localhost'],
                         beforeRequest: async (req) => {
                             expect(await req.body.getText()).to.equal('initial-body');
 
@@ -1295,7 +1295,7 @@ nodeOnly(() => {
 
                 it("can inject a response directly en route", async () => {
                     await server.forAnyRequest().thenPassThrough({
-                        ignoreHostCertificateErrors: ['localhost'],
+                        ignoreHostHttpsErrors: ['localhost'],
                         beforeRequest: () => {
                             return {
                                 response: {
@@ -1318,7 +1318,7 @@ nodeOnly(() => {
 
                 it("can rewrite a response status en route", async () => {
                     await server.forAnyRequest().thenPassThrough({
-                        ignoreHostCertificateErrors: ['localhost'],
+                        ignoreHostHttpsErrors: ['localhost'],
                         beforeResponse: (res) => {
                             expect(res.statusCode).to.equal(200);
                             expect(res.statusMessage).to.equal(''); // Not used in HTTP/2
@@ -1334,7 +1334,7 @@ nodeOnly(() => {
 
                 it("can rewrite response headers en route", async () => {
                     await server.forAnyRequest().thenPassThrough({
-                        ignoreHostCertificateErrors: ['localhost'],
+                        ignoreHostHttpsErrors: ['localhost'],
                         beforeResponse: (res) => {
                             const receivedHeaders = JSON.parse(res.headers['received-headers'] as string);
 
@@ -1372,7 +1372,7 @@ nodeOnly(() => {
 
                 it("can rewrite response headers including :status, as long as it's not a custom value", async () => {
                     await server.forAnyRequest().thenPassThrough({
-                        ignoreHostCertificateErrors: ['localhost'],
+                        ignoreHostHttpsErrors: ['localhost'],
                         beforeResponse: (res) => {
                             expect(res.headers[':status']).to.equal('200');
 
@@ -1394,7 +1394,7 @@ nodeOnly(() => {
 
                 it("rejects custom response pseudoheader headers added en route", async () => {
                     await server.forAnyRequest().thenPassThrough({
-                        ignoreHostCertificateErrors: ['localhost'],
+                        ignoreHostHttpsErrors: ['localhost'],
                         beforeResponse: () => {
                             return {
                                 headers: {
@@ -1415,7 +1415,7 @@ nodeOnly(() => {
 
                 it("rejects a rewritten :status header", async () => {
                     await server.forAnyRequest().thenPassThrough({
-                        ignoreHostCertificateErrors: ['localhost'],
+                        ignoreHostHttpsErrors: ['localhost'],
                         beforeResponse: (res) => {
                             expect(res.headers[':status']).to.equal('200');
 
@@ -1439,7 +1439,7 @@ nodeOnly(() => {
 
                 it("can rewrite a response body en route", async () => {
                     await server.forAnyRequest().thenPassThrough({
-                        ignoreHostCertificateErrors: ['localhost'],
+                        ignoreHostHttpsErrors: ['localhost'],
                         beforeResponse: async (res) => {
                             expect(await res.body.getText()).to.equal('Real HTTP/2 response');
 
@@ -1454,7 +1454,7 @@ nodeOnly(() => {
 
                 it("can rewrite the response body as empty en route", async () => {
                     await server.forAnyRequest().thenPassThrough({
-                        ignoreHostCertificateErrors: ['localhost'],
+                        ignoreHostHttpsErrors: ['localhost'],
                         beforeResponse: async (res) => {
                             expect(await res.body.getText()).to.equal('Real HTTP/2 response');
 
@@ -1478,7 +1478,7 @@ nodeOnly(() => {
 
                 it("can rewrite a response body as JSON en route", async () => {
                     await server.forAnyRequest().thenPassThrough({
-                        ignoreHostCertificateErrors: ['localhost'],
+                        ignoreHostHttpsErrors: ['localhost'],
                         beforeResponse: async (res) => {
                             expect(await res.body.getText()).to.equal('Real HTTP/2 response');
 
@@ -1495,7 +1495,7 @@ nodeOnly(() => {
 
                 it("should allow forwarding the request", async () => {
                     await server.forAnyRequest().thenForwardTo(`localhost:${targetPort}`, {
-                        ignoreHostCertificateErrors: ['localhost']
+                        ignoreHostHttpsErrors: ['localhost']
                     });
 
                     const response = await http2ProxyRequest(server, "https://example.com");
@@ -2011,7 +2011,7 @@ nodeOnly(() => {
 
                 // The remote server always returns a fixed value
                 expect(remoteServer.port).to.not.equal(server.port);
-                await remoteServer.forAnyRequest().thenJSON(200, {
+                await remoteServer.forAnyRequest().thenJson(200, {
                     'body-value': true,
                     'another-body-value': 'a value',
                 }, {
@@ -2311,7 +2311,7 @@ nodeOnly(() => {
                 await server.start();
 
                 await intermediateProxy.start();
-                proxyEndpoint = await intermediateProxy.anyRequest().thenPassThrough(); // Totally neutral proxy
+                proxyEndpoint = await intermediateProxy.forAnyRequest().thenPassThrough(); // Totally neutral proxy
 
                 // Configure Request to use the *first* server as a proxy
                 process.env = _.merge({}, process.env, server.proxyEnv);

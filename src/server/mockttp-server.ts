@@ -228,23 +228,6 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         }));
     }
 
-    /**
-     * This method is deprecated, but still exists and preserves the previous implementation behaviour
-     * of allowing only one rule to be configured. This no longer applies to fallback rules defined
-     * elsewhere, either using forUnmatchedRequest() or raw rule data with priority 0, and exists
-     * here only for backward compatibility.
-     *
-     * @deprecated Use setRequestRules instead with 'priority: 0' rule data instead
-     */
-    public setFallbackRequestRule = (ruleData: RequestRuleData): Promise<MockedEndpoint> => {
-        if (this.requestRuleSets[0]?.length) {
-            throw new Error("Only one fallback request rule can be registered at any time");
-        }
-
-        return this.addRequestRules({ ...ruleData, priority: 0 })
-            .then((rules) => rules[0]);
-    }
-
     public setWebSocketRules = (...ruleData: WebSocketRuleData[]): Promise<ServerMockedEndpoint[]> => {
         Object.values(this.webSocketRuleSets).flat().forEach(r => r.dispose());
 
