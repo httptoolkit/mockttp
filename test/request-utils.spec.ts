@@ -14,7 +14,8 @@ const zstd: Promise<ZstdStreaming> = new Promise((resolve) =>
 describe("buildBodyReader", () => {
 
     let brotli: typeof import('brotli-wasm');
-    beforeEach(async () => {
+    beforeEach(async function () {
+        this.timeout(5000); // Brotli can be slow to load initially
         brotli = await brotliPromise;
     });
 
@@ -72,7 +73,9 @@ describe("buildBodyReader", () => {
             expect(await body.getText()).to.equal('Brotli brotli brotli brotli brotli');
         });
 
-        it('can decode zstandard bodies', async () => {
+        it('can decode zstandard bodies', async function () {
+            this.timeout(5000); // Zstd can be slow to load (inside the body reader, not just here)
+
             const content = Buffer.from((await zstd).compress(Buffer.from('hello zstd zstd zstd world')));
             const body = buildBodyReader(content, {
                 'content-encoding': 'zstd'
