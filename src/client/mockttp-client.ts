@@ -48,7 +48,7 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
     private mockServerOptions: MockttpOptions;
 
     private adminClient: AdminClient<{ http: MockttpAdminPlugin }>;
-    private requestBuilder!: MockttpAdminRequestBuilder; // Always set once server has started.
+    private requestBuilder: MockttpAdminRequestBuilder | undefined; // Set once server has started.
 
     constructor(options: MockttpClientOptions = {}) {
         super(_.defaults(options, {
@@ -181,6 +181,8 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
     }
 
     public on(event: SubscribableEvent, callback: (data: any) => void): Promise<void> {
+        if (!this.requestBuilder) throw new Error('Cannot subscribe to events before the server is started');
+
         return this.adminClient.subscribe(
             this.requestBuilder.buildSubscriptionRequest(event),
             callback
