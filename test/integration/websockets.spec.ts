@@ -548,6 +548,23 @@ nodeOnly(() => {
                 expect(response).to.equal('test echo');
             });
 
+            it("can be explicitly rejected", async () => {
+                mockServer.forAnyWebSocket().thenRejectConnection(401, "Forbidden", {}, "No no no");
+
+                const ws = new WebSocket(`ws://localhost:${REAL_WS_SERVER_PORT}`, {
+                    agent: new HttpProxyAgent(`http://localhost:${mockServer.port}`)
+                });
+
+                const result = await new Promise<'open' | Error>((resolve) => {
+                    ws.on('open', () => resolve('open'));
+                    ws.on('error', (e) => resolve(e));
+                });
+
+                expect(result).to.be.instanceOf(Error);
+                expect((result as Error).message).to.equal("Unexpected server response: 401");
+                ws.close(1000);
+            });
+
             it("can be manually blocked", async () => {
                 mockServer.forAnyWebSocket().thenCloseConnection();
 

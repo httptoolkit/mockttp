@@ -9,7 +9,7 @@ import {
     serializeProxyConfig
 } from "../../serialization/serialization";
 
-import { Explainable } from "../../types";
+import { Explainable, Headers } from "../../types";
 
 import {
     CloseConnectionHandlerDefinition,
@@ -180,6 +180,25 @@ export class PassThroughWebSocketHandlerDefinition extends Serializable implemen
     }
 }
 
+export class RejectWebSocketHandlerDefinition extends Serializable implements WebSocketHandlerDefinition {
+
+    readonly type = 'ws-reject';
+
+    constructor(
+        public readonly statusCode: number,
+        public readonly statusMessage: string = 'WebSocket rejected',
+        public readonly headers: Headers = {},
+        public readonly body: Buffer | string = ''
+    ) {
+        super();
+    }
+
+    explain() {
+        return `explicitly reject the websocket upgrade with status ${this.statusCode}`;
+    }
+
+}
+
 // These two work equally well for HTTP requests as websockets, but it's
 // useful to reexport there here for consistency.
 export {
@@ -189,6 +208,7 @@ export {
 
 export const WsHandlerDefinitionLookup = {
     'ws-passthrough': PassThroughWebSocketHandlerDefinition,
+    'ws-reject': RejectWebSocketHandlerDefinition,
     'close-connection': CloseConnectionHandlerDefinition,
     'timeout': TimeoutHandlerDefinition
 };

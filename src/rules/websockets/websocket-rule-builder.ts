@@ -1,11 +1,12 @@
-import { MockedEndpoint } from "../../types";
+import { MockedEndpoint, Headers } from "../../types";
 import type { WebSocketRuleData } from "./websocket-rule";
 
 import {
     PassThroughWebSocketHandlerDefinition,
     TimeoutHandlerDefinition,
     CloseConnectionHandlerDefinition,
-    PassThroughWebSocketHandlerOptions
+    PassThroughWebSocketHandlerOptions,
+    RejectWebSocketHandlerDefinition
 } from './websocket-handler-definitions';
 
 import { BaseRuleBuilder } from "../base-rule-builder";
@@ -107,6 +108,40 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
                     targetHost: forwardToLocation
                 }
             })
+        };
+
+        return this.addRule(rule);
+    }
+
+    /**
+     * Rejects connections, sending an HTTP response with the given
+     * status, message and body, to explicitly refuse the WebSocket
+     * handshake.
+     *
+     * Calling this method registers the rule with the server, so it
+     * starts to handle requests.
+     *
+     * This method returns a promise that resolves with a mocked endpoint.
+     * Wait for the promise to confirm that the rule has taken effect
+     * before sending requests to be matched. The mocked endpoint
+     * can be used to assert on the requests matched by this rule.
+     *
+     * @category Responses
+     */
+    thenRejectConnection(
+        statusCode: number,
+        statusMessage?: string,
+        headers?: Headers,
+        body?: Buffer | string
+    ): Promise<MockedEndpoint> {
+        const rule: WebSocketRuleData = {
+            ...this.buildBaseRuleData(),
+            handler: new RejectWebSocketHandlerDefinition(
+                statusCode,
+                statusMessage,
+                headers,
+                body
+            )
         };
 
         return this.addRule(rule);

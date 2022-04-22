@@ -31,6 +31,7 @@ import { MOCKTTP_UPSTREAM_CIPHERS } from '../passthrough-handling';
 import {
     PassThroughWebSocketHandlerDefinition,
     PassThroughWebSocketHandlerOptions,
+    RejectWebSocketHandlerDefinition,
     SerializedPassThroughWebSocketData,
     WebSocketHandlerDefinition,
     WsHandlerDefinitionLookup,
@@ -132,13 +133,7 @@ async function mirrorRejection(socket: net.Socket, rejectionResponse: http.Incom
     if (socket.writable) {
         const { statusCode, statusMessage, headers } = rejectionResponse;
 
-        socket.write(
-            `HTTP/1.1 ${statusCode} ${statusMessage}\r\n` +
-            _.map(headers, (value, key) =>
-                `${key}: ${value}`
-            ).join('\r\n') +
-            '\r\n\r\n'
-        );
+        socket.write(rawResponse(statusCode || 500, statusMessage || 'Unknown error', headers));
 
         const body = await streamToBuffer(rejectionResponse);
         if (socket.writable) socket.write(body);
@@ -146,6 +141,17 @@ async function mirrorRejection(socket: net.Socket, rejectionResponse: http.Incom
 
     socket.destroy();
 }
+
+const rawResponse = (
+    statusCode: number,
+    statusMessage: string,
+    headers: http.IncomingHttpHeaders = {}
+) =>
+    `HTTP/1.1 ${statusCode} ${statusMessage}\r\n` +
+    _.map(headers, (value, key) =>
+        `${key}: ${value}`
+    ).join('\r\n') +
+    '\r\n\r\n';
 
 export { PassThroughWebSocketHandlerOptions };
 
@@ -366,6 +372,17 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
     }
 }
 
+export class RejectWebSocketHandler extends RejectWebSocketHandlerDefinition {
+
+    async handle(req: OngoingRequest, socket: net.Socket, head: Buffer) {
+        socket.write(rawResponse(this.statusCode, this.statusMessage, this.headers));
+        if (this.body) socket.write(this.body);
+        socket.write('\r\n');
+        socket.destroy();
+    }
+
+}
+
 // These two work equally well for HTTP requests as websockets, but it's
 // useful to reexport there here for consistency.
 export {
@@ -375,6 +392,7 @@ export {
 
 export const WsHandlerLookup: typeof WsHandlerDefinitionLookup = {
     'ws-passthrough': PassThroughWebSocketHandler,
+    'ws-reject': RejectWebSocketHandler,
     'close-connection': CloseConnectionHandler,
     'timeout': TimeoutHandler
 };
