@@ -22,7 +22,6 @@ import {
     CompletedBody
 } from "../../types";
 
-import { byteLength } from '../../util/util';
 import { MaybePromise } from '../../util/type-utils';
 import { readFile } from '../../util/fs';
 import {
@@ -57,7 +56,13 @@ import { assertParamDereferenced, RuleParameters } from '../rule-parameters';
 
 import { getAgent } from '../http-agents';
 import { ProxySettingSource } from '../proxy-config';
-import { MOCKTTP_UPSTREAM_CIPHERS } from '../passthrough-handling';
+import {
+    getContentLengthAfterModification,
+    getHostAfterModification,
+    getH2HeadersAfterModification,
+    MOCKTTP_UPSTREAM_CIPHERS,
+    OVERRIDABLE_REQUEST_PSEUDOHEADERS
+} from '../passthrough-handling';
 
 import {
     BeforePassthroughRequestRequest,
@@ -304,128 +309,6 @@ function getCallbackResultBody(
     }
 }
 
-function getOverrideUrlLinkedHeader(
-    originalHeaders: Headers,
-    replacementHeaders: Headers | undefined,
-    headerName: 'host' | ':authority' | ':scheme',
-    expectedValue: string
-) {
-    const replacementValue = !!replacementHeaders ? replacementHeaders[headerName] : undefined;
-
-    if (replacementValue !== undefined) {
-        if (replacementValue !== expectedValue && replacementValue === originalHeaders[headerName]) {
-            // If you rewrite the URL-based header wrongly, by explicitly setting it to the
-            // existing value, we accept it but print a warning. This would be easy to
-            // do if you mutate the existing headers, for example, and ignore the host.
-            console.warn(oneLine`
-                Passthrough callback overrode the URL and the ${headerName} header
-                with mismatched values, which may be a mistake. The URL implies
-                ${expectedValue}, whilst the header was set to ${replacementValue}.
-            `);
-        }
-        // Whatever happens, if you explicitly set a value, we use it.
-        return replacementValue;
-    }
-
-    // If you didn't override the header at all, then we automatically ensure
-    // the correct value is set automatically.
-    return expectedValue;
-}
-
-// Helper to autocorrect the host header, but only if you didn't explicitly
-// override it yourself for some reason (e.g. testing bad behaviour).
-function getCorrectHost(
-    reqUrl: string,
-    originalHeaders: Headers,
-    replacementHeaders: Headers | undefined
-): string {
-    return getOverrideUrlLinkedHeader(
-        originalHeaders,
-        replacementHeaders,
-        'host',
-        url.parse(reqUrl).host!
-    );
-}
-
-const OVERRIDABLE_REQUEST_PSEUDOHEADERS = [
-    ':authority',
-    ':scheme'
-] as const;
-
-// We allow manually reconfiguring the :authority & :scheme headers, so that you can
-// send a request to one server, and pretend it was sent to a different server, similar
-// to setting a custom Host header value.
-function getCorrectPseudoheaders(
-    reqUrl: string,
-    originalHeaders: Headers,
-    replacementHeaders: Headers | undefined
-): { [K in typeof OVERRIDABLE_REQUEST_PSEUDOHEADERS[number]]: string } {
-    const parsedUrl = url.parse(reqUrl);
-
-    return {
-        ':scheme': getOverrideUrlLinkedHeader(
-            originalHeaders,
-            replacementHeaders,
-            ':scheme',
-            parsedUrl.protocol!.slice(0, -1)
-        ),
-        ':authority': getOverrideUrlLinkedHeader(
-            originalHeaders,
-            replacementHeaders,
-            ':authority',
-            parsedUrl.host!
-        )
-    };
-}
-
-// Helper to handle content-length nicely for you when rewriting requests with callbacks
-function getCorrectContentLength(
-    body: string | Uint8Array | Buffer,
-    originalHeaders: Headers,
-    replacementHeaders: Headers | undefined,
-    mismatchAllowed: boolean = false
-): string | undefined {
-    // If there was a content-length header, it might now be wrong, and it's annoying
-    // to need to set your own content-length override when you just want to change
-    // the body. To help out, if you override the body but don't explicitly override
-    // the (now invalid) content-length, then we fix it for you.
-
-    if (!_.has(originalHeaders, 'content-length')) {
-        // Nothing to override - use the replacement value, or undefined
-        return (replacementHeaders || {})['content-length'];
-    }
-
-    if (!replacementHeaders) {
-        // There was a length set, and you've provided a body but not changed it.
-        // You probably just want to send this body and have it work correctly,
-        // so we should fix the content length for you automatically.
-        return byteLength(body).toString();
-    }
-
-    // There was a content length before, and you're replacing the headers entirely
-    const lengthOverride = replacementHeaders['content-length'] === undefined
-        ? undefined
-        : replacementHeaders['content-length'].toString();
-
-    // If you're setting the content-length to the same as the origin headers, even
-    // though that's the wrong value, it *might* be that you're just extending the
-    // existing headers, and you're doing this by accident (we can't tell for sure).
-    // We use invalid content-length as instructed, but print a warning just in case.
-    if (
-        lengthOverride === originalHeaders['content-length'] &&
-        lengthOverride !== byteLength(body).toString() &&
-        !mismatchAllowed // Set for HEAD responses
-    ) {
-        console.warn(oneLine`
-            Passthrough modifications overrode the body and the content-length header
-            with mismatched values, which may be a mistake. The body contains
-            ${byteLength(body)} bytes, whilst the header was set to ${lengthOverride}.
-        `);
-    }
-
-    return lengthOverride;
-}
-
 function validateCustomHeaders(
     originalHeaders: Headers,
     modifiedHeaders: Headers | undefined,
@@ -631,7 +514,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                     { level: 1 }
                 );
 
-                headers['content-length'] = getCorrectContentLength(
+                headers['content-length'] = getContentLengthAfterModification(
                     reqBodyOverride,
                     clientReq.headers,
                     (updateHeaders && updateHeaders['content-length'] !== undefined)
@@ -666,8 +549,8 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
 
             Object.assign(headers,
                 isH2Downstream
-                    ? getCorrectPseudoheaders(reqUrl, clientReq.headers, modifiedReq?.headers)
-                    : { 'host': getCorrectHost(reqUrl, clientReq.headers, modifiedReq?.headers) }
+                    ? getH2HeadersAfterModification(reqUrl, clientReq.headers, modifiedReq?.headers)
+                    : { 'host': getHostAfterModification(reqUrl, clientReq.headers, modifiedReq?.headers) }
             );
 
             headersManuallyModified = !!modifiedReq?.headers;
@@ -693,7 +576,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                     { level: 1 }
                 );
 
-                headers['content-length'] = getCorrectContentLength(
+                headers['content-length'] = getContentLengthAfterModification(
                     reqBodyOverride,
                     clientReq.headers,
                     modifiedReq?.headers
@@ -875,7 +758,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                             { level: 1 }
                         );
 
-                        serverHeaders['content-length'] = getCorrectContentLength(
+                        serverHeaders['content-length'] = getContentLengthAfterModification(
                             resBodyOverride,
                             serverRes.headers,
                             (updateHeaders && updateHeaders['content-length'] !== undefined)
@@ -933,7 +816,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                             { level: 1 }
                         );
 
-                        serverHeaders['content-length'] = getCorrectContentLength(
+                        serverHeaders['content-length'] = getContentLengthAfterModification(
                             resBodyOverride,
                             serverRes.headers,
                             modifiedRes?.headers,
