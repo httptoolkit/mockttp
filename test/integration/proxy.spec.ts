@@ -467,6 +467,34 @@ nodeOnly(() => {
                 expect(response.body).to.equal('Fake 404');
             });
 
+            it("should be able to edit a request to inject a response with automatic encoding", async () => {
+                const remoteEndpoint = await remoteServer.forPost('/').thenReply(200);
+
+                await server.forPost(remoteServer.urlFor("/")).thenPassThrough({
+                    beforeRequest: () => ({
+                        response: {
+                            statusCode: 200,
+                            headers: { 'content-encoding': 'gzip' },
+                            body: 'A mock body'
+                        }
+                    })
+                });
+
+                let response = await request.post(remoteServer.urlFor("/"), {
+                    resolveWithFullResponse: true,
+                    encoding: null,
+                    simple: false
+                });
+
+                const seenRequests = await remoteEndpoint.getSeenRequests();
+                expect(seenRequests.length).to.equal(0);
+
+                expect(response.statusCode).to.equal(200);
+
+                const decodedBody = zlib.gunzipSync(response.body).toString();
+                expect(decodedBody).to.equal('A mock body');
+            });
+
             it("should be able to edit a request to close the connection directly", async () => {
                 const remoteEndpoint = await remoteServer.forGet('/').thenReply(200);
 

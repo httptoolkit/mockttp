@@ -136,9 +136,7 @@ export function getContentLengthAfterModification(
     }
 
     // There was a content length before, and you're replacing the headers entirely
-    const lengthOverride = replacementHeaders['content-length'] === undefined
-        ? undefined
-        : replacementHeaders['content-length'].toString();
+    const lengthOverride = replacementHeaders['content-length']?.toString();
 
     // If you're setting the content-length to the same as the origin headers, even
     // though that's the wrong value, it *might* be that you're just extending the

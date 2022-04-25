@@ -305,6 +305,20 @@ describe("HTTP mock rule handling", function () {
         expect(await response.json()).to.deep.equal({myVar: "foo"});
     });
 
+    it("should automatically encode response body data from a callback", async () => {
+        await server.forGet("/mocked-endpoint").thenCallback(() => {
+            return { statusCode: 200, headers: { 'content-encoding': 'gzip' }, body: 'response body' }
+        });
+
+        let response = await fetch(server.urlFor("/mocked-endpoint"));
+
+        expect(response.status).to.equal(200);
+        expect(Object.fromEntries([...response.headers as any])).to.include({
+            'content-encoding': 'gzip'
+        });
+        expect(await response.text()).to.equal("response body");
+    });
+
     it("should allow closing connections with a callback", async () => {
         await server.forGet("/mocked-endpoint").thenCallback(() => {
             return 'close';

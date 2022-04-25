@@ -135,7 +135,7 @@ export class SimpleHandler extends SimpleHandlerDefinition {
     }
 }
 
-function writeResponseFromCallback(result: CallbackResponseMessageResult, response: OngoingResponse) {
+async function writeResponseFromCallback(result: CallbackResponseMessageResult, response: OngoingResponse) {
     if (result.json !== undefined) {
         result.headers = _.assign(result.headers || {}, { 'Content-Type': 'application/json' });
         result.body = JSON.stringify(result.json);
@@ -146,6 +146,15 @@ function writeResponseFromCallback(result: CallbackResponseMessageResult, respon
         dropDefaultHeaders(response);
         validateCustomHeaders({}, result.headers);
         setHeaders(response, dropUndefinedValues(result.headers));
+    }
+
+    if (result.body) {
+        // The body is automatically encoded to match the content-encoding header, if set.
+        result.body = await encodeBuffer(
+            Buffer.from(result.body),
+            (result.headers?.['content-encoding'] || '') as SUPPORTED_ENCODING,
+            { level: 1 }
+        );
     }
 
     response.writeHead(
@@ -173,7 +182,7 @@ export class CallbackHandler extends CallbackHandlerDefinition {
             (request as any).socket.end();
             throw new AbortError('Connection closed (intentionally)');
         } else {
-            writeResponseFromCallback(outResponse, response);
+            await writeResponseFromCallback(outResponse, response);
         }
     }
 
@@ -538,7 +547,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                     throw new AbortError('Connection closed (intentionally)');
                 } else {
                     // The callback has provided a full response: don't passthrough at all, just use it.
-                    writeResponseFromCallback(modifiedReq.response, clientRes);
+                    await writeResponseFromCallback(modifiedReq.response, clientRes);
                     return;
                 }
             }
@@ -568,7 +577,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 reqBodyOverride = getCallbackResultBody(modifiedReq?.body);
             }
 
-            if (reqBodyOverride !== undefined) {
+            if (reqBodyOverride) {
                 // We always re-encode the body to match the resulting content-encoding header:
                 reqBodyOverride = await encodeBuffer(
                     reqBodyOverride,
@@ -808,7 +817,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                         resBodyOverride = getCallbackResultBody(modifiedRes?.body);
                     }
 
-                    if (resBodyOverride !== undefined) {
+                    if (resBodyOverride) {
                         // We always re-encode the body to match the resulting content-encoding header:
                         resBodyOverride = await encodeBuffer(
                             resBodyOverride,
