@@ -367,7 +367,7 @@ nodeOnly(() => {
                 expect(response).to.equal("");
             });
 
-            it("should be able to rewrite a request's body with json", async () => {
+            it("should be able to rewrite a request's body as JSON", async () => {
                 await remoteServer.forPost('/').thenCallback(async (req) => ({
                     statusCode: 200,
                     json: await req.body.getJson()
@@ -387,6 +387,60 @@ nodeOnly(() => {
                     json: true
                 });
                 expect(response).to.deep.equal({ hello: "world" });
+            });
+
+            it("should be able to rewrite a request's body as JSON and encode it automatically", async () => {
+                await remoteServer.forAnyRequest().thenCallback(async (req) => ({
+                    status: 200,
+                    json: { // Echo back the request data
+                        url: req.url,
+                        method: req.method,
+                        headers: req.headers,
+                        rawBody: await req.body.buffer.toString(),
+                        decodedBody: await req.body.getText(), // Echo's the DECODED content
+                    }
+                }));
+
+                await server.forPost(remoteServer.urlFor("/abc")).thenPassThrough({
+                    beforeRequest: async (req) => {
+                        expect(await req.body.getJson()).to.deep.equal({ // Decoded automatically
+                            a: 1,
+                            b: 2
+                        });
+
+                        return {
+                            // Return a body, which should be encoded automatically (due to the existing
+                            // gzip header) before its sent upstream.
+                            body: JSON.stringify({ hello: "world" })
+                        };
+                    }
+                });
+
+                const rawResponse = await request.post(remoteServer.urlFor("/abc"), {
+                    headers: {
+                        'content-encoding': 'gzip',
+                        'custom-header': 'a-value'
+                    },
+                    body: zlib.gzipSync(
+                        JSON.stringify({ a: 1, b: 2 })
+                    )
+                });
+
+                // Use the echoed response to see what the remote server received:
+                const response = JSON.parse(rawResponse);
+                expect(response).to.deep.equal({
+                    url: remoteServer.urlFor("/abc"),
+                    method: 'POST',
+                    headers: {
+                        'host': `localhost:${remoteServer.port}`,
+                        'connection': 'close',
+                        'content-encoding': 'gzip',
+                        'content-length': '37',
+                        'custom-header': 'a-value'
+                    },
+                    rawBody: zlib.gzipSync(JSON.stringify({ hello: 'world' }), { level: 1 }).toString(),
+                    decodedBody: JSON.stringify({ hello: "world" })
+                });
             });
 
             it("should be able to edit a request to inject a response directly", async () => {
@@ -1491,6 +1545,33 @@ nodeOnly(() => {
                     expect(response.headers[':status']).to.equal(200);
                     expect(response.headers['content-type']).to.equal('application/json');
                     expect(response.body.toString('utf8')).to.equal(JSON.stringify({ replaced: true }));
+                });
+
+                it("can rewrite a response body as JSON and encode it automatically en route", async () => {
+                    await server.forAnyRequest().thenPassThrough({
+                        ignoreHostHttpsErrors: ['localhost'],
+                        beforeResponse: async (res) => {
+                            expect(await res.body.getText()).to.equal('Real HTTP/2 response');
+                            return {
+                                headers: {
+                                    'content-encoding': 'gzip'
+                                },
+                                json: { replaced: true } // Should be automatically encoded due to header:
+                            };
+                        }
+                    });
+
+                    const response = await http2ProxyRequest(server, `https://localhost:${targetPort}/`);
+
+                    expect(response.headers[':status']).to.equal(200);
+                    expect(response.headers['content-type']).to.equal('application/json');
+                    expect(response.headers['content-encoding']).to.equal('gzip');
+                    expect(response.body.toString('utf-8')).to.deep.equal(
+                        zlib.gzipSync(JSON.stringify({ replaced: true }), { level: 1 }).toString()
+                    );
+
+                    const decodedResponse = zlib.gunzipSync(response.body).toString('utf-8');
+                    expect(decodedResponse).to.equal(JSON.stringify({ replaced: true }));
                 });
 
                 it("should allow forwarding the request", async () => {

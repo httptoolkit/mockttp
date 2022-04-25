@@ -686,6 +686,13 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
             }
 
             if (reqBodyOverride !== undefined) {
+                // We always re-encode the body to match the resulting content-encoding header:
+                reqBodyOverride = await encodeBuffer(
+                    reqBodyOverride,
+                    (headers['content-encoding'] || '') as SUPPORTED_ENCODING,
+                    { level: 1 }
+                );
+
                 headers['content-length'] = getCorrectContentLength(
                     reqBodyOverride,
                     clientReq.headers,
@@ -864,7 +871,8 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                         // We always re-encode the body to match the resulting content-encoding header:
                         resBodyOverride = await encodeBuffer(
                             resBodyOverride,
-                            (serverHeaders['content-encoding'] || '') as SUPPORTED_ENCODING
+                            (serverHeaders['content-encoding'] || '') as SUPPORTED_ENCODING,
+                            { level: 1 }
                         );
 
                         serverHeaders['content-length'] = getCorrectContentLength(
@@ -918,6 +926,13 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                     }
 
                     if (resBodyOverride !== undefined) {
+                        // We always re-encode the body to match the resulting content-encoding header:
+                        resBodyOverride = await encodeBuffer(
+                            resBodyOverride,
+                            (serverHeaders['content-encoding'] || '') as SUPPORTED_ENCODING,
+                            { level: 1 }
+                        );
+
                         serverHeaders['content-length'] = getCorrectContentLength(
                             resBodyOverride,
                             serverRes.headers,
