@@ -155,19 +155,11 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
      * Call the given callback for any matched requests that are received,
      * and build a response from the result.
      *
-     * The callback should return a response object with the fields below, or
-     * the string 'close' to immediately close the connection. The callback
+     * The callback should return a response object with the fields as
+     * defined by {@link CallbackResponseMessageResult} to define the response,
+     * or the string 'close' to immediately close the connection. The callback
      * can be asynchronous, in which case it should return this value wrapped
      * in a promise.
-     *
-     * Responses object may include various fields to define the response.
-     * All fields are optional, with the defaults listed below.
-     *
-     * Valid fields are:
-     * - `status` (number, defaults to 200)
-     * - `body` (string or buffer, defaults to empty)
-     * - `headers` (object with string keys & values, defaults to standard required headers)
-     * - `json` (object, which will be sent as a JSON response, unset by default)
      *
      * If the callback throws an exception, the server will return a 500
      * with the exception message.
@@ -183,7 +175,7 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
      * @category Responses
      */
     thenCallback(callback:
-        (request: CompletedRequest) => MaybePromise<CallbackResponseResult | 'close'>
+        (request: CompletedRequest) => MaybePromise<CallbackResponseResult>
     ): Promise<MockedEndpoint> {
         const rule: RequestRuleData = {
             ...this.buildBaseRuleData(),

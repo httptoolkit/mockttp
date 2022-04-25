@@ -47,14 +47,71 @@ export interface RequestHandlerDefinition extends Explainable, Serializable {
 
 export type SerializedBuffer = { type: 'Buffer', data: number[] };
 
+/**
+ * Can be returned from callbacks to override parts of a request.
+ *
+ * All fields are optional, and omitted values will default to the original
+ * request value.
+ */
 export interface CallbackRequestResult {
+    /**
+     * A replacement HTTP method, capitalized.
+     */
     method?: string;
+
+    /**
+     * The full URL to send the request to. If set, this will redirect
+     * the request and automatically update the Host header accordingly,
+     * unless you also provide a `headers` value that includes a Host
+     * header, in which case that will take used as-is.
+     */
     url?: string;
+
+    /**
+     * The replacement HTTP headers, as an object of string keys and either
+     * single string or array of string values.
+     */
     headers?: Headers;
 
-    json?: any;
-    body?: string | Buffer;
+    /**
+     * A string or buffer, which replaces the request body if set. This will
+     * be automatically content-encoded to match the Content-Encoding defined
+     * in your request headers.
+     *
+     * If this is set, the Content-Length header will be automatically updated
+     * accordingly to match, unless you also provide a `headers` value that
+     * includes a Content-Length header, in which case that will take used
+     * as-is.
+     *
+     * You should only return one body field: either `body` or `json`.
+     */
+    body?: string | Buffer | Uint8Array;
 
+    /**
+     * A JSON value, which will be stringified and send as a JSON-encoded
+     * request body. This will be automatically content-encoded to match
+     * the Content-Encoding defined in your request headers.
+     *
+     * If this is set, the Content-Length header will be automatically updated
+     * accordingly to match, unless you also provide a `headers` value that
+     * includes a Content-Length header, in which case that will take used
+     * as-is.
+     *
+     * You should only return one body field: either `body` or `json`.
+     */
+    json?: any;
+
+    /**
+     * A response: either a response object defining the fields of a response
+     * or the string 'close' to immediately close the connection.
+     *
+     * See {@link CallbackResponseMessageResult} for the possible fields that can
+     * be set to define the response.
+     *
+     * If set, the request will not be forwarded at all, and this will be used
+     * as the response to immediately return to the client (or for 'close', this
+     * will immediately close the connection to the client).
+     */
     response?: CallbackResponseResult;
 }
 
@@ -62,14 +119,73 @@ export type CallbackResponseResult =
     | CallbackResponseMessageResult
     | 'close';
 
+/**
+ * Can be returned from callbacks to define parts of a response, or
+ * override parts when given an existing repsonse.
+ *
+ * All fields are optional, and omitted values will default to the original
+ * response value or a default value.
+ */
 export interface CallbackResponseMessageResult {
+    /**
+     * The response status code as a number.
+     *
+     * Defaults to 200 if not set.
+     */
     statusCode?: number;
-    status?: number; // exists for backwards compatibility only
+
+    /**
+     * Supported only for backward compatibility.
+     *
+     * @deprecated Use statusCode instead.
+     */
+    status?: number;
+
+    /**
+     * The response status message, as a string. This is ignored for
+     * HTTP/2 responses.
+     *
+     * Defaults to the default status message for the status code if not set.
+     */
     statusMessage?: string;
+
+    /**
+     * The replacement HTTP headers, as an object of string keys and either
+     * single string or array of string values.
+     *
+     * Defaults to a minimum set of standard required headers if not set.
+     */
     headers?: Headers;
 
-    json?: any;
+    /**
+     * A string or buffer, which replaces the response body if set. This will
+     * be automatically encoded to match the Content-Encoding defined in your
+     * response headers.
+     *
+     * If this is set, the Content-Length header will be automatically updated
+     * accordingly to match, unless you also provide a `headers` value that
+     * includes a Content-Length header, in which case that will take used
+     * as-is.
+     *
+     * Defaults to empty.
+     *
+     * You should only return one body field: either `body` or `json`.
+     */
     body?: string | Buffer | Uint8Array;
+
+    /**
+     * A JSON value, which will be stringified and send as a JSON-encoded
+     * request body. This will be automatically content-encoded to match the
+     * Content-Encoding defined in your response headers.
+     *
+     * If this is set, the Content-Length header will be automatically updated
+     * accordingly to match, unless you also provide a `headers` value that
+     * includes a Content-Length header, in which case that will take used
+     * as-is.
+     *
+     * You should only return one body field: either `body` or `json`.
+     */
+    json?: any;
 }
 
 function validateCustomHeaders(
@@ -418,18 +534,9 @@ export interface PassThroughHandlerOptions {
      *
      * The callback can return an object to define how the request should be changed.
      * All fields on the object are optional, and returning undefined is equivalent
-     * to returning an empty object (transforming nothing). The possible fields are:
+     * to returning an empty object (transforming nothing).
      *
-     * - `method` (a replacement HTTP verb, capitalized)
-     * - `url` (a full URL to send the request to)
-     * - `headers` (object with string keys & values, replaces all headers if set)
-     * - `body` (string or buffer, replaces the body if set)
-     * - `json` (object, to be sent as a JSON-encoded body, taking precedence
-     *   over `body` if both are set)
-     * - `response` (a response callback result, either a response object or 'close',
-     *   if provided this will be used as an immediately response, the request will
-     *   not be passed through at all, and any beforeResponse callback will never
-     *   fire)
+     * See {@link CallbackRequestResult} for the possible fields that can be set.
      */
     beforeRequest?: (req: CompletedRequest) => MaybePromise<CallbackRequestResult | void> | void;
 
@@ -442,13 +549,9 @@ export interface PassThroughHandlerOptions {
      * changed, or the string 'close' to immediately close the underlying connection.
      *
      * All fields on the object are optional, and returning undefined is equivalent
-     * to returning an empty object (transforming nothing). The possible fields are:
+     * to returning an empty object (transforming nothing).
      *
-     * - `status` (number, will replace the HTTP status code)
-     * - `headers` (object with string keys & values, replaces all headers if set)
-     * - `body` (string or buffer, replaces the body if set)
-     * - `json` (object, to be sent as a JSON-encoded body, taking precedence
-     *   over `body` if both are set)
+     * See {@link CallbackResponseMessageResult} for the possible fields that can be set.
      */
     beforeResponse?: (res: PassThroughResponse) => MaybePromise<CallbackResponseResult | void> | void;
 }
