@@ -24,7 +24,7 @@ import {
 } from "../../serialization/serialization";
 import {
     withDeserializedBodyReader,
-    withSerializedBodyBuffer
+    withSerializedCallbackBuffers
 } from '../../serialization/body-serialization';
 import { ProxyConfig } from '../proxy-config';
 
@@ -83,9 +83,24 @@ export interface CallbackRequestResult {
      * includes a Content-Length header, in which case that will take used
      * as-is.
      *
-     * You should only return one body field: either `body` or `json`.
+     * You should only return one body field: either `body`, `rawBody` or
+     * `json`.
      */
     body?: string | Buffer | Uint8Array;
+
+    /**
+     * A buffer, which replaces the request body if set, which is sent exactly
+     * as is, and is not automatically encoded.
+     *
+     * If this is set, the Content-Length header will be automatically updated
+     * accordingly to match, unless you also provide a `headers` value that
+     * includes a Content-Length header, in which case that will take used
+     * as-is.
+     *
+     * You should only return one body field: either `body`, `rawBody` or
+     * `json`.
+     */
+    rawBody?: Buffer | Uint8Array;
 
     /**
      * A JSON value, which will be stringified and send as a JSON-encoded
@@ -97,7 +112,8 @@ export interface CallbackRequestResult {
      * includes a Content-Length header, in which case that will take used
      * as-is.
      *
-     * You should only return one body field: either `body` or `json`.
+     * You should only return one body field: either `body`, `rawBody` or
+     * `json`.
      */
     json?: any;
 
@@ -169,9 +185,24 @@ export interface CallbackResponseMessageResult {
      *
      * Defaults to empty.
      *
-     * You should only return one body field: either `body` or `json`.
+     * You should only return one body field: either `body`, `rawBody` or
+     * `json`.
      */
     body?: string | Buffer | Uint8Array;
+
+    /**
+     * A buffer, which replaces the response body if set, which is sent exactly
+     * as is, and is not automatically encoded.
+     *
+     * If this is set, the Content-Length header will be automatically updated
+     * accordingly to match, unless you also provide a `headers` value that
+     * includes a Content-Length header, in which case that will take used
+     * as-is.
+     *
+     * You should only return one body field: either `body`, `rawBody` or
+     * `json`.
+     */
+    rawBody?: Buffer | Uint8Array;
 
     /**
      * A JSON value, which will be stringified and send as a JSON-encoded
@@ -183,7 +214,8 @@ export interface CallbackResponseMessageResult {
      * includes a Content-Length header, in which case that will take used
      * as-is.
      *
-     * You should only return one body field: either `body` or `json`.
+     * You should only return one body field: either `body`, `rawBody` or
+     * `json`.
      */
     json?: any;
 }
@@ -291,7 +323,7 @@ export class CallbackHandlerDefinition extends Serializable implements RequestHa
             if (typeof callbackResult === 'string') {
                 return callbackResult;
             } else {
-                return withSerializedBodyBuffer(callbackResult);
+                return withSerializedCallbackBuffers(callbackResult);
             }
         });
 
@@ -825,11 +857,11 @@ export class PassThroughHandlerDefinition extends Serializable implements Reques
                 );
 
                 const serializedResult = callbackResult
-                    ? withSerializedBodyBuffer(callbackResult)
+                    ? withSerializedCallbackBuffers(callbackResult)
                     : undefined;
 
                 if (serializedResult?.response && typeof serializedResult?.response !== 'string') {
-                    serializedResult.response = withSerializedBodyBuffer(serializedResult.response);
+                    serializedResult.response = withSerializedCallbackBuffers(serializedResult.response);
                 }
 
                 return serializedResult;
@@ -848,7 +880,7 @@ export class PassThroughHandlerDefinition extends Serializable implements Reques
                 if (typeof callbackResult === 'string') {
                     return callbackResult;
                 } else if (callbackResult) {
-                    return withSerializedBodyBuffer(callbackResult);
+                    return withSerializedCallbackBuffers(callbackResult);
                 } else {
                     return undefined;
                 }

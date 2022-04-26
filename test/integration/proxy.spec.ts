@@ -396,7 +396,7 @@ nodeOnly(() => {
                         url: req.url,
                         method: req.method,
                         headers: req.headers,
-                        rawBody: await req.body.buffer.toString(),
+                        rawBody: req.body.buffer.toString(),
                         decodedBody: await req.body.getText(), // Echo's the DECODED content
                     }
                 }));
@@ -441,6 +441,40 @@ nodeOnly(() => {
                     rawBody: zlib.gzipSync(JSON.stringify({ hello: 'world' }), { level: 1 }).toString(),
                     decodedBody: JSON.stringify({ hello: "world" })
                 });
+            });
+
+            it("should be able to rewrite a request's body with already encoded raw data", async () => {
+                await remoteServer.forAnyRequest().thenCallback(async (req) => ({
+                    status: 200,
+                    json: { // Echo back the request data
+                        url: req.url,
+                        method: req.method,
+                        headers: req.headers,
+                        rawBody: req.body.buffer.toString('base64') // Encoded data as base64
+                    }
+                }));
+
+                await server.forPost(remoteServer.urlFor("/abc")).thenPassThrough({
+                    beforeRequest: async () => ({
+                        headers: { 'content-encoding': 'gibberish' }, // Would fail to encode if not raw
+                        rawBody: zlib.gzipSync('Raw manually encoded data')
+                    })
+                });
+
+                const rawResponse = await request.post(remoteServer.urlFor("/abc"), {
+                    headers: {
+                        'content-encoding': 'gzip',
+                        'custom-header': 'a-value'
+                    },
+                    body: zlib.gzipSync(
+                        JSON.stringify({ a: 1, b: 2 })
+                    )
+                });
+
+                // Use the echoed response to see what the remote server received:
+                const response = JSON.parse(rawResponse);
+                const decodedRequestBody = zlib.gunzipSync(Buffer.from(response.rawBody, 'base64'));
+                expect(decodedRequestBody.toString()).to.equal("Raw manually encoded data");
             });
 
             it("should be able to edit a request to inject a response directly", async () => {
@@ -493,6 +527,34 @@ nodeOnly(() => {
 
                 const decodedBody = zlib.gunzipSync(response.body).toString();
                 expect(decodedBody).to.equal('A mock body');
+            });
+
+            it("should be able to edit a request to inject a raw encoded response", async () => {
+                const remoteEndpoint = await remoteServer.forPost('/').thenReply(200);
+
+                await server.forPost(remoteServer.urlFor("/")).thenPassThrough({
+                    beforeRequest: () => ({
+                        response: {
+                            statusCode: 200,
+                            headers: { 'content-encoding': 'gzip' },
+                            rawBody: zlib.gzipSync('An already encoded body')
+                        }
+                    })
+                });
+
+                let response = await request.post(remoteServer.urlFor("/"), {
+                    resolveWithFullResponse: true,
+                    encoding: null,
+                    simple: false
+                });
+
+                const seenRequests = await remoteEndpoint.getSeenRequests();
+                expect(seenRequests.length).to.equal(0);
+
+                expect(response.statusCode).to.equal(200);
+
+                const decodedBody = zlib.gunzipSync(response.body).toString();
+                expect(decodedBody).to.equal('An already encoded body');
             });
 
             it("should be able to edit a request to close the connection directly", async () => {
@@ -616,6 +678,46 @@ nodeOnly(() => {
                     json: true
                 });
                 expect(response).to.deep.equal({ hello: "world" });
+            });
+
+            it("should be able to rewrite a response's body with automatic encoding", async () => {
+                await remoteServer.forGet('/').thenReply(200, 'text');
+
+                await server.forGet(remoteServer.urlFor("/")).thenPassThrough({
+                    beforeResponse: async () => {
+                        return {
+                            headers: { 'content-encoding': 'gzip' },
+                            body: 'decoded data'
+                        };
+                    }
+                });
+
+                let response = await request.get(remoteServer.urlFor("/"), {
+                    json: true,
+                    encoding: null
+                });
+                const decodedResponse = zlib.gunzipSync(response).toString(); // Data was auto-gzipped
+                expect(decodedResponse).to.deep.equal('decoded data');
+            });
+
+            it("should be able to rewrite a response's body with raw data ignoring encoding", async () => {
+                await remoteServer.forGet('/').thenReply(200, 'text');
+
+                await server.forGet(remoteServer.urlFor("/")).thenPassThrough({
+                    beforeResponse: async () => {
+                        return {
+                            headers: { 'content-encoding': 'gibberish' }, // Would fail to encode if not raw
+                            rawBody: zlib.gzipSync('decoded data')
+                        };
+                    }
+                });
+
+                let response = await request.get(remoteServer.urlFor("/"), {
+                    json: true,
+                    encoding: null
+                });
+                const decodedResponse = zlib.gunzipSync(response).toString();
+                expect(decodedResponse).to.deep.equal('decoded data');
             });
 
             it("should use the original body if not overwritten in beforeResponse", async () => {

@@ -2,9 +2,17 @@ import * as _ from 'lodash';
 import * as tls from 'tls';
 import url = require('url');
 import { oneLine } from 'common-tags';
+import { encodeBuffer, SUPPORTED_ENCODING } from 'http-encoding';
 
-import { Headers } from '../types';
+import { CompletedBody, Headers } from '../types';
 import { byteLength } from '../util/util';
+import { asBuffer } from '../util/buffer-utils';
+import { isMockttpBody } from '../util/request-utils';
+
+import {
+    CallbackRequestResult,
+    CallbackResponseMessageResult
+} from './requests/request-handler-definitions';
 
 // We don't want to use the standard Node.js ciphers as-is, because remote servers can
 // examine the TLS fingerprint to recognize they as coming from Node.js. To anonymize
@@ -23,6 +31,49 @@ export const MOCKTTP_UPSTREAM_CIPHERS = [
 ].join(':');
 
 // --- Various helpers for deriving parts of request/response data given partial overrides: ---
+
+/**
+ * Takes a callback result and some headers, and returns a ready to send body, using the headers
+ * (and potentially modifying them) to match the content type & encoding.
+ */
+export async function buildOverriddenBody(
+    callbackResult: CallbackRequestResult | CallbackResponseMessageResult | void,
+    headers: Headers
+) {
+    // Raw bodies are easy: use them as is.
+    if (callbackResult?.rawBody) return callbackResult?.rawBody!;
+
+    // In the json/body case, we need to get the body and transform it into a buffer
+    // for consistent handling later, and encode it to match the headers.
+
+    let replacementBody: string | Uint8Array | Buffer | CompletedBody | undefined;
+    if (callbackResult?.json) {
+        headers['content-type'] = 'application/json';
+        replacementBody = JSON.stringify(callbackResult?.json);
+    } else {
+        replacementBody = callbackResult?.body;
+    }
+
+    if (replacementBody === undefined) return replacementBody;
+
+    let rawBuffer: Buffer;
+    if (isMockttpBody(replacementBody)) {
+        // It's our own bodyReader instance. That's not supposed to happen, but
+        // it's ok, we just need to use the buffer data instead of the whole object
+        rawBuffer = Buffer.from((replacementBody as CompletedBody).buffer);
+    } else if (replacementBody === '') {
+        // For empty bodies, it's slightly more convenient if they're truthy
+        rawBuffer = Buffer.alloc(0);
+    } else {
+        rawBuffer = asBuffer(replacementBody);
+    }
+
+    return await encodeBuffer(
+        rawBuffer,
+        (headers['content-encoding'] || '') as SUPPORTED_ENCODING,
+        { level: 1 }
+    )
+}
 
 /**
  * If you override some headers, they have implications for the effective URL we send the

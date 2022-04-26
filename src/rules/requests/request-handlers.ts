@@ -18,8 +18,7 @@ import {
     Headers,
     OngoingRequest,
     CompletedRequest,
-    OngoingResponse,
-    CompletedBody
+    OngoingResponse
 } from "../../types";
 
 import { MaybePromise } from '../../util/type-utils';
@@ -34,8 +33,7 @@ import {
     h1HeadersToH2,
     h2HeadersToH1,
     isAbsoluteUrl,
-    cleanUpHeaders,
-    isMockttpBody
+    cleanUpHeaders
 } from '../../util/request-utils';
 import { streamToBuffer, asBuffer } from '../../util/buffer-utils';
 import { isLocalhostAddress, isLocalPortActive, isSocketLoop } from '../../util/socket-util';
@@ -46,8 +44,8 @@ import {
 } from '../../serialization/serialization';
 import {
     withSerializedBodyReader,
-    withDeserializedBodyBuffer,
-    WithSerializedBodyBuffer
+    withDeserializedCallbackBuffers,
+    WithSerializedCallbackBuffers
 } from '../../serialization/body-serialization';
 import { CachedDns, DnsLookupFunction } from '../../util/dns';
 import { ErrorLike, isErrorLike } from '../../util/error';
@@ -61,7 +59,8 @@ import {
     getHostAfterModification,
     getH2HeadersAfterModification,
     MOCKTTP_UPSTREAM_CIPHERS,
-    OVERRIDABLE_REQUEST_PSEUDOHEADERS
+    OVERRIDABLE_REQUEST_PSEUDOHEADERS,
+    buildOverriddenBody
 } from '../passthrough-handling';
 
 import {
@@ -150,7 +149,7 @@ async function writeResponseFromCallback(result: CallbackResponseMessageResult, 
 
     if (result.body) {
         // The body is automatically encoded to match the content-encoding header, if set.
-        result.body = await encodeBuffer(
+        result.rawBody = await encodeBuffer(
             Buffer.from(result.body),
             (result.headers?.['content-encoding'] || '') as SUPPORTED_ENCODING,
             { level: 1 }
@@ -161,7 +160,7 @@ async function writeResponseFromCallback(result: CallbackResponseMessageResult, 
         result.statusCode || result.status || 200,
         result.statusMessage
     );
-    response.end(result.body || "");
+    response.end(result.rawBody || "");
 }
 
 export class CallbackHandler extends CallbackHandlerDefinition {
@@ -193,7 +192,7 @@ export class CallbackHandler extends CallbackHandlerDefinition {
         const rpcCallback = async (request: CompletedRequest) => {
             const callbackResult = await channel.request<
                 CallbackRequestMessage,
-                WithSerializedBodyBuffer<CallbackResponseMessageResult> | 'close'
+                WithSerializedCallbackBuffers<CallbackResponseMessageResult> | 'close'
             >({ args: [
                 (version || -1) >= 2
                     ? withSerializedBodyReader(request)
@@ -203,7 +202,7 @@ export class CallbackHandler extends CallbackHandlerDefinition {
             if (typeof callbackResult === 'string') {
                 return callbackResult;
             } else {
-                return withDeserializedBodyBuffer(callbackResult);
+                return withDeserializedCallbackBuffers(callbackResult);
             }
         };
         // Pass across the name from the real callback, for explain()
@@ -298,24 +297,6 @@ export class FileHandler extends FileHandlerDefinition {
 // Used to drop `undefined` headers, which cause problems
 function dropUndefinedValues<D extends {}>(obj: D): D {
     return _.omitBy(obj, (v) => v === undefined) as D;
-}
-
-// Callback result bodies can take a few formats: tidy them up a little
-function getCallbackResultBody(
-    replacementBody: string | Uint8Array | Buffer | CompletedBody | undefined
-): Buffer | undefined {
-    if (replacementBody === undefined) {
-        return replacementBody;
-    } else if (isMockttpBody(replacementBody)) {
-        // It's our own bodyReader instance. That's not supposed to happen, but
-        // it's ok, we just need to use the buffer data instead of the whole object
-        return Buffer.from((replacementBody as CompletedBody).buffer);
-    } else if (replacementBody === '') {
-        // For empty bodies, it's slightly more convenient if they're truthy
-        return Buffer.alloc(0);
-    } else {
-        return asBuffer(replacementBody as Uint8Array | Buffer | string);
-    }
 }
 
 function validateCustomHeaders(
@@ -462,7 +443,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
         }
 
         // Override the request details, if a transform or callback is specified:
-        let reqBodyOverride: Buffer | undefined;
+        let reqBodyOverride: Uint8Array | undefined;
         let headersManuallyModified = false;
         if (this.transformRequest) {
             const {
@@ -570,21 +551,10 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 OVERRIDABLE_REQUEST_PSEUDOHEADERS // These are handled by getCorrectPseudoheaders above
             );
 
-            if (modifiedReq?.json) {
-                headers['content-type'] = 'application/json';
-                reqBodyOverride = asBuffer(JSON.stringify(modifiedReq?.json));
-            } else {
-                reqBodyOverride = getCallbackResultBody(modifiedReq?.body);
-            }
+            reqBodyOverride = await buildOverriddenBody(modifiedReq, headers);
 
             if (reqBodyOverride) {
-                // We always re-encode the body to match the resulting content-encoding header:
-                reqBodyOverride = await encodeBuffer(
-                    reqBodyOverride,
-                    (headers['content-encoding'] || '') as SUPPORTED_ENCODING,
-                    { level: 1 }
-                );
-
+                // Automatically match the content-length to the body, unless it was explicitly overriden.
                 headers['content-length'] = getContentLengthAfterModification(
                     reqBodyOverride,
                     clientReq.headers,
@@ -701,7 +671,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 let serverStatusCode = serverRes.statusCode!;
                 let serverStatusMessage = serverRes.statusMessage
                 let serverHeaders = serverRes.headers;
-                let resBodyOverride: Buffer | undefined;
+                let resBodyOverride: Uint8Array | undefined;
 
                 if (isH2Downstream) {
                     serverHeaders = h1HeadersToH2(serverHeaders);
@@ -810,21 +780,9 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
 
                     serverHeaders = modifiedRes?.headers || serverHeaders;
 
-                    if (modifiedRes?.json) {
-                        serverHeaders['content-type'] = 'application/json';
-                        resBodyOverride = asBuffer(JSON.stringify(modifiedRes?.json));
-                    } else {
-                        resBodyOverride = getCallbackResultBody(modifiedRes?.body);
-                    }
+                    resBodyOverride = await buildOverriddenBody(modifiedRes, serverHeaders);
 
                     if (resBodyOverride) {
-                        // We always re-encode the body to match the resulting content-encoding header:
-                        resBodyOverride = await encodeBuffer(
-                            resBodyOverride,
-                            (serverHeaders['content-encoding'] || '') as SUPPORTED_ENCODING,
-                            { level: 1 }
-                        );
-
                         serverHeaders['content-length'] = getContentLengthAfterModification(
                             resBodyOverride,
                             serverRes.headers,
@@ -964,18 +922,18 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
         let beforeRequest: ((req: CompletedRequest) => MaybePromise<CallbackRequestResult | void>) | undefined;
         if (data.hasBeforeRequestCallback) {
             beforeRequest = async (req: CompletedRequest) => {
-                const result = withDeserializedBodyBuffer<WithSerializedBodyBuffer<CallbackRequestResult>>(
+                const result = withDeserializedCallbackBuffers<CallbackRequestResult>(
                     await channel.request<
                         BeforePassthroughRequestRequest,
-                        WithSerializedBodyBuffer<CallbackRequestResult>
+                        WithSerializedCallbackBuffers<CallbackRequestResult>
                     >('beforeRequest', {
                         args: [withSerializedBodyReader(req)]
                     })
                 );
 
                 if (result.response && typeof result.response !== 'string') {
-                    result.response = withDeserializedBodyBuffer(
-                        result.response as WithSerializedBodyBuffer<CallbackResponseMessageResult>
+                    result.response = withDeserializedCallbackBuffers(
+                        result.response as WithSerializedCallbackBuffers<CallbackResponseMessageResult>
                     );
                 }
 
@@ -988,13 +946,13 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
             beforeResponse = async (res: PassThroughResponse) => {
                 const callbackResult = await channel.request<
                     BeforePassthroughResponseRequest,
-                    WithSerializedBodyBuffer<CallbackResponseMessageResult> | 'close' | undefined
+                    WithSerializedCallbackBuffers<CallbackResponseMessageResult> | 'close' | undefined
                 >('beforeResponse', {
                     args: [withSerializedBodyReader(res)]
                 })
 
                 if (callbackResult && typeof callbackResult !== 'string') {
-                    return withDeserializedBodyBuffer(callbackResult);
+                    return withDeserializedCallbackBuffers(callbackResult);
                 } else {
                     return callbackResult;
                 }

@@ -26,8 +26,14 @@ export function withDeserializedBodyReader<T extends { headers: Headers, body: C
     } as T;
 }
 
-export function withSerializedBodyBuffer<T extends {
-    body?: CompletedBody | Buffer | ArrayBuffer | string
+/**
+ * Serialize a callback result (callback handlers, BeforeRequest/Response etc)
+ * to transform all the many possible buffer formats into either base64-encoded
+ * buffer data, or undefined.
+ */
+export function withSerializedCallbackBuffers<T extends {
+    body?: CompletedBody | Buffer | Uint8Array | ArrayBuffer | string,
+    rawBody?: Buffer | Uint8Array
 }>(input: T): Replace<T, { body: string | undefined }> {
     let serializedBody: string | undefined;
 
@@ -45,25 +51,34 @@ export function withSerializedBodyBuffer<T extends {
 
     return {
         ...input,
-        body: serializedBody
+        body: serializedBody,
+        rawBody: input.rawBody
+            ? serializeBuffer(asBuffer(input.rawBody))
+            : undefined
     };
 }
 
-export type WithSerializedBodyBuffer<T extends { body?: any }> =
-    Replace<T, { body: string | undefined }>;
+export type WithSerializedCallbackBuffers<T extends { body?: any }> =
+    Replace<T, { body?: string, rawBody?: string }>;
 
-export function withDeserializedBodyBuffer<T extends {
-    headers?: Headers,
-    body?: Buffer | string | undefined
+/**
+ * Deserialize a callback result (callback handlers, BeforeRequest/Response etc)
+ * to build buffer data (or undefined) from the base64-serialized data
+ * produced by withSerializedCallbackBuffers
+ */
+export function withDeserializedCallbackBuffers<T extends {
+    body?: Buffer | Uint8Array | string,
+    rawBody?: Buffer | Uint8Array
 }>(
-    input: Replace<T, { body: string | undefined }>
+    input: Replace<T, { body?: string, rawBody?: string }>
 ): T {
-    if (input.body === undefined) return input as T;
-
     return {
         ...input,
         body: input.body !== undefined
             ? Buffer.from(input.body, 'base64')
+            : undefined,
+        rawBody: input.rawBody !== undefined
+            ? Buffer.from(input.rawBody, 'base64')
             : undefined
     } as T;
 }

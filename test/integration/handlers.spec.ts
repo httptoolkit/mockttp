@@ -1,5 +1,6 @@
 import * as semver from 'semver';
 import * as path from 'path';
+import * as zlib from 'zlib';
 import { PassThrough } from 'stream';
 import { getLocal } from "../..";
 import { expect, fetch, isNode, isWeb, delay, headersToObject } from "../test-utils";
@@ -293,9 +294,11 @@ describe("HTTP mock rule handling", function () {
     });
 
     it("should allow mocking body as json with callback", async () => {
-        await server.forGet("/mocked-endpoint").thenCallback(() => {
-            return { statusCode: 201, statusMessage: 'all good', json: { myVar: "foo" } }
-        });
+        await server.forGet("/mocked-endpoint").thenCallback(() => ({
+            statusCode: 201,
+            statusMessage: 'all good',
+            json: { myVar: "foo" }
+        }));
 
         let response = await fetch(server.urlFor("/mocked-endpoint"));
 
@@ -306,8 +309,28 @@ describe("HTTP mock rule handling", function () {
     });
 
     it("should automatically encode response body data from a callback", async () => {
+        await server.forGet("/mocked-endpoint").thenCallback(() => ({
+            statusCode: 200,
+            headers: { 'content-encoding': 'gzip' },
+            body: 'response body'
+        }));
+
+        let response = await fetch(server.urlFor("/mocked-endpoint"));
+
+        expect(response.status).to.equal(200);
+        expect(Object.fromEntries([...response.headers as any])).to.include({
+            'content-encoding': 'gzip'
+        });
+        expect(await response.text()).to.equal("response body");
+    });
+
+    it("should allow returning raw encoded response body data from a callback", async () => {
         await server.forGet("/mocked-endpoint").thenCallback(() => {
-            return { statusCode: 200, headers: { 'content-encoding': 'gzip' }, body: 'response body' }
+            return {
+                statusCode: 200,
+                headers: { 'content-encoding': 'gzip' },
+                rawBody: zlib.gzipSync('response body')
+            }
         });
 
         let response = await fetch(server.urlFor("/mocked-endpoint"));
