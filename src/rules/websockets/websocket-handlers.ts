@@ -11,13 +11,19 @@ import {
     deserializeProxyConfig
 } from "../../serialization/serialization";
 
-import { OngoingRequest } from "../../types";
+import { OngoingRequest, RawHeaders } from "../../types";
 
 import {
     CloseConnectionHandler,
     TimeoutHandler
 } from '../requests/request-handlers';
-import { isHttp2 } from '../../util/request-utils';
+import {
+    findRawHeader,
+    isHttp2,
+    objectHeadersToRaw,
+    pairFlatRawHeaders,
+    rawHeadersToObject
+} from '../../util/request-utils';
 import { streamToBuffer } from '../../util/buffer-utils';
 import { isLocalhostAddress } from '../../util/socket-util';
 import { MaybePromise } from '../../util/type-utils';
@@ -131,9 +137,11 @@ function pipeWebSocket(inSocket: WebSocket, outSocket: WebSocket) {
 
 async function mirrorRejection(socket: net.Socket, rejectionResponse: http.IncomingMessage) {
     if (socket.writable) {
-        const { statusCode, statusMessage, headers } = rejectionResponse;
+        const { statusCode, statusMessage, rawHeaders } = rejectionResponse;
 
-        socket.write(rawResponse(statusCode || 500, statusMessage || 'Unknown error', headers));
+        socket.write(
+            rawResponse(statusCode || 500, statusMessage || 'Unknown error', pairFlatRawHeaders(rawHeaders))
+        );
 
         const body = await streamToBuffer(rejectionResponse);
         if (socket.writable) socket.write(body);
@@ -145,7 +153,7 @@ async function mirrorRejection(socket: net.Socket, rejectionResponse: http.Incom
 const rawResponse = (
     statusCode: number,
     statusMessage: string,
-    headers: http.IncomingHttpHeaders = {}
+    headers: RawHeaders = []
 ) =>
     `HTTP/1.1 ${statusCode} ${statusMessage}\r\n` +
     _.map(headers, (value, key) =>
@@ -213,7 +221,7 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
         this.initializeWsServer();
 
         let { protocol, hostname, port, path } = url.parse(req.url!);
-        const headers = req.headers;
+        const rawHeaders = req.rawHeaders;
 
         const reqMessage = req as unknown as http.IncomingMessage;
         const isH2Downstream = isHttp2(req);
@@ -246,15 +254,22 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
             }//${hostname}${port ? ':' + port : ''}${path}`;
 
             // Optionally update the host header too:
+            let hostHeader = findRawHeader(rawHeaders, hostHeaderName);
+            if (!hostHeader) {
+                // Should never happen really, but just in case:
+                hostHeader = [hostHeaderName, hostname!];
+                rawHeaders.unshift(hostHeader);
+            };
+
             if (updateHostHeader === undefined || updateHostHeader === true) {
                 // If updateHostHeader is true, or just not specified, match the new target
-                headers[hostHeaderName] = hostname + (port ? `:${port}` : '');
+                hostHeader[1] = hostname + (port ? `:${port}` : '');
             } else if (updateHostHeader) {
                 // If it's an explicit custom value, use that directly.
-                headers[hostHeaderName] = updateHostHeader;
+                hostHeader[1] = updateHostHeader;
             } // Otherwise: falsey means don't touch it.
 
-            await this.connectUpstream(wsUrl, reqMessage, headers, socket, head);
+            await this.connectUpstream(wsUrl, reqMessage, rawHeaders, socket, head);
         } else if (!hostname) { // No hostname in URL means transparent proxy, so use Host header
             const hostHeader = req.headers[hostHeaderName];
             [ hostname, port ] = hostHeader!.split(':');
@@ -268,21 +283,21 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
             }
 
             const wsUrl = `${protocol}://${hostname}${port ? ':' + port : ''}${path}`;
-            await this.connectUpstream(wsUrl, reqMessage, headers, socket, head);
+            await this.connectUpstream(wsUrl, reqMessage, rawHeaders, socket, head);
         } else {
             // Connect directly according to the specified URL
             const wsUrl = `${
                 protocol!.replace('http', 'ws')
             }//${hostname}${port ? ':' + port : ''}${path}`;
 
-            await this.connectUpstream(wsUrl, reqMessage, headers, socket, head);
+            await this.connectUpstream(wsUrl, reqMessage, rawHeaders, socket, head);
         }
     }
 
     private async connectUpstream(
         wsUrl: string,
         req: http.IncomingMessage,
-        headers: http.IncomingHttpHeaders,
+        rawHeaders: RawHeaders,
         incomingSocket: net.Socket,
         head: Buffer
     ) {
@@ -314,6 +329,10 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
             tryHttp2: false, // We don't support websockets over H2 yet
             keepAlive: false // Not a thing for websockets: they take over the whole connection
         });
+
+        // We have to flatten the headers, as WS doesn't support raw headers - it builds its own
+        // header object internally.
+        const headers = rawHeadersToObject(rawHeaders);
 
         const upstreamWebSocket = new WebSocket(wsUrl, {
             maxPayload: 0,
@@ -375,7 +394,7 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
 export class RejectWebSocketHandler extends RejectWebSocketHandlerDefinition {
 
     async handle(req: OngoingRequest, socket: net.Socket, head: Buffer) {
-        socket.write(rawResponse(this.statusCode, this.statusMessage, this.headers));
+        socket.write(rawResponse(this.statusCode, this.statusMessage, objectHeadersToRaw(this.headers)));
         if (this.body) socket.write(this.body);
         socket.write('\r\n');
         socket.destroy();

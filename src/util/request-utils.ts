@@ -245,10 +245,10 @@ export function cleanUpHeaders(headers: Headers) {
     );
 }
 
-const findRawHeader = (rawHeaders: RawHeaders, targetKey: string) =>
+export const findRawHeader = (rawHeaders: RawHeaders, targetKey: string) =>
     rawHeaders.find(([key]) => key.toLowerCase() === targetKey);
 
-const findRawHeaders = (rawHeaders: RawHeaders, targetKey: string) =>
+export const findRawHeaders = (rawHeaders: RawHeaders, targetKey: string) =>
     rawHeaders.filter(([key]) => key.toLowerCase() === targetKey);
 
 /**
