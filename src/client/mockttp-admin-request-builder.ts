@@ -3,7 +3,10 @@ import gql from 'graphql-tag';
 
 import { MockedEndpoint, MockedEndpointData } from "../types";
 
-import { buildBodyReader } from '../util/request-utils';
+import {
+    buildBodyReader,
+    interpretRawHeaders
+} from '../util/request-utils';
 import type { Serialized } from '../serialization/serialization';
 
 import { AdminQuery } from './admin-query';
@@ -25,7 +28,12 @@ function normalizeHttpMessage(message: any, event?: SubscribableEvent) {
         message.timingEvents = {};
     }
 
-    if (message.headers) {
+    if (message.rawHeaders) {
+        message.rawHeaders = JSON.parse(message.rawHeaders);
+        // We use raw headers where possible to derive headers, instead of using any pre-derived
+        // header data, for maximum accuracy (and to avoid any need to query for both).
+        message.headers = interpretRawHeaders(message.rawHeaders);
+    } else if (message.headers) {
         message.headers = JSON.parse(message.headers);
     }
 
@@ -182,7 +190,10 @@ export class MockttpAdminRequestBuilder {
                     ${this.schema.asOptionalField('InitiatedRequest', 'remotePort')},
                     hostname,
 
-                    headers,
+                    ${this.schema.typeHasField('InitiatedRequest', 'rawHeaders')
+                        ? 'rawHeaders'
+                        : 'headers'
+                    }
                     timingEvents,
                     httpVersion,
                     ${this.schema.asOptionalField('InitiatedRequest', 'tags')}
@@ -200,7 +211,11 @@ export class MockttpAdminRequestBuilder {
                     ${this.schema.asOptionalField('Request', 'remotePort')},
                     hostname,
 
-                    headers,
+                    ${this.schema.typeHasField('Request', 'rawHeaders')
+                        ? 'rawHeaders'
+                        : 'headers'
+                    }
+
                     body,
                     ${this.schema.asOptionalField('Request', 'timingEvents')}
                     ${this.schema.asOptionalField('Request', 'httpVersion')}
@@ -307,8 +322,13 @@ export class MockttpAdminRequestBuilder {
                                 method,
                                 url,
                                 path,
-                                hostname,
-                                headers,
+                                hostname
+
+                                ${this.schema.typeHasField('Request', 'rawHeaders')
+                                    ? 'rawHeaders'
+                                    : 'headers'
+                                }
+
                                 body,
                                 ${this.schema.asOptionalField('Request', 'timingEvents')}
                                 ${this.schema.asOptionalField('Request', 'httpVersion')}

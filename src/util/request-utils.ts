@@ -7,7 +7,7 @@ import * as stream from 'stream';
 import * as querystring from 'querystring';
 import now = require("performance-now");
 import * as url from 'url';
-import { decodeBuffer, decodeBufferSync } from 'http-encoding';
+import { decodeBuffer } from 'http-encoding';
 
 import {
     Headers,
@@ -18,7 +18,8 @@ import {
     OngoingBody,
     CompletedBody,
     TimingEvents,
-    InitiatedRequest
+    InitiatedRequest,
+    RawHeaders
 } from "../types";
 
 import { nthIndexOf } from './util';
@@ -172,14 +173,6 @@ const parseBodyStream = (bodyStream: stream.Readable, maxSize: number, getHeader
     return body;
 }
 
-function runOrUndefined<R>(func: () => R): R | undefined {
-    try {
-        return func();
-    } catch {
-        return undefined;
-    }
-}
-
 async function runAsyncOrUndefined<R>(func: () => Promise<R>): Promise<R | undefined> {
     try {
         return await func();
@@ -251,6 +244,40 @@ export function cleanUpHeaders(headers: Headers) {
 }
 
 /**
+ * Return node's _very_ raw headers ([k, v, k, v, ...]) into our slightly more convenient
+ * pairwise tuples [[k, v], [k, v], ...] RawHeaders structure.
+ */
+export function pairFlatRawHeaders(flatRawHeaders: string[]): RawHeaders {
+    const result: RawHeaders = [];
+    for (let i = 0; i < flatRawHeaders.length; i += 2 /* Move two at a time */) {
+        result[i/2] = [flatRawHeaders[i], flatRawHeaders[i+1]];
+    }
+    return result;
+}
+
+/**
+ * Take a raw headers, and turn them into headers, but without some of Node's concessions
+ * to ease of use, i.e. keeping multiple values as arrays.
+ */
+export function interpretRawHeaders(rawHeaders: RawHeaders): Headers {
+    return rawHeaders.reduce<Headers>((headers, [key, value]) => {
+        key = key.toLowerCase();
+
+        const existingValue = headers[key];
+
+        if (Array.isArray(existingValue)) {
+            existingValue.push(value);
+        } else if (existingValue) {
+            headers[key] = [existingValue, value];
+        } else {
+            headers[key] = value;
+        }
+
+        return headers;
+    }, {});
+}
+
+/**
  * Build an initiated request: the external representation of a request
  * that's just started.
  */
@@ -268,22 +295,11 @@ export function buildInitiatedRequest(request: OngoingRequest): InitiatedRequest
             'remotePort',
             'hostname',
             'headers',
+            'rawHeaders',
             'tags'
         ),
-        headers: cleanUpHeaders(request.headers),
         timingEvents: request.timingEvents
     };
-}
-
-/**
- * Build an aborted request: the external representation of a request
- * that's been aborted.
- */
-export function buildAbortedRequest(request: OngoingRequest): InitiatedRequest {
-    const requestData = buildInitiatedRequest(request);
-    return Object.assign(requestData, {
-        headers: cleanUpHeaders(request.headers)
-    });
 }
 
 /**
@@ -295,7 +311,7 @@ export async function waitForCompletedRequest(request: OngoingRequest): Promise<
     request.timingEvents.bodyReceivedTimestamp = request.timingEvents.bodyReceivedTimestamp || now();
 
     const requestData = buildInitiatedRequest(request);
-    return Object.assign(requestData, { body, headers: cleanUpHeaders(request.headers) });
+    return { ...requestData, body };
 }
 
 export function trackResponse(

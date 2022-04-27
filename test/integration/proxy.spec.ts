@@ -280,6 +280,44 @@ nodeOnly(() => {
                 });
             });
 
+            it("should be able to examine a request's raw headers in beforeRequest", async () => {
+                await remoteServer.forGet('/rewrite').thenCallback((req) => ({
+                    statusCode: 200,
+                    json: req.headers
+                }));
+
+                await server.forGet(remoteServer.urlFor("/rewrite")).thenPassThrough({
+                    beforeRequest: (req) => {
+                        expect(req.headers).to.deep.equal({
+                            'host': `localhost:${remoteServer.port}`,
+                            'connection': 'close',
+                            'uppercase-header': 'UPPERCASE-VALUE',
+                            'multival': ['value 1', 'value 2']
+                        });
+
+                        expect(req.rawHeaders).to.deep.equal([
+                            ['UPPERCASE-HEADER', 'UPPERCASE-VALUE'],
+                            ['multival', 'value 1'],
+                            ['multival', 'value 2'],
+                            ['host', `localhost:${remoteServer.port}`],
+                            ['Connection', 'close']
+                        ]);
+
+                        return {
+                            headers: Object.assign({}, req.headers, { 'x-test-header': 'test' })
+                        };
+                    }
+                });
+
+                let response = await request.get(remoteServer.urlFor("/rewrite"), {
+                    headers: {
+                        'UPPERCASE-HEADER': 'UPPERCASE-VALUE',
+                        'multival': ['value 1', 'value 2']
+                    }
+                });
+                expect(JSON.parse(response)['x-test-header']).to.equal("test");
+            });
+
             it("should be able to rewrite a request's headers", async () => {
                 await remoteServer.forGet('/rewrite').thenCallback((req) => ({
                     statusCode: 200,

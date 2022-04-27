@@ -36,6 +36,20 @@ describe("HTTP request spying", function () {
             expect(seenRequests[0].url).to.equal(`http://localhost:${server.port}/mocked-endpoint`);
         });
 
+        it("should let you spy on the raw headers of requests that happened", async () => {
+            const endpointMock = await server.forGet("/mocked-endpoint").thenReply(200, "mocked data");
+
+            await fetch(server.urlFor("/mocked-endpoint"));
+
+            const seenRequests = await endpointMock.getSeenRequests();
+            expect(seenRequests.length).to.equal(1);
+
+            expect(seenRequests[0].headers['host']).to.equal(`localhost:${server.port}`); // Parser headers are lowercase
+
+            const hostHeader = seenRequests[0].rawHeaders?.find(([key]) => key === 'Host');
+            expect(hostHeader).to.deep.equal(['Host', `localhost:${server.port}`]); // Raw headers are not
+        });
+
         it("should let you spy on the bodies of requests that happened", async () => {
             const endpointMock = await server.forPost("/mocked-endpoint")
             .withForm({ a: '1', b: '2' })

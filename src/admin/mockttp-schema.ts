@@ -96,6 +96,7 @@ export const MockttpSchema = gql`
         hostname: String
 
         headers: Json!
+        rawHeaders: Json!
     }
 
     type Request {
@@ -114,6 +115,8 @@ export const MockttpSchema = gql`
         hostname: String
 
         headers: Json!
+        rawHeaders: Json!
+
         body: Buffer!
     }
 

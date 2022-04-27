@@ -103,6 +103,39 @@ describe("Request initiated subscriptions", () => {
                 let seenCompletedRequest = await seenCompletedRequestPromise;
                 expect(await seenCompletedRequest.body.getText()).to.equal('start body\nend body');
             });
+
+            it("should include the raw request headers", async () => {
+                let seenRequestPromise = getDeferred<InitiatedRequest>();
+                await server.on('request-initiated', (r) => seenRequestPromise.resolve(r));
+
+                http.request({
+                    method: 'GET',
+                    hostname: 'localhost',
+                    port: server.port,
+                    headers: [
+                        ['UPPERCASEHEADER', 'VALUE'],
+                        ['Dupe-Header', 'A'],
+                        ['Dupe-Header', 'B']
+                    ] as any
+                }).end();
+
+                let seenRequest = await seenRequestPromise;
+
+                // Raw format:
+                expect(seenRequest.rawHeaders).to.deep.equal([
+                    ['UPPERCASEHEADER', 'VALUE'],
+                    ['Dupe-Header', 'A'],
+                    ['Dupe-Header', 'B'],
+                    ['Connection', 'close']
+                ]);
+
+                // Parsed format:
+                expect(seenRequest.headers).to.deep.equal({
+                    connection: 'close',
+                    uppercaseheader: 'VALUE',
+                    'dupe-header': ['A', 'B']
+                });
+            });
         });
     });
 
@@ -163,6 +196,39 @@ describe("Request initiated subscriptions", () => {
                 expect(seenRequest.httpVersion).to.equal('1.1');
                 expect(seenRequest.url).to.equal(client.urlFor("/mocked-endpoint"));
                 expect((seenRequest as any).body).to.equal(undefined); // No body included yet
+            });
+
+            it("should include the raw request headers", async () => {
+                let seenRequestPromise = getDeferred<InitiatedRequest>();
+                await client.on('request-initiated', (r) => seenRequestPromise.resolve(r));
+
+                http.request({
+                    method: 'GET',
+                    hostname: 'localhost',
+                    port: client.port,
+                    headers: [
+                        ['UPPERCASEHEADER', 'VALUE'],
+                        ['Dupe-Header', 'A'],
+                        ['Dupe-Header', 'B']
+                    ] as any
+                }).end();
+
+                let seenRequest = await seenRequestPromise;
+
+                // Raw format:
+                expect(seenRequest.rawHeaders).to.deep.equal([
+                    ['UPPERCASEHEADER', 'VALUE'],
+                    ['Dupe-Header', 'A'],
+                    ['Dupe-Header', 'B'],
+                    ['Connection', 'close']
+                ]);
+
+                // Parsed format:
+                expect(seenRequest.headers).to.deep.equal({
+                    connection: 'close',
+                    uppercaseheader: 'VALUE',
+                    'dupe-header': ['A', 'B']
+                });
             });
         });
     });

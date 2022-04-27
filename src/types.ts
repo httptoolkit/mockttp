@@ -36,6 +36,8 @@ export interface Headers {
     [key: string]: undefined | string | string[];
 }
 
+export type RawHeaders = Array<[key: string, value: string]>;
+
 export interface Request {
     id: string;
     matchedRuleId?: string;
@@ -55,6 +57,7 @@ export interface Request {
     hostname?: string;
 
     headers: Headers;
+    rawHeaders?: RawHeaders; // Not set remotely with older servers
 
     timingEvents: TimingEvents | {};
     tags: string[];
@@ -155,6 +158,7 @@ export interface TimingEvents {
 export interface OngoingResponse extends http.ServerResponse {
     id: string;
     getHeaders(): Headers;
+    rawHeaders: RawHeaders;
     body: OngoingBody;
     timingEvents: TimingEvents;
     tags: string[];

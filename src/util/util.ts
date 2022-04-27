@@ -31,3 +31,9 @@ declare const WorkerGlobalScope: Function | undefined;
 export const isWorker = typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope;
 export const isWeb = typeof Window !== 'undefined' && self instanceof Window;
 export const isNode = !isWorker && !isWeb && typeof process === 'object' && process.version;
+
+export const makePropertyWritable = <T>(obj: T, property: keyof T) =>
+    Object.defineProperty(obj, property, {
+        value: obj[property],
+        writable: true
+    });

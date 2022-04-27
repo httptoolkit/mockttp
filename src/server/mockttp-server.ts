@@ -20,8 +20,7 @@ import {
     TlsRequest,
     ClientError,
     TimingEvents,
-    OngoingBody,
-    MockedEndpoint
+    OngoingBody
 } from "../types";
 import { CAOptions } from '../util/tls';
 import { DestroyableServer } from "../util/destroyable-server";
@@ -32,6 +31,7 @@ import { createComboServer } from "./http-combo-server";
 import { filter } from "../util/promise";
 import { Mutable } from "../util/type-utils";
 import { isErrorLike } from "../util/error";
+import { makePropertyWritable } from "../util/util";
 
 import {
     parseRequestBody,
@@ -40,14 +40,16 @@ import {
     waitForCompletedResponse,
     isAbsoluteUrl,
     buildInitiatedRequest,
-    buildAbortedRequest,
     tryToParseHttp,
     buildBodyReader,
-    getPathFromAbsoluteUrl
+    getPathFromAbsoluteUrl,
+    pairFlatRawHeaders,
+    interpretRawHeaders,
+    cleanUpHeaders
 } from "../util/request-utils";
 import { AbortError } from "../rules/requests/request-handlers";
 import { WebSocketRuleData, WebSocketRule } from "../rules/websockets/websocket-rule";
-import { PassThroughWebSocketHandler, RejectWebSocketHandler, WebSocketHandler } from "../rules/websockets/websocket-handlers";
+import { RejectWebSocketHandler, WebSocketHandler } from "../rules/websockets/websocket-handlers";
 
 type ExtendedRawRequest = (http.IncomingMessage | http2.Http2ServerRequest) & {
     protocol?: string;
@@ -323,7 +325,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
 
     private async announceAbortAsync(request: OngoingRequest) {
         setImmediate(() => {
-            const req = buildAbortedRequest(request);
+            const req = buildInitiatedRequest(request);
             this.eventEmitter.emit('abort', Object.assign(req, {
                 timingEvents: _.clone(req.timingEvents),
                 tags: _.clone(req.tags)
@@ -390,8 +392,17 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         const timingEvents = { startTime: Date.now(), startTimestamp: now() };
         const tags: string[] = [];
 
+        const rawHeaders = pairFlatRawHeaders(req.rawHeaders);
+        const headers = cleanUpHeaders(interpretRawHeaders(rawHeaders));
+
+        // Not writable for HTTP/2:
+        makePropertyWritable(req, 'headers');
+        makePropertyWritable(req, 'rawHeaders');
+
         return Object.assign(req, {
             id,
+            headers,
+            rawHeaders,
             remoteIpAddress: req.socket.remoteAddress,
             remotePort: req.socket.remotePort,
             timingEvents,
