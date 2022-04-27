@@ -6,8 +6,9 @@ export type RequireProps<T, K extends keyof T> =
 
 export type MaybePromise<T> = T | Promise<T>;
 
-export type Replace<T, K extends keyof T, V> =
-    Omit<T, K> & { [k in K]: V };
+type SubsetKeyOf<T, Ks extends keyof T = keyof T> = Ks;
+export type Replace<T, KV extends { [K in SubsetKeyOf<T, any>]: unknown }> =
+    Omit<T, keyof KV> & { [K in keyof KV]: KV[K] };
 
 export type Mutable<T> = {
     -readonly [K in keyof T]: T[K]

@@ -470,7 +470,7 @@ export class CallbackMatcher extends Serializable implements RequestMatcher {
      * @internal
      */
     serialize(channel: ClientServerChannel): SerializedCallbackMatcherData {
-      channel.onRequest<Replace<CompletedRequest, 'body', string>, boolean>(async (streamMsg) => {
+      channel.onRequest<Replace<CompletedRequest, { body: string }>, boolean>(async (streamMsg) => {
         const request = withDeserializedBodyReader(streamMsg);
 
         const callbackResult = await this.callback.call(null, request);
@@ -490,7 +490,7 @@ export class CallbackMatcher extends Serializable implements RequestMatcher {
     ): CallbackMatcher {
       const rpcCallback = async (request: CompletedRequest) => {
         const callbackResult = channel.request<
-            Replace<CompletedRequest, 'body', string>,
+            Replace<CompletedRequest, { body: string }>,
             boolean
         >(withSerializedBodyReader(request) as any);
 

@@ -251,7 +251,7 @@ export interface SerializedCallbackHandlerData {
  */
 export interface CallbackRequestMessage {
     args: [
-        | Replace<CompletedRequest, 'body', string> // New format
+        | Replace<CompletedRequest, { body: string }> // New format
         | CompletedRequest // Old format with directly serialized body
     ];
 }
@@ -279,7 +279,7 @@ export class CallbackHandlerDefinition extends Serializable implements RequestHa
         >(async (streamMsg) => {
             const request = _.isString(streamMsg.args[0].body)
                 ? withDeserializedBodyReader( // New format: body serialized as base64
-                    streamMsg.args[0] as Replace<CompletedRequest, 'body', string>
+                    streamMsg.args[0] as Replace<CompletedRequest, { body: string }>
                 )
                 : { // Backward compat: old fully-serialized format
                     ...streamMsg.args[0],
@@ -666,20 +666,16 @@ export interface SerializedPassThroughData {
     clientCertificateHostMap?: { [host: string]: { pfx: string, passphrase?: string } };
     lookupOptions?: PassThroughLookupOptions;
 
-    transformRequest?: Replace<
-        RequestTransform,
-        | 'replaceBody' // Serialized as base64 buffer
-        | 'updateHeaders' // // Serialized as a string to preserve undefined values
-        | 'updateJsonBody', // Serialized as a string to preserve undefined values
-        string | undefined
-    >,
-    transformResponse?: Replace<
-        ResponseTransform,
-        | 'replaceBody' // Serialized as base64 buffer
-        | 'updateHeaders' // // Serialized as a string to preserve undefined values
-        | 'updateJsonBody', // Serialized as a string to preserve undefined values
-        string | undefined
-    >,
+    transformRequest?: Replace<RequestTransform, {
+        'replaceBody'?: string, // Serialized as base64 buffer
+        'updateHeaders'?: string, // // Serialized as a string to preserve undefined values
+        'updateJsonBody'?: string // Serialized as a string to preserve undefined values
+    }>,
+    transformResponse?: Replace<ResponseTransform, {
+        'replaceBody'?: string, // Serialized as base64 buffer
+        'updateHeaders'?: string, // // Serialized as a string to preserve undefined values
+        'updateJsonBody'?: string // Serialized as a string to preserve undefined values
+    }>,
 
     hasBeforeRequestCallback?: boolean;
     hasBeforeResponseCallback?: boolean;
@@ -689,14 +685,14 @@ export interface SerializedPassThroughData {
  * @internal
  */
 export interface BeforePassthroughRequestRequest {
-    args: [Replace<CompletedRequest, 'body', string>];
+    args: [Replace<CompletedRequest, { body: string }>];
 }
 
 /**
  * @internal
  */
 export interface BeforePassthroughResponseRequest {
-    args: [Replace<PassThroughResponse, 'body', string>];
+    args: [Replace<PassThroughResponse, { body: string }>];
 }
 
 /**
