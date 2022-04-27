@@ -44,8 +44,7 @@ import {
     buildBodyReader,
     getPathFromAbsoluteUrl,
     pairFlatRawHeaders,
-    interpretRawHeaders,
-    cleanUpHeaders
+    rawHeadersToObject
 } from "../util/request-utils";
 import { AbortError } from "../rules/requests/request-handlers";
 import { WebSocketRuleData, WebSocketRule } from "../rules/websockets/websocket-rule";
@@ -393,7 +392,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         const tags: string[] = [];
 
         const rawHeaders = pairFlatRawHeaders(req.rawHeaders);
-        const headers = cleanUpHeaders(interpretRawHeaders(rawHeaders));
+        const headers = rawHeadersToObject(rawHeaders);
 
         // Not writable for HTTP/2:
         makePropertyWritable(req, 'headers');

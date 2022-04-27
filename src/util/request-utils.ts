@@ -96,17 +96,19 @@ export function isHttp2(
         ('stream' in message && 'createPushResponse' in message); // H2 response
 }
 
-export function h2HeadersToH1(h2Headers: Headers): Headers {
-    const h1Headers = _.omitBy(h2Headers, (_value, key: string | Symbol) => {
-        return key === http2.sensitiveHeaders || key.toString().startsWith(':')
-    });
+export function h2HeadersToH1(h2Headers: RawHeaders): RawHeaders {
+    let h1Headers = h2Headers.filter(([key]) => key[0] !== ':');
 
-    if (!h1Headers['host'] && h2Headers[':authority']) {
-        h1Headers['host'] = h2Headers[':authority'];
+    if (!findRawHeader(h1Headers, 'host') && findRawHeader(h2Headers, ':authority')) {
+        h1Headers.unshift(['Host', findRawHeader(h2Headers, ':authority')![1]]);
     }
 
-    if (_.isArray(h1Headers['cookie'])) {
-        h1Headers['cookie'] = h1Headers['cookie'].join('; ');
+    // In HTTP/1 you MUST only send one cookie header - in HTTP/2 sending multiple is fine,
+    // so we have to concatenate them:
+    const cookieHeaders = findRawHeaders(h1Headers, 'cookie')
+    if (cookieHeaders.length > 1) {
+        h1Headers = h1Headers.filter(([key]) => key.toLowerCase() !== 'cookie');
+        h1Headers.push(['Cookie', cookieHeaders.join('; ')]);
     }
 
     return h1Headers;
@@ -243,6 +245,12 @@ export function cleanUpHeaders(headers: Headers) {
     );
 }
 
+const findRawHeader = (rawHeaders: RawHeaders, targetKey: string) =>
+    rawHeaders.find(([key]) => key.toLowerCase() === targetKey);
+
+const findRawHeaders = (rawHeaders: RawHeaders, targetKey: string) =>
+    rawHeaders.filter(([key]) => key.toLowerCase() === targetKey);
+
 /**
  * Return node's _very_ raw headers ([k, v, k, v, ...]) into our slightly more convenient
  * pairwise tuples [[k, v], [k, v], ...] RawHeaders structure.
@@ -255,11 +263,15 @@ export function pairFlatRawHeaders(flatRawHeaders: string[]): RawHeaders {
     return result;
 }
 
+export function flattenPairedRawHeaders(rawHeaders: RawHeaders): string[] {
+    return rawHeaders.flat();
+}
+
 /**
  * Take a raw headers, and turn them into headers, but without some of Node's concessions
  * to ease of use, i.e. keeping multiple values as arrays.
  */
-export function interpretRawHeaders(rawHeaders: RawHeaders): Headers {
+export function rawHeadersToObject(rawHeaders: RawHeaders): Headers {
     return rawHeaders.reduce<Headers>((headers, [key, value]) => {
         key = key.toLowerCase();
 
@@ -275,6 +287,24 @@ export function interpretRawHeaders(rawHeaders: RawHeaders): Headers {
 
         return headers;
     }, {});
+}
+
+export function objectHeadersToRaw(headers: Headers): RawHeaders {
+    const rawHeaders: RawHeaders = [];
+
+    for (let key in headers) {
+        const value = headers[key];
+
+        if (value === undefined) continue;
+
+        if (Array.isArray(value)) {
+            value.forEach((v) => rawHeaders.push([key, v]));
+        } else {
+            rawHeaders.push([key, value]);
+        }
+    }
+
+    return rawHeaders;
 }
 
 /**

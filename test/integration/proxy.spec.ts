@@ -102,6 +102,46 @@ nodeOnly(() => {
             });
 
             it("should be able to pass through request headers", async () => {
+                await remoteServer.forAnyRequest().thenCallback(async (req) => {
+                    expect(req.headers).to.deep.equal({
+                        'dupe-header': ['A', 'B'],
+                        uppercaseheader: 'VALUE',
+                        host: `localhost:${remoteServer.port}`,
+                        connection: 'close'
+                    });
+
+                    expect(req.rawHeaders).to.deep.equal([
+                        ['Dupe-Header', 'A'],
+                        ['UPPERCASEHEADER', 'VALUE'],
+                        ['Dupe-Header', 'B'],
+                        ['Host', `localhost:${remoteServer.port}`],
+                        ['Connection', 'close' ] // Added by node in initial request
+                    ]);
+                    return {};
+                });
+
+                await server.forGet(remoteServer.url).thenPassThrough();
+
+                const request = http.request({
+                    method: 'GET',
+                    hostname: 'localhost',
+                    port: server.port,
+                    headers: [
+                        ['Dupe-Header', 'A'],
+                        ['UPPERCASEHEADER', 'VALUE'],
+                        ['Dupe-Header', 'B'],
+                        ['Host', `localhost:${remoteServer.port}`] // Manually proxy upstream
+                    ] as any
+                }).end();
+
+                const response = await new Promise<http.IncomingMessage>((resolve) =>
+                    request.on('response', resolve)
+                );
+
+                expect(response.statusCode).to.equal(200); // Callback expectations should run OK
+            });
+
+            it("should be able to pass back response headers", async () => {
                 await remoteServer.forAnyRequest().thenCallback(async (req) => ({
                     statusCode: 200,
                     body: await req.body.getText(),
@@ -2074,15 +2114,14 @@ nodeOnly(() => {
                 });
 
                 expect(response).to.deep.equal({
-                    url: remoteServer.urlFor("/abc"),
+                    url: `http://undefined/abc`, // Because we removed the host header completely
                     method: 'POST',
                     headers: {
                         // Required unavoidable headers:
-                        'host': `localhost:${remoteServer.port}`,
                         'connection': 'close',
                         'transfer-encoding': 'chunked', // Because we removed content-length
-                        // No other headers, only the given value:
-                        'custom-header': 'replaced-value',
+                        // No other headers, only injected value:
+                        'custom-header': 'replaced-value'
 
                     },
                     body: JSON.stringify({ a: 1 })

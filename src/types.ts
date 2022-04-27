@@ -85,6 +85,7 @@ export interface TlsTimingEvents {
 
 // Internal representation of an ongoing HTTP request whilst it's being processed
 export interface OngoingRequest extends Request, EventEmitter {
+    rawHeaders: RawHeaders; // Always set internally
     body: OngoingBody;
     timingEvents: TimingEvents;
 }

@@ -33,6 +33,10 @@ import {
     h1HeadersToH2,
     h2HeadersToH1,
     isAbsoluteUrl,
+    objectHeadersToRaw,
+    pairFlatRawHeaders,
+    rawHeadersToObject,
+    flattenPairedRawHeaders,
     cleanUpHeaders
 } from '../../util/request-utils';
 import { streamToBuffer, asBuffer } from '../../util/buffer-utils';
@@ -161,6 +165,11 @@ async function writeResponseFromCallback(result: CallbackResponseMessageResult, 
         result.statusMessage
     );
     response.end(result.rawBody || "");
+}
+
+// Used to drop `undefined` headers, which cause problems
+function dropUndefinedValues<D extends {}>(obj: D): D {
+    return _.omitBy(obj, (v) => v === undefined) as D;
 }
 
 export class CallbackHandler extends CallbackHandlerDefinition {
@@ -294,11 +303,6 @@ export class FileHandler extends FileHandlerDefinition {
     }
 }
 
-// Used to drop `undefined` headers, which cause problems
-function dropUndefinedValues<D extends {}>(obj: D): D {
-    return _.omitBy(obj, (v) => v === undefined) as D;
-}
-
 function validateCustomHeaders(
     originalHeaders: Headers,
     modifiedHeaders: Headers | undefined,
@@ -394,7 +398,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
         dropDefaultHeaders(clientRes);
 
         // Capture raw request data:
-        let { method, url: reqUrl, headers } = clientReq;
+        let { method, url: reqUrl, rawHeaders } = clientReq as OngoingRequest;
         let { protocol, hostname, port, path } = url.parse(reqUrl);
 
         const isH2Downstream = isHttp2(clientReq);
@@ -420,12 +424,19 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
 
             const hostHeaderName = isH2Downstream ? ':authority' : 'host';
 
+            let hostHeader = rawHeaders?.find(([key]) => key.toLowerCase() === hostHeaderName);
+            if (!hostHeader) {
+                // Should never happen really, but just in case:
+                hostHeader = [hostHeaderName, hostname!];
+                rawHeaders.unshift(hostHeader);
+            };
+
             if (updateHostHeader === undefined || updateHostHeader === true) {
                 // If updateHostHeader is true, or just not specified, match the new target
-                headers[hostHeaderName] = hostname + (port ? `:${port}` : '');
+                hostHeader[1] = hostname + (port ? `:${port}` : '');
             } else if (updateHostHeader) {
                 // If it's an explicit custom value, use that directly.
-                headers[hostHeaderName] = updateHostHeader;
+                hostHeader[1] = updateHostHeader;
             } // Otherwise: falsey means don't touch it.
         }
 
@@ -444,8 +455,14 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
 
         // Override the request details, if a transform or callback is specified:
         let reqBodyOverride: Uint8Array | undefined;
+
+        // Set during modification here - if set, we allow overriding certain H2 headers so that manual
+        // modification of the supported headers works as expected.
         let headersManuallyModified = false;
+
         if (this.transformRequest) {
+            let headers = rawHeadersToObject(rawHeaders);
+
             const {
                 replaceMethod,
                 updateHeaders,
@@ -513,7 +530,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 );
             }
 
-            headers = dropUndefinedValues(headers);
+            rawHeaders = objectHeadersToRaw(headers);
         } else if (this.beforeRequest) {
             const completedRequest = await waitForCompletedRequest(clientReq);
             const modifiedReq = await this.beforeRequest({
@@ -535,7 +552,9 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
 
             method = modifiedReq?.method || method;
             reqUrl = modifiedReq?.url || reqUrl;
-            headers = modifiedReq?.headers || headers;
+
+            headersManuallyModified = !!modifiedReq?.headers;
+            let headers = modifiedReq?.headers || clientReq.headers;
 
             Object.assign(headers,
                 isH2Downstream
@@ -543,10 +562,8 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                     : { 'host': getHostAfterModification(reqUrl, clientReq.headers, modifiedReq?.headers) }
             );
 
-            headersManuallyModified = !!modifiedReq?.headers;
-
             validateCustomHeaders(
-                completedRequest.headers,
+                clientReq.headers,
                 modifiedReq?.headers,
                 OVERRIDABLE_REQUEST_PSEUDOHEADERS // These are handled by getCorrectPseudoheaders above
             );
@@ -561,13 +578,14 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                     modifiedReq?.headers
                 );
             }
-            headers = dropUndefinedValues(headers);
 
             // Reparse the new URL, if necessary
             if (modifiedReq?.url) {
                 if (!isAbsoluteUrl(modifiedReq?.url)) throw new Error("Overridden request URLs must be absolute");
                 ({ protocol, hostname, port, path } = url.parse(reqUrl));
             }
+
+            rawHeaders = objectHeadersToRaw(headers);
         }
 
         const hostWithPort = `${hostname}:${port}`
@@ -636,14 +654,14 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
 
         if (isH2Downstream && shouldTryH2Upstream) {
             // We drop all incoming pseudoheaders, and regenerate them (except legally modified ones)
-            headers = _.pickBy(headers, (value, key) =>
+            rawHeaders = rawHeaders.filter(([key]) =>
                 !key.toString().startsWith(':') ||
                 (headersManuallyModified &&
-                    OVERRIDABLE_REQUEST_PSEUDOHEADERS.includes(key as any)
+                    OVERRIDABLE_REQUEST_PSEUDOHEADERS.includes(key.toLowerCase() as any)
                 )
             );
         } else if (isH2Downstream && !shouldTryH2Upstream) {
-            headers = h2HeadersToH1(headers);
+            rawHeaders = h2HeadersToH1(rawHeaders);
         }
 
         let serverReq: http.ClientRequest;
@@ -655,7 +673,9 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 port,
                 family,
                 path,
-                headers,
+                headers: shouldTryH2Upstream
+                    ? rawHeadersToObject(rawHeaders)
+                    : flattenPairedRawHeaders(rawHeaders) as any,
                 lookup: this.lookup() as typeof dns.lookup,
                 // ^ Cast required to handle __promisify__ type hack in the official Node types
                 agent,
