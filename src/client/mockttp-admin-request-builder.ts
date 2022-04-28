@@ -250,9 +250,13 @@ export class MockttpAdminRequestBuilder {
                     path,
                     hostname,
 
-                    headers,
-                    ${this.schema.asOptionalField('Response', 'timingEvents')}
-                    ${this.schema.asOptionalField('Response', 'tags')}
+                    ${this.schema.typeHasField('Request', 'rawHeaders')
+                        ? 'rawHeaders'
+                        : 'headers'
+                    }
+
+                    ${this.schema.asOptionalField('Request', 'timingEvents')}
+                    ${this.schema.asOptionalField('Request', 'tags')}
                 }
             }`,
             'tls-client-error': gql`subscription OnTlsClientError {

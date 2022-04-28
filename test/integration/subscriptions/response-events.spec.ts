@@ -308,6 +308,10 @@ describe("Abort subscriptions", () => {
         let seenAbort = await seenAbortPromise;
         expect(seenRequest.id).to.equal(seenAbort.id);
         expect(seenRequest.tags).to.deep.equal([]);
+        expect(seenRequest.headers['host']).to.deep.equal(`localhost:${server.port}`);
+        expect(
+            seenRequest.rawHeaders.find(([key]) => key === 'Host')
+        ).to.deep.equal(['Host', `localhost:${server.port}`]); // Uppercase header name!
     });
 
     it("should be sent when a request is aborted during an intentional timeout", async () => {
