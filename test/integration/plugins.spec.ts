@@ -15,7 +15,6 @@ nodeOnly(() => {
 
         it("should be able to define additional GraphQL endpoints", async () => {
             adminServer = new PluggableAdmin.AdminServer({
-                debug: true,
                 adminPlugins: {
                     myPlugin: class MyPlugin {
                         start() {}
@@ -45,7 +44,6 @@ nodeOnly(() => {
 
         it("should expose the plugin start metadata", async () => {
             adminServer = new PluggableAdmin.AdminServer({
-                debug: true,
                 adminPlugins: {
                     myPlugin: class MyPlugin {
                         start() {
@@ -153,7 +151,6 @@ nodeOnly(() => {
 
         it("should be verbose debuggable", async () => {
             adminServer = new PluggableAdmin.AdminServer({
-                debug: true,
                 adminPlugins: {
                     myPlugin: class MyPlugin {
                         start() {}
