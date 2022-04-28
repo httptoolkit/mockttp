@@ -732,6 +732,7 @@ ${await this.suggestRule(request)}`
                 url: parsedRequest.url,
                 path: parsedRequest.path,
                 headers: parsedRequest.headers || {},
+                rawHeaders: parsedRequest.rawHeaders || [],
                 remoteIpAddress: socket.remoteAddress,
                 remotePort: socket.remotePort
             };
@@ -741,7 +742,7 @@ ${await this.suggestRule(request)}`
             if (socket.writable) {
                 response = {
                     ...commonParams,
-                    headers: { 'Connection': 'close' },
+                    headers: { 'connection': 'close' },
                     rawHeaders: [['Connection', 'close']],
                     statusCode:
                         isHeaderOverflow
@@ -809,7 +810,8 @@ ${await this.suggestRule(request)}`
 
                 // Unknowable:
                 path: undefined,
-                headers: {}
+                headers: {},
+                rawHeaders: []
             },
             response: 'aborted' // These h2 errors get no app-level response, just a shutdown.
         });

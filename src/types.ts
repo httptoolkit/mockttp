@@ -194,7 +194,9 @@ export interface ClientError {
         method?: string;
         url?: string;
         path?: string;
+
         headers: Headers;
+        rawHeaders: RawHeaders;
 
         remoteIpAddress?: string;
         remotePort?: number;

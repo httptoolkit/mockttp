@@ -549,29 +549,15 @@ export function tryToParseHttp(input: Buffer, socket: net.Socket): PartiallyPars
 
         try {
             const headerLines = lines.slice(1, emptyLineIndex === -1 ? undefined : emptyLineIndex);
-            const headers = headerLines
+            const rawHeaders = headerLines
                 .map((line) => splitBuffer(line, ':', 2))
                 .filter((line) => line.length > 1)
                 .map((headerParts) =>
-                    headerParts.map(p => p.toString('utf8')) as [string, string]
-                )
-                .reduce((headers: Headers, headerPair) => {
-                    const headerName = headerPair[0];
-                    const headerValue = headerPair[1].trim();
-                    const existingKey = _.findKey(headers, (_v, key) => key.toLowerCase() === headerName);
-                    if (existingKey) {
-                        const existingValue = headers[existingKey]!;
-                        if (Array.isArray(existingValue)) {
-                            headers[existingKey] = existingValue.concat(headerValue);
-                        } else {
-                            headers[existingKey] = [existingValue, headerValue];
-                        }
-                    } else {
-                        headers[headerName] = headerValue;
-                    }
-                    return headers;
-                }, {});
-            req.headers = headers;
+                    headerParts.map(p => p.toString('utf8').trim()) as [string, string]
+                );
+
+            req.rawHeaders = rawHeaders;
+            req.headers = rawHeadersToObject(rawHeaders);
         } catch (e) {}
 
         try {
@@ -612,6 +598,7 @@ type PartiallyParsedHttpRequest = {
     method?: string;
     url?: string;
     headers?: Headers;
+    rawHeaders?: RawHeaders;
     hostname?: string;
     path?: string;
 }

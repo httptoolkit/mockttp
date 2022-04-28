@@ -277,7 +277,12 @@ export class MockttpAdminRequestBuilder {
                         method
                         url
                         path
-                        headers
+
+                        ${this.schema.typeHasField('ClientErrorRequest', 'rawHeaders')
+                            ? 'rawHeaders'
+                            : 'headers'
+                        }
+
                         ${this.schema.asOptionalField('ClientErrorRequest', 'remoteIpAddress')},
                         ${this.schema.asOptionalField('ClientErrorRequest', 'remotePort')},
                     }
@@ -287,7 +292,12 @@ export class MockttpAdminRequestBuilder {
                         tags
                         statusCode
                         statusMessage
-                        headers
+
+                        ${this.schema.typeHasField('Response', 'rawHeaders')
+                            ? 'rawHeaders'
+                            : 'headers'
+                        }
+
                         body
                     }
                 }
