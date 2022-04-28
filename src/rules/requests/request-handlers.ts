@@ -5,7 +5,6 @@ import net = require('net');
 import tls = require('tls');
 import http = require('http');
 import https = require('https');
-import http2 = require('http2');
 import * as h2Client from 'http2-wrapper';
 import CacheableLookup from 'cacheable-lookup';
 import { decode as decodeBase64 } from 'base64-arraybuffer';
@@ -35,9 +34,9 @@ import {
     objectHeadersToRaw,
     rawHeadersToObject,
     flattenPairedRawHeaders,
-    cleanUpHeaders,
     findRawHeader,
-    writeHead
+    writeHead,
+    pairFlatRawHeaders
 } from '../../util/request-utils';
 import { streamToBuffer, asBuffer } from '../../util/buffer-utils';
 import { isLocalhostAddress, isLocalPortActive, isSocketLoop } from '../../util/socket-util';
@@ -163,11 +162,6 @@ async function writeResponseFromCallback(result: CallbackResponseMessageResult, 
         result.headers
     );
     response.end(result.rawBody || "");
-}
-
-// Used to drop `undefined` headers, which cause problems
-function dropUndefinedValues<D extends {}>(obj: D): D {
-    return _.omitBy(obj, (v) => v === undefined) as D;
 }
 
 export class CallbackHandler extends CallbackHandlerDefinition {
@@ -682,14 +676,16 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
 
                 let serverStatusCode = serverRes.statusCode!;
                 let serverStatusMessage = serverRes.statusMessage
-                let serverHeaders = serverRes.headers;
+                let serverRawHeaders = pairFlatRawHeaders(serverRes.rawHeaders);
                 let resBodyOverride: Uint8Array | undefined;
 
                 if (isH2Downstream) {
-                    serverHeaders = h1HeadersToH2(serverHeaders);
+                    serverRawHeaders = h1HeadersToH2(serverRawHeaders);
                 }
 
                 if (this.transformResponse) {
+                    let serverHeaders = rawHeadersToObject(serverRawHeaders);
+
                     const {
                         replaceStatus,
                         updateHeaders,
@@ -759,19 +755,19 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                         );
                     }
 
-                    serverHeaders = dropUndefinedValues(serverHeaders);
+                    serverRawHeaders = objectHeadersToRaw(serverHeaders);
                 } else if (this.beforeResponse) {
                     let modifiedRes: CallbackResponseResult | void;
                     let body: Buffer;
 
                     body = await streamToBuffer(serverRes);
-                    const cleanHeaders = cleanUpHeaders(serverHeaders);
+                    let serverHeaders = rawHeadersToObject(serverRawHeaders);
 
                     modifiedRes = await this.beforeResponse({
                         id: clientReq.id,
                         statusCode: serverStatusCode,
                         statusMessage: serverRes.statusMessage,
-                        headers: _.clone(cleanHeaders),
+                        headers: serverHeaders,
                         body: buildBodyReader(body, serverHeaders)
                     });
 
@@ -782,7 +778,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                         throw new AbortError('Connection closed (intentionally)');
                     }
 
-                    validateCustomHeaders(cleanHeaders, modifiedRes?.headers);
+                    validateCustomHeaders(serverHeaders, modifiedRes?.headers);
 
                     serverStatusCode = modifiedRes?.statusCode ||
                         modifiedRes?.status ||
@@ -808,33 +804,16 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                         resBodyOverride = body;
                     }
 
-                    serverHeaders = dropUndefinedValues(serverHeaders);
+                    serverRawHeaders = objectHeadersToRaw(serverHeaders);
                 }
 
-                Object.keys(serverHeaders).forEach((header) => {
-                    const headerValue = serverHeaders[header];
-                    if (
-                        headerValue === undefined ||
-                        (header as unknown) === http2.sensitiveHeaders ||
-                        header === ':status' // H2 status gets set by writeHead below
-                    ) return;
-
-                    try {
-                        clientRes.setHeader(header, headerValue);
-                    } catch (e) {
-                        // A surprising number of real sites have slightly invalid headers
-                        // (e.g. extra spaces). If we hit any, we just drop that header
-                        // and print a warning.
-                        console.log(`Error setting header on passthrough response: ${
-                            (isErrorLike(e) && e.message) || e
-                        }`);
-                    }
-                });
 
                 writeHead(
                     clientRes,
                     serverStatusCode,
-                    serverStatusMessage
+                    serverStatusMessage,
+                    serverRawHeaders
+                        .filter(([key]) => key !== ':status')
                 );
 
                 if (resBodyOverride) {

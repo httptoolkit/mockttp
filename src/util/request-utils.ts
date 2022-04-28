@@ -145,10 +145,10 @@ const HTTP2_ILLEGAL_HEADERS = [
     'transfer-encoding'
 ];
 
-export function h1HeadersToH2(headers: Headers): Headers {
-    return _.omitBy(headers, (_value, key) => {
-        return HTTP2_ILLEGAL_HEADERS.includes(key);
-    });
+export function h1HeadersToH2(headers: RawHeaders): RawHeaders {
+    return headers.filter(([key]) =>
+        !HTTP2_ILLEGAL_HEADERS.includes(key.toLowerCase())
+    );
 }
 
 // Parse an in-progress request or response stream, i.e. where the body or possibly even the headers have
@@ -251,19 +251,6 @@ export const parseRequestBody = (
     let transformedRequest = <OngoingRequest> <any> req;
     transformedRequest.body = parseBodyStream(req, options.maxSize, () => req.headers);
 };
-
-/**
- * Translate from internal header representations (basically Node's header representations) to a
- * mildly more consistent & simplified model that we expose externally: numbers as strings, and
- * no sensitiveHeaders symbol for HTTP/2.
- */
-export function cleanUpHeaders(headers: Headers) {
-    return _.mapValues(
-        _.omit(headers, ...(http2.sensitiveHeaders ? [http2.sensitiveHeaders as any] : [])),
-        (headerValue: undefined | string | string[] | number) =>
-            _.isNumber(headerValue) ? headerValue.toString() : headerValue
-    );
-}
 
 export const findRawHeader = (rawHeaders: RawHeaders, targetKey: string) =>
     rawHeaders.find(([key]) => key.toLowerCase() === targetKey);
