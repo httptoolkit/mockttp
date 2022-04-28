@@ -521,7 +521,8 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
             const completedRequest = await waitForCompletedRequest(clientReq);
             const modifiedReq = await this.beforeRequest({
                 ...completedRequest,
-                headers: _.clone(completedRequest.headers)
+                headers: _.cloneDeep(completedRequest.headers),
+                rawHeaders: _.cloneDeep(completedRequest.rawHeaders)
             });
 
             if (modifiedReq?.response) {
@@ -768,6 +769,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                         statusCode: serverStatusCode,
                         statusMessage: serverRes.statusMessage,
                         headers: serverHeaders,
+                        rawHeaders: _.cloneDeep(serverRawHeaders),
                         body: buildBodyReader(body, serverHeaders)
                     });
 

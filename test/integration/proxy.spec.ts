@@ -683,6 +683,32 @@ nodeOnly(() => {
                 expect(response.statusCode).to.equal(200);
             });
 
+            it("should be able to examine a response's raw headers in beforeResponse", async () => {
+                await remoteServer.forGet('/').thenCallback(() => ({
+                    status: 500,
+                    headers: {
+                        'UPPERCASE-HEADER': 'VALUE'
+                    }
+                }));
+
+                await server.forGet(remoteServer.urlFor("/")).thenPassThrough({
+                    beforeResponse: (res) => {
+                        expect(res.headers).to.deep.equal({
+                            'uppercase-header': 'VALUE'
+                        });
+
+                        expect(res.rawHeaders).to.deep.equal([
+                            ['UPPERCASE-HEADER', 'VALUE']
+                        ]);
+
+                        return { status: 200, body: 'all good' };
+                    }
+                });
+
+                let response = await request.get(remoteServer.urlFor("/"));
+                expect(response).to.equal('all good');
+            });
+
             it("should be able to rewrite a response's status", async () => {
                 await remoteServer.forGet('/').thenReply(404);
                 await server.forGet(remoteServer.urlFor("/")).thenPassThrough({

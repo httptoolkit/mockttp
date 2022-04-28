@@ -9,7 +9,8 @@ import {
     Headers,
     CompletedRequest,
     CompletedBody,
-    Explainable
+    Explainable,
+    RawHeaders
 } from "../../types";
 
 import { MaybePromise, Replace } from '../../util/type-utils';
@@ -432,11 +433,15 @@ export class FileHandlerDefinition extends Serializable implements RequestHandle
     }
 }
 
+// This is different from CompletedResponse because CompletedResponse is a client request to Mockttp
+// whereas this is a real response from an upstream server that we modify before forwarding.
+// We aim for a similar shape, but they're not exactly the same.
 export interface PassThroughResponse {
     id: string;
     statusCode: number;
     statusMessage?: string;
     headers: Headers;
+    rawHeaders: RawHeaders;
     body: CompletedBody;
 }
 
