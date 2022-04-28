@@ -742,6 +742,7 @@ ${await this.suggestRule(request)}`
                 response = {
                     ...commonParams,
                     headers: { 'Connection': 'close' },
+                    rawHeaders: [['Connection', 'close']],
                     statusCode:
                         isHeaderOverflow
                             ? 431

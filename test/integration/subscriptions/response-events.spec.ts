@@ -163,6 +163,30 @@ describe("Response subscriptions", () => {
 
             expect(timingEvents.abortedTimestamp).to.equal(undefined);
         });
+
+        it("should include raw header data", async () => {
+            await server.forGet('/mocked-endpoint').thenReply(200, undefined, {
+                "first-header": "1",
+                "UPPERCASE-header": "value",
+                "last-header": "2",
+            });
+
+            let seenResponsePromise = getDeferred<CompletedResponse>();
+            await server.on('response', (r) => seenResponsePromise.resolve(r));
+
+            fetch(server.urlFor("/mocked-endpoint"));
+
+            let seenResponse = await seenResponsePromise;
+            expect(seenResponse.rawHeaders).to.deep.equal([
+                ...(isNode
+                    ? []
+                    : [['access-control-allow-origin', '*']]
+                ),
+                ["first-header", "1"],
+                ["UPPERCASE-header", "value"],
+                ["last-header", "2"]
+            ]);
+        });
     });
 
     describe("with an HTTP server allowing only tiny bodies", () => {

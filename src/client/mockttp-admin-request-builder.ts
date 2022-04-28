@@ -230,7 +230,12 @@ export class MockttpAdminRequestBuilder {
                     id,
                     statusCode,
                     statusMessage,
-                    headers,
+
+                    ${this.schema.typeHasField('Response', 'rawHeaders')
+                        ? 'rawHeaders'
+                        : 'headers'
+                    }
+
                     body,
                     ${this.schema.asOptionalField('Response', 'timingEvents')}
                     ${this.schema.asOptionalField('Response', 'tags')}

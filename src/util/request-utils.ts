@@ -62,13 +62,32 @@ export const shouldKeepAlive = (req: OngoingRequest): boolean =>
     req.headers['connection'] !== 'close' &&
     req.headers['proxy-connection'] !== 'close';
 
-export const setHeaders = (response: http.ServerResponse, headers: Headers) => {
-    Object.keys(headers).forEach((header) => {
-        let value = headers[header];
-        if (!value) return;
+export const writeHead = (
+    response: http.ServerResponse | http2.Http2ServerResponse,
+    status: number,
+    statusMessage?: string | undefined,
+    headers?: Headers | RawHeaders | undefined
+) => {
+    const flatHeaders =
+        headers === undefined
+            ? {}
+        : isHttp2(response)
+            // Due to a Node.js bug, H2 never expects flat headers
+            ? headers as {}
+        : !Array.isArray(headers)
+            ? objectHeadersToFlat(headers)
+        // RawHeaders for H1, must be flattened:
+            : flattenPairedRawHeaders(headers);
 
-        response.setHeader(header, value);
-    });
+    // We aim to always pass flat headers to writeHead instead of calling setHeader because
+    // in most cases it's more flexible about supporting raw data, e.g. multiple headers with
+    // different casing can't be represented with setHeader at all (the latter overwrites).
+
+    if (statusMessage === undefined) {
+        response.writeHead(status, flatHeaders);
+    } else {
+        response.writeHead(status, statusMessage, flatHeaders);
+    }
 };
 
 // If the user explicitly specifies headers, we tell Node not to handle them,
@@ -87,6 +106,7 @@ export function dropDefaultHeaders(response: OngoingResponse) {
 
 export function isHttp2(
     message: | http.IncomingMessage
+             | http.ServerResponse
              | http2.Http2ServerRequest
              | http2.Http2ServerResponse
              | OngoingRequest
@@ -295,7 +315,7 @@ export function objectHeadersToRaw(headers: Headers): RawHeaders {
     for (let key in headers) {
         const value = headers[key];
 
-        if (value === undefined) continue;
+        if (value === undefined) continue; // Drop undefined header values
 
         if (Array.isArray(value)) {
             value.forEach((v) => rawHeaders.push([key, v]));
@@ -305,6 +325,28 @@ export function objectHeadersToRaw(headers: Headers): RawHeaders {
     }
 
     return rawHeaders;
+}
+
+export function objectHeadersToFlat(headers: Headers): string[] {
+    const flatHeaders: string[] = [];
+
+    for (let key in headers) {
+        const value = headers[key];
+
+        if (value === undefined) continue; // Drop undefined header values
+
+        if (Array.isArray(value)) {
+            value.forEach((v) => {
+                flatHeaders.push(key);
+                flatHeaders.push(v);
+            });
+        } else {
+            flatHeaders.push(key);
+            flatHeaders.push(value);
+        }
+    }
+
+    return flatHeaders;
 }
 
 /**
@@ -351,10 +393,6 @@ export function trackResponse(
     options: { maxSize: number }
 ): OngoingResponse {
     let trackedResponse = <OngoingResponse> response;
-    if (!trackedResponse.getHeaders) {
-        // getHeaders was added in 7.7. - if it's not available, polyfill it
-        trackedResponse.getHeaders = function (this: any) { return this._headers; }
-    }
 
     trackedResponse.timingEvents = timingEvents;
     trackedResponse.tags = tags;
@@ -366,6 +404,11 @@ export function trackResponse(
     const originalWriteHeader = trackedResponse.writeHead;
     const originalWrite = trackedResponse.write;
     const originalEnd = trackedResponse.end;
+    const originalGetHeaders = trackedResponse.getHeaders;
+
+    let writtenHeaders: RawHeaders | undefined;
+    trackedResponse.getRawHeaders = () => writtenHeaders ?? [];
+    trackedResponse.getHeaders = () => rawHeadersToObject(trackedResponse.getRawHeaders());
 
     trackedResponse.writeHead = function (this: typeof trackedResponse, ...args: any) {
         if (!timingEvents.headersSentTimestamp) {
@@ -375,6 +418,47 @@ export function trackResponse(
         // HTTP/2 responses shouldn't have a status message:
         if (isHttp2(trackedResponse) && typeof args[1] === 'string') {
             args[1] = undefined;
+        }
+
+        let headersArg: any;
+        if (args[2]) {
+            headersArg = args[2];
+        } else if (typeof args[1] !== 'string') {
+            headersArg = args[1];
+        }
+
+        // Two legal formats of header args (flat & object), one unofficial (tuple array)
+        if (Array.isArray(headersArg)) {
+            if (!Array.isArray(headersArg[0])) {
+                // Flat -> Raw tuples
+                writtenHeaders = pairFlatRawHeaders(headersArg);
+            } else {
+                // Already raw tuples, cheeky
+                writtenHeaders = headersArg;
+            }
+        } else {
+            // Headers object -> raw tuples
+            writtenHeaders = objectHeadersToRaw(headersArg ?? {});
+        }
+
+        // Headers might also have been set with setHeader before. They'll be combined, with headers
+        // here taking precendence. We simulate this by pulling in all values from getHeaders() and
+        // remembering any of those that we're not about to override.
+        const storedHeaders = originalGetHeaders.apply(this);
+        const writtenHeaderKeys = writtenHeaders.map(([key]) => key.toLowerCase());
+        const storedHeaderKeys = Object.keys(storedHeaders);
+        if (storedHeaderKeys.length) {
+            storedHeaderKeys
+                .filter((key) => !writtenHeaderKeys.includes(key))
+                .reverse() // We're unshifting (these were set first) so we have to reverse to keep order.
+                .forEach((key) => {
+                    const value = storedHeaders[key];
+                    if (Array.isArray(value)) {
+                        value.reverse().forEach(v => writtenHeaders?.unshift([key, v]));
+                    } else if (value !== undefined) {
+                        writtenHeaders?.unshift([key, value]);
+                    }
+                });
         }
 
         return originalWriteHeader.apply(this, args);
@@ -430,7 +514,8 @@ export async function waitForCompletedResponse(response: OngoingResponse): Promi
         'tags'
     ]).assign({
         statusMessage: '',
-        headers: cleanUpHeaders(response.getHeaders()),
+        headers: response.getHeaders(),
+        rawHeaders: response.getRawHeaders(),
         body: body
     }).valueOf();
 

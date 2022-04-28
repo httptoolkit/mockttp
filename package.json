@@ -152,7 +152,7 @@
     "zstd-codec": "^0.1.4"
   },
   "engines": {
-    "node": ">=14.0.0"
+    "node": ">=14.14.0"
   },
   "dependencies": {
     "@graphql-tools/schema": "^7.1.5",

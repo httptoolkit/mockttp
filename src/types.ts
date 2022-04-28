@@ -159,7 +159,7 @@ export interface TimingEvents {
 export interface OngoingResponse extends http.ServerResponse {
     id: string;
     getHeaders(): Headers;
-    rawHeaders: RawHeaders;
+    getRawHeaders(): RawHeaders;
     body: OngoingBody;
     timingEvents: TimingEvents;
     tags: string[];
@@ -170,6 +170,7 @@ export interface CompletedResponse {
     statusCode: number;
     statusMessage: string;
     headers: Headers;
+    rawHeaders: RawHeaders;
     body: CompletedBody;
     timingEvents: TimingEvents | {};
     tags: string[];

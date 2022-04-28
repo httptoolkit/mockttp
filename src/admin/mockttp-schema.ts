@@ -129,6 +129,7 @@ export const MockttpSchema = gql`
         statusMessage: String!
 
         headers: Json!
+        rawHeaders: Json!
         body: Buffer!
     }
 `;
