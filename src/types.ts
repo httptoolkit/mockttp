@@ -57,7 +57,7 @@ export interface Request {
     hostname?: string;
 
     headers: Headers;
-    rawHeaders?: RawHeaders; // Not set remotely with older servers
+    rawHeaders: RawHeaders;
 
     timingEvents: TimingEvents | {};
     tags: string[];

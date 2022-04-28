@@ -5,6 +5,7 @@ import { MockedEndpoint, MockedEndpointData } from "../types";
 
 import {
     buildBodyReader,
+    objectHeadersToRaw,
     rawHeadersToObject
 } from '../util/request-utils';
 import type { Serialized } from '../serialization/serialization';
@@ -34,7 +35,9 @@ function normalizeHttpMessage(message: any, event?: SubscribableEvent) {
         // header data, for maximum accuracy (and to avoid any need to query for both).
         message.headers = rawHeadersToObject(message.rawHeaders);
     } else if (message.headers) {
+        // Backward compat for older servers:
         message.headers = JSON.parse(message.headers);
+        message.rawHeaders = objectHeadersToRaw(message.headers);
     }
 
     if (message.body !== undefined) {
