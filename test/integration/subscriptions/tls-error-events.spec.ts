@@ -127,7 +127,10 @@ describe("TLS error subscriptions", () => {
 
             expect(tlsError.failureCause).to.be.equal('reset');
             expect(tlsError.hostname).to.equal('localhost');
-            expect(tlsError.remoteIpAddress).to.equal('::ffff:127.0.0.1');
+            expect(tlsError.remoteIpAddress).to.be.oneOf([
+                '::ffff:127.0.0.1', // IPv4 localhost
+                '::1' // IPv6 localhost
+            ]);
             expect(tlsError.remotePort).to.be.greaterThan(32768);
 
             expect(tlsError.timingEvents.startTime).to.be.greaterThan(0);
