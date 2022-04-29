@@ -182,6 +182,7 @@ export async function startDnsServer(callback: (question: dns2.DnsQuestion) => s
 
 export const H2_TLS_ON_TLS_SUPPORTED = ">=12.17";
 export const HTTP_ABORTSIGNAL_SUPPORTED = ">=14.17";
+export const OLD_TLS_SUPPORTED = "<17"; // In 17+ TLS < v1.2 is only available with legacy OpenSSL flag
 
 type Http2ResponseHeaders = http2.IncomingHttpHeaders & http2.IncomingHttpStatusHeader;
 

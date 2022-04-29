@@ -21,7 +21,8 @@ import {
     startDnsServer,
     destroyable,
     DestroyableServer,
-    H2_TLS_ON_TLS_SUPPORTED
+    H2_TLS_ON_TLS_SUPPORTED,
+    OLD_TLS_SUPPORTED
 } from "../test-utils";
 import { CA } from "../../src/util/tls";
 import { isLocalIPv6Available } from "../../src/util/socket-util";
@@ -1166,6 +1167,10 @@ nodeOnly(() => {
                 });
 
                 describe("given a TLSv1 upstream server", () => {
+
+                    before(function () {
+                        if (!semver.satisfies(process.version, OLD_TLS_SUPPORTED)) this.skip();
+                    });
 
                     let oldServerPort: number;
                     let oldServer: DestroyableServer & https.Server;
