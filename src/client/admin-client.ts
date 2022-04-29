@@ -11,6 +11,7 @@ import { print } from 'graphql';
 import { DEFAULT_ADMIN_SERVER_PORT } from "../types";
 
 import { MaybePromise, RequireProps } from '../util/type-utils';
+import { isNode } from '../util/util';
 import { isErrorLike } from '../util/error';
 import { getDeferred } from '../util/promise';
 
@@ -21,7 +22,9 @@ import { SchemaIntrospector } from './schema-introspection';
 import { AdminQuery, getSingleSelectedFieldName } from './admin-query';
 import { MockttpOptions } from '../mockttp';
 
-const { fetch, Headers } = typeof globalThis.fetch === 'undefined' ? CrossFetch : globalThis;
+const { fetch, Headers } = isNode || typeof globalThis.fetch === 'undefined'
+    ? CrossFetch
+    : globalThis;
 
 export class ConnectionError extends TypedError { }
 
