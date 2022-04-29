@@ -518,7 +518,11 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 );
             }
 
-            rawHeaders = objectHeadersToRaw(headers);
+            if (headersManuallyModified || reqBodyOverride) {
+                // If the headers have been updated (implicitly or explicitly) we need to regenerate them. We avoid
+                // this if possible, because it normalizes headers, which is slightly lossy (e.g. they're lowercased).
+                rawHeaders = objectHeadersToRaw(headers);
+            }
         } else if (this.beforeRequest) {
             const completedRequest = await waitForCompletedRequest(clientReq);
             const modifiedReq = await this.beforeRequest({
@@ -962,7 +966,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
             beforeRequest,
             beforeResponse,
             proxyConfig: deserializeProxyConfig(data.proxyConfig, channel, ruleParams),
-            transformRequest: {
+            transformRequest: data.transformRequest ? {
                 ...data.transformRequest,
                 ...(data.transformRequest?.replaceBody !== undefined ? {
                     replaceBody: deserializeBuffer(data.transformRequest.replaceBody)
@@ -973,8 +977,8 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 ...(data.transformRequest?.updateJsonBody !== undefined ? {
                     updateJsonBody: mapOmitToUndefined(JSON.parse(data.transformRequest.updateJsonBody))
                 } : {}),
-            } as RequestTransform,
-            transformResponse: {
+            } as RequestTransform : undefined,
+            transformResponse: data.transformResponse ? {
                 ...data.transformResponse,
                 ...(data.transformResponse?.replaceBody !== undefined ? {
                     replaceBody: deserializeBuffer(data.transformResponse.replaceBody)
@@ -985,7 +989,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 ...(data.transformResponse?.updateJsonBody !== undefined ? {
                     updateJsonBody: mapOmitToUndefined(JSON.parse(data.transformResponse.updateJsonBody))
                 } : {})
-            } as ResponseTransform,
+            } as ResponseTransform : undefined,
             // Backward compat for old clients:
             ...data.forwardToLocation ? {
                 forwarding: { targetHost: data.forwardToLocation }

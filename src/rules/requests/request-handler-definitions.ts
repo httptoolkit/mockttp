@@ -915,7 +915,7 @@ export class PassThroughHandlerDefinition extends Serializable implements Reques
             clientCertificateHostMap: _.mapValues(this.clientCertificateHostMap,
                 ({ pfx, passphrase }) => ({ pfx: serializeBuffer(pfx), passphrase })
             ),
-            transformRequest: {
+            transformRequest: this.transformRequest ? {
                 ...this.transformRequest,
                 // Body is always serialized as a base64 buffer:
                 replaceBody: !!this.transformRequest?.replaceBody
@@ -934,8 +934,8 @@ export class PassThroughHandlerDefinition extends Serializable implements Reques
                         (k, v) => v === undefined ? SERIALIZED_OMIT : v
                     )
                     : undefined
-            },
-            transformResponse: {
+            } : undefined,
+            transformResponse: this.transformResponse ? {
                 ...this.transformResponse,
                 // Body is always serialized as a base64 buffer:
                 replaceBody: !!this.transformResponse?.replaceBody
@@ -954,7 +954,7 @@ export class PassThroughHandlerDefinition extends Serializable implements Reques
                         (k, v) => v === undefined ? SERIALIZED_OMIT : v
                     )
                     : undefined
-            },
+            } : undefined,
             hasBeforeRequestCallback: !!this.beforeRequest,
             hasBeforeResponseCallback: !!this.beforeResponse
         };
