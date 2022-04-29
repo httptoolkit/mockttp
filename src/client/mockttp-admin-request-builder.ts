@@ -3,11 +3,9 @@ import gql from 'graphql-tag';
 
 import { MockedEndpoint, MockedEndpointData } from "../types";
 
-import {
-    buildBodyReader,
-    objectHeadersToRaw,
-    rawHeadersToObject
-} from '../util/request-utils';
+import { buildBodyReader } from '../util/request-utils';
+import { objectHeadersToRaw, rawHeadersToObject } from '../util/header-utils';
+
 import type { Serialized } from '../serialization/serialization';
 
 import { AdminQuery } from './admin-query';

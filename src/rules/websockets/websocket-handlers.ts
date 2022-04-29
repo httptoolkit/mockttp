@@ -18,12 +18,14 @@ import {
     TimeoutHandler
 } from '../requests/request-handlers';
 import {
+    isHttp2
+} from '../../util/request-utils';
+import {
     findRawHeader,
-    isHttp2,
     objectHeadersToRaw,
     pairFlatRawHeaders,
     rawHeadersToObject
-} from '../../util/request-utils';
+} from '../../util/header-utils';
 import { streamToBuffer } from '../../util/buffer-utils';
 import { isLocalhostAddress } from '../../util/socket-util';
 import { MaybePromise } from '../../util/type-utils';

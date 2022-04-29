@@ -42,10 +42,12 @@ import {
     buildInitiatedRequest,
     tryToParseHttp,
     buildBodyReader,
-    getPathFromAbsoluteUrl,
+    getPathFromAbsoluteUrl
+} from "../util/request-utils";
+import {
     pairFlatRawHeaders,
     rawHeadersToObject
-} from "../util/request-utils";
+} from "../util/header-utils";
 import { AbortError } from "../rules/requests/request-handlers";
 import { WebSocketRuleData, WebSocketRule } from "../rules/websockets/websocket-rule";
 import { RejectWebSocketHandler, WebSocketHandler } from "../rules/websockets/websocket-handlers";

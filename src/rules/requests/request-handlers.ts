@@ -28,16 +28,18 @@ import {
     shouldKeepAlive,
     dropDefaultHeaders,
     isHttp2,
+    isAbsoluteUrl,
+    writeHead
+} from '../../util/request-utils';
+import {
     h1HeadersToH2,
     h2HeadersToH1,
-    isAbsoluteUrl,
     objectHeadersToRaw,
     rawHeadersToObject,
     flattenPairedRawHeaders,
     findRawHeader,
-    writeHead,
     pairFlatRawHeaders
-} from '../../util/request-utils';
+} from '../../util/header-utils';
 import { streamToBuffer, asBuffer } from '../../util/buffer-utils';
 import { isLocalhostAddress, isLocalPortActive, isSocketLoop } from '../../util/socket-util';
 import {
