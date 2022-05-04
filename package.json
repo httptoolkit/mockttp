@@ -95,7 +95,7 @@
   },
   "homepage": "https://github.com/httptoolkit/mockttp#readme",
   "devDependencies": {
-    "@graphql-tools/utils": "^7.10.0",
+    "@graphql-tools/utils": "^8.6.9",
     "@types/base64-arraybuffer": "0.1.0",
     "@types/body-parser": "1.19.1",
     "@types/chai": "4.2.21",
@@ -164,7 +164,7 @@
     "node": ">=14.14.0"
   },
   "dependencies": {
-    "@graphql-tools/schema": "^7.1.5",
+    "@graphql-tools/schema": "^8.3.10",
     "@httptoolkit/httpolyglot": "^2.0.1",
     "@httptoolkit/proxy-agent": "^5.0.1-socks-lookup-fix.0",
     "@httptoolkit/subscriptions-transport-ws": "^0.9.19",
