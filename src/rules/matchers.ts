@@ -1,6 +1,7 @@
 import * as _ from 'lodash';
 import * as url from 'url';
 import { oneLine } from 'common-tags';
+import * as multipart from 'parse-multipart-data';
 
 import { CompletedRequest, Method, Explainable, OngoingRequest } from "../types";
 import {
@@ -318,6 +319,50 @@ export class FormDataMatcher extends Serializable implements RequestMatcher {
     }
 }
 
+export type MultipartFieldMatchCondition = {
+    name?: string,
+    filename?: string,
+    content?: string | Uint8Array
+};
+
+export class MultipartFormDataMatcher extends Serializable implements RequestMatcher {
+    readonly type = 'multipart-form-data';
+
+    constructor(
+        public matchConditions: Array<MultipartFieldMatchCondition>
+    ) {
+        super();
+    }
+
+    async matches(request: OngoingRequest) {
+        const contentType = request.headers['content-type'];
+
+        if (!contentType) return false;
+        if (!contentType.includes("multipart/form-data")) return false;
+
+        const boundary = contentType.match(/;\s*boundary=(\S+)/);
+        if (!boundary) return false;
+
+        const parsedBody = multipart.parse(await request.body.asDecodedBuffer(), boundary[1]);
+
+        return this.matchConditions.every((condition) => {
+            const expectedContent = condition.content
+                ? Buffer.from(condition.content)
+                : undefined;
+
+            return parsedBody.some((part) =>
+                (expectedContent?.equals(part.data) || expectedContent === undefined) &&
+                (condition.filename === part.filename || condition.filename === undefined) &&
+                (condition.name === part.name || condition.name === undefined)
+            );
+        });
+    }
+
+    explain() {
+        return `with multipart form data matching ${JSON.stringify(this.matchConditions)}`;
+    }
+}
+
 export class RawBodyMatcher extends Serializable implements RequestMatcher {
     readonly type = 'raw-body';
 
@@ -517,6 +562,7 @@ export const MatcherLookup = {
     'query': QueryMatcher,
     'exact-query-string': ExactQueryMatcher,
     'form-data': FormDataMatcher,
+    'multipart-form-data': MultipartFormDataMatcher,
     'raw-body': RawBodyMatcher,
     'raw-body-regexp': RegexBodyMatcher,
     'raw-body-includes': RawBodyIncludesMatcher,

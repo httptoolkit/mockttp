@@ -9,6 +9,10 @@ import * as http2Wrapper from 'http2-wrapper';
 import * as streams from 'stream';
 import * as URL from 'url';
 import * as CrossFetch from "cross-fetch";
+import {
+    FormData as FormDataPolyfill,
+    File as FilePolyfill
+} from "formdata-node";
 
 import chai = require("chai");
 import chaiAsPromised = require("chai-as-promised");
@@ -37,10 +41,10 @@ export const AssertionError = chai.AssertionError;
 
 function getGlobalFetch() {
     return {
-        fetch: <typeof window.fetch> (<any> window.fetch).bind(window),
-        Headers: Headers,
-        Request: Request,
-        Response: Response
+        fetch: globalThis.fetch.bind(globalThis),
+        Headers: globalThis.Headers,
+        Request: globalThis.Request,
+        Response: globalThis.Response
     };
 }
 
@@ -56,6 +60,9 @@ const responseImplementation = fetchImplementation.Response;
 export { headersImplementation as Headers };
 export { requestImplementation as Request };
 export { responseImplementation as Response };
+
+export const FormData = globalThis.FormData ?? FormDataPolyfill;
+export const File = globalThis.File ?? FilePolyfill;
 
 // Quick helper to convert Fetch response headers back into an object. Very dumb,
 // doesn't deal with multiple header values or anything correctly, but ok for tests.

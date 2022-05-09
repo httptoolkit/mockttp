@@ -16,10 +16,11 @@ import {
     RequestMatcher,
     HeaderMatcher,
     QueryMatcher,
+    MultipartFieldMatchCondition,
+    MultipartFormDataMatcher,
     FormDataMatcher,
     RawBodyMatcher,
     RawBodyIncludesMatcher,
-    WildcardMatcher,
     CookieMatcher,
     RegexBodyMatcher,
     JsonBodyMatcher,
@@ -142,11 +143,29 @@ export abstract class BaseRuleBuilder {
     }
 
     /**
-     * Match only requests whose bodies include the given form data.
+     * Match only requests whose bodies include the given URL-encoded form data.
      * @category Matching
      */
     withForm(formData: { [key: string]: string }): this {
         this.matchers.push(new FormDataMatcher(formData));
+        return this;
+    }
+
+    /**
+     * Match only requests whose bodies include the given multipart form data.
+     *
+     * This can take any number of form parts to look for. Each part is specified
+     * with {@link MultipartFieldMatchCondition} object containing one or more of
+     * `name` (string), `filename` (string) and `content` (string or buffer) as
+     * fields to match against in the form data.
+     *
+     * Requests are matched if all conditions match at least one part in the
+     * request's form data.
+     *
+     * @category Matching
+     */
+    withMultipartForm(...matchConditions: Array<MultipartFieldMatchCondition>): this {
+        this.matchers.push(new MultipartFormDataMatcher(matchConditions));
         return this;
     }
 

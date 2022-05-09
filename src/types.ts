@@ -93,6 +93,7 @@ export interface OngoingRequest extends Request, EventEmitter {
 export interface OngoingBody {
     asStream: () => stream.Readable;
     asBuffer: () => Promise<Buffer>;
+    asDecodedBuffer: () => Promise<Buffer>;
     asText: () => Promise<string>;
     asJson: () => Promise<object>;
     asFormData: () => Promise<{ [key: string]: string | string[] | undefined }>;
