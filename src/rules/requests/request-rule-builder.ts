@@ -18,6 +18,7 @@ import {
 import { MaybePromise } from "../../util/type-utils";
 import { byteLength } from "../../util/util";
 import { BaseRuleBuilder } from "../base-rule-builder";
+import { MethodMatcher, RegexPathMatcher, SimplePathMatcher, WildcardMatcher } from "../matchers";
 
 /**
  * @class RequestRuleBuilder
@@ -56,11 +57,25 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
         path?: string | RegExp,
         addRule?: (rule: RequestRuleData) => Promise<MockedEndpoint>
     ) {
-        super(
-            methodOrAddRule instanceof Function ? undefined : methodOrAddRule,
-            path
-        );
+        super();
 
+        // Add the basic method and path matchers inititally, if provided:
+        const method = methodOrAddRule instanceof Function ? undefined : methodOrAddRule;
+        if (method === undefined && path === undefined) {
+            this.matchers.push(new WildcardMatcher());
+        } else {
+            if (method !== undefined) {
+                this.matchers.push(new MethodMatcher(method));
+            }
+
+            if (path instanceof RegExp) {
+                this.matchers.push(new RegexPathMatcher(path));
+            } else if (typeof path === 'string') {
+                this.matchers.push(new SimplePathMatcher(path));
+            }
+        }
+
+        // Store the addRule callback:
         if (methodOrAddRule instanceof Function) {
             this.addRule = methodOrAddRule;
         } else {

@@ -10,6 +10,7 @@ import {
 } from './websocket-handler-definitions';
 
 import { BaseRuleBuilder } from "../base-rule-builder";
+import { WildcardMatcher } from "../matchers";
 
 /**
  * @class WebSocketRuleBuilder
@@ -39,6 +40,9 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
         private addRule: (rule: WebSocketRuleData) => Promise<MockedEndpoint>
     ) {
         super();
+
+        // By default, websockets just match everything:
+        this.matchers.push(new WildcardMatcher());
     }
 
     /**

@@ -14,9 +14,6 @@ import {
 
 import {
     RequestMatcher,
-    MethodMatcher,
-    SimplePathMatcher,
-    RegexPathMatcher,
     HeaderMatcher,
     QueryMatcher,
     FormDataMatcher,
@@ -47,25 +44,11 @@ export abstract class BaseRuleBuilder {
      * Mock rule builders should be constructed through the Mockttp instance you're
      * using, not directly. You shouldn't ever need to call this constructor.
      */
-    constructor(method?: Method, path?: string | RegExp) {
-        if (method === undefined && path === undefined) {
-            this.matchers.push(new WildcardMatcher());
-            return;
-        }
+    constructor() {}
 
-        if (method !== undefined) {
-            this.matchers.push(new MethodMatcher(method));
-        }
-
-        if (path instanceof RegExp) {
-            this.matchers.push(new RegexPathMatcher(path));
-        } else if (typeof path === 'string') {
-            this.matchers.push(new SimplePathMatcher(path));
-        }
-    }
+    protected matchers: RequestMatcher[] = [];
 
     private priority: number = RulePriority.DEFAULT;
-    private matchers: RequestMatcher[] = [];
     private completionChecker?: RuleCompletionChecker;
 
     protected buildBaseRuleData() {
