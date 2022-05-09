@@ -81,13 +81,26 @@ describe("Multipart form data matching", function () {
         ).to.have.responseText("matched");
     });
 
-    it("should match requests by uploaded file content", async () => {
+    it("should match requests by uploaded file string content", async () => {
         await server.forPost("/")
             .withMultipartForm({ content: 'file content' })
             .thenReply(200, "matched");
 
         let form = new FormData();
         form.set('file-upload', new File(['file content'], 'my-file.txt'));
+
+        return expect(
+            fetchWithMultipartForm(server.url, form)
+        ).to.have.responseText("matched");
+    });
+
+    it("should match requests by uploaded file buffer content", async () => {
+        await server.forPost("/")
+            .withMultipartForm({ content: Buffer.from('raw content', 'utf8') })
+            .thenReply(200, "matched");
+
+        let form = new FormData();
+        form.set('file-upload', new File([Buffer.from('raw content', 'utf8')], 'my-file.txt'));
 
         return expect(
             fetchWithMultipartForm(server.url, form)
