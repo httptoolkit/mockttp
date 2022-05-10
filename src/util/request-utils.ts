@@ -7,7 +7,7 @@ import * as stream from 'stream';
 import * as querystring from 'querystring';
 import now = require("performance-now");
 import * as url from 'url';
-import { decodeBuffer } from 'http-encoding';
+import { decodeBuffer, encodeBuffer, SUPPORTED_ENCODING } from 'http-encoding';
 
 import {
     Headers,
@@ -123,6 +123,35 @@ export function isHttp2(
         ('stream' in message && 'createPushResponse' in message); // H2 response
 }
 
+export async function encodeBodyBuffer(buffer: Uint8Array, headers: Headers) {
+    const contentEncoding = headers['content-encoding'];
+
+    // We skip encodeBuffer entirely if possible - this isn't strictly necessary, but it's useful
+    // so you can drop the http-encoding package in bundling downstream without issue in cases
+    // where you don't actually use any encodings.
+    if (!contentEncoding) return buffer;
+
+    return await encodeBuffer(
+        buffer,
+        contentEncoding as SUPPORTED_ENCODING,
+        { level: 1 }
+    )
+}
+
+export async function decodeBodyBuffer(buffer: Buffer, headers: Headers) {
+    const contentEncoding = headers['content-encoding'];
+
+    // We skip decodeBuffer entirely if possible - this isn't strictly necessary, but it's useful
+    // so you can drop the http-encoding package in bundling downstream without issue in cases
+    // where you don't actually use any encodings.
+    if (!contentEncoding) return buffer;
+
+    return await decodeBuffer(
+        buffer,
+        contentEncoding as SUPPORTED_ENCODING
+    )
+}
+
 // Parse an in-progress request or response stream, i.e. where the body or possibly even the headers have
 // not been fully received/sent yet.
 const parseBodyStream = (bodyStream: stream.Readable, maxSize: number, getHeaders: () => Headers): OngoingBody => {
@@ -151,7 +180,7 @@ const parseBodyStream = (bodyStream: stream.Readable, maxSize: number, getHeader
         },
         async asDecodedBuffer() {
             const buffer = await body.asBuffer();
-            return decodeBuffer(buffer, getHeaders()['content-encoding']);
+            return decodeBodyBuffer(buffer, getHeaders());
         },
         asText(encoding: BufferEncoding = 'utf8') {
             return body.asDecodedBuffer().then((b) => b.toString(encoding));

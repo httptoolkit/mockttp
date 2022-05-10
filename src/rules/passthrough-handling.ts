@@ -2,12 +2,11 @@ import * as _ from 'lodash';
 import * as tls from 'tls';
 import url = require('url');
 import { oneLine } from 'common-tags';
-import { encodeBuffer, SUPPORTED_ENCODING } from 'http-encoding';
 
 import { CompletedBody, Headers } from '../types';
 import { byteLength } from '../util/util';
 import { asBuffer } from '../util/buffer-utils';
-import { isMockttpBody } from '../util/request-utils';
+import { isMockttpBody, encodeBodyBuffer } from '../util/request-utils';
 
 import {
     CallbackRequestResult,
@@ -68,11 +67,7 @@ export async function buildOverriddenBody(
         rawBuffer = asBuffer(replacementBody);
     }
 
-    return await encodeBuffer(
-        rawBuffer,
-        (headers['content-encoding'] || '') as SUPPORTED_ENCODING,
-        { level: 1 }
-    )
+    return await encodeBodyBuffer(rawBuffer, headers);
 }
 
 /**

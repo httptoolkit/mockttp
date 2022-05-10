@@ -11,7 +11,6 @@ import { decode as decodeBase64 } from 'base64-arraybuffer';
 import { Transform } from 'stream';
 import { stripIndent, oneLine } from 'common-tags';
 import { TypedError } from 'typed-error';
-import { encodeBuffer, SUPPORTED_ENCODING } from 'http-encoding';
 
 import {
     Headers,
@@ -29,7 +28,8 @@ import {
     dropDefaultHeaders,
     isHttp2,
     isAbsoluteUrl,
-    writeHead
+    writeHead,
+    encodeBodyBuffer
 } from '../../util/request-utils';
 import {
     h1HeadersToH2,
@@ -150,10 +150,9 @@ async function writeResponseFromCallback(result: CallbackResponseMessageResult, 
 
     if (result.body) {
         // The body is automatically encoded to match the content-encoding header, if set.
-        result.rawBody = await encodeBuffer(
+        result.rawBody = await encodeBodyBuffer(
             Buffer.from(result.body),
-            (result.headers?.['content-encoding'] || '') as SUPPORTED_ENCODING,
-            { level: 1 }
+            result.headers ?? {}
         );
     }
 
@@ -503,10 +502,9 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
 
             if (reqBodyOverride) {
                 // We always re-encode the body to match the resulting content-encoding header:
-                reqBodyOverride = await encodeBuffer(
+                reqBodyOverride = await encodeBodyBuffer(
                     reqBodyOverride,
-                    (headers['content-encoding'] || '') as SUPPORTED_ENCODING,
-                    { level: 1 }
+                    headers
                 );
 
                 headers['content-length'] = getContentLengthAfterModification(
@@ -746,10 +744,9 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
 
                     if (resBodyOverride) {
                         // We always re-encode the body to match the resulting content-encoding header:
-                        resBodyOverride = await encodeBuffer(
+                        resBodyOverride = await encodeBodyBuffer(
                             resBodyOverride,
-                            (serverHeaders['content-encoding'] || '') as SUPPORTED_ENCODING,
-                            { level: 1 }
+                            serverHeaders
                         );
 
                         serverHeaders['content-length'] = getContentLengthAfterModification(
