@@ -416,6 +416,23 @@ export interface Mockttp {
     on(event: 'client-error', callback: (error: ClientError) => void): Promise<void>;
 
     /**
+     * Subscribe to hear about requests that fail before successfully sending their
+     * initial parameters (the request line & headers). This will fire for requests
+     * that drop connections early, send invalid or too-long headers, or aren't
+     * correctly parseable in some form.
+     *
+     * This is only useful in some niche use cases, such as logging all requests
+     * seen by the server, independently of the rules defined.
+     *
+     * The callback will be called asynchronously from request handling. This function
+     * returns a promise, and the callback is not guaranteed to be registered until
+     * the promise is resolved.
+     *
+     * @category Events
+     */
+    on(event: 'handle-error', callback: (error: ClientError) => void): Promise<void>;
+
+    /**
      * Adds the given rules to the server.
      *
      * This API is only useful if you're manually building rules, rather than
@@ -576,7 +593,8 @@ export type SubscribableEvent =
     | 'response'
     | 'abort'
     | 'tls-client-error'
-    | 'client-error';
+    | 'client-error'
+    | 'handle-error';
 
 /**
  * @hidden

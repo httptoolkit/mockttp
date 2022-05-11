@@ -277,6 +277,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     public on(event: 'tls-client-error', callback: (req: TlsRequest) => void): Promise<void>;
     public on(event: 'tlsClientError', callback: (req: TlsRequest) => void): Promise<void>;
     public on(event: 'client-error', callback: (error: ClientError) => void): Promise<void>;
+    public on(event: 'handle-error', callback: (error: ClientError) => void): Promise<void>;
     public on(event: string, callback: (...args: any[]) => void): Promise<void> {
         this.eventEmitter.on(event, callback);
         return Promise.resolve();
@@ -464,32 +465,37 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             }
             result = result || 'responded';
         } catch (e) {
-            if (e instanceof AbortError) {
-                abort();
-
-                if (this.debug) {
-                    console.error("Failed to handle request due to abort:", e);
-                }
-            } else {
-                console.error("Failed to handle request:",
-                    this.debug
-                        ? e
-                        : (isErrorLike(e) && e.message) || e
-                );
-
-                // Do whatever we can to tell the client we broke
-                try {
-                    response.writeHead(
-                        (isErrorLike(e) && e.statusCode) || 500,
-                        (isErrorLike(e) && e.statusMessage) || 'Server error'
-                    );
-                } catch (e) {}
-
-                try {
-                    response.end((isErrorLike(e) && e.toString()) || e);
-                    result = result || 'responded';
-                } catch (e) {
+            if (this.eventEmitter.listeners('handle-error').length > 0) {
+                this.eventEmitter.emit('handle-error', e);
+            }
+            else {
+                if (e instanceof AbortError) {
                     abort();
+
+                    if (this.debug) {
+                        console.error("Failed to handle request due to abort:", e);
+                    }
+                } else {
+                    console.error("Failed to handle request:",
+                        this.debug
+                            ? e
+                            : (isErrorLike(e) && e.message) || e
+                    );
+
+                    // Do whatever we can to tell the client we broke
+                    try {
+                        response.writeHead(
+                            (isErrorLike(e) && e.statusCode) || 500,
+                            (isErrorLike(e) && e.statusMessage) || 'Server error'
+                        );
+                    } catch (e) {}
+
+                    try {
+                        response.end((isErrorLike(e) && e.toString()) || e);
+                        result = result || 'responded';
+                    } catch (e) {
+                        abort();
+                    }
                 }
             }
         }
