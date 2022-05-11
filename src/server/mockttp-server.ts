@@ -30,7 +30,7 @@ import { ServerMockedEndpoint } from "./mocked-endpoint";
 import { createComboServer } from "./http-combo-server";
 import { filter } from "../util/promise";
 import { Mutable } from "../util/type-utils";
-import { isErrorLike } from "../util/error";
+import { ErrorLike, isErrorLike } from "../util/error";
 import { makePropertyWritable } from "../util/util";
 
 import {
@@ -277,7 +277,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     public on(event: 'tls-client-error', callback: (req: TlsRequest) => void): Promise<void>;
     public on(event: 'tlsClientError', callback: (req: TlsRequest) => void): Promise<void>;
     public on(event: 'client-error', callback: (error: ClientError) => void): Promise<void>;
-    public on(event: 'handle-error', callback: (error: ClientError) => void): Promise<void>;
+    public on(event: 'handle-error', callback: (error: ErrorLike) => void): Promise<void>;
     public on(event: string, callback: (...args: any[]) => void): Promise<void> {
         this.eventEmitter.on(event, callback);
         return Promise.resolve();

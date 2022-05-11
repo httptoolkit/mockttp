@@ -19,6 +19,7 @@ import {
 } from "./types";
 import type { RequestRuleData } from "./rules/requests/request-rule";
 import type { WebSocketRuleData } from "./rules/websockets/websocket-rule";
+import { ErrorLike } from "./util/error";
 
 export type PortRange = { startPort: number, endPort: number };
 
@@ -430,7 +431,7 @@ export interface Mockttp {
      *
      * @category Events
      */
-    on(event: 'handle-error', callback: (error: ClientError) => void): Promise<void>;
+    on(event: 'handle-error', callback: (error: ErrorLike) => void): Promise<void>;
 
     /**
      * Adds the given rules to the server.
