@@ -1,4 +1,3 @@
-// A server error
 export type ErrorLike = Partial<Error> & {
     // Various properties we might want to look for on errors:
     code?: string;

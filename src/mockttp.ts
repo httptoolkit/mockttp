@@ -15,11 +15,11 @@ import {
     TlsRequest,
     InitiatedRequest,
     ClientError,
-    RulePriority
+    RulePriority,
+    RequestHandlerError
 } from "./types";
 import type { RequestRuleData } from "./rules/requests/request-rule";
 import type { WebSocketRuleData } from "./rules/websockets/websocket-rule";
-import { ErrorLike } from "./util/error";
 
 export type PortRange = { startPort: number, endPort: number };
 
@@ -417,13 +417,9 @@ export interface Mockttp {
     on(event: 'client-error', callback: (error: ClientError) => void): Promise<void>;
 
     /**
-     * Subscribe to hear about requests that fail before successfully sending their
-     * initial parameters (the request line & headers). This will fire for requests
-     * that drop connections early, send invalid or too-long headers, or aren't
-     * correctly parseable in some form.
+     * Subscribe to hear about requests that fail during request handling.
      *
-     * This is only useful in some niche use cases, such as logging all requests
-     * seen by the server, independently of the rules defined.
+     * This is useful in case of DNS resolution problems or connecting to the remote peer.
      *
      * The callback will be called asynchronously from request handling. This function
      * returns a promise, and the callback is not guaranteed to be registered until
@@ -431,7 +427,7 @@ export interface Mockttp {
      *
      * @category Events
      */
-    on(event: 'handle-error', callback: (error: ErrorLike) => void): Promise<void>;
+    on(event: 'request-handler-error', callback: (error: RequestHandlerError) => void): Promise<void>;
 
     /**
      * Adds the given rules to the server.
@@ -595,7 +591,7 @@ export type SubscribableEvent =
     | 'abort'
     | 'tls-client-error'
     | 'client-error'
-    | 'handle-error';
+    | 'request-handler-error';
 
 /**
  * @hidden

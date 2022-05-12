@@ -81,6 +81,14 @@ export const MockttpSchema = gql`
         remotePort: Int!
     }
 
+    type RequestHandlerError {
+        code: String
+        cmd: String
+        signal: String
+        statusCode: Int
+        statusMessage: String
+    }
+
     type InitiatedRequest {
         id: ID!
         timingEvents: Json!

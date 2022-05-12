@@ -304,42 +304,13 @@ export class MockttpAdminRequestBuilder {
                     }
                 }
             }`,
-            // TODO: This is just a copy of the previous client-error section. Needs to be finished.
-            'handle-error': gql`subscription OnError {
-                failedRequest {
-                    errorCode
-                    request {
-                        id
-                        timingEvents
-                        tags
-                        protocol
-                        httpVersion
-                        method
-                        url
-                        path
-
-                        ${this.schema.typeHasField('ClientErrorRequest', 'rawHeaders')
-                            ? 'rawHeaders'
-                            : 'headers'
-                        }
-
-                        ${this.schema.asOptionalField('ClientErrorRequest', 'remoteIpAddress')},
-                        ${this.schema.asOptionalField('ClientErrorRequest', 'remotePort')},
-                    }
-                    response {
-                        id
-                        timingEvents
-                        tags
-                        statusCode
-                        statusMessage
-
-                        ${this.schema.typeHasField('Response', 'rawHeaders')
-                            ? 'rawHeaders'
-                            : 'headers'
-                        }
-
-                        body
-                    }
+            'request-handler-error': gql`subscription OnRequestHandlerError {
+                requestHandlerError {
+                    code
+                    cmd
+                    signal
+                    statusCode
+                    statusMessage
                 }
             }`
         }[event];
