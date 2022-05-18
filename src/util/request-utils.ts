@@ -7,7 +7,7 @@ import * as stream from 'stream';
 import * as querystring from 'querystring';
 import now = require("performance-now");
 import * as url from 'url';
-import { decodeBuffer, encodeBuffer, SUPPORTED_ENCODING } from 'http-encoding';
+import type { SUPPORTED_ENCODING } from 'http-encoding';
 
 import {
     Headers,
@@ -131,11 +131,11 @@ export async function encodeBodyBuffer(buffer: Uint8Array, headers: Headers) {
     // where you don't actually use any encodings.
     if (!contentEncoding) return buffer;
 
-    return await encodeBuffer(
+    return await (await import('http-encoding')).encodeBuffer(
         buffer,
         contentEncoding as SUPPORTED_ENCODING,
         { level: 1 }
-    )
+    );
 }
 
 export async function decodeBodyBuffer(buffer: Buffer, headers: Headers) {
@@ -146,7 +146,7 @@ export async function decodeBodyBuffer(buffer: Buffer, headers: Headers) {
     // where you don't actually use any encodings.
     if (!contentEncoding) return buffer;
 
-    return await decodeBuffer(
+    return await (await import('http-encoding')).decodeBuffer(
         buffer,
         contentEncoding as SUPPORTED_ENCODING
     )
@@ -220,7 +220,7 @@ export const buildBodyReader = (body: Buffer, headers: Headers): CompletedBody =
         async getDecodedBuffer() {
             return runAsyncOrUndefined(async () =>
                 asBuffer(
-                    await decodeBuffer(this.buffer, headers['content-encoding'])
+                    await decodeBodyBuffer(this.buffer, headers)
                 )
             );
         },
