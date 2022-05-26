@@ -29,7 +29,8 @@ import {
     HostMatcher,
     CallbackMatcher,
     HostnameMatcher,
-    PortMatcher
+    PortMatcher,
+    ProtocolMatcher
 } from "./matchers";
 
 /**
@@ -231,6 +232,15 @@ export abstract class BaseRuleBuilder {
      */
     withCookie(cookie: { [key: string]: string }): this {
         this.matchers.push(new CookieMatcher(cookie));
+        return this;
+    }
+
+    /**
+     * Match only requests that sent with the given protocol.
+     * @category Matching
+     */
+    withProtocol(protocol: string): this {
+        this.matchers.push(new ProtocolMatcher(protocol));
         return this;
     }
 
