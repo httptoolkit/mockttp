@@ -61,6 +61,27 @@ export class MethodMatcher extends Serializable implements RequestMatcher {
     }
 }
 
+export class ProtocolMatcher extends Serializable implements RequestMatcher {
+    readonly type = 'protocol';
+
+    constructor(
+        public protocol: "http" | "https"
+    ) {
+		super();
+		if (protocol !== "http" && protocol !== "https") {
+			throw new Error("Invalid protocol: protocol can only be 'http' or 'https'");
+		}
+    }
+
+    matches(request: OngoingRequest) {
+        return request.protocol === this.protocol;
+    }
+
+    explain() {
+        return `for protocol ${this.protocol}`;
+    }
+}
+
 export class HostMatcher extends Serializable implements RequestMatcher {
     readonly type = 'host';
 
@@ -553,6 +574,7 @@ export class CallbackMatcher extends Serializable implements RequestMatcher {
 export const MatcherLookup = {
     'wildcard': WildcardMatcher,
     'method': MethodMatcher,
+    'protocol': ProtocolMatcher,
     'host': HostMatcher,
     'hostname': HostnameMatcher,
     'port': PortMatcher,
