@@ -65,9 +65,12 @@ export class ProtocolMatcher extends Serializable implements RequestMatcher {
     readonly type = 'protocol';
 
     constructor(
-        public protocol: string
+        public protocol: "http" | "https"
     ) {
-        super();
+		super();
+		if (protocol !== "http" && protocol !== "https") {
+			throw new Error("Invalid protocol: protocol can only be 'http' or 'https'");
+		}
     }
 
     matches(request: OngoingRequest) {

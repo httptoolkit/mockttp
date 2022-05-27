@@ -12,6 +12,13 @@ describe('Protocol matching', () => {
 	beforeEach(() => server.start());
 	afterEach(() => server.stop());
 
+	it('should throw error when build with invalid protocol', () => {
+		const builder = server.forGet("/") as any; // Avoid argument type checking.
+		expect(() => builder.withProtocol("HTTP")).throw();
+		expect(() => builder.withProtocol("http:")).throw();
+		expect(() => builder.withProtocol("somethingelse")).throw();
+	});
+
 	it("should match requests with the protocol", async () => {
 		await server.forGet('/')
 			.withProtocol("https")
