@@ -303,6 +303,15 @@ export class MockttpAdminRequestBuilder {
                         body
                     }
                 }
+            }`,
+            'request-handler-error': gql`subscription OnRequestHandlerError {
+                requestHandlerError {
+                    code
+                    cmd
+                    signal
+                    statusCode
+                    statusMessage
+                }
             }`
         }[event];
 

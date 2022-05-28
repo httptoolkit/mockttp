@@ -25,6 +25,7 @@ const RESPONSE_COMPLETED_TOPIC = 'response-completed';
 const REQUEST_ABORTED_TOPIC = 'request-aborted';
 const TLS_CLIENT_ERROR_TOPIC = 'tls-client-error';
 const CLIENT_ERROR_TOPIC = 'client-error';
+const REQUEST_HANDLER_ERROR_TOPIC = 'request-handler-error';
 
 async function buildMockedEndpointData(endpoint: ServerMockedEndpoint): Promise<MockedEndpointData> {
     return {
@@ -79,6 +80,12 @@ export function buildAdminServerModel(
     mockServer.on('client-error', (error) => {
         pubsub.publish(CLIENT_ERROR_TOPIC, {
             failedClientRequest: error
+        })
+    });
+
+    mockServer.on('request-handler-error', (error) => {
+        pubsub.publish(REQUEST_HANDLER_ERROR_TOPIC, {
+            requestHandlerError: error
         })
     });
 

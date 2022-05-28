@@ -15,7 +15,8 @@ import {
     TlsRequest,
     InitiatedRequest,
     ClientError,
-    RulePriority
+    RulePriority,
+    RequestHandlerError
 } from "./types";
 import type { RequestRuleData } from "./rules/requests/request-rule";
 import type { WebSocketRuleData } from "./rules/websockets/websocket-rule";
@@ -416,6 +417,19 @@ export interface Mockttp {
     on(event: 'client-error', callback: (error: ClientError) => void): Promise<void>;
 
     /**
+     * Subscribe to hear about requests that fail during request handling.
+     *
+     * This is useful in case of DNS resolution problems or connecting to the remote peer.
+     *
+     * The callback will be called asynchronously from request handling. This function
+     * returns a promise, and the callback is not guaranteed to be registered until
+     * the promise is resolved.
+     *
+     * @category Events
+     */
+    on(event: 'request-handler-error', callback: (error: RequestHandlerError) => void): Promise<void>;
+
+    /**
      * Adds the given rules to the server.
      *
      * This API is only useful if you're manually building rules, rather than
@@ -576,7 +590,8 @@ export type SubscribableEvent =
     | 'response'
     | 'abort'
     | 'tls-client-error'
-    | 'client-error';
+    | 'client-error'
+    | 'request-handler-error';
 
 /**
  * @hidden

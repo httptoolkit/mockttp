@@ -1,6 +1,7 @@
 import stream = require('stream');
 import http = require('http');
 import { EventEmitter } from 'events';
+import { ErrorLike } from './util/error';
 
 export const DEFAULT_ADMIN_SERVER_PORT = 45454;
 
@@ -204,6 +205,11 @@ export interface ClientError {
     };
     response: CompletedResponse | 'aborted';
 }
+
+/**
+ * RequestHandlerError dummy
+ */
+ export interface RequestHandlerError extends ErrorLike {}
 
 /**
  * A mocked endpoint provides methods to see the current state of

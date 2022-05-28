@@ -143,3 +143,5 @@ export * as PluggableAdmin from './pluggable-admin-api/pluggable-admin';
  * @category Internal
  */
 export * as MockttpPluggableAdmin from './pluggable-admin-api/mockttp-pluggable-admin';
+
+export { RequestHandlerError } from "./types";
