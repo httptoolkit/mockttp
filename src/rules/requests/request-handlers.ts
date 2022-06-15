@@ -456,7 +456,8 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 replaceHeaders,
                 replaceBody,
                 replaceBodyFromFile,
-                updateJsonBody
+                updateJsonBody,
+                matchReplaceBody
             } = this.transformRequest;
 
             if (replaceMethod) {
@@ -498,6 +499,18 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 );
 
                 reqBodyOverride = asBuffer(JSON.stringify(updatedBody));
+            } else if (matchReplaceBody) {
+                const { body: realBody } = await waitForCompletedRequest(clientReq);
+                let replacedBody = await realBody.getText();
+                if (replacedBody === undefined) {
+                    throw new Error("Can't match & replace non-decodeable request body");
+                }
+
+                for (let [match, result] of matchReplaceBody) {
+                    replacedBody = replacedBody!.replace(match, result);
+                }
+
+                reqBodyOverride = asBuffer(replacedBody);
             }
 
             if (reqBodyOverride) {
@@ -697,7 +710,8 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                         replaceHeaders,
                         replaceBody,
                         replaceBodyFromFile,
-                        updateJsonBody
+                        updateJsonBody,
+                        matchReplaceBody
                     } = this.transformResponse;
 
                     if (replaceStatus) {
@@ -740,6 +754,20 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                         );
 
                         resBodyOverride = asBuffer(JSON.stringify(updatedBody));
+                    } else if (matchReplaceBody) {
+                        const rawBody = await streamToBuffer(serverRes);
+                        const realBody = buildBodyReader(rawBody, serverRes.headers);
+
+                        let replacedBody = await realBody.getText();
+                        if (replacedBody === undefined) {
+                            throw new Error("Can't match & replace non-decodeable response body");
+                        }
+
+                        for (let [match, result] of matchReplaceBody) {
+                            replacedBody = replacedBody!.replace(match, result);
+                        }
+
+                        resBodyOverride = asBuffer(replacedBody);
                     }
 
                     if (resBodyOverride) {
@@ -974,6 +1002,16 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 ...(data.transformRequest?.updateJsonBody !== undefined ? {
                     updateJsonBody: mapOmitToUndefined(JSON.parse(data.transformRequest.updateJsonBody))
                 } : {}),
+                ...(data.transformRequest?.matchReplaceBody !== undefined ? {
+                    matchReplaceBody: data.transformRequest.matchReplaceBody.map(([match, result]) =>
+                        [
+                            !_.isString(match) && 'regexSource' in match
+                                ? new RegExp(match.regexSource, match.flags)
+                                : match,
+                            result
+                        ]
+                    )
+                } : {})
             } as RequestTransform : undefined,
             transformResponse: data.transformResponse ? {
                 ...data.transformResponse,
@@ -985,6 +1023,16 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 } : {}),
                 ...(data.transformResponse?.updateJsonBody !== undefined ? {
                     updateJsonBody: mapOmitToUndefined(JSON.parse(data.transformResponse.updateJsonBody))
+                } : {}),
+                ...(data.transformResponse?.matchReplaceBody !== undefined ? {
+                    matchReplaceBody: data.transformResponse.matchReplaceBody.map(([match, result]) =>
+                        [
+                            !_.isString(match) && 'regexSource' in match
+                                ? new RegExp(match.regexSource, match.flags)
+                                : match,
+                            result
+                        ]
+                    )
                 } : {})
             } as ResponseTransform : undefined,
             // Backward compat for old clients:

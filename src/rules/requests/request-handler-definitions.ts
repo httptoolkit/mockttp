@@ -639,6 +639,17 @@ export interface RequestTransform {
     updateJsonBody?: {
         [key: string]: any;
     };
+
+    /**
+     * Perform a series of string match & replace operations on the request body.
+     *
+     * This parameter should be an array of pairs, which will be applied to the body
+     * decoded as a string like `body.replace(p1, p2)`, applied in the order provided.
+     * The first parameter can be either a string or RegExp to match, and the second
+     * must be a string to insert. The normal `str.replace` $ placeholders can be
+     * used in the second argument, so that e.g. $1 will insert the 1st matched group.
+     */
+    matchReplaceBody?: Array<[string | RegExp, string]>;
 }
 
 export interface ResponseTransform {
@@ -688,6 +699,17 @@ export interface ResponseTransform {
         [key: string]: any;
     };
 
+    /**
+     * Perform a series of string match & replace operations on the response body.
+     *
+     * This parameter should be an array of pairs, which will be applied to the body
+     * decoded as a string like `body.replace(p1, p2)`, applied in the order provided.
+     * The first parameter can be either a string or RegExp to match, and the second
+     * must be a string to insert. The normal `str.replace` $ placeholders can be
+     * used in the second argument, so that e.g. $1 will insert the 1st matched group.
+     */
+    matchReplaceBody?: Array<[string | RegExp, string]>;
+
 }
 
 /**
@@ -706,12 +728,20 @@ export interface SerializedPassThroughData {
     transformRequest?: Replace<RequestTransform, {
         'replaceBody'?: string, // Serialized as base64 buffer
         'updateHeaders'?: string, // // Serialized as a string to preserve undefined values
-        'updateJsonBody'?: string // Serialized as a string to preserve undefined values
+        'updateJsonBody'?: string, // Serialized as a string to preserve undefined values
+        'matchReplaceBody'?: Array<[
+            string | { regexSource: string, flags: string }, // Regexes serialized
+            string
+        ]>
     }>,
     transformResponse?: Replace<ResponseTransform, {
         'replaceBody'?: string, // Serialized as base64 buffer
         'updateHeaders'?: string, // // Serialized as a string to preserve undefined values
-        'updateJsonBody'?: string // Serialized as a string to preserve undefined values
+        'updateJsonBody'?: string, // Serialized as a string to preserve undefined values
+        'matchReplaceBody'?: Array<[
+            string | { regexSource: string, flags: string }, // Regexes serialized
+            string
+        ]>
     }>,
 
     hasBeforeRequestCallback?: boolean;
@@ -811,7 +841,8 @@ export class PassThroughHandlerDefinition extends Serializable implements Reques
             if ([
                 options.transformRequest.replaceBody,
                 options.transformRequest.replaceBodyFromFile,
-                options.transformRequest.updateJsonBody
+                options.transformRequest.updateJsonBody,
+                options.transformRequest.matchReplaceBody
             ].filter(o => !!o).length > 1) {
                 throw new Error("Only one request body transform can be specified at a time");
             }
@@ -833,7 +864,8 @@ export class PassThroughHandlerDefinition extends Serializable implements Reques
             if ([
                 options.transformResponse.replaceBody,
                 options.transformResponse.replaceBodyFromFile,
-                options.transformResponse.updateJsonBody
+                options.transformResponse.updateJsonBody,
+                options.transformResponse.matchReplaceBody
             ].filter(o => !!o).length > 1) {
                 throw new Error("Only one response body transform can be specified at a time");
             }
@@ -933,7 +965,17 @@ export class PassThroughHandlerDefinition extends Serializable implements Reques
                         this.transformRequest.updateJsonBody,
                         (k, v) => v === undefined ? SERIALIZED_OMIT : v
                     )
-                    : undefined
+                    : undefined,
+                matchReplaceBody: !!this.transformRequest?.matchReplaceBody
+                    ? this.transformRequest.matchReplaceBody.map(([match, result]) =>
+                        [
+                            _.isRegExp(match)
+                                ? { regexSource: match.source, flags: match.flags }
+                                : match,
+                            result
+                        ]
+                    )
+                    : undefined,
             } : undefined,
             transformResponse: this.transformResponse ? {
                 ...this.transformResponse,
@@ -953,7 +995,17 @@ export class PassThroughHandlerDefinition extends Serializable implements Reques
                         this.transformResponse.updateJsonBody,
                         (k, v) => v === undefined ? SERIALIZED_OMIT : v
                     )
-                    : undefined
+                    : undefined,
+                matchReplaceBody: !!this.transformResponse?.matchReplaceBody
+                    ? this.transformResponse.matchReplaceBody.map(([match, result]) =>
+                        [
+                            _.isRegExp(match)
+                                ? { regexSource: match.source, flags: match.flags }
+                                : match,
+                            result
+                        ]
+                    )
+                    : undefined,
             } : undefined,
             hasBeforeRequestCallback: !!this.beforeRequest,
             hasBeforeResponseCallback: !!this.beforeResponse

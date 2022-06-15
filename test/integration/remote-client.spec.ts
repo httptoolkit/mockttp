@@ -273,6 +273,57 @@ nodeOnly(() => {
                     });
                 });
 
+                it("should successfully update request & response body via pattern", async () => {
+                    // Echo the incoming request
+                    await targetServer.forAnyRequest().thenCallback(async (req) => ({
+                        status: 200,
+                        json: {
+                            url: req.url,
+                            method: req.method,
+                            headers: req.headers,
+                            body: await req.body.getText(),
+                        }
+                    }));
+
+                    await remoteServer.forPost(targetServer.urlFor('/req')).thenPassThrough({
+                        transformRequest: {
+                            matchReplaceBody: [
+                                [/i/gi, '1'] // Should be applied and preserve flags
+                            ]
+                        },
+                        transformResponse: {
+                            matchReplaceBody: [
+                                // Both should be applied in series, with the same semantics as
+                                // string.replace (i.e. first match only)
+                                ['localhost', 'onceUpdatedHost'],
+                                ['onceUpdatedHost', 'twiceUpdatedHost']
+                            ]
+                        },
+                    });
+
+                    expect(await request.post(targetServer.urlFor('/req'), {
+                        proxy: remoteServer.urlFor("/"),
+                        json: true,
+                        body: {
+                            InitialValue: true
+                        }
+                    })).to.deep.equal({
+                        url: `http://twiceUpdatedHost:${targetServer.port}/req`, // Two-step replace
+                        method: 'POST',
+                        headers: {
+                            host: `localhost:${targetServer.port}`, // Each replace applies only once
+                            accept: 'application/json',
+                            'content-type': 'application/json',
+                            'content-length': '21',
+                            connection: 'close'
+                        },
+                        body: JSON.stringify({
+                            // Request body was separately transformed:
+                            '1n1t1alValue': true
+                        })
+                    });
+                });
+
                 it("should support proxy configuration specified by a callback", async () => {
                     // Remote server sends fixed response:
                     const targetEndpoint = await targetServer.forAnyRequest().thenReply(200, "Remote server says hi!");
