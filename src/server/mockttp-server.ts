@@ -361,7 +361,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         });
     }
 
-    private preprocessRequest(req: ExtendedRawRequest): OngoingRequest {
+    private preprocessRequest(req: ExtendedRawRequest, type: 'request' | 'websocket'): OngoingRequest {
         parseRequestBody(req, { maxSize: this.maxBodySize });
 
         // Make req.url always absolute, if it isn't already, using the host header.
@@ -389,6 +389,17 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             req.path = getPathFromAbsoluteUrl(req.url!);
         }
 
+        if (type === 'websocket') {
+            req.protocol = req.protocol === 'https'
+                ? 'wss'
+                : 'ws';
+
+            // Transform the protocol in req.url too:
+            Object.defineProperty(req, 'url', {
+                value: req.url!.replace(/^http/, 'ws')
+            });
+        }
+
         const id = uuid();
         const timingEvents = { startTime: Date.now(), startTimestamp: now() };
         const tags: string[] = [];
@@ -412,7 +423,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     }
 
     private async handleRequest(rawRequest: ExtendedRawRequest, rawResponse: http.ServerResponse) {
-        const request = this.preprocessRequest(rawRequest);
+        const request = this.preprocessRequest(rawRequest, 'request');
         if (this.debug) console.log(`Handling request for ${rawRequest.url}`);
 
         let result: 'responded' | 'aborted' | null = null;
@@ -502,7 +513,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     private async handleWebSocket(rawRequest: ExtendedRawRequest, socket: net.Socket, head: Buffer) {
         if (this.debug) console.log(`Handling websocket for ${rawRequest.url}`);
 
-        const request = this.preprocessRequest(rawRequest);
+        const request = this.preprocessRequest(rawRequest, 'websocket');
 
         socket.on('error', (error) => {
             console.log('Response error:', this.debug ? error : error.message);

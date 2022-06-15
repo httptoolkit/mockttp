@@ -239,7 +239,7 @@ export abstract class BaseRuleBuilder {
      * Match only requests that sent with the given protocol.
      * @category Matching
      */
-    withProtocol(protocol: "http" | "https"): this {
+    withProtocol(protocol: "http" | "https" | "ws" | "wss"): this {
         this.matchers.push(new ProtocolMatcher(protocol));
         return this;
     }

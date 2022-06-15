@@ -65,12 +65,19 @@ export class ProtocolMatcher extends Serializable implements RequestMatcher {
     readonly type = 'protocol';
 
     constructor(
-        public protocol: "http" | "https"
+        public protocol: "http" | "https" | "ws" | "wss"
     ) {
-		super();
-		if (protocol !== "http" && protocol !== "https") {
-			throw new Error("Invalid protocol: protocol can only be 'http' or 'https'");
-		}
+        super();
+        if (
+            protocol !== "http" &&
+            protocol !== "https" &&
+            protocol !== "ws" &&
+            protocol !== "wss"
+        ) {
+            throw new Error(
+                "Invalid protocol: protocol can only be 'http', 'https', 'ws' or 'wss'"
+            );
+        }
     }
 
     matches(request: OngoingRequest) {

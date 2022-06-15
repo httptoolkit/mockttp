@@ -251,9 +251,7 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
             }
 
             // Connect directly to the forwarding target URL
-            wsUrl = `${
-                protocol!.replace('http', 'ws')
-            }//${hostname}${port ? ':' + port : ''}${path}`;
+            wsUrl = `${protocol!}//${hostname}${port ? ':' + port : ''}${path}`;
 
             // Optionally update the host header too:
             let hostHeader = findRawHeader(rawHeaders, hostHeaderName);
