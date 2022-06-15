@@ -173,6 +173,15 @@ export class PassThroughWebSocketHandlerDefinition extends Serializable implemen
     }
 }
 
+export class EchoWebSocketHandlerDefinition extends Serializable implements WebSocketHandlerDefinition {
+
+    readonly type = 'ws-echo';
+
+    explain(): string {
+        return "echo all websocket messages";
+    }
+}
+
 export class RejectWebSocketHandlerDefinition extends Serializable implements WebSocketHandlerDefinition {
 
     readonly type = 'ws-reject';
@@ -201,6 +210,7 @@ export {
 
 export const WsHandlerDefinitionLookup = {
     'ws-passthrough': PassThroughWebSocketHandlerDefinition,
+    'ws-echo': EchoWebSocketHandlerDefinition,
     'ws-reject': RejectWebSocketHandlerDefinition,
     'close-connection': CloseConnectionHandlerDefinition,
     'timeout': TimeoutHandlerDefinition

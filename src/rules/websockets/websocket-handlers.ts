@@ -37,6 +37,7 @@ import { assertParamDereferenced, RuleParameters } from '../rule-parameters';
 import { MOCKTTP_UPSTREAM_CIPHERS } from '../passthrough-handling';
 
 import {
+    EchoWebSocketHandlerDefinition,
     PassThroughWebSocketHandlerDefinition,
     PassThroughWebSocketHandlerOptions,
     RejectWebSocketHandlerDefinition,
@@ -48,7 +49,7 @@ import {
 export interface WebSocketHandler extends WebSocketHandlerDefinition {
     handle(
         // The incoming upgrade request
-        request: OngoingRequest,
+        request: OngoingRequest & http.IncomingMessage,
         // The raw socket on which we'll be communicating
         socket: net.Socket,
         // Initial data received
@@ -169,6 +170,16 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
 
     private wsServer?: WebSocket.Server;
 
+    private initializeWsServer() {
+        if (this.wsServer) return;
+
+        this.wsServer = new WebSocket.Server({ noServer: true });
+        this.wsServer.on('connection', (ws: InterceptedWebSocket) => {
+            pipeWebSocket(ws, ws.upstreamWebSocket);
+            pipeWebSocket(ws.upstreamWebSocket, ws);
+        });
+    }
+
     private _trustedCACertificates: MaybePromise<Array<string> | undefined>;
     private async trustedCACertificates(): Promise<Array<string> | undefined> {
         if (!this.extraCACertificates.length) return undefined;
@@ -207,16 +218,6 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
         }
 
         return this._cacheableLookupInstance.lookup;
-    }
-
-    private initializeWsServer() {
-        if (this.wsServer) return;
-
-        this.wsServer = new WebSocket.Server({ noServer: true });
-        this.wsServer.on('connection', (ws: InterceptedWebSocket) => {
-            pipeWebSocket(ws, ws.upstreamWebSocket);
-            pipeWebSocket(ws.upstreamWebSocket, ws);
-        });
     }
 
     async handle(req: OngoingRequest, socket: net.Socket, head: Buffer) {
@@ -301,10 +302,6 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
         incomingSocket: net.Socket,
         head: Buffer
     ) {
-        // Initialize the server when we handle the first actual request. Mainly just so we
-        // don't try to initialize it in a browser when building rules initially.
-        if (!this.wsServer) this.wsServer = new WebSocket.Server({ noServer: true });
-
         // Skip cert checks if the host or host+port are whitelisted
         const parsedUrl = url.parse(wsUrl);
         const checkServerCertificate = !_.includes(this.ignoreHostHttpsErrors, parsedUrl.hostname) &&
@@ -351,7 +348,6 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
         } as WebSocket.ClientOptions & { lookup: any, maxPayload: number });
 
         upstreamWebSocket.once('open', () => {
-            // Presumably the below adds an error handler. But what about before we get here?
             this.wsServer!.handleUpgrade(req, incomingSocket, head, (ws) => {
                 (<InterceptedWebSocket> ws).upstreamWebSocket = upstreamWebSocket;
                 this.wsServer!.emit('connection', ws);
@@ -391,6 +387,28 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
     }
 }
 
+export class EchoWebSocketHandler extends EchoWebSocketHandlerDefinition {
+
+    private wsServer?: WebSocket.Server;
+
+    private initializeWsServer() {
+        if (this.wsServer) return;
+
+        this.wsServer = new WebSocket.Server({ noServer: true });
+        this.wsServer.on('connection', (ws: WebSocket) => {
+            pipeWebSocket(ws, ws);
+        });
+    }
+
+    async handle(req: OngoingRequest & http.IncomingMessage, socket: net.Socket, head: Buffer) {
+        this.initializeWsServer();
+
+        this.wsServer!.handleUpgrade(req, socket, head, (ws) => {
+            this.wsServer!.emit('connection', ws);
+        });
+    }
+}
+
 export class RejectWebSocketHandler extends RejectWebSocketHandlerDefinition {
 
     async handle(req: OngoingRequest, socket: net.Socket, head: Buffer) {
@@ -411,6 +429,7 @@ export {
 
 export const WsHandlerLookup: typeof WsHandlerDefinitionLookup = {
     'ws-passthrough': PassThroughWebSocketHandler,
+    'ws-echo': EchoWebSocketHandler,
     'ws-reject': RejectWebSocketHandler,
     'close-connection': CloseConnectionHandler,
     'timeout': TimeoutHandler

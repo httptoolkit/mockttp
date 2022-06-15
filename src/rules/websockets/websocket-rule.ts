@@ -1,6 +1,7 @@
 import * as _ from 'lodash';
 import { v4 as uuid } from "uuid";
 import * as net from 'net';
+import * as http from 'http';
 
 import {
     OngoingRequest,
@@ -72,7 +73,7 @@ export class WebSocketRule implements WebSocketRule {
 
     handle(req: OngoingRequest, res: net.Socket, head: Buffer, record: boolean): Promise<void> {
         let handlerPromise = (async () => { // Catch (a)sync errors
-            return this.handler.handle(req, res, head);
+            return this.handler.handle(req as OngoingRequest & http.IncomingMessage, res, head);
         })();
 
         // Requests are added to rule.requests as soon as they start being handled,

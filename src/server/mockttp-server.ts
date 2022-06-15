@@ -529,7 +529,11 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
                 // Unmatched requests get passed through untouched automatically. This exists for
                 // historical/backward-compat reasons, to match the initial WS implementation, and
                 // will probably be removed to match handleRequest in future.
-                await this.defaultWsHandler.handle(request, socket, head);
+                await this.defaultWsHandler.handle(
+                    request as OngoingRequest & http.IncomingMessage,
+                    socket,
+                    head
+                );
             }
         } catch (e) {
             if (e instanceof AbortError) {

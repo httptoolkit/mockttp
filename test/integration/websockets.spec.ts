@@ -543,6 +543,24 @@ nodeOnly(() => {
             expect(response).to.equal('test echo');
         });
 
+        it("can echo data", async () => {
+            mockServer.forAnyWebSocket().thenEcho();
+
+            // Ask for 999 (doesn't exist), and the above will forward you
+            // invisibly to our real WS server elsewhere instead.
+            const ws = new WebSocket(`ws://localhost:${mockServer.port}`);
+
+            ws.on('open', () => ws.send('test message'));
+
+            const response = await new Promise((resolve, reject) => {
+                ws.on('message', resolve);
+                ws.on('error', (e) => reject(e));
+            });
+            ws.close(1000);
+
+            expect(response).to.equal('test message');
+        });
+
         it("can be explicitly rejected", async () => {
             mockServer.forAnyWebSocket().thenRejectConnection(401, "Forbidden", {}, "No no no");
 
