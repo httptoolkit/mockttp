@@ -416,7 +416,7 @@ export interface Mockttp {
     on(event: 'client-error', callback: (error: ClientError) => void): Promise<void>;
 
     /**
-     * Adds the given rules to the server.
+     * Adds the given HTTP request rules to the server.
      *
      * This API is only useful if you're manually building rules, rather than
      * using RequestRuleBuilder, and is only for special cases. This approach may
@@ -428,8 +428,23 @@ export interface Mockttp {
     addRequestRules(...ruleData: RequestRuleData[]): Promise<MockedEndpoint[]>;
 
     /**
-     * Set the given rules as the only rules on the server, replacing any
-     * existing rules (except websocket rules).
+     * Adds the given HTTP request rule to the server.
+     *
+     * This is a convenient alias for calling `addRequestRules` with one rule,
+     * and extracting the first endpoint result.
+     *
+     * This API is only useful if you're manually building rules, rather than
+     * using RequestRuleBuilder, and is only for special cases. This approach may
+     * be necessary if you need to configure all your rules in one place to
+     * enable them elsewhere/later.
+     *
+     * @category Manual rule definition
+     */
+    addRequestRule(ruleData: RequestRuleData): Promise<MockedEndpoint>;
+
+    /**
+     * Set the given HTTP request rules as the only request rules on the server,
+     * replacing any existing rules (except websocket rules).
      *
      * This API is only useful if you're manually building rules, rather than
      * using RequestRuleBuilder, and is only for special cases. This approach may
@@ -451,6 +466,21 @@ export interface Mockttp {
      * @category Manual rule definition
      */
     addWebSocketRules(...ruleData: WebSocketRuleData[]): Promise<MockedEndpoint[]>;
+
+    /**
+     * Adds the given websocket rule to the server.
+     *
+     * This is a convenient alias for calling `addWebSocketRules` with one rule,
+     * and extracting the first endpoint result.
+     *
+     * This API is only useful if you're manually building rules, rather than
+     * using RequestRuleBuilder, and is only for special cases. This approach may
+     * be necessary if you need to configure all your rules in one place to
+     * enable them elsewhere/later.
+     *
+     * @category Manual rule definition
+     */
+    addWebSocketRule(ruleData: WebSocketRuleData): Promise<MockedEndpoint>;
 
     /**
      * Set the given websocket rules as the only websocket rules on the server,
