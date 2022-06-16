@@ -358,6 +358,38 @@ export interface Mockttp {
     on(event: 'response', callback: (req: CompletedResponse) => void): Promise<void>;
 
     /**
+     * Subscribe to hear about websocket connection requests. This event fires when the
+     * initial WebSocket request is completed, regardless of whether the request is
+     * accepted.
+     *
+     * This is only useful in some niche use cases, such as logging all websockets seen
+     * by the server independently of the rules defined.
+     *
+     * The callback will be called asynchronously from request handling. This function
+     * returns a promise, and the callback is not guaranteed to be registered until
+     * the promise is resolved.
+     *
+     * @category Events
+     */
+    on(event: 'websocket-request', callback: (req: CompletedRequest) => void): Promise<void>;
+
+    /**
+     * Subscribe to hear about websocket connection upgrades. This event fires when a
+     * WebSocket request is accepted, returning the HTTP response body that was sent
+     * before the WebSocket stream starts.
+     *
+     * This is only useful in some niche use cases, such as logging all websockets seen
+     * by the server independently of the rules defined.
+     *
+     * The callback will be called asynchronously from request handling. This function
+     * returns a promise, and the callback is not guaranteed to be registered until
+     * the promise is resolved.
+     *
+     * @category Events
+     */
+    on(event: 'websocket-accepted', callback: (req: CompletedResponse) => void): Promise<void>;
+
+    /**
      * Subscribe to hear about requests that are aborted before the request or
      * response is fully completed.
      *
@@ -604,6 +636,8 @@ export type SubscribableEvent =
     | 'request-initiated'
     | 'request'
     | 'response'
+    | 'websocket-request'
+    | 'websocket-accepted'
     | 'abort'
     | 'tls-client-error'
     | 'client-error';

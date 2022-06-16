@@ -22,6 +22,8 @@ export const MockttpSchema = gql`
         requestInitiated: InitiatedRequest!
         requestReceived: Request!
         responseCompleted: Response!
+        webSocketRequest: Request!
+        webSocketAccepted: Response!
         requestAborted: Request!
         failedTlsRequest: TlsRequest!
         failedClientRequest: ClientError!

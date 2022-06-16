@@ -22,6 +22,8 @@ import { deserializeRuleData, deserializeWebSocketRuleData } from "../rules/rule
 const REQUEST_INITIATED_TOPIC = 'request-initiated';
 const REQUEST_RECEIVED_TOPIC = 'request-received';
 const RESPONSE_COMPLETED_TOPIC = 'response-completed';
+const WEBSOCKET_REQUEST_TOPIC = 'websocket-request';
+const WEBSOCKET_ACCEPTED_TOPIC = 'websocket-accepted';
 const REQUEST_ABORTED_TOPIC = 'request-aborted';
 const TLS_CLIENT_ERROR_TOPIC = 'tls-client-error';
 const CLIENT_ERROR_TOPIC = 'client-error';
@@ -57,6 +59,18 @@ export function buildAdminServerModel(
     mockServer.on('response', (response) => {
         pubsub.publish(RESPONSE_COMPLETED_TOPIC, {
             responseCompleted: response
+        })
+    });
+
+    mockServer.on('websocket-request', (request) => {
+        pubsub.publish(WEBSOCKET_REQUEST_TOPIC, {
+            webSocketRequest: request
+        })
+    });
+
+    mockServer.on('websocket-accepted', (response) => {
+        pubsub.publish(WEBSOCKET_ACCEPTED_TOPIC, {
+            webSocketAccepted: response
         })
     });
 
@@ -150,6 +164,12 @@ export function buildAdminServerModel(
             },
             responseCompleted: {
                 subscribe: () => pubsub.asyncIterator(RESPONSE_COMPLETED_TOPIC)
+            },
+            webSocketRequest: {
+                subscribe: () => pubsub.asyncIterator(WEBSOCKET_REQUEST_TOPIC)
+            },
+            webSocketAccepted: {
+                subscribe: () => pubsub.asyncIterator(WEBSOCKET_ACCEPTED_TOPIC)
             },
             requestAborted: {
                 subscribe: () => pubsub.asyncIterator(REQUEST_ABORTED_TOPIC)

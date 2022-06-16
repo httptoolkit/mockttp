@@ -431,9 +431,9 @@ export async function waitForCompletedResponse(response: OngoingResponse): Promi
     return completedResponse;
 }
 
-// Take raw HTTP bytes recieved, have a go at parsing something useful out of them.
+// Take raw HTTP request bytes received, have a go at parsing something useful out of them.
 // Very lax - this is a method to use when normal parsing has failed, not as standard
-export function tryToParseHttp(input: Buffer, socket: net.Socket): PartiallyParsedHttpRequest {
+export function tryToParseHttpRequest(input: Buffer, socket: net.Socket): PartiallyParsedHttpRequest {
     const req: PartiallyParsedHttpRequest = {};
     try {
         req.protocol = socket.lastHopEncrypted ? "https" : "http"; // Wild guess really
@@ -505,4 +505,38 @@ type PartiallyParsedHttpRequest = {
     rawHeaders?: RawHeaders;
     hostname?: string;
     path?: string;
+}
+
+// Take raw HTTP response bytes received, parse something useful out of them. This is *not*
+// very lax, and will throw errors due to unexpected response data, but it's used when we
+// ourselves generate the data (for websocket responses that 'ws' writes directly to the
+// socket invisibly). Fortunately all responses are very simple:
+export function parseRawHttpResponse(input: Buffer): CompletedResponse {
+    const res: Partial<CompletedResponse> = {};
+
+    const lines = splitBuffer(input, '\r\n');
+    const responseLine = lines[0].slice(0, lines[0].length).toString('ascii');
+    const [_httpVersion, statusCode, ...messageParts] = responseLine.split(" ");
+    res.statusCode = parseInt(statusCode, 10);
+    res.statusMessage = messageParts.join(' ');
+
+    // An empty line delineates the headers from the body
+    const emptyLineIndex = _.findIndex(lines, (line) => line.length === 0);
+
+    const headerLines = lines.slice(1, emptyLineIndex === -1 ? undefined : emptyLineIndex);
+    const rawHeaders = headerLines
+        .map((line) => splitBuffer(line, ':', 2))
+        .map((headerParts) =>
+            headerParts.map(p => p.toString('utf8').trim()) as [string, string]
+        );
+
+    res.rawHeaders = rawHeaders;
+    res.headers = rawHeadersToObject(rawHeaders);
+
+    res.body = buildBodyReader(Buffer.from([]), {});
+
+    res.timingEvents = {};
+    res.tags = [];
+
+    return res as CompletedResponse;
 }

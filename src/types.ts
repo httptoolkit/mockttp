@@ -155,6 +155,7 @@ export interface TimingEvents {
     headersSentTimestamp?: number; // When the response headers were sent
     responseSentTimestamp?: number; // When the response was fully completed
     abortedTimestamp?: number; // When the request was aborted
+    wsAcceptedTimestamp?: number; // When the websocket was accepted
 }
 
 export interface OngoingResponse extends http.ServerResponse {

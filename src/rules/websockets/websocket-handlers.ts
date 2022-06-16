@@ -350,6 +350,7 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
         upstreamWebSocket.once('open', () => {
             this.wsServer!.handleUpgrade(req, incomingSocket, head, (ws) => {
                 (<InterceptedWebSocket> ws).upstreamWebSocket = upstreamWebSocket;
+                incomingSocket.emit('ws-upgrade', ws);
                 this.wsServer!.emit('connection', ws);
             });
         });
@@ -404,6 +405,7 @@ export class EchoWebSocketHandler extends EchoWebSocketHandlerDefinition {
         this.initializeWsServer();
 
         this.wsServer!.handleUpgrade(req, socket, head, (ws) => {
+            socket.emit('ws-upgrade', ws);
             this.wsServer!.emit('connection', ws);
         });
     }

@@ -40,9 +40,10 @@ import {
     waitForCompletedResponse,
     isAbsoluteUrl,
     buildInitiatedRequest,
-    tryToParseHttp,
+    tryToParseHttpRequest,
     buildBodyReader,
-    getPathFromAbsoluteUrl
+    getPathFromAbsoluteUrl,
+    parseRawHttpResponse
 } from "../util/request-utils";
 import {
     pairFlatRawHeaders,
@@ -274,6 +275,8 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     public on(event: 'request', callback: (req: CompletedRequest) => void): Promise<void>;
     public on(event: 'response', callback: (req: CompletedResponse) => void): Promise<void>;
     public on(event: 'abort', callback: (req: InitiatedRequest) => void): Promise<void>;
+    public on(event: 'websocket-request', callback: (req: CompletedRequest) => void): Promise<void>;
+    public on(event: 'websocket-accepted', callback: (req: CompletedResponse) => void): Promise<void>;
     public on(event: 'tls-client-error', callback: (req: TlsRequest) => void): Promise<void>;
     public on(event: 'client-error', callback: (error: ClientError) => void): Promise<void>;
     public on(event: string, callback: (...args: any[]) => void): Promise<void> {
@@ -320,6 +323,55 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
                 }));
             })
             .catch(console.error);
+        });
+    }
+
+    private announceWebSocketRequestAsync(request: OngoingRequest) {
+        setImmediate(() => {
+            waitForCompletedRequest(request)
+            .then((completedReq: CompletedRequest) => {
+                this.eventEmitter.emit('websocket-request', Object.assign(completedReq, {
+                    timingEvents: _.clone(completedReq.timingEvents),
+                    tags: _.clone(completedReq.tags)
+                }));
+            })
+            .catch(console.error);
+        });
+    }
+
+    private announceWebSocketUpgradeAsync(response: CompletedResponse) {
+        setImmediate(() => {
+            this.eventEmitter.emit('websocket-accepted', {
+                ...response,
+                timingEvents: _.clone(response.timingEvents),
+                tags: _.clone(response.tags)
+            });
+        });
+    }
+
+    private announceWebSocketEvents(request: OngoingRequest, socket: net.Socket) {
+        const originalWrite = socket._write;
+        const originalWriteV = socket._writev;
+
+        // Hook the socket to capture our upgrade response:
+        let data = Buffer.from([]);
+        socket._writev = undefined;
+        socket._write = function (): any {
+            data = Buffer.concat([data, Buffer.from(arguments[0])]);
+            return originalWrite.apply(this, arguments as any);
+        };
+
+        socket.once('ws-upgrade', (ws) => {
+            // Undo our write hook setup:
+            socket._write = originalWrite;
+            socket._writev = originalWriteV;
+
+            const httpResponse = parseRawHttpResponse(data);
+            httpResponse.id = request.id;
+            httpResponse.timingEvents = request.timingEvents;
+            (httpResponse.timingEvents as TimingEvents).wsAcceptedTimestamp = now();
+            httpResponse.tags = request.tags;
+            this.announceWebSocketUpgradeAsync(httpResponse);
         });
     }
 
@@ -520,6 +572,17 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
 
         try {
             let nextRulePromise = this.findMatchingRule(this.webSocketRuleSets, request);
+
+            // Async: once we know what the next rule is, ping a websocket-request event
+            nextRulePromise
+                .then((rule) => rule ? rule.id : undefined)
+                .catch(() => undefined)
+                .then((ruleId) => {
+                    request.matchedRuleId = ruleId;
+                    this.announceWebSocketRequestAsync(request);
+                });
+
+            this.announceWebSocketEvents(request, socket);
 
             let nextRule = await nextRulePromise;
             if (nextRule) {
@@ -734,7 +797,7 @@ ${await this.suggestRule(request)}`
 
             // For packets where we get more than just httpolyglot-peeked data, guess-parse them:
             const parsedRequest = rawPacket.byteLength > 1
-                ? tryToParseHttp(rawPacket, socket)
+                ? tryToParseHttpRequest(rawPacket, socket)
                 : {};
 
             if (isHeaderOverflow) commonParams.tags.push('header-overflow');

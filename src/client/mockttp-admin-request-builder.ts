@@ -239,6 +239,39 @@ export class MockttpAdminRequestBuilder {
                     ${this.schema.asOptionalField('Response', 'tags')}
                 }
             }`,
+            'websocket-request': gql`subscription OnWebSocketRequest {
+                webSocketRequest {
+                    id,
+                    matchedRuleId,
+                    protocol,
+                    method,
+                    url,
+                    path,
+                    remoteIpAddress,
+                    remotePort,
+                    hostname,
+
+                    rawHeaders,
+                    body,
+
+                    timingEvents,
+                    httpVersion,
+                    tags
+                }
+            }`,
+            'websocket-accepted': gql`subscription OnWebSocketRequest {
+                webSocketAccepted {
+                    id,
+                    statusCode,
+                    statusMessage,
+
+                    rawHeaders,
+                    body,
+
+                    timingEvents,
+                    tags
+                }
+            }`,
             abort: gql`subscription OnAbort {
                 requestAborted {
                     id,
