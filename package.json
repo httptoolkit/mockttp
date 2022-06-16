@@ -115,7 +115,7 @@
     "@types/shelljs": "0.8.9",
     "@types/source-map-support": "0.4.2",
     "@types/uuid": "8.3.4",
-    "@types/ws": "7.4.7",
+    "@types/ws": " 8.5.3",
     "agent-base": "^4.2.1",
     "assert": "^2.0.0",
     "brotli-wasm": "^1.0.0",
@@ -197,6 +197,6 @@
     "portfinder": "^1.0.23",
     "typed-error": "^3.0.2",
     "uuid": "^8.3.2",
-    "ws": "^7.3.1"
+    "ws": "^8.8.0"
   }
 }

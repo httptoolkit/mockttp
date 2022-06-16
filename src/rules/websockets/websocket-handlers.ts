@@ -88,9 +88,9 @@ function pipeWebSocket(inSocket: WebSocket, outSocket: WebSocket) {
         console.error(`Websocket ${op} failed`, err);
     };
 
-    inSocket.on('message', (msg) => {
+    inSocket.on('message', (msg, isBinary) => {
         if (isOpen(outSocket)) {
-            outSocket.send(msg, onPipeFailed('message'))
+            outSocket.send(msg, { binary: isBinary }, onPipeFailed('message'))
         }
     });
 
@@ -128,7 +128,14 @@ function pipeWebSocket(inSocket: WebSocket, outSocket: WebSocket) {
             // that's effectively on purpose: we're simulating the client going wrong:
             const buf = Buffer.allocUnsafe(2);
             buf.writeUInt16BE(status); // status comes from readUInt16BE, so always fits
-            rawOutSocket._sender.doClose(buf, true, () => {
+            const sender = rawOutSocket._sender;
+            sender.sendFrame(sender.constructor.frame(buf, {
+                fin: true,
+                rsv1: false,
+                opcode: 0x08,
+                mask: true,
+                readOnly: false
+            }), () => {
                 rawOutSocket._socket.destroy();
             });
         } else {

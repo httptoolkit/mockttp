@@ -238,6 +238,13 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
             // If never connected successfully, we do nothing.
         });
 
+        targetStream.on('end', () => {
+            // Ignore any further events - this stream is no longer useful
+            wsStream.removeAllListeners('connect');
+            wsStream.removeAllListeners('ws-close');
+            wsStream.destroy();
+        });
+
         return wsStream;
     }
 

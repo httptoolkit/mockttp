@@ -85,7 +85,7 @@ describe("Mockttp rule building", function () {
         ws.addEventListener('open', () => ws.send('test echo'));
 
         const response = await new Promise((resolve, reject) => {
-            ws.addEventListener('message', (evt) => resolve(evt.data));
+            ws.addEventListener('message', (evt) => resolve(evt.data.toString()));
             ws.addEventListener('error', (e) => reject(e));
         });
         ws.close(1000);

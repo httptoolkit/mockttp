@@ -711,7 +711,7 @@ nodeOnly(() => {
 
                 // Manually send a subscription socket with no Origin (can't start an invalid client
                 // and test, because the client fails to start given a bad origin)
-                const ws = new WebSocket(`http://localhost:45454/session/${client.port}/subscription`);
+                const ws = new WebSocket(`ws://localhost:45454/session/${client.port}/subscription`);
 
                 await expect(new Promise((resolve, reject) => {
                     ws.addEventListener('open', resolve);
@@ -732,7 +732,7 @@ nodeOnly(() => {
 
                 // Manually send a subscription socket with the wrong Origin (can't start an invalid client
                 // and test, because the client fails to start given a bad origin)
-                const ws = new WebSocket(`http://localhost:45454/session/${client.port}/subscription`, {
+                const ws = new WebSocket(`ws://localhost:45454/session/${client.port}/subscription`, {
                     headers: {
                         origin: 'https://twitter.com'
                     }
@@ -757,7 +757,7 @@ nodeOnly(() => {
 
                 // Manually send a subscription socket with the right Origin for consistency with above
                 const id = getClientSessionId(client);
-                const ws = new WebSocket(`http://localhost:45454/session/${id}/subscription`, {
+                const ws = new WebSocket(`ws://localhost:45454/session/${id}/subscription`, {
                     headers: {
                         origin: 'https://example.com'
                     }

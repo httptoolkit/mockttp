@@ -40,7 +40,7 @@ browserOnly(() => {
             ws.addEventListener('open', () => ws.send('test echo'));
 
             const response = await new Promise((resolve, reject) => {
-                ws.addEventListener('message', (evt) => resolve(evt.data));
+                ws.addEventListener('message', (evt) => resolve(evt.data.toString()));
                 ws.addEventListener('error', (e) => reject(e));
             });
             ws.close(1000);
@@ -81,8 +81,8 @@ nodeOnly(() => {
                     ws.send("echo-header: " + request.headers['echo-header']);
                 }
 
-                ws.on('message', (message) => {
-                    ws.send(message);
+                ws.on('message', (message, isBinary) => {
+                    ws.send(message, { binary: isBinary });
                     ws.close();
                 });
 
@@ -131,13 +131,13 @@ nodeOnly(() => {
 
                 ws.on('open', () => ws.send('test echo'));
 
-                const response = await new Promise((resolve, reject) => {
+                const response = await new Promise<Buffer>((resolve, reject) => {
                     ws.on('message', resolve);
-                    ws.on('error', (e) => reject(e));
+                    ws.on('error', reject);
                 });
                 ws.close(1000);
 
-                expect(response).to.equal('test echo');
+                expect(response.toString()).to.equal('test echo');
             });
 
             it("forwards the incoming requests's headers", async () => {
@@ -150,13 +150,13 @@ nodeOnly(() => {
                     }
                 });
 
-                const response = await new Promise((resolve, reject) => {
+                const response = await new Promise<Buffer>((resolve, reject) => {
                     ws.on('message', resolve);
-                    ws.on('error', (e) => reject(e));
+                    ws.on('error', reject);
                 });
                 ws.close(1000);
 
-                expect(response).to.equal('echo-header: a=b');
+                expect(response.toString()).to.equal('echo-header: a=b');
             });
 
             it("can handle & proxy invalid client frames upstream", async () => {
@@ -173,7 +173,14 @@ nodeOnly(() => {
                         // Badly behaved games with the ws internals:
                         const buf = Buffer.allocUnsafe(2);
                         buf.writeUInt16BE(0);
-                        rawWs._sender.doClose(buf, true, () => {
+                        const sender = rawWs._sender;
+                        sender.sendFrame(sender.constructor.frame(buf, {
+                            fin: true,
+                            rsv1: false,
+                            opcode: 0x08,
+                            mask: true,
+                            readOnly: false
+                        }), () => {
                             rawWs._socket.end();
                             resolve();
                         });
@@ -196,13 +203,13 @@ nodeOnly(() => {
 
                 ws.on('open', () => ws.send('test echo'));
 
-                const response = await new Promise((resolve, reject) => {
+                const response = await new Promise<Buffer>((resolve, reject) => {
                     ws.on('message', resolve);
-                    ws.on('error', (e) => reject(e));
+                    ws.on('error', reject);
                 });
                 ws.close(1000);
 
-                expect(response).to.equal('test echo');
+                expect(response.toString()).to.equal('test echo');
             });
 
             describe("to an HTTPS WS server", () => {
@@ -224,8 +231,8 @@ nodeOnly(() => {
 
                     // Echo every message
                     wssServer.on('connection', (ws) => {
-                        ws.on('message', (message) => {
-                            ws.send(message);
+                        ws.on('message', (message, isBinary) => {
+                            ws.send(message, { binary: isBinary });
                             ws.close();
                         });
                     });
@@ -246,13 +253,13 @@ nodeOnly(() => {
 
                     ws.on('open', () => ws.send('test echo'));
 
-                    const response = await new Promise((resolve, reject) => {
+                    const response = await new Promise<Buffer>((resolve, reject) => {
                         ws.on('message', resolve);
-                        ws.on('error', (e) => reject(e));
+                        ws.on('error', reject);
                     });
                     ws.close(1000);
 
-                    expect(response).to.equal('test echo');
+                    expect(response.toString()).to.equal('test echo');
                 });
 
                 it('can be passed through successfully over HTTPS', async () => {
@@ -264,13 +271,13 @@ nodeOnly(() => {
 
                     ws.on('open', () => ws.send('test echo'));
 
-                    const response = await new Promise((resolve, reject) => {
+                    const response = await new Promise<Buffer>((resolve, reject) => {
                         ws.on('message', resolve);
-                        ws.on('error', (e) => reject(e));
+                        ws.on('error', reject);
                     });
                     ws.close(1000);
 
-                    expect(response).to.equal('test echo');
+                    expect(response.toString()).to.equal('test echo');
                 });
 
             });
@@ -292,8 +299,8 @@ nodeOnly(() => {
 
                     // Echo every message
                     wssServer.on('connection', (ws) => {
-                        ws.on('message', (message) => {
-                            ws.send(message);
+                        ws.on('message', (message, isBinary) => {
+                            ws.send(message, { binary: isBinary });
                             ws.close();
                         });
                     });
@@ -315,7 +322,7 @@ nodeOnly(() => {
 
                     const error = await new Promise<Error>((resolve, reject) => {
                         ws.on('message', reject);
-                        ws.on('error', (e) => resolve(e));
+                        ws.on('error', resolve);
                     });
                     ws.close(1000);
 
@@ -333,13 +340,13 @@ nodeOnly(() => {
 
                     ws.on('open', () => ws.send('test echo'));
 
-                    const response = await new Promise<Error>((resolve, reject) => {
+                    const response = await new Promise<Buffer>((resolve, reject) => {
                         ws.on('message', resolve);
                         ws.on('error', reject);
                     });
                     ws.close(1000);
 
-                    expect(response).to.equal('test echo');
+                    expect(response.toString()).to.equal('test echo');
                 });
 
                 it("should still block the request if the hostname doesn't match", async () => {
@@ -355,7 +362,7 @@ nodeOnly(() => {
 
                     const error = await new Promise<Error>((resolve, reject) => {
                         ws.on('message', reject);
-                        ws.on('error', (e) => resolve(e));
+                        ws.on('error', resolve);
                     });
                     ws.close(1000);
 
@@ -375,7 +382,7 @@ nodeOnly(() => {
 
                         const error = await new Promise<Error>((resolve, reject) => {
                             ws.on('message', reject);
-                            ws.on('error', (e) => resolve(e));
+                            ws.on('error', resolve);
                         });
                         ws.close(1000);
 
@@ -405,7 +412,7 @@ nodeOnly(() => {
 
                         const error = await new Promise<Error>((resolve, reject) => {
                             ws.on('message', reject);
-                            ws.on('error', (e) => resolve(e));
+                            ws.on('error', resolve);
                         });
                         ws.close(1000);
 
@@ -442,14 +449,14 @@ nodeOnly(() => {
 
                     ws.on('open', () => ws.send('test echo'));
 
-                    const response = await new Promise((resolve, reject) => {
+                    const response = await new Promise<Buffer>((resolve, reject) => {
                         ws.on('message', resolve);
-                        ws.on('error', (e) => reject(e));
+                        ws.on('error', reject);
                     });
                     ws.close(1000);
 
                     // We get our echoed responses:
-                    expect(response).to.equal('test echo');
+                    expect(response.toString()).to.equal('test echo');
                     // And they go via the intermediate proxy
                     expect((await proxyEndpoint.getSeenRequests()).length).to.equal(1);
                 });
@@ -468,14 +475,14 @@ nodeOnly(() => {
 
                     ws.on('open', () => ws.send('test echo'));
 
-                    const response = await new Promise((resolve, reject) => {
+                    const response = await new Promise<Buffer>((resolve, reject) => {
                         ws.on('message', resolve);
-                        ws.on('error', (e) => reject(e));
+                        ws.on('error', reject);
                     });
                     ws.close(1000);
 
                     // We get our echoed responses:
-                    expect(response).to.equal('test echo');
+                    expect(response.toString()).to.equal('test echo');
 
                     // But it doesn't go via the intermediate proxy:
                     expect((await proxyEndpoint.getSeenRequests()).length).to.equal(0);
@@ -512,13 +519,13 @@ nodeOnly(() => {
 
                     ws.on('open', () => ws.send('test echo'));
 
-                    const response = await new Promise((resolve, reject) => {
+                    const response = await new Promise<Buffer>((resolve, reject) => {
                         ws.on('message', resolve);
-                        ws.on('error', (e) => reject(e));
+                        ws.on('error', reject);
                     });
                     ws.close(1000);
 
-                    expect(response).to.equal('test echo');
+                    expect(response.toString()).to.equal('test echo');
                 });
             });
         });
@@ -534,13 +541,13 @@ nodeOnly(() => {
 
             ws.on('open', () => ws.send('test echo'));
 
-            const response = await new Promise((resolve, reject) => {
+            const response = await new Promise<Buffer>((resolve, reject) => {
                 ws.on('message', resolve);
-                ws.on('error', (e) => reject(e));
+                ws.on('error', reject);
             });
             ws.close(1000);
 
-            expect(response).to.equal('test echo');
+            expect(response.toString()).to.equal('test echo');
         });
 
         it("can echo data", async () => {
@@ -552,13 +559,13 @@ nodeOnly(() => {
 
             ws.on('open', () => ws.send('test message'));
 
-            const response = await new Promise((resolve, reject) => {
+            const response = await new Promise<Buffer>((resolve, reject) => {
                 ws.on('message', resolve);
-                ws.on('error', (e) => reject(e));
+                ws.on('error', reject);
             });
             ws.close(1000);
 
-            expect(response).to.equal('test message');
+            expect(response.toString()).to.equal('test message');
         });
 
         it("can be explicitly rejected", async () => {
