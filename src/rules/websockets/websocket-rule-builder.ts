@@ -7,7 +7,8 @@ import {
     CloseConnectionHandlerDefinition,
     PassThroughWebSocketHandlerOptions,
     RejectWebSocketHandlerDefinition,
-    EchoWebSocketHandlerDefinition
+    EchoWebSocketHandlerDefinition,
+    ListenWebSocketHandlerDefinition
 } from './websocket-handler-definitions';
 
 import { BaseRuleBuilder } from "../base-rule-builder";
@@ -136,6 +137,29 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
         const rule: WebSocketRuleData = {
             ...this.buildBaseRuleData(),
             handler: new EchoWebSocketHandlerDefinition()
+        };
+
+        return this.addRule(rule);
+    }
+
+    /**
+     * Accept incoming WebSocket connections, and simply listen to
+     * incoming messages without ever sending anything in return.
+     *
+     * Calling this method registers the rule with the server, so it
+     * starts to handle requests.
+     *
+     * This method returns a promise that resolves with a mocked endpoint.
+     * Wait for the promise to confirm that the rule has taken effect
+     * before sending requests to be matched. The mocked endpoint
+     * can be used to assert on the requests matched by this rule.
+     *
+     * @category Responses
+     */
+    thenPassivelyListen(): Promise<MockedEndpoint> {
+        const rule: WebSocketRuleData = {
+            ...this.buildBaseRuleData(),
+            handler: new ListenWebSocketHandlerDefinition()
         };
 
         return this.addRule(rule);

@@ -182,6 +182,15 @@ export class EchoWebSocketHandlerDefinition extends Serializable implements WebS
     }
 }
 
+export class ListenWebSocketHandlerDefinition extends Serializable implements WebSocketHandlerDefinition {
+
+    readonly type = 'ws-listen';
+
+    explain(): string {
+        return "silently accept websocket messages without responding";
+    }
+}
+
 export class RejectWebSocketHandlerDefinition extends Serializable implements WebSocketHandlerDefinition {
 
     readonly type = 'ws-reject';
@@ -211,6 +220,7 @@ export {
 export const WsHandlerDefinitionLookup = {
     'ws-passthrough': PassThroughWebSocketHandlerDefinition,
     'ws-echo': EchoWebSocketHandlerDefinition,
+    'ws-listen': ListenWebSocketHandlerDefinition,
     'ws-reject': RejectWebSocketHandlerDefinition,
     'close-connection': CloseConnectionHandlerDefinition,
     'timeout': TimeoutHandlerDefinition

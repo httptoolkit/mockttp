@@ -38,6 +38,7 @@ import { MOCKTTP_UPSTREAM_CIPHERS } from '../passthrough-handling';
 
 import {
     EchoWebSocketHandlerDefinition,
+    ListenWebSocketHandlerDefinition,
     PassThroughWebSocketHandlerDefinition,
     PassThroughWebSocketHandlerOptions,
     RejectWebSocketHandlerDefinition,
@@ -418,6 +419,30 @@ export class EchoWebSocketHandler extends EchoWebSocketHandlerDefinition {
     }
 }
 
+export class ListenWebSocketHandler extends ListenWebSocketHandlerDefinition {
+
+    private wsServer?: WebSocket.Server;
+
+    private initializeWsServer() {
+        if (this.wsServer) return;
+
+        this.wsServer = new WebSocket.Server({ noServer: true });
+        this.wsServer.on('connection', (ws: WebSocket) => {
+            // Accept but ignore the incoming websocket data
+            ws.resume();
+        });
+    }
+
+    async handle(req: OngoingRequest & http.IncomingMessage, socket: net.Socket, head: Buffer) {
+        this.initializeWsServer();
+
+        this.wsServer!.handleUpgrade(req, socket, head, (ws) => {
+            socket.emit('ws-upgrade', ws);
+            this.wsServer!.emit('connection', ws);
+        });
+    }
+}
+
 export class RejectWebSocketHandler extends RejectWebSocketHandlerDefinition {
 
     async handle(req: OngoingRequest, socket: net.Socket, head: Buffer) {
@@ -439,6 +464,7 @@ export {
 export const WsHandlerLookup: typeof WsHandlerDefinitionLookup = {
     'ws-passthrough': PassThroughWebSocketHandler,
     'ws-echo': EchoWebSocketHandler,
+    'ws-listen': ListenWebSocketHandler,
     'ws-reject': RejectWebSocketHandler,
     'close-connection': CloseConnectionHandler,
     'timeout': TimeoutHandler

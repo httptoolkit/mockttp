@@ -553,8 +553,6 @@ nodeOnly(() => {
         it("can echo data", async () => {
             mockServer.forAnyWebSocket().thenEcho();
 
-            // Ask for 999 (doesn't exist), and the above will forward you
-            // invisibly to our real WS server elsewhere instead.
             const ws = new WebSocket(`ws://localhost:${mockServer.port}`);
 
             ws.on('open', () => ws.send('test message'));
@@ -566,6 +564,23 @@ nodeOnly(() => {
             ws.close(1000);
 
             expect(response.toString()).to.equal('test message');
+        });
+
+        it("can passively listen to data", async () => {
+            mockServer.forAnyWebSocket().thenPassivelyListen();
+
+            const ws = new WebSocket(`ws://localhost:${mockServer.port}`);
+
+            ws.on('open', () => ws.send('test message'));
+
+            await new Promise<void>((resolve, reject) => {
+                ws.on('message', reject);
+                ws.on('error', reject);
+
+                // All OK as long as we get no response within 500ms
+                setTimeout(() => resolve(), 500);
+            });
+            ws.close(1000);
         });
 
         it("can be explicitly rejected", async () => {
