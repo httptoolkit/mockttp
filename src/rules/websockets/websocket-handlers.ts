@@ -167,7 +167,7 @@ const rawResponse = (
     headers: RawHeaders = []
 ) =>
     `HTTP/1.1 ${statusCode} ${statusMessage}\r\n` +
-    _.map(headers, (value, key) =>
+    _.map(headers, ([key, value]) =>
         `${key}: ${value}`
     ).join('\r\n') +
     '\r\n\r\n';
