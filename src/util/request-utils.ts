@@ -407,7 +407,12 @@ export function trackResponse(
  * Build a completed response: the external representation of a response
  * that's been completely written out and sent back to the client.
  */
-export async function waitForCompletedResponse(response: OngoingResponse): Promise<CompletedResponse> {
+export async function waitForCompletedResponse(
+    response: OngoingResponse | CompletedResponse
+): Promise<CompletedResponse> {
+    // Ongoing response has 'getHeaders' - completed has 'headers'.
+    if ('headers' in response) return response;
+
     const body = await waitForBody(response.body, response.getHeaders());
     response.timingEvents.responseSentTimestamp = response.timingEvents.responseSentTimestamp || now();
 

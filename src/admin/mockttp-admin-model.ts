@@ -27,6 +27,7 @@ const WEBSOCKET_REQUEST_TOPIC = 'websocket-request';
 const WEBSOCKET_ACCEPTED_TOPIC = 'websocket-accepted';
 const WEBSOCKET_MESSAGE_RECEIVED_TOPIC = 'websocket-message-received';
 const WEBSOCKET_MESSAGE_SENT_TOPIC = 'websocket-message-sent';
+const WEBSOCKET_CLOSE_TOPIC = 'websocket-close';
 const REQUEST_ABORTED_TOPIC = 'request-aborted';
 const TLS_CLIENT_ERROR_TOPIC = 'tls-client-error';
 const CLIENT_ERROR_TOPIC = 'client-error';
@@ -47,51 +48,57 @@ export function buildAdminServerModel(
 ): IResolvers {
     const pubsub = new PubSub();
 
-    mockServer.on('request-initiated', (request) => {
+    mockServer.on('request-initiated', (evt) => {
         pubsub.publish(REQUEST_INITIATED_TOPIC, {
-            requestInitiated: request
+            requestInitiated: evt
         })
     });
 
-    mockServer.on('request', (request) => {
+    mockServer.on('request', (evt) => {
         pubsub.publish(REQUEST_RECEIVED_TOPIC, {
-            requestReceived: request
+            requestReceived: evt
         })
     });
 
-    mockServer.on('response', (response) => {
+    mockServer.on('response', (evt) => {
         pubsub.publish(RESPONSE_COMPLETED_TOPIC, {
-            responseCompleted: response
+            responseCompleted: evt
         })
     });
 
-    mockServer.on('websocket-request', (request) => {
+    mockServer.on('websocket-request', (evt) => {
         pubsub.publish(WEBSOCKET_REQUEST_TOPIC, {
-            webSocketRequest: request
+            webSocketRequest: evt
         })
     });
 
-    mockServer.on('websocket-accepted', (response) => {
+    mockServer.on('websocket-accepted', (evt) => {
         pubsub.publish(WEBSOCKET_ACCEPTED_TOPIC, {
-            webSocketAccepted: response
+            webSocketAccepted: evt
         })
     });
 
-    mockServer.on('websocket-message-received', (response) => {
+    mockServer.on('websocket-message-received', (evt) => {
         pubsub.publish(WEBSOCKET_MESSAGE_RECEIVED_TOPIC, {
-            webSocketMessageReceived: response
+            webSocketMessageReceived: evt
         })
     });
 
-    mockServer.on('websocket-message-sent', (response) => {
+    mockServer.on('websocket-message-sent', (evt) => {
         pubsub.publish(WEBSOCKET_MESSAGE_SENT_TOPIC, {
-            webSocketMessageSent: response
+            webSocketMessageSent: evt
         })
     });
 
-    mockServer.on('abort', (request) => {
+    mockServer.on('websocket-close', (evt) => {
+        pubsub.publish(WEBSOCKET_CLOSE_TOPIC, {
+            webSocketClose: evt
+        })
+    });
+
+    mockServer.on('abort', (evt) => {
         pubsub.publish(REQUEST_ABORTED_TOPIC, {
-            requestAborted: Object.assign(request, {
+            requestAborted: Object.assign(evt, {
                 // Backward compat: old clients expect this to be present. In future this can be removed
                 // and abort events can switch from Request to InitiatedRequest in the schema.
                 body: Buffer.alloc(0)
@@ -99,15 +106,15 @@ export function buildAdminServerModel(
         })
     });
 
-    mockServer.on('tls-client-error', (request) => {
+    mockServer.on('tls-client-error', (evt) => {
         pubsub.publish(TLS_CLIENT_ERROR_TOPIC, {
-            failedTlsRequest: request
+            failedTlsRequest: evt
         })
     });
 
-    mockServer.on('client-error', (error) => {
+    mockServer.on('client-error', (evt) => {
         pubsub.publish(CLIENT_ERROR_TOPIC, {
-            failedClientRequest: error
+            failedClientRequest: evt
         })
     });
 
@@ -191,6 +198,9 @@ export function buildAdminServerModel(
             },
             webSocketMessageSent: {
                 subscribe: () => pubsub.asyncIterator(WEBSOCKET_MESSAGE_SENT_TOPIC)
+            },
+            webSocketClose: {
+                subscribe: () => pubsub.asyncIterator(WEBSOCKET_CLOSE_TOPIC)
             },
             requestAborted: {
                 subscribe: () => pubsub.asyncIterator(REQUEST_ABORTED_TOPIC)

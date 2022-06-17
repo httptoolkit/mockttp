@@ -304,6 +304,17 @@ export class MockttpAdminRequestBuilder {
                     tags
                 }
             }`,
+            'websocket-close': gql`subscription OnWebSocketClose {
+                webSocketClose {
+                    streamId,
+
+                    closeCode,
+                    closeReason,
+
+                    timingEvents,
+                    tags
+                }
+            }`,
             abort: gql`subscription OnAbort {
                 requestAborted {
                     id,

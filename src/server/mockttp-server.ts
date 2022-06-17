@@ -22,7 +22,8 @@ import {
     ClientError,
     TimingEvents,
     OngoingBody,
-    WebSocketMessage
+    WebSocketMessage,
+    WebSocketClose
 } from "../types";
 import { CAOptions } from '../util/tls';
 import { DestroyableServer } from "../util/destroyable-server";
@@ -282,6 +283,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     public on(event: 'websocket-accepted', callback: (req: CompletedResponse) => void): Promise<void>;
     public on(event: 'websocket-message-received', callback: (req: WebSocketMessage) => void): Promise<void>;
     public on(event: 'websocket-message-sent', callback: (req: WebSocketMessage) => void): Promise<void>;
+    public on(event: 'websocket-close', callback: (close: WebSocketClose) => void): Promise<void>;
     public on(event: 'tls-client-error', callback: (req: TlsRequest) => void): Promise<void>;
     public on(event: 'client-error', callback: (error: ClientError) => void): Promise<void>;
     public on(event: string, callback: (...args: any[]) => void): Promise<void> {
@@ -318,7 +320,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         });
     }
 
-    private announceResponseAsync(response: OngoingResponse) {
+    private announceResponseAsync(response: OngoingResponse | CompletedResponse) {
         setImmediate(() => {
             waitForCompletedResponse(response)
             .then((res: CompletedResponse) => {
@@ -375,6 +377,24 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         });
     }
 
+    private announceWebSocketCloseAsync(
+        request: OngoingRequest,
+        closeCode: number,
+        closeReason?: string
+    ) {
+        setImmediate(() => {
+            this.eventEmitter.emit('websocket-close', {
+                streamId: request.id,
+
+                closeCode,
+                closeReason,
+
+                timingEvents: request.timingEvents,
+                tags: request.tags
+            } as WebSocketClose);
+        });
+    }
+
     // Hook the request and socket to announce all WebSocket events after the initial request:
     private trackWebSocketEvents(request: OngoingRequest, socket: net.Socket) {
         const originalWrite = socket._write;
@@ -388,16 +408,40 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             return originalWrite.apply(this, arguments as any);
         };
 
+        let upgradeCompleted = false;
+
+        socket.once('close', () => {
+            if (upgradeCompleted) return;
+
+            if (data.length) {
+                const httpResponse = parseRawHttpResponse(data);
+                httpResponse.id = request.id;
+                httpResponse.tags = request.tags;
+
+                httpResponse.timingEvents = request.timingEvents;
+                (httpResponse.timingEvents as TimingEvents).responseSentTimestamp = now();
+
+                this.announceResponseAsync(httpResponse);
+            } else {
+                // Connect closed during upgrade, before we responded:
+                request.timingEvents.abortedTimestamp = now();
+                this.announceAbortAsync(request);
+            }
+        });
+
         socket.once('ws-upgrade', (ws: WebSocket) => {
+            upgradeCompleted = true;
+
             // Undo our write hook setup:
             socket._write = originalWrite;
             socket._writev = originalWriteV;
 
             const httpResponse = parseRawHttpResponse(data);
             httpResponse.id = request.id;
+            httpResponse.tags = request.tags;
+
             httpResponse.timingEvents = request.timingEvents;
             (httpResponse.timingEvents as TimingEvents).wsAcceptedTimestamp = now();
-            httpResponse.tags = request.tags;
 
             this.announceWebSocketUpgradeAsync(httpResponse);
 
@@ -415,6 +459,17 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
                 _send.apply(this, arguments as any);
                 self.announceWebSocketMessageAsync(request, 'sent', asBuffer(data), isBinary);
             };
+
+            ws.on('close', (closeCode, closeReason) => {
+                if (closeCode === 1006) {
+                    // Not a clean close!
+                    request.timingEvents.abortedTimestamp = now();
+                    this.announceAbortAsync(request);
+                } else {
+                    request.timingEvents.wsClosedTimestamp = now();
+                    this.announceWebSocketCloseAsync(request, closeCode, closeReason.toString('utf8'));
+                }
+            });
         });
     }
 

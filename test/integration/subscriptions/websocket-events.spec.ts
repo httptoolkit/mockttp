@@ -1,13 +1,19 @@
 import * as WebSocket from 'isomorphic-ws';
 
 import {
+    getLocal,
     CompletedRequest,
     CompletedResponse,
     WebSocketMessage,
-    getLocal
+    WebSocketClose,
+    InitiatedRequest,
+    TimingEvents
 } from "../../..";
 import {
-    expect, getDeferred
+    expect,
+    getDeferred,
+    delay,
+    nodeOnly
 } from "../../test-utils";
 
 describe("WebSocket subscriptions", () => {
@@ -115,6 +121,147 @@ describe("WebSocket subscriptions", () => {
                 expect(messageEvent.tags).to.deep.equal([]);
             });
 
+        });
+
+        describe("for connection shutdown", () => {
+
+            it("should fire websocket-close events for cleanly closed connections", async () => {
+                await server.forAnyWebSocket().thenPassivelyListen();
+
+                let requestPromise = getDeferred<CompletedRequest>();
+                await server.on('websocket-request', (r) => requestPromise.resolve(r));
+
+                let closePromise = getDeferred<WebSocketClose>();
+                await server.on('websocket-close', (r) => closePromise.resolve(r));
+
+                let seenAbort = false;
+                await server.on('abort', () => { seenAbort = true });
+
+                const ws = new WebSocket(`ws://localhost:${server.port}/qwe`);
+                ws.addEventListener('open', () => {
+                    ws.close(3003, "Goodbye Mockttp");
+                });
+
+                const requestEvent = await requestPromise;
+                const closeEvent = await closePromise;
+
+                expect(closeEvent.streamId).to.equal(requestEvent.id);
+                expect(closeEvent.closeCode).to.equal(3003);
+                expect(closeEvent.closeReason).to.equal("Goodbye Mockttp");
+
+                expect(closeEvent.timingEvents.startTime).to.be.greaterThan(0);
+                expect(closeEvent.timingEvents.startTimestamp).to.be.greaterThan(0);
+                expect(closeEvent.timingEvents.wsAcceptedTimestamp).to.be.greaterThan(0);
+                expect(closeEvent.timingEvents.wsClosedTimestamp).to.be.greaterThan(0);
+
+                await delay(100);
+                expect(seenAbort).to.equal(false);
+            });
+
+            it("should fire response events for refused upgrade attempts", async () => {
+                await server.forAnyWebSocket().thenRejectConnection(403);
+
+                let requestPromise = getDeferred<CompletedRequest>();
+                await server.on('websocket-request', (r) => requestPromise.resolve(r));
+
+                let responsePromise = getDeferred<CompletedResponse>();
+                await server.on('response', (r) => responsePromise.resolve(r));
+
+                let seenClose = false;
+                await server.on('websocket-close', () => { seenClose = true });
+
+                const ws = new WebSocket(`ws://localhost:${server.port}/qwe`);
+                ws.addEventListener('error', () => {});
+
+                const requestEvent = await requestPromise;
+                const responseEvent = await responsePromise;
+
+                expect(responseEvent.id).to.equal(requestEvent.id);
+
+                const timingEvents = responseEvent.timingEvents as TimingEvents;
+                expect(timingEvents.startTime).to.be.greaterThan(0);
+                expect(timingEvents.startTimestamp).to.be.greaterThan(0);
+                expect(timingEvents.responseSentTimestamp).to.be.greaterThan(0);
+
+                expect(timingEvents.wsAcceptedTimestamp).to.equal(undefined);
+                expect(timingEvents.wsClosedTimestamp).to.equal(undefined);
+
+                await delay(100);
+                expect(seenClose).to.equal(false);
+            });
+
+            nodeOnly(() => {
+                it("should fire abort events for aborted upgrade attempts", async () => {
+                    await server.forAnyWebSocket().thenTimeout();
+
+                    let requestPromise = getDeferred<CompletedRequest>();
+                    await server.on('websocket-request', (r) => requestPromise.resolve(r));
+
+                    let abortPromise = getDeferred<InitiatedRequest>();
+                    await server.on('abort', (r) => abortPromise.resolve(r));
+
+                    let seenClose = false;
+                    await server.on('websocket-close', () => { seenClose = true });
+
+                    const ws = new WebSocket(`ws://localhost:${server.port}/qwe`);
+                    ws.addEventListener('error', () => {});
+                    setTimeout(() => {
+                        // Forcibly kill the socket, before the upgrade completes (due to thenTimeout)
+                        (ws as any)._req.socket.destroy();
+                    }, 50);
+
+                    const requestEvent = await requestPromise;
+                    const abortEvent = await abortPromise;
+
+                    expect(abortEvent.id).to.equal(requestEvent.id);
+
+                    expect(abortEvent.timingEvents.startTime).to.be.greaterThan(0);
+                    expect(abortEvent.timingEvents.startTimestamp).to.be.greaterThan(0);
+                    expect(abortEvent.timingEvents.abortedTimestamp).to.be.greaterThan(0);
+
+                    expect(abortEvent.timingEvents.wsAcceptedTimestamp).to.equal(undefined);
+                    expect(abortEvent.timingEvents.wsClosedTimestamp).to.equal(undefined);
+
+                    await delay(100);
+                    expect(seenClose).to.equal(false);
+                });
+            });
+
+            nodeOnly(() => {
+                it("should fire abort events for uncleanly closed connections", async () => {
+                    await server.forAnyWebSocket().thenPassivelyListen();
+
+                    let requestPromise = getDeferred<CompletedRequest>();
+                    await server.on('websocket-request', (r) => requestPromise.resolve(r));
+
+                    let abortPromise = getDeferred<InitiatedRequest>();
+                    await server.on('abort', (r) => abortPromise.resolve(r));
+
+                    let seenClose = false;
+                    await server.on('websocket-close', () => { seenClose = true });
+
+                    const ws = new WebSocket(`ws://localhost:${server.port}/qwe`);
+                    ws.addEventListener('open', () => {
+                        // Forcibly kill the socket, after the connection has opened:
+                        (ws as any)._socket.destroy();
+                    });
+
+                    const requestEvent = await requestPromise;
+                    const abortEvent = await abortPromise;
+
+                    expect(abortEvent.id).to.equal(requestEvent.id);
+
+                    expect(abortEvent.timingEvents.startTime).to.be.greaterThan(0);
+                    expect(abortEvent.timingEvents.startTimestamp).to.be.greaterThan(0);
+                    expect(abortEvent.timingEvents.wsAcceptedTimestamp).to.be.greaterThan(0);
+                    expect(abortEvent.timingEvents.abortedTimestamp).to.be.greaterThan(0);
+
+                    expect(abortEvent.timingEvents.wsClosedTimestamp).to.equal(undefined);
+
+                    await delay(100);
+                    expect(seenClose).to.equal(false);
+                });
+            });
 
         });
 

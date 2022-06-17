@@ -16,7 +16,8 @@ import {
     InitiatedRequest,
     ClientError,
     RulePriority,
-    WebSocketMessage
+    WebSocketMessage,
+    WebSocketClose
 } from "./types";
 import type { RequestRuleData } from "./rules/requests/request-rule";
 import type { WebSocketRuleData } from "./rules/websockets/websocket-rule";
@@ -423,6 +424,24 @@ export interface Mockttp {
     on(event: 'websocket-message-sent', callback: (req: WebSocketMessage) => void): Promise<void>;
 
     /**
+     * Subscribe to hear when a websocket connection is closed. This fires only for clean
+     * websocket shutdowns, after the websocket was initially accepted. If the connection
+     * is closed uncleanly, an 'abort' event will fire instead. If the websocket was
+     * initially rejected explicitly, a 'response' event (with the rejecting response) will
+     * fire instead.
+     *
+     * This is only useful in some niche use cases, such as logging all websockets seen
+     * by the server independently of the rules defined.
+     *
+     * The callback will be called asynchronously from request handling. This function
+     * returns a promise, and the callback is not guaranteed to be registered until
+     * the promise is resolved.
+     *
+     * @category Events
+     */
+    on(event: 'websocket-close', callback: (req: WebSocketClose) => void): Promise<void>;
+
+    /**
      * Subscribe to hear about requests that are aborted before the request or
      * response is fully completed.
      *
@@ -673,6 +692,7 @@ export type SubscribableEvent =
     | 'websocket-accepted'
     | 'websocket-message-received'
     | 'websocket-message-sent'
+    | 'websocket-close'
     | 'abort'
     | 'tls-client-error'
     | 'client-error';

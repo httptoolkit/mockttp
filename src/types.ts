@@ -154,8 +154,11 @@ export interface TimingEvents {
     bodyReceivedTimestamp?: number; // When the request body was fully received
     headersSentTimestamp?: number; // When the response headers were sent
     responseSentTimestamp?: number; // When the response was fully completed
-    abortedTimestamp?: number; // When the request was aborted
+
     wsAcceptedTimestamp?: number; // When the websocket was accepted
+    wsClosedTimestamp?: number; // When the websocket was closed
+
+    abortedTimestamp?: number; // When the connected was aborted
 }
 
 export interface OngoingResponse extends http.ServerResponse {
@@ -209,6 +212,33 @@ export interface WebSocketMessage {
      * To link this to the current time, compare it to `timingEvents.startTime`.
      */
     eventTimestamp: number;
+
+    timingEvents: TimingEvents;
+    tags: string[];
+}
+
+export interface WebSocketClose {
+    /**
+     * The id of this websocket stream. This will match the id of the request,
+     * the initial connection response, and any other WebSocket events for the
+     * same connection stream.
+     */
+    streamId: string;
+
+    /**
+     * The close code of the shutdown. This is the close code that was received
+     * from the remote client (either initiated remotely, or echoing our own sent
+     * close frame).
+     *
+     * This event is always fired for clean shutdowns, so this will always be set.
+     * For unclean shutdowns, an 'abort' event will fire instead.
+     */
+    closeCode: number;
+
+    /**
+     * The close reason of the shutdown.
+     */
+    closeReason: string;
 
     timingEvents: TimingEvents;
     tags: string[];
