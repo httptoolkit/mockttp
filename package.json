@@ -170,7 +170,7 @@
     "@httptoolkit/httpolyglot": "^2.0.1",
     "@httptoolkit/proxy-agent": "^5.0.1-socks-lookup-fix.0",
     "@httptoolkit/subscriptions-transport-ws": "^0.11.2",
-    "@httptoolkit/websocket-stream": "^6.0.0",
+    "@httptoolkit/websocket-stream": "^6.0.1",
     "@types/cors": "^2.8.6",
     "@types/node": "*",
     "base64-arraybuffer": "^0.1.5",

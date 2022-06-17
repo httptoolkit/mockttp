@@ -30,7 +30,8 @@ module.exports = function(config) {
                     "request-promise-native": require.resolve('./test/empty-stub.js'),
                     "fs-extra": require.resolve('./test/empty-stub.js'),
                     "portfinder": require.resolve('./test/empty-stub.js'),
-                    "dns2": require.resolve('./test/empty-stub.js')
+                    "dns2": require.resolve('./test/empty-stub.js'),
+                    "ws": require.resolve('./test/empty-stub.js')
                 },
                 fallback: {
                     // With Webpack 5, we need explicit mocks for all node modules. Because the
