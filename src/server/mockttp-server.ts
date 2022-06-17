@@ -1,3 +1,4 @@
+import _ = require("lodash");
 import net = require("net");
 import url = require("url");
 import tls = require("tls");
@@ -9,7 +10,7 @@ import connect = require("connect");
 import { v4 as uuid } from "uuid";
 import cors = require("cors");
 import now = require("performance-now");
-import _ = require("lodash");
+import WebSocket = require("ws");
 
 import {
     InitiatedRequest,
@@ -20,7 +21,8 @@ import {
     TlsRequest,
     ClientError,
     TimingEvents,
-    OngoingBody
+    OngoingBody,
+    WebSocketMessage
 } from "../types";
 import { CAOptions } from '../util/tls';
 import { DestroyableServer } from "../util/destroyable-server";
@@ -45,6 +47,7 @@ import {
     getPathFromAbsoluteUrl,
     parseRawHttpResponse
 } from "../util/request-utils";
+import { asBuffer } from "../util/buffer-utils";
 import {
     pairFlatRawHeaders,
     rawHeadersToObject
@@ -277,6 +280,8 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     public on(event: 'abort', callback: (req: InitiatedRequest) => void): Promise<void>;
     public on(event: 'websocket-request', callback: (req: CompletedRequest) => void): Promise<void>;
     public on(event: 'websocket-accepted', callback: (req: CompletedResponse) => void): Promise<void>;
+    public on(event: 'websocket-message-received', callback: (req: WebSocketMessage) => void): Promise<void>;
+    public on(event: 'websocket-message-sent', callback: (req: WebSocketMessage) => void): Promise<void>;
     public on(event: 'tls-client-error', callback: (req: TlsRequest) => void): Promise<void>;
     public on(event: 'client-error', callback: (error: ClientError) => void): Promise<void>;
     public on(event: string, callback: (...args: any[]) => void): Promise<void> {
@@ -349,7 +354,29 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         });
     }
 
-    private announceWebSocketEvents(request: OngoingRequest, socket: net.Socket) {
+    private announceWebSocketMessageAsync(
+        request: OngoingRequest,
+        direction: 'sent' | 'received',
+        content: Buffer,
+        isBinary: boolean
+    ) {
+        setImmediate(() => {
+            this.eventEmitter.emit(`websocket-message-${direction}`, {
+                streamId: request.id,
+
+                direction,
+                content,
+                isBinary,
+
+                eventTimestamp: now(),
+                timingEvents: request.timingEvents,
+                tags: request.tags
+            } as WebSocketMessage);
+        });
+    }
+
+    // Hook the request and socket to announce all WebSocket events after the initial request:
+    private trackWebSocketEvents(request: OngoingRequest, socket: net.Socket) {
         const originalWrite = socket._write;
         const originalWriteV = socket._writev;
 
@@ -357,11 +384,11 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         let data = Buffer.from([]);
         socket._writev = undefined;
         socket._write = function (): any {
-            data = Buffer.concat([data, Buffer.from(arguments[0])]);
+            data = Buffer.concat([data, asBuffer(arguments[0])]);
             return originalWrite.apply(this, arguments as any);
         };
 
-        socket.once('ws-upgrade', (ws) => {
+        socket.once('ws-upgrade', (ws: WebSocket) => {
             // Undo our write hook setup:
             socket._write = originalWrite;
             socket._writev = originalWriteV;
@@ -371,7 +398,23 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             httpResponse.timingEvents = request.timingEvents;
             (httpResponse.timingEvents as TimingEvents).wsAcceptedTimestamp = now();
             httpResponse.tags = request.tags;
+
             this.announceWebSocketUpgradeAsync(httpResponse);
+
+            ws.on('message', (data: Buffer, isBinary) => {
+                this.announceWebSocketMessageAsync(request, 'received', data, isBinary);
+            });
+
+            // Wrap ws.send() to report all sent data:
+            const _send = ws.send;
+            const self = this;
+            ws.send = function (data: any, options: any): any {
+                const isBinary = options.binary
+                    ?? typeof data !== 'string';
+
+                _send.apply(this, arguments as any);
+                self.announceWebSocketMessageAsync(request, 'sent', asBuffer(data), isBinary);
+            };
         });
     }
 
@@ -582,7 +625,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
                     this.announceWebSocketRequestAsync(request);
                 });
 
-            this.announceWebSocketEvents(request, socket);
+            this.trackWebSocketEvents(request, socket);
 
             let nextRule = await nextRulePromise;
             if (nextRule) {

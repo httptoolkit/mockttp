@@ -24,6 +24,8 @@ export const MockttpSchema = gql`
         responseCompleted: Response!
         webSocketRequest: Request!
         webSocketAccepted: Response!
+        webSocketMessageReceived: WebSocketMessage!
+        webSocketMessageSent: WebSocketMessage!
         requestAborted: Request!
         failedTlsRequest: TlsRequest!
         failedClientRequest: ClientError!
@@ -134,5 +136,16 @@ export const MockttpSchema = gql`
         headers: Json!
         rawHeaders: Json!
         body: Buffer!
+    }
+
+    type WebSocketMessage {
+        streamId: ID!
+        direction: String!
+        content: Buffer!
+        isBinary: Boolean!
+        eventTimestamp: Float!
+
+        timingEvents: Json!
+        tags: [String!]!
     }
 `;

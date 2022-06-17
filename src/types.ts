@@ -178,6 +178,42 @@ export interface CompletedResponse {
     tags: string[];
 }
 
+export interface WebSocketMessage {
+    /**
+     * The id of this websocket stream. This will match the id of the request,
+     * the initial connection response, and any other WebSocket events for the
+     * same connection stream.
+     */
+    streamId: string;
+
+    /**
+     * Whether the message was sent by Mockttp, or received from a Mockttp client.
+     */
+    direction: 'sent' | 'received';
+
+    /**
+     * The contents of the message as a raw buffer. This is already decompressed,
+     * if the WebSocket uses compression.
+     */
+    content: Uint8Array;
+
+    /**
+     * Whether this is a string message or a raw binary data message.
+     */
+    isBinary: boolean;
+
+    /**
+     * A high-precision floating-point monotonically increasing timestamp.
+     * Comparable and precise, but not related to specific current time.
+     *
+     * To link this to the current time, compare it to `timingEvents.startTime`.
+     */
+    eventTimestamp: number;
+
+    timingEvents: TimingEvents;
+    tags: string[];
+}
+
 /**
  * A client error event describes a request (or our best guess at parsing it),
  * that wasn't correctly completed, and the error response it received, or

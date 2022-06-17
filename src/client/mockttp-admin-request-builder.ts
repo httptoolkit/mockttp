@@ -47,6 +47,14 @@ function normalizeHttpMessage(message: any, event?: SubscribableEvent) {
     if (!message.tags) message.tags = [];
 }
 
+function normalizeWebSocketMessage(message: any) {
+    // Timing events are serialized as raw JSON
+    message.timingEvents = JSON.parse(message.timingEvents);
+
+    // Content is serialized as the raw encoded buffer in base64
+    message.content = Buffer.from(message.content, 'base64');
+}
+
 export class MockttpAdminRequestBuilder {
 
     constructor(
@@ -272,6 +280,30 @@ export class MockttpAdminRequestBuilder {
                     tags
                 }
             }`,
+            'websocket-message-received': gql`subscription OnWebSocketMessageReceived {
+                webSocketMessageReceived {
+                    streamId,
+                    direction,
+                    content,
+                    isBinary,
+                    eventTimestamp,
+
+                    timingEvents,
+                    tags
+                }
+            }`,
+            'websocket-message-sent': gql`subscription OnWebSocketMessageSent {
+                webSocketMessageSent {
+                    streamId,
+                    direction,
+                    content,
+                    isBinary,
+                    eventTimestamp,
+
+                    timingEvents,
+                    tags
+                }
+            }`,
             abort: gql`subscription OnAbort {
                 requestAborted {
                     id,
@@ -354,6 +386,8 @@ export class MockttpAdminRequestBuilder {
                     } else {
                         data.response = 'aborted';
                     }
+                } else if (event === 'websocket-message-received' || event === 'websocket-message-sent') {
+                    normalizeWebSocketMessage(data);
                 } else {
                     normalizeHttpMessage(data, event);
                 }

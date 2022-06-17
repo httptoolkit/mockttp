@@ -15,7 +15,8 @@ import {
     TlsRequest,
     InitiatedRequest,
     ClientError,
-    RulePriority
+    RulePriority,
+    WebSocketMessage
 } from "./types";
 import type { RequestRuleData } from "./rules/requests/request-rule";
 import type { WebSocketRuleData } from "./rules/websockets/websocket-rule";
@@ -390,6 +391,38 @@ export interface Mockttp {
     on(event: 'websocket-accepted', callback: (req: CompletedResponse) => void): Promise<void>;
 
     /**
+     * Subscribe to hear about websocket messages received by Mockttp from its downstream
+     * websocket clients. This event fires whenever any data is received on an open
+     * mocked WebSocket.
+     *
+     * This is only useful in some niche use cases, such as logging all websockets seen
+     * by the server independently of the rules defined.
+     *
+     * The callback will be called asynchronously from request handling. This function
+     * returns a promise, and the callback is not guaranteed to be registered until
+     * the promise is resolved.
+     *
+     * @category Events
+     */
+    on(event: 'websocket-message-received', callback: (req: WebSocketMessage) => void): Promise<void>;
+
+    /**
+     * Subscribe to hear about websocket messages sent by Mockttp to its downstream
+     * websocket clients. This event fires whenever any data is sent on an open
+     * mocked WebSocket.
+     *
+     * This is only useful in some niche use cases, such as logging all websockets seen
+     * by the server independently of the rules defined.
+     *
+     * The callback will be called asynchronously from request handling. This function
+     * returns a promise, and the callback is not guaranteed to be registered until
+     * the promise is resolved.
+     *
+     * @category Events
+     */
+    on(event: 'websocket-message-sent', callback: (req: WebSocketMessage) => void): Promise<void>;
+
+    /**
      * Subscribe to hear about requests that are aborted before the request or
      * response is fully completed.
      *
@@ -638,6 +671,8 @@ export type SubscribableEvent =
     | 'response'
     | 'websocket-request'
     | 'websocket-accepted'
+    | 'websocket-message-received'
+    | 'websocket-message-sent'
     | 'abort'
     | 'tls-client-error'
     | 'client-error';

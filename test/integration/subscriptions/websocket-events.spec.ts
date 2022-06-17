@@ -1,6 +1,11 @@
 import * as WebSocket from 'isomorphic-ws';
 
-import { CompletedRequest, CompletedResponse, getLocal } from "../../..";
+import {
+    CompletedRequest,
+    CompletedResponse,
+    WebSocketMessage,
+    getLocal
+} from "../../..";
 import {
     expect, getDeferred
 } from "../../test-utils";
@@ -16,7 +21,7 @@ describe("WebSocket subscriptions", () => {
         describe("for connection setup", () => {
 
             it("should fire websocket-request when a websocket upgrade is attempted", async () => {
-                await server.forAnyWebSocket().thenEcho();
+                await server.forAnyWebSocket().thenPassivelyListen();
 
                 let eventPromise = getDeferred<CompletedRequest>();
                 await server.on('websocket-request', (r) => eventPromise.resolve(r));
@@ -30,7 +35,7 @@ describe("WebSocket subscriptions", () => {
             });
 
             it("should fire websocket-accepted when a websocket upgrade is completed", async () => {
-                await server.forAnyWebSocket().thenEcho();
+                await server.forAnyWebSocket().thenPassivelyListen();
 
                 let requestPromise = getDeferred<CompletedRequest>();
                 await server.on('websocket-request', (r) => requestPromise.resolve(r));
@@ -47,6 +52,69 @@ describe("WebSocket subscriptions", () => {
                 expect(upgradeEvent.statusCode).to.equal(101);
                 expect(upgradeEvent.headers.upgrade).to.equal('websocket');
             });
+
+        });
+
+        describe("for message data", () => {
+
+            it("should fire websocket-message-received events for received data", async () => {
+                await server.forAnyWebSocket().thenPassivelyListen();
+
+                let requestPromise = getDeferred<CompletedRequest>();
+                await server.on('websocket-request', (r) => requestPromise.resolve(r));
+
+                let eventPromise = getDeferred<WebSocketMessage>();
+                await server.on('websocket-message-received', (d) => eventPromise.resolve(d));
+
+                const ws = new WebSocket(`ws://localhost:${server.port}/qwe`);
+
+                ws.addEventListener('open', () => {
+                    ws.send('test message');
+                });
+
+                const requestEvent = await requestPromise;
+                const messageEvent = await eventPromise;
+
+                expect(requestEvent.id).to.equal(messageEvent.streamId);
+
+                expect(messageEvent.direction).to.equal('received');
+                expect(messageEvent.content.toString()).to.equal('test message');
+                expect(messageEvent.isBinary).to.equal(false);
+
+                expect(messageEvent.eventTimestamp).to.be.greaterThan(0);
+                expect(messageEvent.timingEvents.startTime).to.be.greaterThan(0);
+                expect(messageEvent.tags).to.deep.equal([]);
+            });
+
+            it("should fire websocket-message-sent events for received data", async () => {
+                await server.forAnyWebSocket().thenEcho();
+
+                let requestPromise = getDeferred<CompletedRequest>();
+                await server.on('websocket-request', (r) => requestPromise.resolve(r));
+
+                let eventPromise = getDeferred<WebSocketMessage>();
+                await server.on('websocket-message-sent', (d) => eventPromise.resolve(d));
+
+                const ws = new WebSocket(`ws://localhost:${server.port}/qwe`);
+
+                ws.addEventListener('open', () => {
+                    ws.send('test message');
+                });
+
+                const requestEvent = await requestPromise;
+                const messageEvent = await eventPromise;
+
+                expect(requestEvent.id).to.equal(messageEvent.streamId);
+
+                expect(messageEvent.direction).to.equal('sent');
+                expect(messageEvent.content.toString()).to.equal('test message');
+                expect(messageEvent.isBinary).to.equal(false);
+
+                expect(messageEvent.eventTimestamp).to.be.greaterThan(0);
+                expect(messageEvent.timingEvents.startTime).to.be.greaterThan(0);
+                expect(messageEvent.tags).to.deep.equal([]);
+            });
+
 
         });
 

@@ -11,7 +11,8 @@ import type {
     MockedEndpointData,
     CompletedRequest,
     CompletedResponse,
-    ClientError
+    ClientError,
+    WebSocketMessage
 } from "../types";
 import type { Serialized } from "../serialization/serialization";
 import type { RequestRuleData } from "../rules/requests/request-rule";
@@ -24,6 +25,8 @@ const REQUEST_RECEIVED_TOPIC = 'request-received';
 const RESPONSE_COMPLETED_TOPIC = 'response-completed';
 const WEBSOCKET_REQUEST_TOPIC = 'websocket-request';
 const WEBSOCKET_ACCEPTED_TOPIC = 'websocket-accepted';
+const WEBSOCKET_MESSAGE_RECEIVED_TOPIC = 'websocket-message-received';
+const WEBSOCKET_MESSAGE_SENT_TOPIC = 'websocket-message-sent';
 const REQUEST_ABORTED_TOPIC = 'request-aborted';
 const TLS_CLIENT_ERROR_TOPIC = 'tls-client-error';
 const CLIENT_ERROR_TOPIC = 'client-error';
@@ -71,6 +74,18 @@ export function buildAdminServerModel(
     mockServer.on('websocket-accepted', (response) => {
         pubsub.publish(WEBSOCKET_ACCEPTED_TOPIC, {
             webSocketAccepted: response
+        })
+    });
+
+    mockServer.on('websocket-message-received', (response) => {
+        pubsub.publish(WEBSOCKET_MESSAGE_RECEIVED_TOPIC, {
+            webSocketMessageReceived: response
+        })
+    });
+
+    mockServer.on('websocket-message-sent', (response) => {
+        pubsub.publish(WEBSOCKET_MESSAGE_SENT_TOPIC, {
+            webSocketMessageSent: response
         })
     });
 
@@ -170,6 +185,12 @@ export function buildAdminServerModel(
             },
             webSocketAccepted: {
                 subscribe: () => pubsub.asyncIterator(WEBSOCKET_ACCEPTED_TOPIC)
+            },
+            webSocketMessageReceived: {
+                subscribe: () => pubsub.asyncIterator(WEBSOCKET_MESSAGE_RECEIVED_TOPIC)
+            },
+            webSocketMessageSent: {
+                subscribe: () => pubsub.asyncIterator(WEBSOCKET_MESSAGE_SENT_TOPIC)
             },
             requestAborted: {
                 subscribe: () => pubsub.asyncIterator(REQUEST_ABORTED_TOPIC)
