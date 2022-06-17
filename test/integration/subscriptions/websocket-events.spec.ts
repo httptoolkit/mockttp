@@ -56,7 +56,7 @@ describe("WebSocket subscriptions", () => {
 
                 expect(upgradeEvent.id).to.equal(requestEvent.id);
                 expect(upgradeEvent.statusCode).to.equal(101);
-                expect(upgradeEvent.headers.upgrade).to.equal('websocket');
+                expect(upgradeEvent.headers['upgrade']).to.equal('websocket');
             });
 
         });

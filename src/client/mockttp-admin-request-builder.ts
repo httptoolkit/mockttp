@@ -267,7 +267,7 @@ export class MockttpAdminRequestBuilder {
                     tags
                 }
             }`,
-            'websocket-accepted': gql`subscription OnWebSocketRequest {
+            'websocket-accepted': gql`subscription OnWebSocketAccepted {
                 webSocketAccepted {
                     id,
                     statusCode,

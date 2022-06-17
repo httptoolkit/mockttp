@@ -11,8 +11,7 @@ import type {
     MockedEndpointData,
     CompletedRequest,
     CompletedResponse,
-    ClientError,
-    WebSocketMessage
+    ClientError
 } from "../types";
 import type { Serialized } from "../serialization/serialization";
 import type { RequestRuleData } from "../rules/requests/request-rule";
