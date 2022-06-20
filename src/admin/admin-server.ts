@@ -38,7 +38,10 @@ export interface AdminServerOptions<Plugins extends { [key: string]: AdminPlugin
     /**
      * Set CORS options to limit the sites which can send requests to manage this admin server.
      */
-    corsOptions?: cors.CorsOptions & { strict?: boolean };
+    corsOptions?: cors.CorsOptions & {
+        strict?: boolean,
+        allowPrivateNetworkAccess?: boolean
+    };
 
     /**
      * Set a keep alive frequency in milliseconds for the subscription & stream websockets of each
@@ -140,6 +143,20 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
         this.webSocketKeepAlive = options.webSocketKeepAlive || undefined;
         this.ruleParams = options.ruleParameters || {};
         this.adminPlugins = options.adminPlugins || {} as PluginConstructorMap<Plugins>;
+
+        if (options.corsOptions?.allowPrivateNetworkAccess) {
+            // Allow web pages on non-local URLs (testsite.example.com, not localhost) to
+            // send requests to this admin server too. Without this, those requests will
+            // fail after rejected preflights in recent Chrome (from ~v102, ish? Unclear).
+            // This is combined with the origin restrictions that may be set, so only
+            // accepted origins will be allowed to make these requests.
+            this.app.use((req, res, next) => {
+                if (req.headers["access-control-request-private-network"]) {
+                    res.setHeader("access-control-allow-private-network", "true");
+                }
+                next(null);
+            });
+        }
 
         this.app.use(cors(options.corsOptions));
 
