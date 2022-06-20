@@ -148,8 +148,9 @@ async function writeResponseFromCallback(result: CallbackResponseMessageResult, 
         validateCustomHeaders({}, result.headers);
     }
 
-    if (result.body) {
-        // The body is automatically encoded to match the content-encoding header, if set.
+    if (result.body && !result.rawBody) {
+        // RawBody takes priority if both are set (useful for backward compat) but if not then
+        // the body is automatically encoded to match the content-encoding header.
         result.rawBody = await encodeBodyBuffer(
             Buffer.from(result.body),
             result.headers ?? {}
