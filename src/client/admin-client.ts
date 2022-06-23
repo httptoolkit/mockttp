@@ -533,7 +533,7 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
 
         const fieldName = getSingleSelectedFieldName(query);
         if (!this.schema!.typeHasField('Subscription', fieldName)) {
-            console.warn(`Remote client cannot subscribe to unrecognized event: ${fieldName}`);
+            console.warn(`Ignoring client subscription for event unrecognized by Mockttp server: ${fieldName}`);
             return Promise.resolve();
         }
 

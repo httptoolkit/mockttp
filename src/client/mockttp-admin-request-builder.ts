@@ -183,7 +183,7 @@ export class MockttpAdminRequestBuilder {
         };
     }
 
-    public buildSubscriptionRequest<T>(event: SubscribableEvent): AdminQuery<unknown, T> {
+    public buildSubscriptionRequest<T>(event: SubscribableEvent): AdminQuery<unknown, T> | undefined {
         // Note the asOptionalField checks - these are a quick hack for backward compatibility,
         // introspecting the server schema to avoid requesting fields that don't exist on old servers.
 
@@ -381,6 +381,8 @@ export class MockttpAdminRequestBuilder {
                 }
             }`
         }[event];
+
+        if (!query) return; // Unrecognized event, we can't subscribe to this.
 
         return {
             query,

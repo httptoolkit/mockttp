@@ -167,9 +167,17 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
     public on(event: SubscribableEvent, callback: (data: any) => void): Promise<void> {
         if (!this.requestBuilder) throw new Error('Cannot subscribe to events before the server is started');
 
-        return this.adminClient.subscribe(
-            this.requestBuilder.buildSubscriptionRequest(event),
-            callback
-        );
+        const subRequest = this.requestBuilder.buildSubscriptionRequest(event);
+
+        if (!subRequest) {
+            // We just return an immediately promise if we don't recognize the event, which will quietly
+            // succeed but never call the corresponding callback (the same as the server and most event
+            // sources in the same kind of situation). This is what happens when the *client* doesn't
+            // recognize the event. Subscribe() below handles the unknown-to-server case.
+            console.warn(`Ignoring subscription for event unrecognized by Mockttp client: ${event}`);
+            return Promise.resolve();
+        }
+
+        return this.adminClient.subscribe(subRequest, callback);
     }
 }
