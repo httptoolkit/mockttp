@@ -158,6 +158,39 @@ describe("WebSocket subscriptions", () => {
                 expect(seenAbort).to.equal(false);
             });
 
+            it("should fire websocket-close events with undefined codes, if no code was sent", async () => {
+                await server.forAnyWebSocket().thenPassivelyListen();
+
+                let requestPromise = getDeferred<CompletedRequest>();
+                await server.on('websocket-request', (r) => requestPromise.resolve(r));
+
+                let closePromise = getDeferred<WebSocketClose>();
+                await server.on('websocket-close', (r) => closePromise.resolve(r));
+
+                let seenAbort = false;
+                await server.on('abort', () => { seenAbort = true });
+
+                const ws = new WebSocket(`ws://localhost:${server.port}/qwe`);
+                ws.addEventListener('open', () => {
+                    ws.close(3003, "Goodbye Mockttp");
+                });
+
+                const requestEvent = await requestPromise;
+                const closeEvent = await closePromise;
+
+                expect(closeEvent.streamId).to.equal(requestEvent.id);
+                expect(closeEvent.closeCode).to.equal(3003);
+                expect(closeEvent.closeReason).to.equal("Goodbye Mockttp");
+
+                expect(closeEvent.timingEvents.startTime).to.be.greaterThan(0);
+                expect(closeEvent.timingEvents.startTimestamp).to.be.greaterThan(0);
+                expect(closeEvent.timingEvents.wsAcceptedTimestamp).to.be.greaterThan(0);
+                expect(closeEvent.timingEvents.wsClosedTimestamp).to.be.greaterThan(0);
+
+                await delay(100);
+                expect(seenAbort).to.equal(false);
+            });
+
             it("should fire response events for refused upgrade attempts", async () => {
                 await server.forAnyWebSocket().thenRejectConnection(403);
 

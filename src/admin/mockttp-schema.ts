@@ -153,7 +153,7 @@ export const MockttpSchema = gql`
     type WebSocketClose {
         streamId: ID!
 
-        closeCode: Int!
+        closeCode: Int
         closeReason: String
 
         timingEvents: Json!

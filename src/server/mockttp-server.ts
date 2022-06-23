@@ -379,7 +379,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
 
     private announceWebSocketCloseAsync(
         request: OngoingRequest,
-        closeCode: number,
+        closeCode: number | undefined,
         closeReason?: string
     ) {
         setImmediate(() => {
@@ -467,7 +467,14 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
                     this.announceAbortAsync(request);
                 } else {
                     request.timingEvents.wsClosedTimestamp = now();
-                    this.announceWebSocketCloseAsync(request, closeCode, closeReason.toString('utf8'));
+
+                    this.announceWebSocketCloseAsync(
+                        request,
+                        closeCode === 1005
+                            ? undefined // Clean close, but with a close frame with no status
+                            : closeCode,
+                        closeReason.toString('utf8')
+                    );
                 }
             });
         });

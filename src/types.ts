@@ -230,10 +230,12 @@ export interface WebSocketClose {
      * from the remote client (either initiated remotely, or echoing our own sent
      * close frame).
      *
-     * This event is always fired for clean shutdowns, so this will always be set.
-     * For unclean shutdowns, an 'abort' event will fire instead.
+     * This may be undefined only if a close frame was received but did not contain
+     * any close code. If no close frame was received before the connection was
+     * lost (i.e. the connection was not cleanly closed) this event will not
+     * fire at all, and an 'abort' event will fire instead.
      */
-    closeCode: number;
+    closeCode: number | undefined;
 
     /**
      * The close reason of the shutdown.
