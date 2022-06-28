@@ -1,8 +1,8 @@
 import * as _ from "lodash";
 import { Duplex } from "stream";
 
-import type { IResolvers } from "@graphql-tools/utils/Interfaces";
 import { PubSub } from "graphql-subscriptions";
+import type { IResolvers } from "@graphql-tools/utils";
 
 import type { MockttpServer } from "../server/mockttp-server";
 import type { ServerMockedEndpoint } from "../server/mocked-endpoint";
