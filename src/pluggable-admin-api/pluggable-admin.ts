@@ -6,6 +6,8 @@
  * In future these parts might be extracted into a separate library, but it's a bit tricky
  * to do so immediately as the server side does actually include some unavoidable Mockttp
  * dependencies for API backward compatibility.
+ *
+ * Everything exported here is experimental, and many change unpredictably in future releases.
  */
 
 export type {

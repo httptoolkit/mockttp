@@ -55,6 +55,12 @@ function normalizeWebSocketMessage(message: any) {
     message.content = Buffer.from(message.content, 'base64');
 }
 
+/**
+ * This is part of Mockttp's experimental 'pluggable admin' API. This may change
+ * unpredictably, even in minor releases.
+ *
+ * @internal
+ */
 export class MockttpAdminRequestBuilder {
 
     constructor(

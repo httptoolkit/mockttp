@@ -165,6 +165,9 @@ export async function resetAdminServer(options: AdminClientOptions = {}): Promis
  *
  * For normal usage of Mockttp, you should use `Mockttp.getRemote()` instead, to get a Mockttp
  * remote client, which wraps this class with the full Mockttp API for mocking HTTP.
+ *
+ * This is part of Mockttp's experimental 'pluggable admin' API. It may change
+ * unpredictably, even in minor releases.
  */
 export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> }> {
 
