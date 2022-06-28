@@ -1,4 +1,5 @@
 import _ = require('lodash');
+import * as stream from 'stream';
 import gql from 'graphql-tag';
 
 import { MockedEndpoint, MockedEndpointData } from "../types";
@@ -17,6 +18,7 @@ import type { WebSocketRuleData } from '../rules/websockets/websocket-rule';
 import { SubscribableEvent } from '../mockttp';
 import { MockedEndpointClient } from "./mocked-endpoint-client";
 import { AdminClient } from './admin-client';
+import { serializeRuleData } from '../rules/rule-serialization';
 
 function normalizeHttpMessage(message: any, event?: SubscribableEvent) {
     if (message.timingEvents) {
@@ -68,14 +70,23 @@ export class MockttpAdminRequestBuilder {
     ) {}
 
     buildAddRequestRulesQuery(
-        rules: Array<Serialized<RequestRuleData>>,
-        reset: boolean
+        rules: Array<RequestRuleData>,
+        reset: boolean,
+        adminStream: stream.Duplex
     ): AdminQuery<
         { endpoints: Array<{ id: string, explanation?: string }> },
         MockedEndpoint[]
     > {
         const requestName = (reset ? 'Set' : 'Add') + 'Rules';
         const mutationName = (reset ? 'set' : 'add') + 'Rules';
+
+        const serializedRules = rules.map((rule) => {
+            const serializedRule = serializeRuleData(rule, adminStream)
+            if (!this.schema.typeHasInputField('MockRule', 'id')) {
+                delete serializedRule.id;
+            }
+            return serializedRule;
+        });
 
         return {
             query: gql`
@@ -87,7 +98,7 @@ export class MockttpAdminRequestBuilder {
                 }
             `,
             variables: {
-                newRules: rules
+                newRules: serializedRules
             },
             transformResponse: (response, { adminClient }) => {
                 return response.endpoints.map(({ id, explanation }) =>
@@ -102,8 +113,9 @@ export class MockttpAdminRequestBuilder {
     }
 
     buildAddWebSocketRulesQuery(
-        rules: Array<Serialized<WebSocketRuleData>>,
-        reset: boolean
+        rules: Array<WebSocketRuleData>,
+        reset: boolean,
+        adminStream: stream.Duplex
     ): AdminQuery<
         { endpoints: Array<{ id: string, explanation?: string }> },
         MockedEndpoint[]
@@ -112,6 +124,8 @@ export class MockttpAdminRequestBuilder {
         // deal with backward compatibility.
         const requestName = (reset ? 'Set' : 'Add') + 'WebSocketRules';
         const mutationName = (reset ? 'set' : 'add') + 'WebSocketRules';
+
+        const serializedRules = rules.map((rule) => serializeRuleData(rule, adminStream));
 
         return {
             query: gql`
@@ -123,7 +137,7 @@ export class MockttpAdminRequestBuilder {
                 }
             `,
             variables: {
-                newRules: rules
+                newRules: serializedRules
             },
             transformResponse: (response, { adminClient }) => {
                 return response.endpoints.map(({ id, explanation }) =>

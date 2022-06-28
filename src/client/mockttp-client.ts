@@ -113,18 +113,9 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
     ): Promise<MockedEndpoint[]> => {
         if (!this.requestBuilder) throw new Error('Cannot add rules before the server is started');
 
-        const { schema, adminStream } = this.adminClient;
-
-        const serializedRules = rules.map((rule) => {
-            const serializedRule = serializeRuleData(rule, adminStream)
-            if (!schema.typeHasInputField('MockRule', 'id')) {
-                delete serializedRule.id;
-            }
-            return serializedRule;
-        });
-
+        const { adminStream } = this.adminClient;
         return this.adminClient.sendQuery(
-            this.requestBuilder.buildAddRequestRulesQuery(serializedRules, reset)
+            this.requestBuilder.buildAddRequestRulesQuery(rules, reset, adminStream)
         );
     }
 
@@ -137,10 +128,7 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
         const { adminStream } = this.adminClient;
 
         return this.adminClient.sendQuery(
-            this.requestBuilder.buildAddWebSocketRulesQuery(
-                rules.map((rule) => serializeRuleData(rule, adminStream)),
-                reset
-            )
+            this.requestBuilder.buildAddWebSocketRulesQuery(rules, reset, adminStream)
         );
     }
 
