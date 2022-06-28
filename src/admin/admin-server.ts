@@ -21,7 +21,6 @@ import { isErrorLike } from '../util/error';
 import { objectAllPromise } from '../util/promise';
 
 import { DEFAULT_ADMIN_SERVER_PORT } from '../types';
-import type { Mockttp } from '../mockttp';
 
 import { RuleParameters } from '../rules/rule-parameters';
 import { AdminPlugin, PluginConstructorMap, PluginStartParamsMap } from './admin-plugin-types';
@@ -246,7 +245,9 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
                 if (isPluginAwareClient) {
                     res.json({
                         id: sessionId,
-                        pluginData: pluginStartResults
+                        pluginData: _.mapValues(pluginStartResults, (r: unknown) =>
+                            r ?? {} // Always return _something_, even if the plugin returns null/undefined.
+                        )
                     });
                 } else {
                     res.json({
