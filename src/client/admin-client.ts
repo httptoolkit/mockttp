@@ -62,6 +62,12 @@ export class GraphQLError extends RequestError {
 }
 
 export interface AdminClientOptions {
+
+    /**
+     * Should the client print extra debug information?
+     */
+    debug?: boolean;
+
     /**
      * The full URL to use to connect to a Mockttp admin server when using a
      * remote (or local but browser) client.
@@ -188,6 +194,7 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
     private running: MaybePromise<boolean> = false;
 
     constructor(options: AdminClientOptions = {}) {
+        this.debug = !!options.debug;
         this.adminClientOptions = _.defaults(options, {
             adminServerUrl: `http://localhost:${DEFAULT_ADMIN_SERVER_PORT}`
         });
@@ -492,6 +499,7 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
     }
 
     public enableDebug = async (): Promise<void> => {
+        this.debug = true;
         return (await this.queryMockServer<void>(
             `mutation EnableDebug {
                 enableDebug
