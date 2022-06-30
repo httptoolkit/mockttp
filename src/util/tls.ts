@@ -37,10 +37,17 @@ export type GeneratedCertificate = {
  * These can be saved to disk, and their paths passed
  * as HTTPS options to a Mockttp server.
  */
-export async function generateCACertificate(options: { commonName?: string, bits?: number } = {}) {
+export async function generateCACertificate(options: {
+    commonName?: string,
+    organizationName?: string,
+    countryName?: string,
+    bits?: number
+} = {}) {
     options = _.defaults({}, options, {
         commonName: 'Mockttp Testing CA - DO NOT TRUST - TESTING ONLY',
-        bits: 2048
+        organizationName: 'Mockttp',
+        countryName: 'XX', // ISO-3166-1 alpha-2 'unknown country' code
+        bits: 2048,
     });
 
     const keyPair = await new Promise<forge.pki.rsa.KeyPair>((resolve, reject) => {
@@ -52,7 +59,7 @@ export async function generateCACertificate(options: { commonName?: string, bits
 
     const cert = pki.createCertificate();
     cert.publicKey = keyPair.publicKey;
-    cert.serialNumber = uuid().replace(/-/g, '');
+    cert.serialNumber = '0' + uuid().replace(/-/g, ''); // Leading zero to ensure this is always positive
 
     cert.validity.notBefore = new Date();
     // Make it valid for the last 24h - helps in cases where clocks slightly disagree
@@ -62,12 +69,18 @@ export async function generateCACertificate(options: { commonName?: string, bits
     // Valid for the next year by default.
     cert.validity.notAfter.setFullYear(cert.validity.notAfter.getFullYear() + 1);
 
-    cert.setSubject([{ name: 'commonName', value: options.commonName }]);
+    cert.setSubject([
+        // All of these are required for a fully valid CA cert that will be accepted when imported anywhere:
+        { name: 'commonName', value: options.commonName },
+        { name: 'countryName', value: options.countryName },
+        { name: 'organizationName', value: options.organizationName }
+    ]);
 
-    cert.setExtensions([{
-        name: 'basicConstraints',
-        cA: true
-    }]);
+    cert.setExtensions([
+        { name: 'basicConstraints', cA: true, critical: true },
+        { name: 'keyUsage', keyCertSign: true, digitalSignature: true, nonRepudiation: true, cRLSign: true, critical: true },
+        { name: 'subjectKeyIdentifier' }
+    ]);
 
     // Self-issued too
     cert.setIssuer(cert.subject.attributes);
@@ -157,7 +170,7 @@ export class CA {
         let cert = pki.createCertificate();
 
         cert.publicKey = KEY_PAIR!.publicKey;
-        cert.serialNumber = uuid().replace(/-/g, '');
+        cert.serialNumber = '0' + uuid().replace(/-/g, ''); // Leading zero to ensure it's always positive
 
         cert.validity.notBefore = new Date();
         // Make it valid for the last 24h - helps in cases where clocks slightly disagree.
@@ -169,24 +182,45 @@ export class CA {
 
         cert.setSubject([
             { name: 'commonName', value: domain },
+            { name: 'countryName', value: 'XX' }, // ISO-3166-1 alpha-2 'unknown country' code
+            { name: 'localityName', value: 'Unknown' },
             { name: 'organizationName', value: 'Mockttp Cert - DO NOT TRUST' }
         ]);
         cert.setIssuer(this.caCert.subject.attributes);
 
-        cert.setExtensions([{
-            name: 'keyUsage',
-            keyCertSign: true,
-            digitalSignature: true,
-            nonRepudiation: true,
-            keyEncipherment: true,
-            dataEncipherment: true
-        }, {
-            name: 'subjectAltName',
-            altNames: [{
-                type: 2,
-                value: domain
-            }]
-        }]);
+        const policyList = forge.asn1.create(forge.asn1.Class.UNIVERSAL, forge.asn1.Type.SEQUENCE, true, [
+            forge.asn1.create(forge.asn1.Class.UNIVERSAL, forge.asn1.Type.SEQUENCE, true, [
+                forge.asn1.create(
+                    forge.asn1.Class.UNIVERSAL,
+                    forge.asn1.Type.OID,
+                    false,
+                    forge.asn1.oidToDer('2.5.29.32.0').getBytes() // Mark all as Domain Verified
+                )
+            ])
+        ]);
+
+        cert.setExtensions([
+            { name: 'basicConstraints', cA: false, critical: true },
+            { name: 'keyUsage', digitalSignature: true, keyEncipherment: true, critical: true },
+            { name: 'extKeyUsage', serverAuth: true, clientAuth: true },
+            {
+                name: 'subjectAltName',
+                altNames: [{
+                    type: 2,
+                    value: domain
+                }]
+            },
+            { name: 'certificatePolicies', value: policyList },
+            { name: 'subjectKeyIdentifier' },
+            {
+                name: 'authorityKeyIdentifier',
+                // We have to calculate this ourselves due to
+                // https://github.com/digitalbazaar/forge/issues/462
+                keyIdentifier: (
+                    this.caCert as any // generateSubjectKeyIdentifier is missing from node-forge types
+                ).generateSubjectKeyIdentifier().getBytes()
+            }
+        ]);
 
         cert.sign(this.caKey, md.sha256.create());
 
