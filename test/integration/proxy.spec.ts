@@ -1033,7 +1033,11 @@ nodeOnly(() => {
                     expect(response).to.equal("mocked data");
                 });
 
-                it("should pass through HTTPS with a non-Node.js TLS fingerprint", async function () {
+                // TODO: Unfortunately disabled for now, as ja3er is no longer available, and it's difficult to calculate
+                // TLS fingerprints like this in pure Node. We should aim to bring this back, if ja3er comes back online,
+                // or to implement this ourselves in future if we do more low-level TLS handling that makes it possible
+                // to calculate these hashes for ourselves.
+                it.skip("should pass through HTTPS with a non-Node.js TLS fingerprint", async function () {
                     this.retries(3); // Allow some retries, since we need an external service for this
 
                     await server.forAnyRequest().thenPassThrough();
