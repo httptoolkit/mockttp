@@ -226,7 +226,7 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
             const serverShutdown = closeEvent.code === 1000;
             if (serverShutdown) {
                 // Clean shutdown implies the server is gone, and we need to shutdown & cleanup.
-                this.stop();
+                targetStream.emit('server-shutdown');
             } else if (streamConnected && (await this.running) === true) {
                 console.warn('Admin client stream unexpectedly disconnected', closeEvent);
 
@@ -242,14 +242,14 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
                 }).catch((err) => {
                     // On a failed reconnect, we just shut down completely.
                     console.warn('Admin client stream reconnection failed, shutting down', err);
-                    this.stop();
+                    targetStream.emit('server-shutdown');
                 });
             }
             // If never connected successfully, we do nothing.
         });
 
-        targetStream.on('end', () => {
-            // Ignore any further events - this stream is no longer useful
+        targetStream.on('finish', () => { // Client has shutdown
+            // Ignore any further WebSocket events - the websocket stream is no longer useful
             wsStream.removeAllListeners('connect');
             wsStream.removeAllListeners('ws-close');
             wsStream.destroy();
@@ -266,6 +266,12 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
 
         const wsStream = this.attachStreamWebsocket(adminSessionBaseUrl, wsTarget);
         wsTarget.on('error', (e) => exposedStream.emit('error', e));
+
+        // When the server stream ends, end the target stream, which will automatically end all websockets.
+        exposedStream.on('finish', () => wsTarget.end());
+
+        // Propagate 'server is definitely no longer available' back from the websockets:
+        wsTarget.on('server-shutdown', () => exposedStream.emit('server-shutdown'));
 
         // These receive a lot of listeners! One channel per matcher, handler & completion checker,
         // and each adds listeners for data/error/finish/etc. That's OK, it's not generally a leak,
@@ -400,7 +406,13 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
             }/${sessionId}`
 
             // Also open a stream connection, for 2-way communication we might need later.
-            this.adminServerStream = await this.openStreamToMockServer(adminSessionBaseUrl);
+            const adminServerStream = await this.openStreamToMockServer(adminSessionBaseUrl);
+            adminServerStream.on('server-shutdown', () => {
+                // When the server remotely disconnects the stream, shut down the client iff the client hasn't
+                // stopped & restarted in the meantime (can happen, since all shutdown is async).
+                if (this.adminServerStream === adminServerStream) this.stop();
+            });
+            this.adminServerStream = adminServerStream;
 
             // Create a subscription client, preconfigured & ready to connect if on() is called later:
             this.prepareSubscriptionClientToAdminServer(adminSessionBaseUrl);
