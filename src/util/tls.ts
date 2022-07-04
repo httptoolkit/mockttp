@@ -59,7 +59,7 @@ export async function generateCACertificate(options: {
 
     const cert = pki.createCertificate();
     cert.publicKey = keyPair.publicKey;
-    cert.serialNumber = '0' + uuid().replace(/-/g, ''); // Leading zero to ensure this is always positive
+    cert.serialNumber = generateSerialNumber();
 
     cert.validity.notBefore = new Date();
     // Make it valid for the last 24h - helps in cases where clocks slightly disagree
@@ -103,6 +103,13 @@ export function generateSPKIFingerprint(certPem: PEM) {
             encoding: 'binary'
         })
     );
+}
+
+// Generates a unique serial number for a certificate as a hex string:
+function generateSerialNumber() {
+    return 'A' + uuid().replace(/-/g, '');
+    // We add a leading 'A' to ensure it's always positive (not 'F') and always
+    // valid (e.g. leading 000 is bad padding, and would be unparseable).
 }
 
 export async function getCA(options: CAOptions): Promise<CA> {
@@ -170,7 +177,7 @@ export class CA {
         let cert = pki.createCertificate();
 
         cert.publicKey = KEY_PAIR!.publicKey;
-        cert.serialNumber = '0' + uuid().replace(/-/g, ''); // Leading zero to ensure it's always positive
+        cert.serialNumber = generateSerialNumber();
 
         cert.validity.notBefore = new Date();
         // Make it valid for the last 24h - helps in cases where clocks slightly disagree.
