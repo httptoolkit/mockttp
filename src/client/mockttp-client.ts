@@ -6,8 +6,7 @@ import { Mockttp, AbstractMockttp, MockttpOptions, PortRange, SubscribableEvent 
 import type { RequestRuleData } from "../rules/requests/request-rule";
 import type { WebSocketRuleData } from '../rules/websockets/websocket-rule';
 
-import { serializeRuleData } from '../rules/rule-serialization';
-import { AdminClient } from './admin-client';
+import { AdminClient, AdminClientEvent } from './admin-client';
 import { MockttpAdminPlugin } from '../admin/mockttp-admin-plugin';
 import { MockttpAdminRequestBuilder } from './mockttp-admin-request-builder';
 
@@ -28,6 +27,8 @@ export interface MockttpClientOptions extends MockttpOptions {
         headers?: { [key: string]: string };
     }
 }
+
+export type MockttpClientEvent = `admin-client:${AdminClientEvent}`;
 
 /**
  * A Mockttp implementation, controlling a remote Mockttp admin server.
@@ -152,10 +153,16 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
         return this.adminClient.getRuleParameterKeys();
     }
 
-    public on(event: SubscribableEvent, callback: (data: any) => void): Promise<void> {
-        if (!this.requestBuilder) throw new Error('Cannot subscribe to events before the server is started');
+    public on(event: SubscribableEvent | MockttpClientEvent, callback: (data: any) => void): Promise<void> {
+        if (event.startsWith('admin-client:')) {
+            // All MockttpClient events come from the internal admin-client instance:
+            this.adminClient.on(event, callback);
+            return Promise.resolve();
+        }
 
-        const subRequest = this.requestBuilder.buildSubscriptionRequest(event);
+        if (!this.requestBuilder) throw new Error('Cannot subscribe to Mockttp events before the server is started');
+
+        const subRequest = this.requestBuilder.buildSubscriptionRequest(event as SubscribableEvent);
 
         if (!subRequest) {
             // We just return an immediately promise if we don't recognize the event, which will quietly

@@ -1,4 +1,5 @@
 import _ = require('lodash');
+import { EventEmitter } from 'events';
 import { Duplex } from 'stream';
 import DuplexPair = require('native-duplexpair');
 import { TypedError } from 'typed-error';
@@ -60,6 +61,20 @@ export class GraphQLError extends RequestError {
         );
     }
 }
+
+// The various events that the admin client can emit:
+export type AdminClientEvent =
+    | 'starting'
+    | 'started'
+    | 'start-failed'
+    | 'stopping'
+    | 'stopped'
+    | 'stream-error'
+    | 'stream-reconnecting'
+    | 'stream-reconnected'
+    | 'stream-reconnect-failed'
+    | 'subscription-error'
+    | 'subscription-reconnecting';
 
 export interface AdminClientOptions {
 
@@ -175,7 +190,7 @@ export async function resetAdminServer(options: AdminClientOptions = {}): Promis
  * This is part of Mockttp's experimental 'pluggable admin' API. It may change
  * unpredictably, even in minor releases.
  */
-export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> }> {
+export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> }> extends EventEmitter {
 
     private adminClientOptions: RequireProps<AdminClientOptions, 'adminServerUrl'>;
 
@@ -194,6 +209,7 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
     private running: MaybePromise<boolean> = false;
 
     constructor(options: AdminClientOptions = {}) {
+        super();
         this.debug = !!options.debug;
         this.adminClientOptions = _.defaults(options, {
             adminServerUrl: `http://localhost:${DEFAULT_ADMIN_SERVER_PORT}`
@@ -217,6 +233,7 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
         // We ignore errors, but websocket closure eventually results in reconnect or shutdown
         wsStream.on('error', (e) => {
             if (this.debug) console.warn('Admin client stream error', e);
+            this.emit('stream-error', e);
         });
 
         // When the websocket closes (after connect, either close frame, error, or socket shutdown):
@@ -230,6 +247,8 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
             } else if (streamConnected && (await this.running) === true) {
                 console.warn('Admin client stream unexpectedly disconnected', closeEvent);
 
+                this.emit('stream-reconnecting');
+
                 // Unclean shutdown means something has gone wrong somewhere. Try to reconnect.
                 const newStream = this.attachStreamWebsocket(adminSessionBaseUrl, targetStream);
 
@@ -239,9 +258,12 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
                 }).then(() => {
                     // On a successful connect, business resumes as normal.
                     console.warn('Admin client stream reconnected');
+                    this.emit('stream-reconnected');
                 }).catch((err) => {
                     // On a failed reconnect, we just shut down completely.
-                    console.warn('Admin client stream reconnection failed, shutting down', err);
+                    console.warn('Admin client stream reconnection failed, shutting down:', err.message);
+                    if (this.debug) console.warn(err);
+                    this.emit('stream-reconnect-failed', err);
                     targetStream.emit('server-shutdown');
                 });
             }
@@ -295,12 +317,14 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
         }, WebSocket);
 
         this.subscriptionClient.onError((e) => {
+            this.emit('subscription-error', e);
             if (this.debug) console.error("Subscription error", e)
         });
 
-        this.subscriptionClient.onReconnecting(() =>
+        this.subscriptionClient.onReconnecting(() => {
+            this.emit('subscription-reconnecting');
             console.warn('Reconnecting Mockttp subscription client')
-        );
+        });
     }
 
     private async requestFromMockServer(path: string, options?: RequestInit): Promise<Response> {
@@ -361,9 +385,11 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
     ): Promise<PluginClientResponsesMap<Plugins>> {
         if (this.adminSessionBaseUrl || await this.running) throw new Error('Server is already started');
         if (this.debug) console.log(`Starting remote mock server`);
+        this.emit('starting');
 
         const startPromise = getDeferred<boolean>();
         this.running = startPromise.then((result) => {
+            this.emit(result ? 'started' : 'start-failed');
             this.running = result;
             return result;
         });
@@ -410,7 +436,10 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
             adminServerStream.on('server-shutdown', () => {
                 // When the server remotely disconnects the stream, shut down the client iff the client hasn't
                 // stopped & restarted in the meantime (can happen, since all shutdown is async).
-                if (this.adminServerStream === adminServerStream) this.stop();
+                if (this.adminServerStream === adminServerStream) {
+                    console.warn('Client stopping due to admin server shutdown');
+                    this.stop();
+                }
             });
             this.adminServerStream = adminServerStream;
 
@@ -467,9 +496,11 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
     // and we just want to ensure that's happened and clean everything up.
     async stop(): Promise<void> {
         if (await this.running === false) return; // If stopped or stopping, do nothing.
+        this.emit('stopping');
 
         const stopPromise = getDeferred<boolean>();
         this.running = stopPromise.then((result) => {
+            this.emit('stopped');
             this.running = result;
             return result;
         });
