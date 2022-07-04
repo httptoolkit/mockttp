@@ -58,7 +58,9 @@ nodeOnly(() => {
             expect(caCertificate.key.split('\r\n')[0]).to.equal('-----BEGIN RSA PRIVATE KEY-----');
         });
 
-        it("should be able to generate a CA certificate that passes lintcert checks", async () => {
+        it("should be able to generate a CA certificate that passes lintcert checks", async function () {
+            this.retries(3); // Lintcert can have intermittent connectivity blips
+
             const caCertificate = await caCertificatePromise;
 
             const { cert } = caCertificate;
@@ -85,6 +87,7 @@ nodeOnly(() => {
 
         it("should generate a CA certs that can be used to create domain certs that pass lintcert checks", async function () {
             this.timeout(5000); // Large cert + remote request can make this slow
+            this.retries(3); // Lintcert can have intermittent connectivity blips
 
             const caCertificate = await caCertificatePromise;
             const ca = new CA(caCertificate.key, caCertificate.cert, 2048);
