@@ -156,7 +156,7 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
     public on(event: SubscribableEvent | MockttpClientEvent, callback: (data: any) => void): Promise<void> {
         if (event.startsWith('admin-client:')) {
             // All MockttpClient events come from the internal admin-client instance:
-            this.adminClient.on(event, callback);
+            this.adminClient.on(event.slice('admin-client:'.length), callback);
             return Promise.resolve();
         }
 

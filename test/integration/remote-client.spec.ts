@@ -16,6 +16,7 @@ import {
     MOCKTTP_PARAM_REF
 } from "../..";
 import { expect, fetch, nodeOnly, browserOnly, delay, getDeferred } from "../test-utils";
+import type { MockttpClient } from "../../dist/client/mockttp-client";
 
 browserOnly(() => {
     describe("Remote browser client with an admin server", function () {
@@ -488,6 +489,20 @@ nodeOnly(() => {
                     await expect(getRemote().start(port))
                         .to.eventually.be.rejectedWith(/Failed to start mock session: listen EADDRINUSE/);
                 });
+            });
+
+            it("should allow subscription to admin-client events", async () => {
+                // Two arbitrary easy to trigger admin client lifecycle events:
+                const stoppingEventPromise = getDeferred<void>();
+                await (remoteServer as MockttpClient).on('admin-client:stopping', () => stoppingEventPromise.resolve());
+                const stoppedEventPromise = getDeferred<void>();
+                await (remoteServer as MockttpClient).on('admin-client:stopped', () => stoppedEventPromise.resolve());
+
+                await remoteServer.stop();
+
+                // Make sure the events fired:
+                await stoppingEventPromise;
+                await stoppedEventPromise;
             });
         });
 
