@@ -308,7 +308,7 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
      * This is run synchronously when a session is created, after it has fully started
      * but before its been returned to remote clients.
      */
-    on(event: 'mock-session-started', listener: (plugins: Plugins) => void): void;
+    on(event: 'mock-session-started', listener: (plugins: Plugins, sessionId: string) => void): void;
 
     /**
      * Subscribe to hear when a mock session is stopped. The listener is provided with
@@ -321,7 +321,7 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
      * their request. This is also run before shutdown when the admin server itself is
      * cleanly shutdown with `adminServer.stop()`.
      */
-    on(event: 'mock-session-stopping', listener: (plugins: Plugins) => void): void;
+    on(event: 'mock-session-stopping', listener: (plugins: Plugins, sessionId: string) => void): void;
     on(event: string, listener: (...args: any) => void): void {
         this.eventEmitter.on(event, listener);
     }
@@ -509,7 +509,7 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
             stop: stopSession
         };
 
-        this.eventEmitter.emit('mock-session-started', plugins);
+        this.eventEmitter.emit('mock-session-started', plugins, sessionId);
     }
 
     stop(): Promise<void> {
