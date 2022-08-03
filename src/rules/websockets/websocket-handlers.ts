@@ -34,7 +34,7 @@ import { readFile } from '../../util/fs';
 import { getAgent } from '../http-agents';
 import { ProxySettingSource } from '../proxy-config';
 import { assertParamDereferenced, RuleParameters } from '../rule-parameters';
-import { MOCKTTP_UPSTREAM_CIPHERS } from '../passthrough-handling';
+import { UPSTREAM_TLS_OPTIONS } from '../passthrough-handling';
 
 import {
     EchoWebSocketHandlerDefinition,
@@ -350,7 +350,7 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
             ) as { [key: string]: string }, // Simplify to string - doesn't matter though, only used by http module anyway
 
             // TLS options:
-            ciphers: MOCKTTP_UPSTREAM_CIPHERS,
+            ...UPSTREAM_TLS_OPTIONS,
             rejectUnauthorized: checkServerCertificate,
             ...caConfig
         } as WebSocket.ClientOptions & { lookup: any, maxPayload: number });

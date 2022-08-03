@@ -13,21 +13,66 @@ import {
     CallbackResponseMessageResult
 } from './requests/request-handler-definitions';
 
-// We don't want to use the standard Node.js ciphers as-is, because remote servers can
-// examine the TLS fingerprint to recognize they as coming from Node.js. To anonymize
-// ourselves, we use a ever-so-slightly tweaked cipher config, which ensures we aren't
-// easily recognizeable by default.
-const defaultCiphers = (tls as any).DEFAULT_CIPHERS?.split(':') || []; // Standard, but not yet in the types - watch this space. [] included for browser fallback.
-export const MOCKTTP_UPSTREAM_CIPHERS = [
-    // We swap the ciphers position 1 & 3. These must be already preferred ciphers,
-    // at the top of the list, so this should always be safe. For Node 14, this swaps
-    // TLS_AES_256_GCM_SHA384 for TLS_AES_128_GCM_SHA256. Both are modern TLS 1.3
-    // options, and this order matches Firefox & cURL's current top 3 ciphers too.
-    defaultCiphers[2],
-    defaultCiphers[1],
-    defaultCiphers[0],
-    ...defaultCiphers.slice(3)
-].join(':');
+// TLS settings for proxied connections, intended to avoid TLS fingerprint blocking
+// issues so far as possible, by closely emulating a Firefox Client Hello:
+const NEW_CURVES_SUPPORTED = Number(process.versions.node.split('.')[0]) >= 17;
+
+const SSL_OP_TLSEXT_PADDING = 1 << 4;
+const SSL_OP_NO_ENCRYPT_THEN_MAC = 1 << 19;
+
+// All settings are designed to exactly match Firefox v103, since that's a good baseline
+// that seems to be widely accepted and is easy to emulate from Node.js.
+export const UPSTREAM_TLS_OPTIONS: tls.SecureContextOptions = {
+    ecdhCurve: [
+        'X25519',
+        'prime256v1', // N.B. Equivalent to secp256r1
+        'secp384r1',
+        'secp521r1',
+        ...(NEW_CURVES_SUPPORTED
+            ? [ // Only available with OpenSSL v3+:
+                'ffdhe2048',
+                'ffdhe3072'
+            ] : []
+        )
+    ].join(':'),
+    sigalgs: [
+        'ecdsa_secp256r1_sha256',
+        'ecdsa_secp384r1_sha384',
+        'ecdsa_secp521r1_sha512',
+        'rsa_pss_rsae_sha256',
+        'rsa_pss_rsae_sha384',
+        'rsa_pss_rsae_sha512',
+        'rsa_pkcs1_sha256',
+        'rsa_pkcs1_sha384',
+        'rsa_pkcs1_sha512',
+        'ECDSA+SHA1',
+        'rsa_pkcs1_sha1'
+    ].join(':'),
+    ciphers: [
+        'TLS_AES_128_GCM_SHA256',
+        'TLS_CHACHA20_POLY1305_SHA256',
+        'TLS_AES_256_GCM_SHA384',
+        'ECDHE-ECDSA-AES128-GCM-SHA256',
+        'ECDHE-RSA-AES128-GCM-SHA256',
+        'ECDHE-ECDSA-CHACHA20-POLY1305',
+        'ECDHE-RSA-CHACHA20-POLY1305',
+        'ECDHE-ECDSA-AES256-GCM-SHA384',
+        'ECDHE-RSA-AES256-GCM-SHA384',
+        'ECDHE-ECDSA-AES256-SHA',
+        'ECDHE-ECDSA-AES128-SHA',
+        'ECDHE-RSA-AES128-SHA',
+        'ECDHE-RSA-AES256-SHA',
+        'AES128-GCM-SHA256',
+        'AES256-GCM-SHA384',
+        'AES128-SHA',
+        'AES256-SHA'
+    ].join(':'),
+    secureOptions: SSL_OP_TLSEXT_PADDING | SSL_OP_NO_ENCRYPT_THEN_MAC,
+    ...({
+        // Valid, but not included in Node.js TLS module types:
+        requestOSCP: true
+    } as any)
+};
 
 // --- Various helpers for deriving parts of request/response data given partial overrides: ---
 

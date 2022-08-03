@@ -63,9 +63,9 @@ import {
     getContentLengthAfterModification,
     getHostAfterModification,
     getH2HeadersAfterModification,
-    MOCKTTP_UPSTREAM_CIPHERS,
     OVERRIDABLE_REQUEST_PSEUDOHEADERS,
-    buildOverriddenBody
+    buildOverriddenBody,
+    UPSTREAM_TLS_OPTIONS
 } from '../passthrough-handling';
 
 import {
@@ -685,7 +685,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 // ^ Cast required to handle __promisify__ type hack in the official Node types
                 agent,
                 // TLS options:
-                ciphers: MOCKTTP_UPSTREAM_CIPHERS,
+                ...UPSTREAM_TLS_OPTIONS,
                 minVersion: strictHttpsChecks ? tls.DEFAULT_MIN_VERSION : 'TLSv1', // Allow TLSv1, if !strict
                 rejectUnauthorized: strictHttpsChecks,
                 ...clientCert,
