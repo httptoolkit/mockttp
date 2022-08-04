@@ -669,6 +669,13 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
             rawHeaders = h2HeadersToH1(rawHeaders);
         }
 
+        // Drop proxy-connection header. This is almost always intended for us, not for upstream servers,
+        // and forwarding it causes problems (most notably, it triggers lots of weird-traffic blocks,
+        // most notably by Cloudflare).
+        rawHeaders = rawHeaders.filter(([key]) =>
+            key.toLowerCase() !== 'proxy-connection'
+        );
+
         let serverReq: http.ClientRequest;
         return new Promise<void>((resolve, reject) => (async () => { // Wrapped to easily catch (a)sync errors
             serverReq = await makeRequest({
