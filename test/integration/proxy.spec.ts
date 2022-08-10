@@ -22,7 +22,8 @@ import {
     destroyable,
     DestroyableServer,
     H2_TLS_ON_TLS_SUPPORTED,
-    OLD_TLS_SUPPORTED
+    OLD_TLS_SUPPORTED,
+    delay
 } from "../test-utils";
 import { CA } from "../../src/util/tls";
 import { isLocalIPv6Available } from "../../src/util/socket-util";
@@ -1034,19 +1035,30 @@ nodeOnly(() => {
                 });
 
                 it("should pass through HTTPS with a non-Node.js TLS fingerprint", async function () {
-                    this.retries(3); // Allow some retries, since we need an external service for this
+                    this.timeout(5000); // External service, can be slow
 
                     await server.forAnyRequest().thenPassThrough();
 
-                    let response = await request.get("https://ja3er.com/json", {
-                        headers: {
-                            // The hash will get recorded with the user agent that's used - we don't want the database
-                            // to fill up with records that make it clear it's Mockttp's fingerprint!
-                            'user-agent': `Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.${
-                                String(Date.now()).slice(-2) // Some very basic randomness
-                            } Safari/537.36`
-                        }
-                    });
+                    let response = await Promise.race([
+                        request.get("https://ja3er.com/json", {
+                            headers: {
+                                // The hash will get recorded with the user agent that's used - we don't want the database
+                                // to fill up with records that make it clear it's Mockttp's fingerprint!
+                                'user-agent': `Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.${
+                                    String(Date.now()).slice(-2) // Some very basic randomness
+                                } Safari/537.36`
+                            }
+                        }),
+                        delay(4000).then(() => { throw new Error('timeout'); })
+                    ]).catch(e => e);
+
+                    if (response instanceof Error) {
+                        // ja3er.com is often unavailable. This is annoying but hard to avoid. To handle
+                        // this for now, we just skip the test if the server is unavailable. We only
+                        // fail when we get a real response with a bad fingerprint.
+                        console.warn('Skipping JA3 test due to network error:', response);
+                        return this.skip();
+                    }
 
                     const ja3Hash = JSON.parse(response).ja3_hash;
 
