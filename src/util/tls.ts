@@ -174,6 +174,24 @@ export class CA {
         // TODO: Expire domains from the cache? Based on their actual expiry?
         if (this.certCache[domain]) return this.certCache[domain];
 
+        if (domain.includes('_')) {
+            // TLS certificates cannot cover domains with underscores, bizarrely. More info:
+            // https://www.digicert.com/kb/ssl-support/underscores-not-allowed-in-fqdns.htm
+            // To fix this, we use wildcards instead. This is only possible for one level of
+            // certificate, and only for subdomains, so our options are a little limited, but
+            // this should be very rare (because it's not supported elsewhere either).
+            const [ , ...otherParts] = domain.split('.');
+            if (
+                otherParts.length <= 1 || // *.com is never valid
+                otherParts.some(p => p.includes('_'))
+            ) {
+                throw new Error(`Cannot generate certificate for domain due to underscores: ${domain}`);
+            }
+
+            // Replace the first part with a wildcard to solve the problem:
+            domain = `*.${otherParts.join('.')}`;
+        }
+
         let cert = pki.createCertificate();
 
         cert.publicKey = KEY_PAIR!.publicKey;
@@ -188,7 +206,10 @@ export class CA {
         cert.validity.notAfter.setFullYear(cert.validity.notAfter.getFullYear() + 1);
 
         cert.setSubject([
-            { name: 'commonName', value: domain },
+            ...(domain[0] === '*'
+                ? [] // We skip the CN (deprecated, rarely used) for wildcards, since they can't be used here.
+                : [{ name: 'commonName', value: domain }]
+            ),
             { name: 'countryName', value: 'XX' }, // ISO-3166-1 alpha-2 'unknown country' code
             { name: 'localityName', value: 'Unknown' },
             { name: 'organizationName', value: 'Mockttp Cert - DO NOT TRUST' }

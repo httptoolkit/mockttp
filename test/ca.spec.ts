@@ -1,5 +1,6 @@
 import * as https from 'https';
 import * as path from 'path';
+import * as forge from 'node-forge';
 
 import { expect, fetch, nodeOnly } from "./test-utils";
 import * as fs from '../src/util/fs';
@@ -85,7 +86,7 @@ nodeOnly(() => {
             expect(errors.join('\n')).to.equal('');
         });
 
-        it("should generate a CA certs that can be used to create domain certs that pass lintcert checks", async function () {
+        it("should generate CA certs that can be used to create domain certs that pass lintcert checks", async function () {
             this.timeout(5000); // Large cert + remote request can make this slow
             this.retries(3); // Lintcert can have intermittent connectivity blips
 
@@ -93,6 +94,50 @@ nodeOnly(() => {
             const ca = new CA(caCertificate.key, caCertificate.cert, 2048);
 
             const { cert } = ca.generateCertificate('httptoolkit.tech');
+
+
+            const certData = forge.pki.certificateFromPem(cert);
+            expect((certData.getExtension('subjectAltName') as any).altNames[0].value).to.equal('httptoolkit.tech');
+
+            const response = await fetch('https://crt.sh/lintcert', {
+                method: 'POST',
+                headers: { 'content-type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({'b64cert': cert})
+            });
+
+            expect(response.status).to.equal(200);
+            const lintOutput = await response.text();
+
+            const lintResults = lintOutput
+                .split('\n')
+                .map(line => line.split('\t').slice(1))
+                .filter(line => line.length > 1);
+
+            const errors = lintResults
+                .filter(([level]) => level === 'ERROR' || level === 'FATAL')
+                .map(([_level, message]) => message)
+                .filter((message) =>
+                    // TODO: We don't yet support AIA due to https://github.com/digitalbazaar/forge/issues/988
+                    // This is relatively new, tricky to support (we'd need an OCSP server), and not yet required
+                    // anywhere AFAICT, so not a high priority short-term, but good to do later if possible.
+                    !message.includes("OCSP") &&
+                    !message.includes("authorityInformationAccess")
+                );
+
+            expect(errors.join('\n')).to.equal('');
+        });
+
+        it("should generate wildcard certs that pass lintcert checks for invalid subdomain names", async function () {
+            this.timeout(5000); // Large cert + remote request can make this slow
+            this.retries(3); // Lintcert can have intermittent connectivity blips
+
+            const caCertificate = await caCertificatePromise;
+            const ca = new CA(caCertificate.key, caCertificate.cert, 2048);
+
+            const { cert } = ca.generateCertificate('under_score.httptoolkit.tech');
+
+            const certData = forge.pki.certificateFromPem(cert);
+            expect((certData.getExtension('subjectAltName') as any).altNames[0].value).to.equal('*.httptoolkit.tech');
 
             const response = await fetch('https://crt.sh/lintcert', {
                 method: 'POST',
