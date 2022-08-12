@@ -2,7 +2,7 @@ import * as https from 'https';
 import * as path from 'path';
 import * as forge from 'node-forge';
 
-import { expect, fetch, nodeOnly } from "./test-utils";
+import { expect, fetch, ignoreNetworkError, nodeOnly } from "./test-utils";
 import * as fs from '../src/util/fs';
 
 import { CA, generateCACertificate } from '../src/util/tls';
@@ -60,17 +60,18 @@ nodeOnly(() => {
         });
 
         it("should be able to generate a CA certificate that passes lintcert checks", async function () {
-            this.retries(3); // Lintcert can have intermittent connectivity blips
-
             const caCertificate = await caCertificatePromise;
 
             const { cert } = caCertificate;
 
-            const response = await fetch('https://crt.sh/lintcert', {
-                method: 'POST',
-                headers: { 'content-type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams({'b64cert': cert})
-            });
+            const response = await ignoreNetworkError(
+                fetch('https://crt.sh/lintcert', {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({'b64cert': cert})
+                }),
+                { context: this }
+            );
 
             const lintOutput = await response.text();
 
@@ -88,7 +89,6 @@ nodeOnly(() => {
 
         it("should generate CA certs that can be used to create domain certs that pass lintcert checks", async function () {
             this.timeout(5000); // Large cert + remote request can make this slow
-            this.retries(3); // Lintcert can have intermittent connectivity blips
 
             const caCertificate = await caCertificatePromise;
             const ca = new CA(caCertificate.key, caCertificate.cert, 2048);
@@ -99,11 +99,14 @@ nodeOnly(() => {
             const certData = forge.pki.certificateFromPem(cert);
             expect((certData.getExtension('subjectAltName') as any).altNames[0].value).to.equal('httptoolkit.tech');
 
-            const response = await fetch('https://crt.sh/lintcert', {
-                method: 'POST',
-                headers: { 'content-type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams({'b64cert': cert})
-            });
+            const response = await ignoreNetworkError(
+                fetch('https://crt.sh/lintcert', {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({'b64cert': cert})
+                }),
+                { context: this }
+            );
 
             expect(response.status).to.equal(200);
             const lintOutput = await response.text();
@@ -129,7 +132,6 @@ nodeOnly(() => {
 
         it("should generate wildcard certs that pass lintcert checks for invalid subdomain names", async function () {
             this.timeout(5000); // Large cert + remote request can make this slow
-            this.retries(3); // Lintcert can have intermittent connectivity blips
 
             const caCertificate = await caCertificatePromise;
             const ca = new CA(caCertificate.key, caCertificate.cert, 2048);
@@ -139,11 +141,14 @@ nodeOnly(() => {
             const certData = forge.pki.certificateFromPem(cert);
             expect((certData.getExtension('subjectAltName') as any).altNames[0].value).to.equal('*.httptoolkit.tech');
 
-            const response = await fetch('https://crt.sh/lintcert', {
-                method: 'POST',
-                headers: { 'content-type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams({'b64cert': cert})
-            });
+            const response = await ignoreNetworkError(
+                fetch('https://crt.sh/lintcert', {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({'b64cert': cert})
+                }),
+                { context: this }
+            );
 
             expect(response.status).to.equal(200);
             const lintOutput = await response.text();

@@ -23,7 +23,7 @@ import {
     DestroyableServer,
     H2_TLS_ON_TLS_SUPPORTED,
     OLD_TLS_SUPPORTED,
-    delay
+    ignoreNetworkError
 } from "../test-utils";
 import { CA } from "../../src/util/tls";
 import { isLocalIPv6Available } from "../../src/util/socket-util";
@@ -1039,7 +1039,7 @@ nodeOnly(() => {
 
                     await server.forAnyRequest().thenPassThrough();
 
-                    let response = await Promise.race([
+                    let response = await ignoreNetworkError( // External service, can be unreliable, c'est la vie
                         request.get("https://ja3er.com/json", {
                             headers: {
                                 // The hash will get recorded with the user agent that's used - we don't want the database
@@ -1047,16 +1047,8 @@ nodeOnly(() => {
                                 'user-agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:103.0) Gecko/20100101 Firefox/103.0'
                             }
                         }),
-                        delay(4000).then(() => { throw new Error('timeout'); })
-                    ]).catch(e => e);
-
-                    if (response instanceof Error) {
-                        // ja3er.com is often unavailable. This is annoying but hard to avoid. To handle
-                        // this for now, we just skip the test if the server is unavailable. We only
-                        // fail when we get a real response with a bad fingerprint.
-                        console.warn('Skipping JA3 test due to network error:', response);
-                        return this.skip();
-                    }
+                        { context: this, timeout: 4000 }
+                    );
 
                     const ja3Hash = JSON.parse(response).ja3_hash;
 

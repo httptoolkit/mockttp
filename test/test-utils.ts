@@ -13,6 +13,7 @@ import {
     FormData as FormDataPolyfill,
     File as FilePolyfill
 } from "formdata-node";
+import { RequestPromise } from 'request-promise-native';
 
 import chai = require("chai");
 import chaiAsPromised = require("chai-as-promised");
@@ -85,6 +86,38 @@ export function browserOnly(body: Function) {
 
 export function nodeOnly(body: Function) {
     if (isNode) body();
+}
+
+// Wrap a test promise that might fail due to irrelevant remote network issues, and it'll skip the test
+// if there's a timeout or 502 response (but still throw any other errors). This allows us to write tests
+// that will fail if a remote server explicitly rejects something, but make them resilient to the remote
+// server simply being entirely unavailable.
+export async function ignoreNetworkError<T extends RequestPromise | Promise<Response>>(request: T, options: {
+    context: Mocha.Context,
+    timeout?: number
+}): Promise<T> {
+    const TimeoutError = new Error('timeout');
+
+    const result = await Promise.race([
+        request.catch(e => e),
+        delay(options.timeout ?? 1000).then(() => { throw TimeoutError })
+    ]).catch(error => {
+        console.log(error);
+        if (error === TimeoutError) {
+            console.warn(`Skipping test due to network error: ${error.message || error}`);
+            if ('abort' in request) request.abort();
+            throw options.context.skip();
+        } else {
+            throw error;
+        }
+    });
+
+    if ((result as any).status === 502) {
+        console.warn('Skipping test due to remote 502 response');
+        throw options.context.skip();
+    }
+
+    return result;
 }
 
 const TOO_LONG_HEADER_SIZE = 1024 * (isNode ? 16 : 160) + 1;
