@@ -502,16 +502,20 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 reqBodyOverride = asBuffer(JSON.stringify(updatedBody));
             } else if (matchReplaceBody) {
                 const { body: realBody } = await waitForCompletedRequest(clientReq);
-                let replacedBody = await realBody.getText();
-                if (replacedBody === undefined) {
+
+                const originalBody = await realBody.getText();
+                if (originalBody === undefined) {
                     throw new Error("Can't match & replace non-decodeable request body");
                 }
 
+                let replacedBody = originalBody;
                 for (let [match, result] of matchReplaceBody) {
                     replacedBody = replacedBody!.replace(match, result);
                 }
 
-                reqBodyOverride = asBuffer(replacedBody);
+                if (replacedBody !== originalBody) {
+                    reqBodyOverride = asBuffer(replacedBody);
+                }
             }
 
             if (reqBodyOverride) {
@@ -766,16 +770,19 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                         const rawBody = await streamToBuffer(serverRes);
                         const realBody = buildBodyReader(rawBody, serverRes.headers);
 
-                        let replacedBody = await realBody.getText();
-                        if (replacedBody === undefined) {
+                        const originalBody = await realBody.getText();
+                        if (originalBody === undefined) {
                             throw new Error("Can't match & replace non-decodeable response body");
                         }
 
+                        let replacedBody = originalBody;
                         for (let [match, result] of matchReplaceBody) {
                             replacedBody = replacedBody!.replace(match, result);
                         }
 
-                        resBodyOverride = asBuffer(replacedBody);
+                        if (replacedBody !== originalBody) {
+                            resBodyOverride = asBuffer(replacedBody);
+                        }
                     }
 
                     if (resBodyOverride) {
