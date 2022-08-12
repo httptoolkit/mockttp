@@ -1044,9 +1044,7 @@ nodeOnly(() => {
                             headers: {
                                 // The hash will get recorded with the user agent that's used - we don't want the database
                                 // to fill up with records that make it clear it's Mockttp's fingerprint!
-                                'user-agent': `Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.${
-                                    String(Date.now()).slice(-2) // Some very basic randomness
-                                } Safari/537.36`
+                                'user-agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:103.0) Gecko/20100101 Firefox/103.0'
                             }
                         }),
                         delay(4000).then(() => { throw new Error('timeout'); })
