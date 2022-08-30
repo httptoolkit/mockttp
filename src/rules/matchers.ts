@@ -234,11 +234,14 @@ export class SimplePathMatcher extends Serializable implements RequestMatcher {
 
 export class RegexPathMatcher extends Serializable implements RequestMatcher {
     readonly type = 'regex-path';
+
     readonly regexSource: string;
+    readonly regexFlags: string;
 
     constructor(regex: RegExp) {
         super();
         this.regexSource = regex.source;
+        this.regexFlags = regex.flags;
     }
 
     matches(request: OngoingRequest) {
@@ -246,13 +249,13 @@ export class RegexPathMatcher extends Serializable implements RequestMatcher {
         const urlPath = getPathFromAbsoluteUrl(absoluteUrl);
 
         // Test the matcher against both the path alone & the full URL
-        const urlMatcher = new RegExp(this.regexSource);
+        const urlMatcher = new RegExp(this.regexSource, this.regexFlags);
         return urlMatcher.test(absoluteUrl) ||
             urlMatcher.test(urlPath);
     }
 
     explain() {
-        return `matching /${unescapeRegexp(this.regexSource)}/`;
+        return `matching /${unescapeRegexp(this.regexSource)}/${this.regexFlags ?? ''}`;
     }
 
 }
