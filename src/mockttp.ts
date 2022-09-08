@@ -310,6 +310,18 @@ export interface Mockttp {
     forOptions(url?: string | RegExp): RequestRuleBuilder;
 
     /**
+     * Match JSON-RPC requests, optionally matching a given method and/or params.
+     *
+     * If no method or params are specified, this will match all JSON-RPC requests.
+     *
+     * Params are matched flexibly, using the same logic as .withJsonBodyIncluding(),
+     * so only the included fields are checked and other extra fields are ignored
+     *
+     * @category Mock HTTP requests
+     */
+    forJsonRpcRequest(match?: { method?: string, params?: any }): RequestRuleBuilder;
+
+    /**
      * Get a builder for a mock rule that will match all websocket connections.
      *
      * @category Mock websockets
@@ -790,6 +802,15 @@ export abstract class AbstractMockttp {
             `);
         }
         return new RequestRuleBuilder(Method.OPTIONS, url, this.addRequestRule);
+    }
+
+    forJsonRpcRequest(match: { method?: string, params?: any } = {}) {
+        return new RequestRuleBuilder(this.addRequestRule)
+            .withJsonBodyIncluding({
+                jsonrpc: '2.0',
+                ...(match.method ? { method: match.method } : {}),
+                ...(match.params ? { params: match.params } : {})
+            });
     }
 
     forAnyWebSocket(): WebSocketRuleBuilder {

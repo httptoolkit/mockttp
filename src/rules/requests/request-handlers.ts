@@ -80,6 +80,7 @@ import {
     FileHandlerDefinition,
     ForwardingOptions,
     HandlerDefinitionLookup,
+    JsonRpcResponseHandlerDefinition,
     PassThroughHandlerDefinition,
     PassThroughHandlerOptions,
     PassThroughLookupOptions,
@@ -1080,6 +1081,27 @@ export class TimeoutHandler extends TimeoutHandlerDefinition {
     }
 }
 
+export class JsonRpcResponseHandler extends JsonRpcResponseHandlerDefinition {
+    async handle(request: OngoingRequest, response: OngoingResponse) {
+        const data: any = await request.body.asJson()
+            .catch(() => {}); // Handle parsing errors with the check below
+
+        if (!data || data.jsonrpc !== '2.0' || !('id' in data)) { // N.B. id can be null
+            throw new Error("Can't send a JSON-RPC response to an invalid JSON-RPC request");
+        }
+
+        response.writeHead(200, {
+            'content-type': 'application/json'
+        });
+
+        response.end(JSON.stringify({
+            jsonrpc: '2.0',
+            id: data.id,
+            ...this.result
+        }));
+    }
+}
+
 export const HandlerLookup: typeof HandlerDefinitionLookup = {
     'simple': SimpleHandler,
     'callback': CallbackHandler,
@@ -1087,5 +1109,6 @@ export const HandlerLookup: typeof HandlerDefinitionLookup = {
     'file': FileHandler,
     'passthrough': PassThroughHandler,
     'close-connection': CloseConnectionHandler,
-    'timeout': TimeoutHandler
+    'timeout': TimeoutHandler,
+    'json-rpc-response': JsonRpcResponseHandler
 }

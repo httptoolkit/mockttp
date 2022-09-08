@@ -14,6 +14,7 @@ import {
     TimeoutHandlerDefinition,
     PassThroughHandlerOptions,
     FileHandlerDefinition,
+    JsonRpcResponseHandlerDefinition,
 } from "./request-handler-definitions";
 import { MaybePromise } from "../../util/type-utils";
 import { byteLength } from "../../util/util";
@@ -391,6 +392,38 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
         const rule: RequestRuleData = {
             ...this.buildBaseRuleData(),
             handler: new TimeoutHandlerDefinition()
+        };
+
+        return this.addRule(rule);
+    }
+
+    /**
+     * Send a successful JSON-RPC response to a JSON-RPC request. The response data
+     * can be any JSON-serializable value. If a matching request is received that
+     * is not a valid JSON-RPC request, it will be rejected with an HTTP error.
+     *
+     * @category Responses
+     */
+    thenSendJsonRpcResult(result: any) {
+        const rule = {
+            ...this.buildBaseRuleData(),
+            handler: new JsonRpcResponseHandlerDefinition({ result })
+        };
+
+        return this.addRule(rule);
+    }
+
+    /**
+     * Send a failing error JSON-RPC response to a JSON-RPC request. The error data
+     * can be any JSON-serializable value. If a matching request is received that
+     * is not a valid JSON-RPC request, it will be rejected with an HTTP error.
+     *
+     * @category Responses
+     */
+    thenSendJsonRpcError(error: any) {
+        const rule = {
+            ...this.buildBaseRuleData(),
+            handler: new JsonRpcResponseHandlerDefinition({ error })
         };
 
         return this.addRule(rule);

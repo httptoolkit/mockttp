@@ -1029,6 +1029,30 @@ export class TimeoutHandlerDefinition extends Serializable implements RequestHan
     }
 }
 
+export class JsonRpcResponseHandlerDefinition extends Serializable implements RequestHandlerDefinition {
+    readonly type = 'json-rpc-response';
+
+    constructor(
+        public readonly result:
+            | { result: any, error?: undefined }
+            | { error: any, result?: undefined }
+    ) {
+        super();
+
+        if (!('result' in result) && !('error' in result)) {
+            throw new Error('JSON-RPC response must be either a result or an error');
+        }
+    }
+
+    explain() {
+        const resultType = 'result' in this.result
+            ? 'result'
+            : 'error';
+
+        return `send a fixed JSON-RPC ${resultType} of ${JSON.stringify(this.result[resultType])}`;
+    }
+}
+
 export const HandlerDefinitionLookup = {
     'simple': SimpleHandlerDefinition,
     'callback': CallbackHandlerDefinition,
@@ -1036,5 +1060,6 @@ export const HandlerDefinitionLookup = {
     'file': FileHandlerDefinition,
     'passthrough': PassThroughHandlerDefinition,
     'close-connection': CloseConnectionHandlerDefinition,
-    'timeout': TimeoutHandlerDefinition
+    'timeout': TimeoutHandlerDefinition,
+    'json-rpc-response': JsonRpcResponseHandlerDefinition
 }
