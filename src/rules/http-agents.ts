@@ -1,7 +1,14 @@
 import * as _ from 'lodash';
+import * as url from 'url';
 import * as http from 'http';
 import * as https from 'https';
-import ProxyAgent = require('@httptoolkit/proxy-agent');
+
+import * as LRU from 'lru-cache';
+
+import getHttpsProxyAgent = require('https-proxy-agent');
+import getPacProxyAgent = require('pac-proxy-agent');
+import { SocksProxyAgent } from 'socks-proxy-agent';
+const getSocksProxyAgent = (opts: any) => new SocksProxyAgent(opts);
 
 import { isNode } from "../util/util";
 import { getProxySetting, matchesNoProxy, ProxySettingSource } from './proxy-config';
@@ -15,6 +22,31 @@ const KeepAliveAgents = isNode
             keepAlive: true
         })
     } : {};
+
+const ProxyAgentFactoryMap = {
+    'http:': getHttpsProxyAgent, // HTTPS here really means 'CONNECT-tunnelled' - it can do either
+    'https:': getHttpsProxyAgent,
+
+    'pac+http:': getPacProxyAgent,
+    'pac+https:': getPacProxyAgent,
+
+    'socks:': getSocksProxyAgent,
+    'socks4:': getSocksProxyAgent,
+    'socks4a:': getSocksProxyAgent,
+    'socks5:': getSocksProxyAgent,
+    'socks5h:': getSocksProxyAgent
+} as const;
+
+const proxyAgentCache = new LRU<string, http.Agent>({
+    max: 20,
+
+    ttl: 1000 * 60 * 5, // Drop refs to unused agents after 5 minutes
+    ttlResolution: 1000 * 60, // Check for expiry once every minute maximum
+    ttlAutopurge: true, // Actively drop expired agents
+    updateAgeOnGet: true // Don't drop agents while they're in use
+});
+
+const getCacheKey = (options: {}) => JSON.stringify(options);
 
 export async function getAgent({
     protocol, hostname, port, tryHttp2, keepAlive, proxySettingSource
@@ -35,7 +67,24 @@ export async function getAgent({
         if (!matchesNoProxy(hostname, port, proxySetting.noProxy)) {
             // We notably ignore HTTP/2 upstream in this case: it's complicated to mix that up with proxying
             // so for now we ignore it entirely.
-            return new ProxyAgent(proxySetting.proxyUrl) as http.Agent;
+
+            const cacheKey = getCacheKey({
+                url: proxySetting?.proxyUrl
+            });
+
+            if (!proxyAgentCache.has(cacheKey)) {
+                const { protocol, auth, hostname, port } = url.parse(proxySetting?.proxyUrl);
+                const buildProxyAgent = ProxyAgentFactoryMap[protocol as keyof typeof ProxyAgentFactoryMap];
+
+                proxyAgentCache.set(cacheKey, buildProxyAgent({
+                    protocol,
+                    auth,
+                    hostname,
+                    port
+                }));
+            }
+
+            return proxyAgentCache.get(cacheKey);
         }
     }
 

@@ -2669,6 +2669,30 @@ nodeOnly(() => {
                 expect((await proxyEndpoint.getSeenRequests()).length).to.equal(1);
             });
 
+            it("should support authenticating to the remote proxy", async () => {
+                // Remote server sends fixed response on this one URL:
+                await remoteServer.forGet('/test-url').thenReply(200, "Remote server says hi!");
+
+                // Mockttp forwards requests via our intermediate proxy
+                await server.forAnyRequest().thenPassThrough({
+                    proxyConfig: {
+                        proxyUrl: intermediateProxy.url
+                            .replace('://', '://username:password@')
+                    }
+                });
+
+                const response = await request.get(remoteServer.urlFor("/test-url"));
+
+                // We get a successful response
+                expect(response).to.equal("Remote server says hi!");
+                // And it went via the intermediate proxy
+                expect((await proxyEndpoint.getSeenRequests()).length).to.equal(1);
+
+                // N.B: we don't actually check that the auth params are used here, only that the request with
+                // them in the URL sends OK. We can't, unfortunately, since they only exist in the CONNECT
+                // and that's always unwrapped and never exposed. Visible in Wireshark though.
+            });
+
             it("should skip the proxy if the target is in the no-proxy list", async () => {
                 // Remote server sends fixed response on this one URL:
                 await remoteServer.forGet('/test-url').thenReply(200, "Remote server says hi!");

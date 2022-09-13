@@ -12,7 +12,9 @@
             "scripthost"
         ],
         "paths": {
-            "@httptoolkit/proxy-agent": ["./custom-typings/proxy-agent.d.ts"]
+            "https-proxy-agent": ["./custom-typings/proxy-agent-modules.d.ts"],
+            "socks-proxy-agent": ["./custom-typings/proxy-agent-modules.d.ts"],
+            "pac-proxy-agent": ["./custom-typings/proxy-agent-modules.d.ts"]
         }
     },
     "compileOnSave": true,
