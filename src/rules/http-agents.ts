@@ -56,7 +56,7 @@ export async function getAgent({
     port: number,
     tryHttp2: boolean,
     keepAlive: boolean
-    proxySettingSource: ProxySettingSource,
+    proxySettingSource: ProxySettingSource
 }): Promise<http.Agent | undefined> { // <-- We force this cast for convenience in various different uses later
     const proxySetting = await getProxySetting(proxySettingSource, { hostname });
 
@@ -69,18 +69,27 @@ export async function getAgent({
             // so for now we ignore it entirely.
 
             const cacheKey = getCacheKey({
-                url: proxySetting?.proxyUrl
+                url: proxySetting.proxyUrl,
+                ca: proxySetting.trustedCAs
             });
 
             if (!proxyAgentCache.has(cacheKey)) {
-                const { protocol, auth, hostname, port } = url.parse(proxySetting?.proxyUrl);
+                const { protocol, auth, hostname, port } = url.parse(proxySetting.proxyUrl);
                 const buildProxyAgent = ProxyAgentFactoryMap[protocol as keyof typeof ProxyAgentFactoryMap];
 
                 proxyAgentCache.set(cacheKey, buildProxyAgent({
                     protocol,
                     auth,
                     hostname,
-                    port
+                    port,
+
+                    // If you specify trusted CAs, we override the CAs used for this connection, i.e. the trusted
+                    // CA for the certificate of an HTTPS proxy. This is *not* the CAs trusted for upstream servers
+                    // on the otherside of the proxy - see the `trustAdditionalCAs` passthrough option for that.
+                    ...(proxySetting.trustedCAs
+                        ? { ca: proxySetting.trustedCAs }
+                        : {}
+                    )
                 }));
             }
 

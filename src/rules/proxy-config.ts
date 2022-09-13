@@ -35,6 +35,16 @@ export interface ProxySetting {
      * will generally be ignored, but may match in unexpected ways.
      */
     noProxy?: string[];
+
+    /**
+     * CAs to trust for HTTPS connections to the proxy. Ignored if the connection to
+     * the proxy is not HTTPS. If not specified, this will default to the Node
+     * defaults, or you can override them here completely.
+     *
+     * Note that unlike passthrough rule's `trustAdditionalCAs` option, this sets the
+     * complete list of trusted CAs - not just additional ones.
+     */
+    trustedCAs?: string[];
 }
 
 /**

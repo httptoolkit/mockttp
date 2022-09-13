@@ -2851,6 +2851,72 @@ nodeOnly(() => {
             });
         });
 
+        describe("when configured to use an upstream HTTPS proxy", () => {
+
+            const intermediateProxy = getLocal({
+                https: {
+                    keyPath: './test/fixtures/untrusted-ca.key',
+                    certPath: './test/fixtures/untrusted-ca.pem'
+                }
+            });
+            // HTTPS proxy - note that the remote server is plain HTTP.
+
+            let proxyEndpoint: MockedEndpoint;
+
+            beforeEach(async () => {
+                server = getLocal();
+                await server.start();
+
+                await intermediateProxy.start();
+                proxyEndpoint = await intermediateProxy.forAnyRequest().thenPassThrough(); // Totally neutral proxy
+
+                // Configure Request to use the *first* server as a proxy
+                process.env = _.merge({}, process.env, server.proxyEnv);
+            });
+
+            afterEach(() => intermediateProxy.stop());
+
+            it("should not trust unknown proxy CAs by default", async () => {
+                // Remote server sends fixed response on this one URL:
+                await remoteServer.forGet('/test-url').thenReply(200, "Remote server says hi!");
+
+                // Mockttp forwards requests via our intermediate proxy
+                await server.forAnyRequest().thenPassThrough({
+                    proxyConfig: {
+                        proxyUrl: intermediateProxy.url
+                    }
+                });
+
+                const result = await request.get(remoteServer.urlFor("/test-url")).catch(e => e);
+
+                expect(result).to.be.instanceOf(Error);
+                expect(result.message).to.match(/self(-| )signed certificate/); // Dash varies by Node version
+            });
+
+            it("should trust the remote proxy's CA if explicitly specified", async () => {
+                // Remote server sends fixed response on this one URL:
+                await remoteServer.forGet('/test-url').thenReply(200, "Remote server says hi!");
+
+                // Mockttp forwards requests via our intermediate proxy
+                await server.forAnyRequest().thenPassThrough({
+                    proxyConfig: {
+                        proxyUrl: intermediateProxy.url,
+                        trustedCAs: [
+                            (await fs.readFile('./test/fixtures/untrusted-ca.pem')).toString()
+                        ]
+                    }
+                });
+
+                const response = await request.get(remoteServer.urlFor("/test-url"));
+
+                // We get a successful response
+                expect(response).to.equal("Remote server says hi!");
+                // And it went via the intermediate proxy
+                expect((await proxyEndpoint.getSeenRequests()).length).to.equal(1);
+            });
+
+        });
+
         describe("when configured with custom DNS options", function () {
 
             this.timeout(5000); // Sometimes these can take a little while, DNS failures can be slow
