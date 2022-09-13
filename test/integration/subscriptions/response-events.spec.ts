@@ -467,7 +467,8 @@ describe("Abort subscriptions", () => {
                 await server.on('response', (r) => seenResponsePromise.resolve(r));
 
                 await server.forAnyRequest().thenPassThrough({
-                    proxyConfig: { proxyUrl: `http://localhost:8901` }
+                    // Wrong port: this connection will fail
+                    proxyConfig: { proxyUrl: `http://localhost:8999` }
                 });
 
                 fetch(server.urlFor("/mocked-endpoint")).catch(() => {});

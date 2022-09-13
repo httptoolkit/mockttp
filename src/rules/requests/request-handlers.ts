@@ -929,7 +929,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 }
                 clientRes.tags.push('passthrough-error:' + e.code);
 
-                if (e.code === 'ECONNRESET') {
+                if (e.code === 'ECONNRESET' || e.code === 'ECONNREFUSED') {
                     // The upstream socket closed: forcibly close the downstream stream to match
                     const socket: net.Socket = (clientReq as any).socket;
                     socket.destroy();
