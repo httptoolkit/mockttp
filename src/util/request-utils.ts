@@ -111,6 +111,16 @@ export function dropDefaultHeaders(response: OngoingResponse) {
     );
 }
 
+export function validateHeader(name: string, value: string | string[]): boolean {
+    try {
+        http.validateHeaderName(name);
+        http.validateHeaderValue(name, value);
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
 export function isHttp2(
     message: | http.IncomingMessage
              | http.ServerResponse

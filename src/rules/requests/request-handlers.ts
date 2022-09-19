@@ -29,7 +29,8 @@ import {
     isHttp2,
     isAbsoluteUrl,
     writeHead,
-    encodeBodyBuffer
+    encodeBodyBuffer,
+    validateHeader
 } from '../../util/request-utils';
 import {
     h1HeadersToH2,
@@ -856,13 +857,21 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                     serverRawHeaders = objectHeadersToRaw(serverHeaders);
                 }
 
-
                 writeHead(
                     clientRes,
                     serverStatusCode,
                     serverStatusMessage,
                     serverRawHeaders
-                        .filter(([key]) => key !== ':status')
+                        .filter(([key, value]) => {
+                            if (key === ':status') return false;
+                            if (!validateHeader(key, value)) {
+                                console.warn(`Not forwarding invalid header: "${key}: ${value}"`);
+                                // Nothing else we can do in this case regardless - setHeaders will
+                                // throw within Node if we try to set this value.
+                                return false;
+                            }
+                            return true;
+                        })
                 );
 
                 if (resBodyOverride) {

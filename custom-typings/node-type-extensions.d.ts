@@ -83,6 +83,12 @@ declare module "_stream_wrap" {
     export = SocketWrapper;
 }
 
+declare module "http" {
+    // Two missing methods from the official types:
+    export function validateHeaderName(name: string): void;
+    export function validateHeaderValue(name: string, value: unknown): void;
+}
+
 declare module "http2" {
     import * as net from 'net';
 
