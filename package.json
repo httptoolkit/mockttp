@@ -128,6 +128,7 @@
     "form-data-encoder": "^1.7.2",
     "formdata-node": "^4.3.2",
     "fs-extra": "^8.1.0",
+    "http-proxy-agent": "^5.0.0",
     "karma": "^6.3.2",
     "karma-chai": "^0.1.0",
     "karma-chrome-launcher": "^2.2.0",
