@@ -88,7 +88,7 @@ describe("HTTP request spying", function () {
 
             const abortController = new AbortController();
             fetch(server.urlFor("/mocked-endpoint"), {
-                signal: abortController.signal
+                signal: abortController.signal as AbortSignal
             }).catch(() => {});
 
             await delay(50); // Make sure the request has been received

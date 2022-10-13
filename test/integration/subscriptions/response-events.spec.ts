@@ -33,7 +33,7 @@ function makeAbortableRequest(server: Mockttp, path: string) {
         let abortController = new AbortController();
         fetch(server.urlFor(path), {
             method: 'POST',
-            signal: abortController.signal
+            signal: abortController.signal as AbortSignal
         }).catch(() => {});
         return abortController;
     }
