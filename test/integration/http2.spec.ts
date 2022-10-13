@@ -15,7 +15,7 @@ import {
     browserOnly,
     getHttp2Response,
     getHttp2Body,
-    destroyable,
+    makeDestroyable,
     cleanup,
     fetch,
     H2_TLS_ON_TLS_SUPPORTED,
@@ -461,7 +461,7 @@ nodeOnly(() => {
 
             describe("to an HTTP/2-only target", () => {
 
-                const http2Server = destroyable(http2.createSecureServer({
+                const http2Server = makeDestroyable(http2.createSecureServer({
                     allowHTTP1: false,
                     key: fs.readFileSync('./test/fixtures/test-ca.key'),
                     cert: fs.readFileSync('./test/fixtures/test-ca.pem')

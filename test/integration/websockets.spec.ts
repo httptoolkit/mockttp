@@ -13,7 +13,7 @@ import {
     browserOnly,
     startDnsServer,
     DestroyableServer,
-    destroyable
+    makeDestroyable
 } from '../test-utils';
 import { getCA } from '../../src/util/tls';
 import { delay } from '../../src/util/util';
@@ -214,7 +214,7 @@ nodeOnly(() => {
 
             describe("to an HTTPS WS server", () => {
 
-                let wsHttpsServer: DestroyableServer & https.Server;
+                let wsHttpsServer: DestroyableServer<https.Server>;
 
                 beforeEach(async () => {
                     const ca = await getCA({
@@ -222,7 +222,7 @@ nodeOnly(() => {
                         certPath: './test/fixtures/test-ca.pem'
                     });
                     const cert = ca.generateCertificate('localhost');
-                    wsHttpsServer = destroyable(https.createServer({
+                    wsHttpsServer = makeDestroyable(https.createServer({
                         key: cert.key,
                         cert: cert.cert
                     }));
@@ -284,13 +284,13 @@ nodeOnly(() => {
 
             describe("to an untrusted HTTPS WS server", () => {
 
-                let wsHttpsServer: DestroyableServer & https.Server;
+                let wsHttpsServer: DestroyableServer<https.Server>;
                 const untrustedCACert = generateCACertificate({ bits: 1024 });
 
                 beforeEach(async () => {
                     const ca = await getCA(await untrustedCACert);
                     const cert = ca.generateCertificate('localhost');
-                    wsHttpsServer = destroyable(https.createServer({
+                    wsHttpsServer = makeDestroyable(https.createServer({
                         key: cert.key,
                         cert: cert.cert
                     }));
@@ -492,7 +492,7 @@ nodeOnly(() => {
 
             describe("with a custom DNS server", () => {
 
-                let dnsServer: (DestroyableServer & net.Server) | undefined;
+                let dnsServer: (DestroyableServer<net.Server>) | undefined;
                 let fixedDnsResponse: string | undefined = undefined;
 
                 before(async () => {

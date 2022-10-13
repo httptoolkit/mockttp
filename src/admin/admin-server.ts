@@ -16,7 +16,7 @@ import { SubscriptionServer } from '@httptoolkit/subscriptions-transport-ws';
 import { EventEmitter } from 'stream';
 import DuplexPair = require('native-duplexpair');
 
-import { destroyable, DestroyableServer } from "../util/destroyable-server";
+import { makeDestroyable, DestroyableServer } from "destroyable-server";
 import { isErrorLike } from '../util/error';
 import { objectAllPromise } from '../util/promise';
 
@@ -120,7 +120,7 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
     private ruleParams: RuleParameters;
 
     private app = express();
-    private server: DestroyableServer & http.Server | null = null;
+    private server: DestroyableServer<http.Server> | null = null;
     private eventEmitter = new EventEmitter();
 
     private adminPlugins: PluginConstructorMap<Plugins>;
@@ -335,7 +335,7 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
         if (this.server) throw new Error('Admin server already running');
 
         await new Promise<void>((resolve, reject) => {
-            this.server = destroyable(this.app.listen(listenOptions, resolve));
+            this.server = makeDestroyable(this.app.listen(listenOptions, resolve));
 
             this.server.on('error', reject);
 

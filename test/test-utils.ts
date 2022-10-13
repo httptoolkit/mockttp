@@ -24,9 +24,9 @@ import * as dns2 from 'dns2'; // Imported here just for types
 import { Mockttp } from "..";
 
 export { getDeferred, Deferred } from '../src/util/promise';
-import { destroyable, DestroyableServer } from "../src/util/destroyable-server";
+import { makeDestroyable, DestroyableServer } from "destroyable-server";
 import { isNode, isWeb, delay } from '../src/util/util';
-export { isNode, isWeb, delay, destroyable, DestroyableServer };
+export { isNode, isWeb, delay, makeDestroyable, DestroyableServer };
 
 if (isNode) {
     // Run a target websocket server in the background. In browsers, this is
@@ -194,7 +194,7 @@ export async function startDnsServer(callback: (question: dns2.DnsQuestion) => s
     // We import the implementation async, because it fails in the browser
     const dns2 = await import('dns2');
 
-    const server = destroyable(dns2.createServer(async (request, sendResponse) => {
+    const server = makeDestroyable(dns2.createServer(async (request, sendResponse) => {
         const response = dns2.Packet.createResponseFromRequest(request);
 
         // Multiple questions are allowed in theory, but apparently nobody
@@ -213,7 +213,7 @@ export async function startDnsServer(callback: (question: dns2.DnsQuestion) => s
         sendResponse(response);
     }));
 
-    return new Promise<DestroyableServer & net.Server>((resolve, reject) => {
+    return new Promise<DestroyableServer<net.Server>>((resolve, reject) => {
         server.listen(5333, '127.0.0.1');
         server.on('listening', () => resolve(server));
         server.on('error', reject);

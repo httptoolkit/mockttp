@@ -26,7 +26,7 @@ import {
     WebSocketClose
 } from "../types";
 import { CAOptions } from '../util/tls';
-import { DestroyableServer } from "../util/destroyable-server";
+import { DestroyableServer } from "destroyable-server";
 import { Mockttp, AbstractMockttp, MockttpOptions, PortRange } from "../mockttp";
 import { RequestRule, RequestRuleData } from "../rules/requests/request-rule";
 import { ServerMockedEndpoint } from "./mocked-endpoint";
@@ -79,7 +79,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     private maxBodySize: number;
 
     private app: connect.Server;
-    private server: DestroyableServer & net.Server | undefined;
+    private server: DestroyableServer<net.Server> | undefined;
 
     private eventEmitter: EventEmitter;
 

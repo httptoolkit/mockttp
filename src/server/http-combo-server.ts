@@ -8,7 +8,7 @@ import httpolyglot = require('@httptoolkit/httpolyglot');
 import now = require("performance-now");
 
 import { TlsRequest } from '../types';
-import { destroyable, DestroyableServer } from '../util/destroyable-server';
+import { makeDestroyable, DestroyableServer } from 'destroyable-server';
 import { getCA, CAOptions } from '../util/tls';
 import { delay } from '../util/util';
 
@@ -147,7 +147,7 @@ export async function createComboServer(
     options: ComboServerOptions,
     requestListener: (req: http.IncomingMessage, res: http.ServerResponse) => void,
     tlsClientErrorListener: (socket: tls.TLSSocket, req: TlsRequest) => void
-): Promise<DestroyableServer & net.Server> {
+): Promise<DestroyableServer<net.Server>> {
     let server: net.Server;
     if (!options.https) {
         server = httpolyglot.createServer(requestListener);
@@ -286,7 +286,7 @@ export async function createComboServer(
         server.emit('connection', res.stream);
     }
 
-    return destroyable(server);
+    return makeDestroyable(server);
 }
 
 function getParentSocket(socket: net.Socket) {

@@ -19,7 +19,7 @@ import {
     sendRawRequest,
     http2ProxyRequest,
     startDnsServer,
-    destroyable,
+    makeDestroyable,
     DestroyableServer,
     H2_TLS_ON_TLS_SUPPORTED,
     OLD_TLS_SUPPORTED,
@@ -1175,7 +1175,7 @@ nodeOnly(() => {
                     });
 
                     let oldServerPort: number;
-                    let oldServer: DestroyableServer & https.Server;
+                    let oldServer: DestroyableServer<https.Server>;
 
                     beforeEach(async () => {
                         const caKey = await fs.readFile('./test/fixtures/test-ca.key');
@@ -1184,7 +1184,7 @@ nodeOnly(() => {
 
                         const cert = ca.generateCertificate('localhost');
 
-                        oldServer = destroyable(https.createServer({
+                        oldServer = makeDestroyable(https.createServer({
                             ...cert,
                             minVersion: 'TLSv1',
                             maxVersion: 'TLSv1',
@@ -1260,13 +1260,13 @@ nodeOnly(() => {
 
                 describe("talking to a target server that requires a client cert", () => {
                     let authenticatingServerPort: number;
-                    let authenticatingServer: DestroyableServer & https.Server;
+                    let authenticatingServer: DestroyableServer<https.Server>;
 
                     beforeEach(async () => {
                         const key = await fs.readFile('./test/fixtures/test-ca.key');
                         const cert = await fs.readFile('./test/fixtures/test-ca.pem');
 
-                        authenticatingServer = destroyable(https.createServer({
+                        authenticatingServer = makeDestroyable(https.createServer({
                             key: key,
                             cert: cert,
 
@@ -1313,11 +1313,11 @@ nodeOnly(() => {
                     if (!semver.satisfies(process.version, H2_TLS_ON_TLS_SUPPORTED)) this.skip();
                 });
 
-                let http2Server: DestroyableServer & http2.Http2SecureServer;
+                let http2Server: DestroyableServer<http2.Http2SecureServer>;
                 let targetPort: number;
 
                 beforeEach(async () => {
-                    http2Server = destroyable(http2.createSecureServer({
+                    http2Server = makeDestroyable(http2.createSecureServer({
                         allowHTTP1: false,
                         key: fs.readFileSync('./test/fixtures/test-ca.key'),
                         cert: fs.readFileSync('./test/fixtures/test-ca.pem')
@@ -2929,7 +2929,7 @@ nodeOnly(() => {
                 fixedDnsResponse = undefined;
             });
 
-            let dnsServer: (DestroyableServer & net.Server) | undefined;
+            let dnsServer: (DestroyableServer<net.Server>) | undefined;
             let fixedDnsResponse: string | undefined = undefined;
 
             before(async () => {
