@@ -65,3 +65,13 @@ export const isSocketLoop = (outgoingSockets: net.Socket[] | Set<net.Socket>, in
                 outgoingSocket.localPort === incomingSocket.remotePort;
         }
     });
+
+export const resetSocket = (socket: net.Socket) => {
+    if (!('resetAndDestroy' in socket)) {
+        throw new Error(
+            'Connection reset is only supported in Node v16.17+, v18.3.0+, or later'
+        );
+    }
+
+    socket.resetAndDestroy();
+};

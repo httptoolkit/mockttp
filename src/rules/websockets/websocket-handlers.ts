@@ -15,6 +15,7 @@ import { OngoingRequest, RawHeaders } from "../../types";
 
 import {
     CloseConnectionHandler,
+    ResetConnectionHandler,
     TimeoutHandler
 } from '../requests/request-handlers';
 import {
@@ -454,10 +455,11 @@ export class RejectWebSocketHandler extends RejectWebSocketHandlerDefinition {
 
 }
 
-// These two work equally well for HTTP requests as websockets, but it's
+// These three work equally well for HTTP requests as websockets, but it's
 // useful to reexport there here for consistency.
 export {
     CloseConnectionHandler,
+    ResetConnectionHandler,
     TimeoutHandler
 };
 
@@ -467,5 +469,6 @@ export const WsHandlerLookup: typeof WsHandlerDefinitionLookup = {
     'ws-listen': ListenWebSocketHandler,
     'ws-reject': RejectWebSocketHandler,
     'close-connection': CloseConnectionHandler,
+    'reset-connection': ResetConnectionHandler,
     'timeout': TimeoutHandler
 };

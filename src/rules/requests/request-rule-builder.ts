@@ -15,6 +15,7 @@ import {
     PassThroughHandlerOptions,
     FileHandlerDefinition,
     JsonRpcResponseHandlerDefinition,
+    ResetConnectionHandlerDefinition,
 } from "./request-handler-definitions";
 import { MaybePromise } from "../../util/type-utils";
 import { byteLength } from "../../util/util";
@@ -369,6 +370,33 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
         const rule: RequestRuleData = {
             ...this.buildBaseRuleData(),
             handler: new CloseConnectionHandlerDefinition()
+        };
+
+        return this.addRule(rule);
+    }
+
+    /**
+     * Reset connections that match this rule immediately, sending a TCP
+     * RST packet directly, without any status code or response, and without
+     * cleanly closing the TCP connection.
+     *
+     * This is only supported in Node.js versions (>=16.17, >=18.3.0, or
+     * later), where `net.Socket` includes the `resetAndDestroy` method.
+     *
+     * Calling this method registers the rule with the server, so it
+     * starts to handle requests.
+     *
+     * This method returns a promise that resolves with a mocked endpoint.
+     * Wait for the promise to confirm that the rule has taken effect
+     * before sending requests to be matched. The mocked endpoint
+     * can be used to assert on the requests matched by this rule.
+     *
+     * @category Responses
+     */
+    thenResetConnection(): Promise<MockedEndpoint> {
+        const rule: RequestRuleData = {
+            ...this.buildBaseRuleData(),
+            handler: new ResetConnectionHandlerDefinition()
         };
 
         return this.addRule(rule);

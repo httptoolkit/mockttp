@@ -134,7 +134,8 @@ export interface CallbackRequestResult {
 
 export type CallbackResponseResult =
     | CallbackResponseMessageResult
-    | 'close';
+    | 'close'
+    | 'reset';
 
 /**
  * Can be returned from callbacks to define parts of a response, or
@@ -1051,6 +1052,14 @@ export class CloseConnectionHandlerDefinition extends Serializable implements Re
     }
 }
 
+export class ResetConnectionHandlerDefinition extends Serializable implements RequestHandlerDefinition {
+    readonly type = 'reset-connection';
+
+    explain() {
+        return 'reset the connection';
+    }
+}
+
 export class TimeoutHandlerDefinition extends Serializable implements RequestHandlerDefinition {
     readonly type = 'timeout';
 
@@ -1090,6 +1099,7 @@ export const HandlerDefinitionLookup = {
     'file': FileHandlerDefinition,
     'passthrough': PassThroughHandlerDefinition,
     'close-connection': CloseConnectionHandlerDefinition,
+    'reset-connection': ResetConnectionHandlerDefinition,
     'timeout': TimeoutHandlerDefinition,
     'json-rpc-response': JsonRpcResponseHandlerDefinition
 }

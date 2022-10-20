@@ -13,6 +13,7 @@ import { Explainable, Headers } from "../../types";
 
 import {
     CloseConnectionHandlerDefinition,
+    ResetConnectionHandlerDefinition,
     TimeoutHandlerDefinition,
     ForwardingOptions,
     PassThroughLookupOptions
@@ -210,10 +211,11 @@ export class RejectWebSocketHandlerDefinition extends Serializable implements We
 
 }
 
-// These two work equally well for HTTP requests as websockets, but it's
+// These three work equally well for HTTP requests as websockets, but it's
 // useful to reexport there here for consistency.
 export {
     CloseConnectionHandlerDefinition,
+    ResetConnectionHandlerDefinition,
     TimeoutHandlerDefinition
 };
 
@@ -223,5 +225,6 @@ export const WsHandlerDefinitionLookup = {
     'ws-listen': ListenWebSocketHandlerDefinition,
     'ws-reject': RejectWebSocketHandlerDefinition,
     'close-connection': CloseConnectionHandlerDefinition,
+    'reset-connection': ResetConnectionHandlerDefinition,
     'timeout': TimeoutHandlerDefinition
 };

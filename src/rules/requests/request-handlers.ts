@@ -42,7 +42,12 @@ import {
     pairFlatRawHeaders
 } from '../../util/header-utils';
 import { streamToBuffer, asBuffer } from '../../util/buffer-utils';
-import { isLocalhostAddress, isLocalPortActive, isSocketLoop } from '../../util/socket-util';
+import {
+    isLocalhostAddress,
+    isLocalPortActive,
+    isSocketLoop,
+    resetSocket
+} from '../../util/socket-util';
 import {
     ClientServerChannel,
     deserializeBuffer,
@@ -88,6 +93,7 @@ import {
     PassThroughResponse,
     RequestHandlerDefinition,
     RequestTransform,
+    ResetConnectionHandlerDefinition,
     ResponseTransform,
     SerializedBuffer,
     SerializedCallbackHandlerData,
@@ -194,6 +200,9 @@ export class CallbackHandler extends CallbackHandlerDefinition {
         if (outResponse === 'close') {
             (request as any).socket.end();
             throw new AbortError('Connection closed intentionally by rule');
+        } else if (outResponse === 'reset') {
+            resetSocket((request as any).socket);
+            throw new AbortError('Connection reset intentionally by rule');
         } else {
             await writeResponseFromCallback(outResponse, response);
         }
@@ -206,7 +215,9 @@ export class CallbackHandler extends CallbackHandlerDefinition {
         const rpcCallback = async (request: CompletedRequest) => {
             const callbackResult = await channel.request<
                 CallbackRequestMessage,
-                WithSerializedCallbackBuffers<CallbackResponseMessageResult> | 'close'
+                | WithSerializedCallbackBuffers<CallbackResponseMessageResult>
+                | 'close'
+                | 'reset'
             >({ args: [
                 (version || -1) >= 2
                     ? withSerializedBodyReader(request)
@@ -563,6 +574,10 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                     const socket: net.Socket = (<any> clientReq).socket;
                     socket.end();
                     throw new AbortError('Connection closed intentionally by rule');
+                } else if (modifiedReq.response === 'reset') {
+                    const socket: net.Socket = (<any> clientReq).socket;
+                    resetSocket(socket);
+                    throw new AbortError('Connection reset intentionally by rule');
                 } else {
                     // The callback has provided a full response: don't passthrough at all, just use it.
                     await writeResponseFromCallback(modifiedReq.response, clientRes);
@@ -835,6 +850,11 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                         serverRes.resume();
                         (clientRes as any).socket.end();
                         throw new AbortError('Connection closed intentionally by rule');
+                    } else if (modifiedRes === 'reset') {
+                        // Dump the real response data and kill the client socket:
+                        serverRes.resume();
+                        resetSocket((clientRes as any).socket);
+                        throw new AbortError('Connection reset intentionally by rule');
                     }
 
                     validateCustomHeaders(serverHeaders, modifiedRes?.headers);
@@ -1015,7 +1035,10 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
             beforeResponse = async (res: PassThroughResponse) => {
                 const callbackResult = await channel.request<
                     BeforePassthroughResponseRequest,
-                    WithSerializedCallbackBuffers<CallbackResponseMessageResult> | 'close' | undefined
+                    | WithSerializedCallbackBuffers<CallbackResponseMessageResult>
+                    | 'close'
+                    | 'reset'
+                    | undefined
                 >('beforeResponse', {
                     args: [withSerializedBodyReader(res)]
                 })
@@ -1100,6 +1123,33 @@ export class CloseConnectionHandler extends CloseConnectionHandlerDefinition {
     }
 }
 
+export class ResetConnectionHandler extends ResetConnectionHandlerDefinition {
+    constructor() {
+        super();
+
+        if (!net.Socket.prototype.resetAndDestroy) {
+            throw new Error('Reset handlers are only supported in Node v16.17+, v18.3.0+, or later');
+        }
+    }
+
+    async handle(request: OngoingRequest) {
+        const socket: net.Socket = (<any> request).socket;
+        socket.resetAndDestroy();
+        throw new AbortError('Connection reset intentionally by rule');
+    }
+
+    /**
+     * @internal
+     */
+    static deserialize() {
+        if (!net.Socket.prototype.resetAndDestroy) {
+            throw new Error('Reset handlers are only supported in Node v16.17+, v18.3.0+, or later');
+        }
+
+        return new ResetConnectionHandler();
+    }
+}
+
 export class TimeoutHandler extends TimeoutHandlerDefinition {
     async handle() {
         // Do nothing, leaving the socket open but never sending a response.
@@ -1135,6 +1185,7 @@ export const HandlerLookup: typeof HandlerDefinitionLookup = {
     'file': FileHandler,
     'passthrough': PassThroughHandler,
     'close-connection': CloseConnectionHandler,
+    'reset-connection': ResetConnectionHandler,
     'timeout': TimeoutHandler,
     'json-rpc-response': JsonRpcResponseHandler
 }

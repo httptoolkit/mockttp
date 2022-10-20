@@ -1,5 +1,7 @@
+import * as semver from 'semver';
+
 import { getLocal } from "../../..";
-import { expect, fetch, isNode, delay } from "../../test-utils";
+import { expect, fetch, isNode, delay, SOCKET_RESET_SUPPORTED } from "../../test-utils";
 
 describe("Broken response handlers", function () {
 
@@ -15,6 +17,17 @@ describe("Broken response handlers", function () {
 
         expect(result).to.be.instanceof(Error);
         expect(result.message).to.contain(isNode ? 'socket hang up' : 'Failed to fetch');
+    });
+
+    it("should allow forcibly closing the connection", async function () {
+        if (!semver.satisfies(process.version, SOCKET_RESET_SUPPORTED)) this.skip();
+
+        await server.forGet('/mocked-endpoint').thenResetConnection();
+
+        let result = await fetch(server.urlFor('/mocked-endpoint')).catch(e => e);
+
+        expect(result).to.be.instanceof(Error);
+        expect(result.message).to.contain('read ECONNRESET');
     });
 
     it("should allow leaving connections to time out", async () => {
