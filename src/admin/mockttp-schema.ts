@@ -27,7 +27,7 @@ export const MockttpSchema = gql`
         webSocketMessageReceived: WebSocketMessage!
         webSocketMessageSent: WebSocketMessage!
         webSocketClose: WebSocketClose!
-        requestAborted: Request!
+        requestAborted: AbortedRequest!
         failedTlsRequest: TlsRequest!
         failedClientRequest: ClientError!
     }
@@ -124,6 +124,29 @@ export const MockttpSchema = gql`
         rawHeaders: Json!
 
         body: Buffer!
+    }
+
+    type AbortedRequest {
+        id: ID!
+        timingEvents: Json!
+        tags: [String!]!
+        matchedRuleId: ID
+
+        protocol: String!
+        httpVersion: String!
+        method: String!
+        url: String!
+        path: String!
+        remoteIpAddress: String!
+        remotePort: Int!
+        hostname: String
+
+        headers: Json!
+        rawHeaders: Json!
+
+        body: Buffer!
+
+        error: Json
     }
 
     type Response {

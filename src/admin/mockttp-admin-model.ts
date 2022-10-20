@@ -98,8 +98,8 @@ export function buildAdminServerModel(
     mockServer.on('abort', (evt) => {
         pubsub.publish(REQUEST_ABORTED_TOPIC, {
             requestAborted: Object.assign(evt, {
-                // Backward compat: old clients expect this to be present. In future this can be removed
-                // and abort events can switch from Request to InitiatedRequest in the schema.
+                // Backward compat: old clients expect this to be present. In future this can be
+                // removed and abort events can lose the 'body' in the schema.
                 body: Buffer.alloc(0)
             })
         })

@@ -7,7 +7,9 @@ import {
     InitiatedRequest,
     CompletedRequest,
     CompletedResponse,
-    Mockttp
+    Mockttp,
+    TimingEvents,
+    AbortedRequest
 } from "../../..";
 import {
     expect,
@@ -17,7 +19,6 @@ import {
     getDeferred,
     delay
 } from "../../test-utils";
-import { TimingEvents } from "../../../dist/types";
 
 function makeAbortableRequest(server: Mockttp, path: string) {
     if (isNode) {
@@ -278,7 +279,7 @@ describe("Abort subscriptions", () => {
     afterEach(() => server.stop());
 
     it("should not be sent for successful requests", async () => {
-        let seenAbortPromise = getDeferred<InitiatedRequest>();
+        let seenAbortPromise = getDeferred<AbortedRequest>();
         await server.on('abort', (r) => seenAbortPromise.resolve(r));
         await server.forGet('/mocked-endpoint').thenReply(200);
 
@@ -294,7 +295,7 @@ describe("Abort subscriptions", () => {
         let seenRequestPromise = getDeferred<CompletedRequest>();
         await server.on('request', (r) => seenRequestPromise.resolve(r));
 
-        let seenAbortPromise = getDeferred<InitiatedRequest>();
+        let seenAbortPromise = getDeferred<AbortedRequest>();
         await server.on('abort', (r) => seenAbortPromise.resolve(r));
 
         await server.forPost('/mocked-endpoint').thenCallback(() => delay(500).then(() => ({})));
@@ -312,13 +313,14 @@ describe("Abort subscriptions", () => {
         expect(
             seenRequest.rawHeaders.find(([key]) => key === 'Host')
         ).to.deep.equal(['Host', `localhost:${server.port}`]); // Uppercase header name!
+        expect(seenAbort.error).to.equal(undefined); // Client abort, not an error
     });
 
     it("should be sent when a request is aborted during an intentional timeout", async () => {
         let seenRequestPromise = getDeferred<CompletedRequest>();
         await server.on('request', (r) => seenRequestPromise.resolve(r));
 
-        let seenAbortPromise = getDeferred<InitiatedRequest>();
+        let seenAbortPromise = getDeferred<AbortedRequest>();
         await server.on('abort', (r) => seenAbortPromise.resolve(r));
 
         await server.forPost('/mocked-endpoint').thenTimeout();
@@ -331,13 +333,14 @@ describe("Abort subscriptions", () => {
 
         let seenAbort = await seenAbortPromise;
         expect(seenRequest.id).to.equal(seenAbort.id);
+        expect(seenAbort.error).to.equal(undefined); // Client abort, not an error
     });
 
     it("should be sent when a request is intentionally closed by a close handler", async () => {
         let seenRequestPromise = getDeferred<CompletedRequest>();
         await server.on('request', (r) => seenRequestPromise.resolve(r));
 
-        let seenAbortPromise = getDeferred<InitiatedRequest>();
+        let seenAbortPromise = getDeferred<AbortedRequest>();
         await server.on('abort', (r) => seenAbortPromise.resolve(r));
 
         await server.forGet('/mocked-endpoint').thenCloseConnection();
@@ -347,13 +350,15 @@ describe("Abort subscriptions", () => {
         let seenRequest = await seenRequestPromise;
         let seenAbort = await seenAbortPromise;
         expect(seenRequest.id).to.equal(seenAbort.id);
+
+        expect(seenAbort.error!.message).to.equal('Connection closed intentionally by rule');
     });
 
     it("should be sent when a request is intentionally closed by a callback handler", async () => {
         let seenRequestPromise = getDeferred<CompletedRequest>();
         await server.on('request', (r) => seenRequestPromise.resolve(r));
 
-        let seenAbortPromise = getDeferred<InitiatedRequest>();
+        let seenAbortPromise = getDeferred<AbortedRequest>();
         await server.on('abort', (r) => seenAbortPromise.resolve(r));
 
         await server.forGet('/mocked-endpoint').thenCallback(() => 'close');
@@ -363,13 +368,14 @@ describe("Abort subscriptions", () => {
         let seenRequest = await seenRequestPromise;
         let seenAbort = await seenAbortPromise;
         expect(seenRequest.id).to.equal(seenAbort.id);
+        expect(seenAbort.error!.message).to.equal('Connection closed intentionally by rule');
     });
 
     it("should be sent when a request is intentionally closed by beforeRequest", async () => {
         let seenRequestPromise = getDeferred<CompletedRequest>();
         await server.on('request', (r) => seenRequestPromise.resolve(r));
 
-        let seenAbortPromise = getDeferred<InitiatedRequest>();
+        let seenAbortPromise = getDeferred<AbortedRequest>();
         await server.on('abort', (r) => seenAbortPromise.resolve(r));
 
         await server.forGet('/mocked-endpoint').thenPassThrough({
@@ -383,13 +389,14 @@ describe("Abort subscriptions", () => {
         let seenRequest = await seenRequestPromise;
         let seenAbort = await seenAbortPromise;
         expect(seenRequest.id).to.equal(seenAbort.id);
+        expect(seenAbort.error!.message).to.equal('Connection closed intentionally by rule');
     });
 
     it("should be sent when a forwarded request is intentionally closed by beforeResponse", async () => {
         let seenRequestPromise = getDeferred<CompletedRequest>();
         await server.on('request', (r) => seenRequestPromise.resolve(r));
 
-        let seenAbortPromise = getDeferred<InitiatedRequest>();
+        let seenAbortPromise = getDeferred<AbortedRequest>();
         await server.on('abort', (r) => seenAbortPromise.resolve(r));
 
         await server.forGet('/mocked-endpoint').thenPassThrough({
@@ -402,6 +409,7 @@ describe("Abort subscriptions", () => {
         let seenRequest = await seenRequestPromise;
         let seenAbort = await seenAbortPromise;
         expect(seenRequest.id).to.equal(seenAbort.id);
+        expect(seenAbort.error!.message).to.equal('Connection closed intentionally by rule');
     });
 
     nodeOnly(() => {
@@ -409,7 +417,7 @@ describe("Abort subscriptions", () => {
             let wasRequestSeen = false;
             await server.on('request', (r) => { wasRequestSeen = true; });
 
-            let seenAbortPromise = getDeferred<InitiatedRequest>();
+            let seenAbortPromise = getDeferred<AbortedRequest>();
             await server.on('abort', (r) => seenAbortPromise.resolve(r));
 
             let abortable = makeAbortableRequest(server, '/mocked-endpoint') as http.ClientRequest;
@@ -418,6 +426,7 @@ describe("Abort subscriptions", () => {
 
             let seenAbort = await seenAbortPromise;
             expect(seenAbort.timingEvents.bodyReceivedTimestamp).to.equal(undefined);
+            expect(seenAbort.error).to.equal(undefined); // Client abort, not an error
             expect(wasRequestSeen).to.equal(false);
         });
 
@@ -440,8 +449,8 @@ describe("Abort subscriptions", () => {
                 badServer.close();
             });
 
-            it("should be sent when the remote server aborts the resopnse", async () => {
-                let seenAbortPromise = getDeferred<InitiatedRequest>();
+            it("should be sent when the remote server aborts the response", async () => {
+                let seenAbortPromise = getDeferred<AbortedRequest>();
                 await server.on('abort', (r) => seenAbortPromise.resolve(r));
 
                 let seenResponsePromise = getDeferred<CompletedResponse>();
@@ -451,16 +460,19 @@ describe("Abort subscriptions", () => {
 
                 fetch(server.urlFor("/mocked-endpoint")).catch(() => {});
 
-                await Promise.race([
+                const seenAbort = await Promise.race([
                     seenAbortPromise,
                     seenResponsePromise.then(() => {
                         throw new Error('Should not fire a response event');
                     })
                 ]);
+
+                expect(seenAbort.error!.message).to.equal('Upstream connection error: socket hang up');
+                expect(seenAbort.error!.code).to.equal('ECONNRESET');
             });
 
             it("should be sent when a remote proxy aborts the response", async () => {
-                let seenAbortPromise = getDeferred<InitiatedRequest>();
+                let seenAbortPromise = getDeferred<AbortedRequest>();
                 await server.on('abort', (r) => seenAbortPromise.resolve(r));
 
                 let seenResponsePromise = getDeferred<CompletedResponse>();
@@ -473,12 +485,18 @@ describe("Abort subscriptions", () => {
 
                 fetch(server.urlFor("/mocked-endpoint")).catch(() => {});
 
-                await Promise.race([
+                const seenAbort = await Promise.race([
                     seenAbortPromise,
                     seenResponsePromise.then(() => {
                         throw new Error('Should not fire a response event');
                     })
                 ]);
+
+                expect(seenAbort.error!.message).to.be.oneOf([
+                    'Upstream connection error: connect ECONNREFUSED 127.0.0.1:8999',
+                    'Upstream connection error: connect ECONNREFUSED ::1:8999'
+                ]);
+                expect(seenAbort.error!.code).to.equal('ECONNREFUSED');
             });
         });
     });
@@ -508,7 +526,7 @@ describe("Abort subscriptions", () => {
         let seenRequestPromise = getDeferred<CompletedRequest>();
         await server.on('request', (r) => seenRequestPromise.resolve(r));
 
-        let seenAbortPromise = getDeferred<InitiatedRequest>();
+        let seenAbortPromise = getDeferred<AbortedRequest>();
         await server.on('abort', (r) => seenAbortPromise.resolve(r));
 
         await server.forPost('/mocked-endpoint').thenCallback(() => delay(500).then(() => ({})));

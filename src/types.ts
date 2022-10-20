@@ -139,6 +139,15 @@ export interface InitiatedRequest extends Request {
     timingEvents: TimingEvents;
 }
 
+export interface AbortedRequest extends InitiatedRequest {
+    error?: {
+        name?: string;
+        code?: string;
+        message?: string;
+        stack?: string;
+    };
+}
+
 // Internal & external representation of a fully completed HTTP request
 export interface CompletedRequest extends Request {
     body: CompletedBody;

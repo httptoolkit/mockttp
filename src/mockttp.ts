@@ -17,7 +17,8 @@ import {
     ClientError,
     RulePriority,
     WebSocketMessage,
-    WebSocketClose
+    WebSocketClose,
+    AbortedRequest
 } from "./types";
 import type { RequestRuleData } from "./rules/requests/request-rule";
 import type { WebSocketRuleData } from "./rules/websockets/websocket-rule";
@@ -466,7 +467,7 @@ export interface Mockttp {
      *
      * @category Events
      */
-    on(event: 'abort', callback: (req: InitiatedRequest) => void): Promise<void>;
+    on(event: 'abort', callback: (req: AbortedRequest) => void): Promise<void>;
 
     /**
      * Subscribe to hear about requests that start a TLS handshake, but fail to complete it.

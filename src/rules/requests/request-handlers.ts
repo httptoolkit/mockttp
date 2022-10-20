@@ -115,7 +115,16 @@ export {
 
 // An error that indicates that the handler is aborting the request.
 // This could be intentional, or an upstream server aborting the request.
-export class AbortError extends TypedError { }
+export class AbortError extends TypedError {
+
+    constructor(
+        message: string,
+        readonly code?: string
+    ) {
+        super(message);
+    }
+
+}
 
 function isSerializedBuffer(obj: any): obj is SerializedBuffer {
     return obj && obj.type === 'Buffer' && !!obj.data;
@@ -184,7 +193,7 @@ export class CallbackHandler extends CallbackHandlerDefinition {
 
         if (outResponse === 'close') {
             (request as any).socket.end();
-            throw new AbortError('Connection closed (intentionally)');
+            throw new AbortError('Connection closed intentionally by rule');
         } else {
             await writeResponseFromCallback(outResponse, response);
         }
@@ -553,7 +562,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 if (modifiedReq.response === 'close') {
                     const socket: net.Socket = (<any> clientReq).socket;
                     socket.end();
-                    throw new AbortError('Connection closed (intentionally)');
+                    throw new AbortError('Connection closed intentionally by rule');
                 } else {
                     // The callback has provided a full response: don't passthrough at all, just use it.
                     await writeResponseFromCallback(modifiedReq.response, clientRes);
@@ -825,7 +834,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                         // Dump the real response data and kill the client socket:
                         serverRes.resume();
                         (clientRes as any).socket.end();
-                        throw new AbortError('Connection closed (intentionally)');
+                        throw new AbortError('Connection closed intentionally by rule');
                     }
 
                     validateCustomHeaders(serverHeaders, modifiedRes?.headers);
@@ -946,7 +955,10 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                     } else {
                         socket.destroy();
                     }
-                    reject(new AbortError('Upstream connection failed'));
+
+                    reject(new AbortError(`Upstream connection error: ${
+                        e.message ?? e
+                    }`, e.code));
                 } else {
                     e.statusCode = 502;
                     e.statusMessage = 'Error communicating with upstream server';
@@ -1084,7 +1096,7 @@ export class CloseConnectionHandler extends CloseConnectionHandlerDefinition {
     async handle(request: OngoingRequest) {
         const socket: net.Socket = (<any> request).socket;
         socket.end();
-        throw new AbortError('Connection closed (intentionally)');
+        throw new AbortError('Connection closed intentionally by rule');
     }
 }
 

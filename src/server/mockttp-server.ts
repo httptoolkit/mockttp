@@ -33,7 +33,7 @@ import { ServerMockedEndpoint } from "./mocked-endpoint";
 import { createComboServer } from "./http-combo-server";
 import { filter } from "../util/promise";
 import { Mutable } from "../util/type-utils";
-import { isErrorLike } from "../util/error";
+import { ErrorLike, isErrorLike } from "../util/error";
 import { makePropertyWritable } from "../util/util";
 
 import {
@@ -480,12 +480,18 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         });
     }
 
-    private async announceAbortAsync(request: OngoingRequest) {
+    private async announceAbortAsync(request: OngoingRequest, abortError?: ErrorLike) {
         setImmediate(() => {
             const req = buildInitiatedRequest(request);
             this.eventEmitter.emit('abort', Object.assign(req, {
                 timingEvents: _.clone(req.timingEvents),
-                tags: _.clone(req.tags)
+                tags: _.clone(req.tags),
+                error: abortError ? {
+                    name: abortError.name,
+                    code: abortError.code,
+                    message: abortError.message,
+                    stack: abortError.stack
+                } : undefined
             }));
         });
     }
@@ -582,18 +588,18 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         if (this.debug) console.log(`Handling request for ${rawRequest.url}`);
 
         let result: 'responded' | 'aborted' | null = null;
-        const abort = () => {
+        const abort = (error?: Error) => {
             if (result === null) {
                 result = 'aborted';
                 request.timingEvents.abortedTimestamp = now();
-                this.announceAbortAsync(request);
+                this.announceAbortAsync(request, error);
             }
         }
         request.once('aborted', abort);
         // In Node 16+ we don't get an abort event in many cases, just closes, but we know
         // it's aborted because the response is closed with no other result being set.
         rawResponse.once('close', () => setImmediate(abort));
-        request.once('error', () => setImmediate(abort));
+        request.once('error', (error) => setImmediate(() => abort(error)));
 
         this.announceInitialRequestAsync(request);
 
@@ -606,7 +612,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         response.id = request.id;
         response.on('error', (error) => {
             console.log('Response error:', this.debug ? error : error.message);
-            abort();
+            abort(error);
         });
 
         try {
@@ -631,7 +637,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             result = result || 'responded';
         } catch (e) {
             if (e instanceof AbortError) {
-                abort();
+                abort(e);
 
                 if (this.debug) {
                     console.error("Failed to handle request due to abort:", e);
@@ -655,7 +661,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
                     response.end((isErrorLike(e) && e.toString()) || e);
                     result = result || 'responded';
                 } catch (e) {
-                    abort();
+                    abort(e as Error);
                 }
             }
         }

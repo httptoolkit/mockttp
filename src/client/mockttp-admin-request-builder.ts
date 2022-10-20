@@ -351,6 +351,7 @@ export class MockttpAdminRequestBuilder {
 
                     ${this.schema.asOptionalField('Request', 'timingEvents')}
                     ${this.schema.asOptionalField('Request', 'tags')}
+                    ${this.schema.asOptionalField('AbortedRequest', 'error')}
                 }
             }`,
             'tls-client-error': gql`subscription OnTlsClientError {
@@ -421,6 +422,9 @@ export class MockttpAdminRequestBuilder {
                     }
                 } else if (event === 'websocket-message-received' || event === 'websocket-message-sent') {
                     normalizeWebSocketMessage(data);
+                } else if (event === 'abort') {
+                    normalizeHttpMessage(data, event);
+                    data.error = data.error ? JSON.parse(data.error) : undefined;
                 } else {
                     normalizeHttpMessage(data, event);
                 }
