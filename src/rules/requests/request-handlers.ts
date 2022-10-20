@@ -938,11 +938,15 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 }
                 clientRes.tags.push('passthrough-error:' + e.code);
 
-                if (e.code === 'ECONNRESET' || e.code === 'ECONNREFUSED') {
+                if (e.code === 'ECONNRESET' || e.code === 'ECONNREFUSED' || this.simulateConnectionErrors) {
                     // The upstream socket closed: forcibly close the downstream stream to match
                     const socket: net.Socket = (clientReq as any).socket;
-                    socket.destroy();
-                    reject(new AbortError('Upstream connection was reset'));
+                    if ('resetAndDestroy' in socket) {
+                        socket.resetAndDestroy();
+                    } else {
+                        socket.destroy();
+                    }
+                    reject(new AbortError('Upstream connection failed'));
                 } else {
                     e.statusCode = 502;
                     e.statusMessage = 'Error communicating with upstream server';
@@ -1066,6 +1070,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
             } : {},
             forwarding: data.forwarding,
             lookupOptions: data.lookupOptions,
+            simulateConnectionErrors: !!data.simulateConnectionErrors,
             ignoreHostHttpsErrors: data.ignoreHostCertificateErrors,
             trustAdditionalCAs: data.extraCACertificates,
             clientCertificateHostMap: _.mapValues(data.clientCertificateHostMap,

@@ -894,6 +894,34 @@ nodeOnly(() => {
                 expect(response.statusCode).to.equal(500);
             });
 
+            it("should return a 502 if proxying fails", async () => {
+                await server.forGet().thenPassThrough();
+
+                let response = await request.get(`http://invalid.example`, {
+                    resolveWithFullResponse: true,
+                    simple: false
+                });
+
+                expect(response.statusCode).to.equal(502);
+            });
+
+            it("should kill the connection if proxying fails with error simulation", async () => {
+                await server.forGet().thenPassThrough({
+                    simulateConnectionErrors: true
+                });
+
+                let result = await request.get(`http://invalid.example`, {
+                    resolveWithFullResponse: true,
+                    simple: false
+                }).catch(e => e);
+
+                expect(result).to.be.instanceOf(Error);
+                expect(result.message).to.be.oneOf([
+                    'Error: socket hang up',
+                    'Error: read ECONNRESET'
+                ]);
+            });
+
             describe("with an IPv6-only server", () => {
                 if (!isLocalIPv6Available) return;
 

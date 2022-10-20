@@ -535,6 +535,31 @@ export interface PassThroughHandlerOptions {
     lookupOptions?: PassThroughLookupOptions;
 
     /**
+     * Whether to simulate connection errors back to the client.
+     *
+     * By default (in most cases - see below) when an upstream request fails
+     * outright a 502 "Bad Gateway" response is sent to the downstream client,
+     * explicitly indicating the failure and containing the error that caused
+     * the issue in the response body.
+     *
+     * Only in the case of upstream connection reset errors is a connection reset
+     * normally sent back downstream to existing clients (this behaviour exists
+     * for backward compatibility, and will change to match other error behaviour
+     * in a future version).
+     *
+     * When this option is set to `true`, low-level connection failures will
+     * always trigger a downstream connection close/reset, rather than a 502
+     * response.
+     *
+     * This includes DNS failures, TLS connection errors, TCP connection resets,
+     * etc (but not HTTP non-200 responses, which are still proxied as normal).
+     * This is less convenient for debugging in a testing environment or when
+     * using a proxy intentionally, but can be more accurate when trying to
+     * transparently proxy network traffic, errors and all.
+     */
+    simulateConnectionErrors?: boolean;
+
+    /**
      * A set of data to automatically transform a request. This includes properties
      * to support many transformation common use cases.
      *
@@ -724,6 +749,7 @@ export interface SerializedPassThroughData {
     extraCACertificates?: Array<{ cert: string } | { certPath: string }>;
     clientCertificateHostMap?: { [host: string]: { pfx: string, passphrase?: string } };
     lookupOptions?: PassThroughLookupOptions;
+    simulateConnectionErrors?: boolean;
 
     transformRequest?: Replace<RequestTransform, {
         'replaceBody'?: string, // Serialized as base64 buffer
@@ -792,6 +818,8 @@ export class PassThroughHandlerDefinition extends Serializable implements Reques
 
     public readonly lookupOptions?: PassThroughLookupOptions;
 
+    public readonly simulateConnectionErrors: boolean;
+
     // Used in subclass - awkwardly needs to be initialized here to ensure that its set when using a
     // handler built from a definition. In future, we could improve this (compose instead of inheritance
     // to better control handler construction?) but this will do for now.
@@ -823,6 +851,7 @@ export class PassThroughHandlerDefinition extends Serializable implements Reques
 
         this.lookupOptions = options.lookupOptions;
         this.proxyConfig = options.proxyConfig;
+        this.simulateConnectionErrors = !!options.simulateConnectionErrors;
 
         this.clientCertificateHostMap = options.clientCertificateHostMap || {};
         this.extraCACertificates = options.trustAdditionalCAs || [];
@@ -932,6 +961,7 @@ export class PassThroughHandlerDefinition extends Serializable implements Reques
             } : {},
             proxyConfig: serializeProxyConfig(this.proxyConfig, channel),
             lookupOptions: this.lookupOptions,
+            simulateConnectionErrors: this.simulateConnectionErrors,
             ignoreHostCertificateErrors: this.ignoreHostHttpsErrors,
             extraCACertificates: this.extraCACertificates.map((certObject) => {
                 // We use toString to make sure that buffers always end up as
