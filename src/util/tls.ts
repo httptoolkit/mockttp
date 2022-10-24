@@ -12,12 +12,14 @@ export type HttpsOptions = {
     key: string;
     cert: string;
     keyLength?: number;
+    domain?: string;
 };
 
 export type HttpsPathOptions = {
     keyPath: string;
     certPath: string;
     keyLength?: number;
+    domain?: string;
 }
 
 export type PEM = string | string[] | Buffer | Buffer[];
