@@ -9,8 +9,9 @@ import now = require("performance-now");
 
 import { TlsRequest } from '../types';
 import { makeDestroyable, DestroyableServer } from 'destroyable-server';
-import { getCA, CAOptions } from '../util/tls';
+import { getCA } from '../util/tls';
 import { delay } from '../util/util';
+import { MockttpHttpsOptions } from '../mockttp';
 
 // Hardcore monkey-patching: force TLSSocket to link servername & remoteAddress to
 // sockets as soon as they're available, without waiting for the handshake to fully
@@ -39,7 +40,7 @@ const originalSocketInit = (<any>tls.TLSSocket.prototype)._init;
 
 export type ComboServerOptions = {
     debug: boolean,
-    https: CAOptions | undefined,
+    https: MockttpHttpsOptions | undefined,
     http2: true | false | 'fallback'
 };
 
@@ -154,7 +155,7 @@ export async function createComboServer(
     if (!options.https) {
         server = httpolyglot.createServer(requestListener);
     } else {
-        const ca = await getCA(options.https!);
+        const ca = await getCA(options.https);
         const defaultCert = ca.generateCertificate(options.https.defaultDomain ?? 'localhost');
 
         server = httpolyglot.createServer({

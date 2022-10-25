@@ -623,6 +623,14 @@ export interface Mockttp {
     getRuleParameterKeys(): Promise<string[]>;
 }
 
+export type MockttpHttpsOptions = CAOptions & {
+    /**
+     * The domain name that will be used in the certificate for incoming TLS
+     * connections which don't use SNI to request a specific domain.
+     */
+    defaultDomain?: string;
+};
+
 export interface MockttpOptions {
     /**
      * Should the server automatically respond to OPTIONS requests with a permissive
@@ -645,7 +653,7 @@ export interface MockttpOptions {
      * containing the private key and certificate in PEM format, or a { keyPath,
      * certPath } object containing the path to files containing that content.
      */
-    https?: CAOptions;
+    https?: MockttpHttpsOptions;
 
     /**
      * Should HTTP/2 be enabled? Can be true, false, or 'fallback'. If true,

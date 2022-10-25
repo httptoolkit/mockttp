@@ -25,9 +25,14 @@ import {
     WebSocketMessage,
     WebSocketClose
 } from "../types";
-import { CAOptions } from '../util/tls';
 import { DestroyableServer } from "destroyable-server";
-import { Mockttp, AbstractMockttp, MockttpOptions, PortRange } from "../mockttp";
+import {
+    Mockttp,
+    AbstractMockttp,
+    MockttpOptions,
+    MockttpHttpsOptions,
+    PortRange
+} from "../mockttp";
 import { RequestRule, RequestRuleData } from "../rules/requests/request-rule";
 import { ServerMockedEndpoint } from "./mocked-endpoint";
 import { createComboServer } from "./http-combo-server";
@@ -74,7 +79,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     private requestRuleSets: { [priority: number]: RequestRule[] } = {};
     private webSocketRuleSets: { [priority: number]: WebSocketRule[] } = {};
 
-    private httpsOptions: CAOptions | undefined;
+    private httpsOptions: MockttpHttpsOptions | undefined;
     private isHttp2Enabled: true | false | 'fallback';
     private maxBodySize: number;
 

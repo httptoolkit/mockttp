@@ -1,4 +1,4 @@
-import { Mockttp, MockttpOptions, SubscribableEvent, PortRange } from "./mockttp";
+import { Mockttp, MockttpOptions, MockttpHttpsOptions, SubscribableEvent, PortRange } from "./mockttp";
 import { MockttpServer } from "./server/mockttp-server";
 import {
     MockttpClient,
@@ -13,6 +13,7 @@ export type {
     MockttpServer,
     MockttpAdminServer,
     MockttpOptions,
+    MockttpHttpsOptions,
     MockttpClientOptions,
     MockttpAdminServerOptions,
     SubscribableEvent,
@@ -68,8 +69,8 @@ export {
 export type {
     CAOptions,
     PEM,
-    HttpsOptions,
-    HttpsPathOptions
+    CertDataOptions,
+    CertPathOptions
 } from './util/tls';
 export type { CachedDns, DnsLookupFunction } from './util/dns';
 export type { Serialized, SerializedValue } from './serialization/serialization';

@@ -6,25 +6,23 @@ const { pki, md, util: { encode64 } } = forge;
 
 import * as fs from './fs';
 
-export type CAOptions = (HttpsOptions | HttpsPathOptions);
+export type CAOptions = (CertDataOptions | CertPathOptions);
 
-export interface HttpsOptions extends IAdditionalHttpsOptions {
+export interface CertDataOptions extends BaseCAOptions {
     key: string;
     cert: string;
 };
 
-export interface HttpsPathOptions extends IAdditionalHttpsOptions {
+export interface CertPathOptions extends BaseCAOptions {
     keyPath: string;
     certPath: string;
 }
 
-/**
- * @prop {number?} [keyLength] - Minimum key length when generating a CA.  Defaults to 2048.
- * @prop {string?} [defaultDomain] - The domain name that will be used in the certificate for incoming TLS connections which don't use SNI to request a specific domain.
- */
-export interface IAdditionalHttpsOptions {
+export interface BaseCAOptions {
+    /**
+     * Minimum key length when generating certificates. Defaults to 2048.
+     */
     keyLength?: number;
-    defaultDomain?: string;
 }
 
 export type PEM = string | string[] | Buffer | Buffer[];
@@ -120,26 +118,25 @@ function generateSerialNumber() {
 }
 
 export async function getCA(options: CAOptions): Promise<CA> {
-    let httpsOptions: HttpsOptions;
-    if ((<any>options).key && (<any>options).cert) {
-        httpsOptions = <HttpsOptions> options;
+    let certOptions: CertDataOptions;
+    if ('key' in options && 'cert' in options) {
+        certOptions = options;
     }
-    else if ((<any>options).keyPath && (<any>options).certPath) {
-        let pathOptions = <HttpsPathOptions> options;
-        httpsOptions = await Promise.all([
-            fs.readFile(pathOptions.keyPath, 'utf8'),
-            fs.readFile(pathOptions.certPath, 'utf8')
+    else if ('keyPath' in options && 'certPath' in options) {
+        certOptions = await Promise.all([
+            fs.readFile(options.keyPath, 'utf8'),
+            fs.readFile(options.certPath, 'utf8')
         ]).then(([ keyContents, certContents ]) => ({
             key: keyContents,
             cert: certContents,
-            keyLength: pathOptions.keyLength
+            keyLength: options.keyLength
         }));
     }
     else {
         throw new Error('Unrecognized https options: you need to provide either a keyPath & certPath, or a key & cert.')
     }
 
-    return new CA(httpsOptions.key, httpsOptions.cert, httpsOptions.keyLength || 2048);
+    return new CA(certOptions.key, certOptions.cert, certOptions.keyLength || 2048);
 }
 
 // We share a single keypair across all certificates in this process, and
