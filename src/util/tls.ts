@@ -8,18 +8,23 @@ import * as fs from './fs';
 
 export type CAOptions = (HttpsOptions | HttpsPathOptions);
 
-export type HttpsOptions = {
+export interface HttpsOptions extends IAdditionalHttpsOptions {
     key: string;
     cert: string;
-    keyLength?: number;
-    domain?: string;
 };
 
-export type HttpsPathOptions = {
+export interface HttpsPathOptions extends IAdditionalHttpsOptions {
     keyPath: string;
     certPath: string;
+}
+
+/**
+ * @prop {number?} [keyLength] - Minimum key length when generating a CA.  Defaults to 2048.
+ * @prop {string?} [defaultDomain] - The domain name that will be used in the certificate for incoming TLS connections which don't use SNI to request a specific domain.
+ */
+export interface IAdditionalHttpsOptions {
     keyLength?: number;
-    domain?: string;
+    defaultDomain?: string;
 }
 
 export type PEM = string | string[] | Buffer | Buffer[];
