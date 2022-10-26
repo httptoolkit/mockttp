@@ -22,8 +22,6 @@ import {
 } from "../../test-utils";
 import { CA } from "../../../src/util/tls";
 import { streamToBuffer } from "../../../src/util/buffer-utils";
-import { TLSSocket } from "tls";
-import { assert } from "console";
 
 const INITIAL_ENV = _.cloneDeep(process.env);
 
@@ -61,7 +59,6 @@ nodeOnly(() => {
                     cert: fs.readFileSync('./test/fixtures/test-ca.pem'),
                 }
                 const tlsSocket = tls.connect(server.port, 'localhost', options, () => {
-                    console.log('client connected', tlsSocket.authorized ? 'authorized' : 'unauthorized');
                     process.stdin.pipe(tlsSocket);
                     process.stdin.resume();
                 })
