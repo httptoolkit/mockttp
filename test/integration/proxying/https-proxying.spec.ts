@@ -6,6 +6,7 @@ import * as semver from 'semver';
 import portfinder = require('portfinder');
 import request = require("request-promise-native");
 import * as zlib from 'zlib';
+import * as tls from 'tls';
 
 import { getLocal, Mockttp, CompletedResponse } from "../../..";
 import {
@@ -21,6 +22,7 @@ import {
 } from "../../test-utils";
 import { CA } from "../../../src/util/tls";
 import { streamToBuffer } from "../../../src/util/buffer-utils";
+import { TLSSocket } from "tls";
 
 const INITIAL_ENV = _.cloneDeep(process.env);
 
@@ -30,7 +32,8 @@ nodeOnly(() => {
         let server = getLocal({
             https: {
                 keyPath: './test/fixtures/test-ca.key',
-                certPath: './test/fixtures/test-ca.pem'
+                certPath: './test/fixtures/test-ca.pem',
+                defaultDomain: 'test.com'
             }
         });
 
@@ -47,6 +50,26 @@ nodeOnly(() => {
             await remoteServer.stop();
             process.env = INITIAL_ENV;
         });
+
+        describe("the test I need for this", () => {
+            it("should return correct domain name", async () => {
+                await server.forAnyRequest().thenReply(200, "mocked data");
+                let options = {
+                    key: fs.readFileSync('./test/fixtures/test-ca.key'),
+                    ca: fs.readFileSync('./test/fixtures/test-ca.pem')
+                }
+                const tlsSocket = tls.connect(server.port, 'localhost', options, () => {
+                    process.stdin.pipe(tlsSocket);
+                    process.stdin.resume();
+                })
+
+                let cert = tlsSocket.getCertificate() as tls.PeerCertificate;
+
+                console.log('In my test');
+                console.log(cert);
+                expect(cert.subject.CN).to.equal("test.com");
+            })
+        })
 
         describe("using request + process.env", () => {
             it("should mock proxied HTTP", async () => {
