@@ -51,23 +51,25 @@ nodeOnly(() => {
             process.env = INITIAL_ENV;
         });
 
-        describe("the test I need for this", () => {
-            it("should return correct domain name", async () => {
+        describe("bypass SNI", () => {
+            it("should return default domain", async () => {
                 await server.forAnyRequest().thenReply(200, "mocked data");
                 let options = {
                     key: fs.readFileSync('./test/fixtures/test-ca.key'),
+                    cert: fs.readFileSync('./test/fixtures/test-ca.pem'),
                     ca: fs.readFileSync('./test/fixtures/test-ca.pem')
                 }
-                const tlsSocket = tls.connect(server.port, 'localhost', options, () => {
+                const tlsSocket = tls.connect(8000, 'localhost', options, () => {
+                    console.log('client connected', tlsSocket.authorized ? 'authorized' : 'unauthorized');
                     process.stdin.pipe(tlsSocket);
                     process.stdin.resume();
                 })
 
-                let cert = tlsSocket.getCertificate() as tls.PeerCertificate;
+                let cert = tlsSocket.getCertificate();
 
                 console.log('In my test');
                 console.log(cert);
-                expect(cert.subject.CN).to.equal("test.com");
+                expect('didnt work').to.equal("test.com");
             })
         })
 
