@@ -284,10 +284,10 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
             const hostHeader = req.headers[hostHeaderName];
             [ hostname, port ] = hostHeader!.split(':');
 
-            // lastHopEncrypted is set in http-combo-server, for requests that have explicitly
+            // __lastHopEncrypted is set in http-combo-server, for requests that have explicitly
             // CONNECTed upstream (which may then up/downgrade from the current encryption).
-            if (socket.lastHopEncrypted !== undefined) {
-                protocol = socket.lastHopEncrypted ? 'wss' : 'ws';
+            if (socket.__lastHopEncrypted !== undefined) {
+                protocol = socket.__lastHopEncrypted ? 'wss' : 'ws';
             } else {
                 protocol = reqMessage.connection.encrypted ? 'wss' : 'ws';
             }

@@ -190,7 +190,7 @@ export async function createComboServer(
 
         // All sockets are initially marked as using unencrypted upstream connections.
         // If TLS is used, this is upgraded to 'true' by secureConnection below.
-        socket.lastHopEncrypted = false;
+        socket.__lastHopEncrypted = false;
 
         // For actual sockets, set NODELAY to avoid any buffering whilst streaming. This is
         // off by default in Node HTTP, but likely to be enabled soon & is default in curl.
@@ -210,7 +210,7 @@ export async function createComboServer(
 
         socket.__timingInfo!.tlsConnectedTimestamp = now();
 
-        socket.lastHopEncrypted = true;
+        socket.__lastHopEncrypted = true;
         ifTlsDropped(socket, () => {
             tlsClientErrorListener(socket, buildTlsError(socket, 'closed'));
         });

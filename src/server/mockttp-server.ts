@@ -529,7 +529,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         // It might not be if this is a direct request, or if it's being transparently proxied.
         if (!isAbsoluteUrl(req.url!)) {
             req.protocol = req.headers[':scheme'] as string ||
-                (req.socket.lastHopEncrypted ? 'https' : 'http');
+                (req.socket.__lastHopEncrypted ? 'https' : 'http');
             req.path = req.url;
 
             const host = req.headers[':authority'] || req.headers['host'];

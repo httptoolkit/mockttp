@@ -451,7 +451,7 @@ export async function waitForCompletedResponse(
 export function tryToParseHttpRequest(input: Buffer, socket: net.Socket): PartiallyParsedHttpRequest {
     const req: PartiallyParsedHttpRequest = {};
     try {
-        req.protocol = socket.lastHopEncrypted ? "https" : "http"; // Wild guess really
+        req.protocol = socket.__lastHopEncrypted ? "https" : "http"; // Wild guess really
 
         // For TLS sockets, we default the hostname to the name given by SNI. Might be overridden
         // by the URL or Host header later, if available.
