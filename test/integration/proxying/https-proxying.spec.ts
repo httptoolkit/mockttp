@@ -55,9 +55,9 @@ nodeOnly(() => {
             it("should return default domain", async () => {
                 await server.forAnyRequest().thenReply(200, "mocked data");
                 let options = {
+                    ca: fs.readFileSync('./test/fixtures/test-ca.pem'),
                     key: fs.readFileSync('./test/fixtures/test-ca.key'),
                     cert: fs.readFileSync('./test/fixtures/test-ca.pem'),
-                    ca: fs.readFileSync('./test/fixtures/test-ca.pem')
                 }
                 const tlsSocket = tls.connect(8000, 'localhost', options, () => {
                     console.log('client connected', tlsSocket.authorized ? 'authorized' : 'unauthorized');
@@ -65,10 +65,11 @@ nodeOnly(() => {
                     process.stdin.resume();
                 })
 
-                let cert = tlsSocket.getCertificate();
+                tlsSocket.once('secureConnect', () => {
 
-                console.log('In my test');
-                console.log(cert);
+                    console.log(tlsSocket.getPeerCertificate());
+                })
+
                 expect('didnt work').to.equal("test.com");
             })
         })
