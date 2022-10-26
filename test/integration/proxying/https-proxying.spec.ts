@@ -23,6 +23,7 @@ import {
 import { CA } from "../../../src/util/tls";
 import { streamToBuffer } from "../../../src/util/buffer-utils";
 import { TLSSocket } from "tls";
+import { assert } from "console";
 
 const INITIAL_ENV = _.cloneDeep(process.env);
 
@@ -59,20 +60,21 @@ nodeOnly(() => {
                     key: fs.readFileSync('./test/fixtures/test-ca.key'),
                     cert: fs.readFileSync('./test/fixtures/test-ca.pem'),
                 }
-                const tlsSocket = tls.connect(8000, 'localhost', options, () => {
+                const tlsSocket = tls.connect(server.port, 'localhost', options, () => {
                     console.log('client connected', tlsSocket.authorized ? 'authorized' : 'unauthorized');
                     process.stdin.pipe(tlsSocket);
                     process.stdin.resume();
                 })
 
-                tlsSocket.once('secureConnect', () => {
+                let expectedCommonName = 'localhost';
 
-                    console.log(tlsSocket.getPeerCertificate());
+                tlsSocket.once('secureConnect', () => {
+                    expectedCommonName = tlsSocket.getPeerCertificate().subject.CN;
                 })
 
-                expect('didnt work').to.equal("test.com");
-            })
-        })
+                expect(expectedCommonName).to.equal("test.com");     
+            });
+        });
 
         describe("using request + process.env", () => {
             it("should mock proxied HTTP", async () => {
