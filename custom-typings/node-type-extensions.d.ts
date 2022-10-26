@@ -12,6 +12,10 @@ declare module "net" {
         // vice versa) all on one socket, this is the value for the final hop.
         __lastHopEncrypted?: boolean;
 
+        // For CONNECT-based socket tunnels, this is the address that was listed in the
+        // last layer of the tunnelling so far.
+        __lastHopConnectAddress?: string;
+
         // Normally only defined on TLSSocket, but useful to explicitly include here
         // Undefined on plain HTTP, 'true' on TLSSocket.
         encrypted?: boolean;
@@ -101,6 +105,7 @@ declare module "http2" {
     class ServerHttp2Stream {
         // Treated the same as net.Socket, when we unwrap them in our combo server:
         __lastHopEncrypted?: net.Socket['__lastHopEncrypted'];
+        __lastHopConnectAddress?: net.Socket['__lastHopConnectAddress'];
         __timingInfo?: net.Socket['__timingInfo'];
     }
 }

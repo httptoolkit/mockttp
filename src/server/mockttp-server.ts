@@ -41,6 +41,7 @@ import { Mutable } from "../util/type-utils";
 import { ErrorLike, isErrorLike } from "../util/error";
 import { makePropertyWritable } from "../util/util";
 
+import { isSocketLoop } from "../util/socket-util";
 import {
     parseRequestBody,
     waitForCompletedRequest,
@@ -133,7 +134,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             debug: this.debug,
             https: this.httpsOptions,
             http2: this.isHttp2Enabled,
-        }, this.app, this.announceTlsErrorAsync.bind(this));
+        }, this.app, this.announceTlsErrorAsync.bind(this), this.passthroughSocket.bind(this));
 
         this.server!.listen(port);
 
@@ -1009,5 +1010,47 @@ ${await this.suggestRule(request)}`
             },
             response: 'aborted' // These h2 errors get no app-level response, just a shutdown.
         });
+    }
+
+    private outgoingPassthroughSockets: Set<net.Socket> = new Set();
+
+    private passthroughSocket(
+        socket: net.Socket,
+        host: string,
+        port?: number
+    ) {
+        const targetPort = port || 443;
+
+        if (isSocketLoop(this.outgoingPassthroughSockets, socket)) {
+            // Hard to reproduce: loops can only happen if a) SNI triggers this (because tunnels
+            // require a repeated client request at each step) and b) the hostname points back to
+            // us, and c) we're running on the default port. Still good to guard against though.
+            console.warn(`Socket bypass loop for ${host}:${targetPort}`);
+            if ('resetAndDestroy' in socket) {
+                socket.resetAndDestroy();
+            } else {
+                socket.destroy();
+            }
+            return;
+        }
+
+        if (socket.closed) return; // Nothing to do
+
+        const upstreamSocket = net.connect({ host, port: targetPort });
+
+        socket.pipe(upstreamSocket);
+        upstreamSocket.pipe(socket);
+
+        socket.on('close', () => upstreamSocket.destroy());
+        upstreamSocket.on('close', () => socket.destroy());
+        socket.on('error', () => upstreamSocket.destroy());
+        upstreamSocket.on('error', () => socket.destroy());
+
+        upstreamSocket.once('connect', () => this.outgoingPassthroughSockets.add(upstreamSocket));
+        upstreamSocket.once('close', () => this.outgoingPassthroughSockets.delete(upstreamSocket));
+
+        if (this.debug) console.log(`Passing through raw bypassed connection to ${host}:${targetPort}${
+            !port ? ' (assumed port)' : ''
+        }`);
     }
 }

@@ -629,6 +629,21 @@ export type MockttpHttpsOptions = CAOptions & {
      * connections which don't use SNI to request a specific domain.
      */
     defaultDomain?: string;
+
+    /**
+     * A list of hostnames where TLS interception should always be skipped.
+     *
+     * When a TLS connection is started that references a matching hostname in its
+     * server name indication (SNI) extension, or which uses a matching hostname
+     * in a preceeding CONNECT request to create a tunnel, the connection will be
+     * sent raw to the upstream hostname, without handling TLS within Mockttp (i.e.
+     * with no TLS interception performed).
+     *
+     * Each element in the list must be an object with a 'hostname' field for the
+     * hostname that should be matched. In future more options may be supported
+     * here for additional configuration of this behaviour.
+     */
+    tlsPassthrough?: Array<{ hostname: string }>
 };
 
 export interface MockttpOptions {

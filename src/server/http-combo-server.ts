@@ -1,14 +1,15 @@
 import _ = require('lodash');
+import now = require("performance-now");
 import net = require('net');
 import tls = require('tls');
 import http = require('http');
 import http2 = require('http2');
 import * as streams from 'stream';
+import { makeDestroyable, DestroyableServer } from 'destroyable-server';
 import httpolyglot = require('@httptoolkit/httpolyglot');
-import now = require("performance-now");
+import { NonTlsError, readTlsClientHello } from 'read-tls-client-hello';
 
 import { TlsRequest } from '../types';
-import { makeDestroyable, DestroyableServer } from 'destroyable-server';
 import { getCA } from '../util/tls';
 import { delay } from '../util/util';
 import { MockttpHttpsOptions } from '../mockttp';
@@ -149,7 +150,8 @@ function buildTlsError(
 export async function createComboServer(
     options: ComboServerOptions,
     requestListener: (req: http.IncomingMessage, res: http.ServerResponse) => void,
-    tlsClientErrorListener: (socket: tls.TLSSocket, req: TlsRequest) => void
+    tlsClientErrorListener: (socket: tls.TLSSocket, req: TlsRequest) => void,
+    tlsPassthroughListener: (socket: net.Socket, address: string, port?: number) => void
 ): Promise<DestroyableServer<net.Server>> {
     let server: net.Server;
     if (!options.https) {
@@ -158,7 +160,7 @@ export async function createComboServer(
         const ca = await getCA(options.https);
         const defaultCert = ca.generateCertificate(options.https.defaultDomain ?? 'localhost');
 
-        server = httpolyglot.createServer({
+        const tlsServer = tls.createServer({
             key: defaultCert.key,
             cert: defaultCert.cert,
             ca: [defaultCert.ca],
@@ -183,7 +185,17 @@ export async function createComboServer(
                     cb(e);
                 }
             }
-        }, requestListener);
+        });
+
+        if (options.https.tlsPassthrough?.length) {
+            passThroughMatchingTls(
+                tlsServer,
+                options.https.tlsPassthrough,
+                tlsPassthroughListener
+            );
+        }
+
+        server = httpolyglot.createServer(tlsServer, requestListener);
     }
 
     server.on('connection', (socket: net.Socket | http2.ServerHttp2Stream) => {
@@ -257,6 +269,7 @@ export async function createComboServer(
 
         socket.write('HTTP/' + req.httpVersion + ' 200 OK\r\n\r\n', 'utf-8', () => {
             socket.__timingInfo!.tunnelSetupTimestamp = now();
+            socket.__lastHopConnectAddress = connectUrl;
             server.emit('connection', socket);
         });
     }
@@ -277,6 +290,7 @@ export async function createComboServer(
         res.writeHead(200, {});
         copyAddressDetails(res.socket, res.stream);
         copyTimingDetails(res.socket, res.stream);
+        res.stream.__lastHopConnectAddress = connectUrl;
 
         // When layering HTTP/2 on JS streams, we have to make sure the JS stream won't autoclose
         // when the other side does, because the upper HTTP/2 layers want to handle shutdown, so
@@ -301,17 +315,24 @@ function getParentSocket(socket: net.Socket) {
 type SocketIsh<MinProps extends keyof net.Socket> =
     streams.Duplex & Partial<Pick<net.Socket, MinProps>>;
 
+const SOCKET_ADDRESS_METADATA_FIELDS = [
+    'localAddress',
+    'localPort',
+    'remoteAddress',
+    'remotePort',
+    '__lastHopConnectAddress'
+] as const;
+
 // Update the target socket(-ish) with the address details from the source socket,
 // iff the target has no details of its own.
 function copyAddressDetails(
-    source: SocketIsh<'localAddress' | 'localPort' | 'remoteAddress' | 'remotePort'>,
-    target: SocketIsh<'localAddress' | 'localPort' | 'remoteAddress' | 'remotePort'>
+    source: SocketIsh<typeof SOCKET_ADDRESS_METADATA_FIELDS[number]>,
+    target: SocketIsh<typeof SOCKET_ADDRESS_METADATA_FIELDS[number]>
 ) {
-    const fields = ['localAddress', 'localPort', 'remoteAddress', 'remotePort'] as const;
-    Object.defineProperties(target, _.zipObject(fields,
-        _.range(fields.length).map(() => ({ writable: true }))
+    Object.defineProperties(target, _.zipObject(SOCKET_ADDRESS_METADATA_FIELDS,
+        _.range(SOCKET_ADDRESS_METADATA_FIELDS.length).map(() => ({ writable: true }))
     ));
-    fields.forEach((fieldName) => {
+    SOCKET_ADDRESS_METADATA_FIELDS.forEach((fieldName) => {
         if (target[fieldName] === undefined) {
             (target as any)[fieldName] = source[fieldName];
         }
@@ -326,4 +347,45 @@ function copyTimingDetails<T extends SocketIsh<'__timingInfo'>>(
         // Clone timing info, don't copy it - child sockets get their own independent timing stats
         target.__timingInfo = Object.assign({}, source.__timingInfo);
     }
+}
+
+/**
+ * Takes a tls passthrough list, and reconfigures a given TLS server so that all
+ * matching requests are passed to the given passthrough listener, instead of
+ * beginning a full TLS handshake.
+ */
+function passThroughMatchingTls(
+    server: tls.Server,
+    passthroughList: Required<MockttpHttpsOptions>['tlsPassthrough'],
+    listener: (socket: net.Socket, address: string, port?: number) => void
+) {
+    const hostnames = passthroughList.map(({ hostname }) => hostname);
+
+    const tlsConnectionListener = server.listeners('connection')[0] as (socket: net.Socket) => {};
+    server.removeListener('connection', tlsConnectionListener);
+    server.on('connection', async (socket: net.Socket) => {
+        try {
+            const helloData = await readTlsClientHello(socket);
+
+            const [connectHostname, connectPort] = socket.__lastHopConnectAddress?.split(':') ?? [];
+            const sniHostname = helloData.serverName;
+
+            if (connectHostname && hostnames.includes(connectHostname)) {
+                listener(socket, connectHostname, connectPort ? parseInt(connectPort, 10) : undefined)
+                return; // Do not continue with TLS
+            } else if (sniHostname && hostnames.includes(sniHostname)) {
+                listener(socket, sniHostname); // Can't guess the port - it's not included in SNI
+                return; // Do not continue with TLS
+            }
+        } catch (e) {
+            if (!(e instanceof NonTlsError)) { // Don't even warn for non-TLS traffic
+                console.warn(`TLS client hello data not available for TLS connection from ${
+                    socket.remoteAddress ?? 'unknown address'
+                }: ${(e as Error).message ?? e}`);
+            }
+        }
+
+        // Didn't match a passthrough hostname - continue with TLS setup
+        tlsConnectionListener.call(server, socket);
+    });
 }

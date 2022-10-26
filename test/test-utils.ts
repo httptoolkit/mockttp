@@ -263,7 +263,7 @@ async function http2Request(
     });
     if (requestBody) req.end(requestBody);
 
-    const responseHeaders = await getHttp2Response(req);
+    const responseHeaders = getHttp2Response(req);
     const responseBody = await getHttp2Body(req);
     const alpnProtocol = client.alpnProtocol;
 
@@ -271,7 +271,7 @@ async function http2Request(
 
     return {
         alpnProtocol,
-        headers: responseHeaders,
+        headers: await responseHeaders,
         body: responseBody
     };
 }
@@ -293,27 +293,36 @@ export async function http2ProxyRequest(
     headers: {} = {},
     requestBody = ''
 ) {
-    const proxyClient = http2.connect(proxyServer.url);
     const parsedUrl = URL.parse(url);
+    const isTLS = parsedUrl.protocol === 'https:';
+
+    const targetHost = parsedUrl.hostname!;
+    const targetPort = parsedUrl.port! ?? (isTLS ? 443 : 80);
+
+    const proxyClient = http2.connect(proxyServer.url);
     const proxyReq = proxyClient.request({
         ':method': 'CONNECT',
-        ':authority': parsedUrl.host!
+        ':authority': `${targetHost}:${targetPort}`
     });
 
     const proxyResponse = await getHttp2Response(proxyReq);
     expect(proxyResponse[':status']).to.equal(200);
 
-    const result = http2Request(
+    const result = await http2Request(
         url,
         {
             ':path': parsedUrl.path,
             ...headers
         },
         requestBody,
-        () => tls.connect({
-            socket: proxyReq as any,
-            ALPNProtocols: ['h2']
-        })
+        () => isTLS
+            ? tls.connect({
+                host: targetHost,
+                servername: targetHost,
+                socket: proxyReq as any,
+                ALPNProtocols: ['h2']
+            })
+            : proxyReq
     );
 
     await cleanup(proxyClient);
