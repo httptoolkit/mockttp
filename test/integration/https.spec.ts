@@ -1,11 +1,18 @@
 import * as fs from 'fs-extra';
-import * as net from 'net';
 import * as http from 'http';
 import * as tls from 'tls';
 import * as https from 'https';
 
 import { getLocal } from "../..";
-import { expect, fetch, nodeOnly, delay, http2ProxyRequest } from "../test-utils";
+import {
+    expect,
+    fetch,
+    nodeOnly,
+    delay,
+    openRawSocket,
+    openRawTlsSocket,
+    http2ProxyRequest
+} from "../test-utils";
 import { streamToBuffer } from '../../src/util/buffer-utils';
 
 describe("When configured for HTTPS", () => {
@@ -158,8 +165,7 @@ describe("When configured for HTTPS", () => {
             });
 
             it("still accepts TLS connections with other SNI", async () => {
-                const tlsSocket = await tlsConnect({
-                    port: server.port,
+                const tlsSocket = await openRawTlsSocket(server, {
                     rejectUnauthorized: false,
                     servername: 'unmatched.example'
                 });
@@ -170,9 +176,7 @@ describe("When configured for HTTPS", () => {
             });
 
             it("still accepts TLS connections without SNI", async () => {
-                const tlsSocket = await tlsConnect({
-                    port: server.port
-                });
+                const tlsSocket = await openRawTlsSocket(server);
 
                 const cert = tlsSocket.getPeerCertificate();
                 expect(cert.subject.CN).to.equal('localhost');
@@ -180,8 +184,7 @@ describe("When configured for HTTPS", () => {
             });
 
             it("bypasses Mockttp for TLS connections with matching SNI", async () => {
-                const tlsSocket = await tlsConnect({
-                    port: server.port,
+                const tlsSocket = await openRawTlsSocket(server, {
                     servername: 'example.com'
                 });
 
@@ -191,9 +194,7 @@ describe("When configured for HTTPS", () => {
             });
 
             it("bypasses Mockttp for TLS connections inside matching HTTP/1 CONNECT tunnel", async () => {
-                const tunnel = await netConnect({
-                    port: server.port
-                });
+                const tunnel = await openRawSocket(server);
 
                 tunnel.write('CONNECT example.com:443 HTTP/1.1\r\n\r\n');
 
@@ -202,9 +203,8 @@ describe("When configured for HTTPS", () => {
                 const result = tunnel.read();
                 expect(result.toString()).to.equal('HTTP/1.1 200 OK\r\n\r\n');
 
-                const tlsSocket = await tlsConnect({
-                    host: 'example.com',
-                    socket: tunnel
+                const tlsSocket = await openRawTlsSocket(tunnel, {
+                    host: 'example.com'
                     // No SNI used here!
                 });
 
@@ -214,9 +214,7 @@ describe("When configured for HTTPS", () => {
             });
 
             it("still handles matching CONNECT-tunnelled plain-HTTP requests", async () => {
-                const tunnel = await netConnect({
-                    port: server.port
-                });
+                const tunnel = await openRawSocket(server);
 
                 tunnel.write('CONNECT example.com:80 HTTP/1.1\r\n\r\n');
 
@@ -246,16 +244,4 @@ describe("When configured for HTTPS", () => {
         });
 
     });
-});
-
-const netConnect = (options: net.NetConnectOpts) => new Promise<net.Socket>((resolve, reject) => {
-    const socket = net.connect(options);
-    socket.on('connect', () => resolve(socket));
-    socket.on('error', reject);
-});
-
-const tlsConnect = (options: tls.ConnectionOptions) => new Promise<tls.TLSSocket>((resolve, reject) => {
-    const socket = tls.connect(options);
-    socket.on('secureConnect', () => resolve(socket));
-    socket.on('error', reject);
 });

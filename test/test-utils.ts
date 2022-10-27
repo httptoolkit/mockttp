@@ -124,9 +124,15 @@ const TOO_LONG_HEADER_SIZE = 1024 * (isNode ? 16 : 160) + 1;
 export const TOO_LONG_HEADER_VALUE = _.range(TOO_LONG_HEADER_SIZE).map(() => "X").join("");
 
 export async function openRawSocket(server: Mockttp) {
-    const client = new net.Socket();
-    await new Promise<void>((resolve) => client.connect(server.port, '127.0.0.1', resolve));
-    return client;
+    const socket = new net.Socket();
+    return new Promise<net.Socket>((resolve, reject) => {
+        socket.connect({
+            port: server.port,
+            host: '127.0.0.1'
+        });
+        socket.on('connect', () => resolve(socket));
+        socket.on('error', reject);
+    });
 }
 
 export async function sendRawRequest(server: Mockttp, requestContent: string): Promise<string> {
@@ -146,21 +152,20 @@ export async function sendRawRequest(server: Mockttp, requestContent: string): P
 }
 
 export async function openRawTlsSocket(
-    server: Mockttp,
-    options: {
-        servername?: string
-        alpn?: string[]
-    } = {}
+    target: Mockttp | net.Socket,
+    options: tls.ConnectionOptions = {}
 ): Promise<tls.TLSSocket> {
-    if (!options.alpn) options.alpn = ['http/1.1']
-
-    return await new Promise<tls.TLSSocket>((resolve) => {
+    return await new Promise<tls.TLSSocket>((resolve, reject) => {
         const socket: tls.TLSSocket = tls.connect({
             host: 'localhost',
-            port: server.port,
-            servername: options.servername,
-            ALPNProtocols: options.alpn
-        }, () => resolve(socket));
+            ...(target instanceof net.Socket
+                ? { socket: target }
+                : { port: target.port }
+            ),
+            ...options
+        });
+        socket.once('secureConnect', () => resolve(socket));
+        socket.once('error', reject);
     });
 }
 

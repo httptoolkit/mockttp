@@ -266,7 +266,7 @@ describe("Client error subscription", () => {
 
                 const socket = await openRawTlsSocket(server, {
                     servername: `localhost:${server.port}`,
-                    alpn: ['h2']
+                    ALPNProtocols: ['h2']
                 });
 
                 socket.write("GET / HTTP/1.1\r\n\r\n"); // Send H1 on H2 connection
@@ -290,7 +290,7 @@ describe("Client error subscription", () => {
 
                 const socket = await openRawTlsSocket(server, {
                     servername: `localhost:${server.port}`,
-                    alpn: ['h2']
+                    ALPNProtocols: ['h2']
                 });
 
                 socket.write("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"); // Send the HTTP/2 preface
