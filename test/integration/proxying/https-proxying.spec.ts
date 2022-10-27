@@ -87,9 +87,9 @@ nodeOnly(() => {
                 await server.forAnyRequest().thenPassThrough();
 
                 let response = await ignoreNetworkError( // External service, can be unreliable, c'est la vie
-                    request.get("https://ja3er.com/json", {
+                    request.get("https://check.ja3.zone/", {
                         headers: {
-                            // The hash will get recorded with the user agent that's used - we don't want the database
+                            // The hash may be recorded with the user agent that's used - we don't want the database
                             // to fill up with records that make it clear it's Mockttp's fingerprint!
                             'user-agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:103.0) Gecko/20100101 Firefox/103.0'
                         }
@@ -97,13 +97,12 @@ nodeOnly(() => {
                     { context: this, timeout: 4000 }
                 );
 
-                const ja3Hash = JSON.parse(response).ja3_hash;
+                const ja3Hash = JSON.parse(response).hash;
 
                 // Any hash is fine, as long as it's not a super common Node.js hash:
-                expect(ja3Hash).not.to.be.oneOf([
-                    '5d1b45c217fe17488ef0a688cf2cc497', // Node 10.23
-                    'c4aac137ff0b0ac82f3c138cf174b427', // Node 16.8, 14.17, 12.22
-                    '4c319ebb1fb1ef7937f04ac445bbdf86' // Node 17.0
+                expect(ja3Hash).be.oneOf([
+                    '66bd0ddf06e1943541373fc7283c0c00', // Node <17
+                    '555d2f0593c1e23a9b59cfaa7dc0e43a' // Node 17+
                 ]);
             });
 
