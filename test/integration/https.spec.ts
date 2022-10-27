@@ -1,5 +1,8 @@
+import * as fs from 'fs-extra';
+import * as tls from 'tls';
+
 import { getLocal } from "../..";
-import { expect, fetch } from "../test-utils";
+import { expect, fetch, nodeOnly } from "../test-utils";
 
 describe("An HTTPS server", () => {
     describe("passed key & cert paths", () => {
@@ -33,6 +36,58 @@ describe("An HTTPS server", () => {
             let result = await fetch(server.urlFor('/file.txt'));
 
             await expect(result).to.have.responseText('Fake file');
+        });
+    });
+
+    nodeOnly(() => {
+        describe("with an overriden default domain", () => {
+
+            let server = getLocal({
+                https: {
+                    keyPath: './test/fixtures/test-ca.key',
+                    certPath: './test/fixtures/test-ca.pem',
+                    defaultDomain: 'test.example'
+                }
+            });
+
+            beforeEach(() => server.start());
+            afterEach(() => server.stop());
+
+            it("should use the default domain when no SNI is provided", async () => {
+                const tlsSocket = tls.connect({
+                    ca: fs.readFileSync('./test/fixtures/test-ca.pem'),
+                    key: fs.readFileSync('./test/fixtures/test-ca.key'),
+                    cert: fs.readFileSync('./test/fixtures/test-ca.pem'),
+
+                    host: 'localhost',
+                    port: server.port,
+                    rejectUnauthorized: false // Don't fail even though the hostname is wrong
+                }).on('error', () => {}); // Ignore failure when this is closed later
+
+                await new Promise((resolve) => tlsSocket.once('secureConnect', resolve));
+
+                // The server uses the default name, when no 'servername' option is set:
+                expect(tlsSocket.getPeerCertificate().subject.CN).to.equal("test.example");
+            });
+
+            it("should still use the SNI name if one isis provided", async () => {
+                const tlsSocket = tls.connect({
+                    ca: fs.readFileSync('./test/fixtures/test-ca.pem'),
+                    key: fs.readFileSync('./test/fixtures/test-ca.key'),
+                    cert: fs.readFileSync('./test/fixtures/test-ca.pem'),
+
+                    host: 'localhost',
+                    servername: 'sni-name.example', // <-- Set a name via SNI
+                    port: server.port,
+                    rejectUnauthorized: false // Don't fail even though the hostname is wrong
+                }).on('error', () => {}); // Ignore failure when this is closed later
+
+                await new Promise((resolve) => tlsSocket.once('secureConnect', resolve));
+
+                // The SNI name is used, not the default:
+                expect(tlsSocket.getPeerCertificate().subject.CN).to.equal("sni-name.example");
+            });
+
         });
     });
 });

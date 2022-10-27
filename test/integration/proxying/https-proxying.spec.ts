@@ -6,7 +6,6 @@ import * as semver from 'semver';
 import portfinder = require('portfinder');
 import request = require("request-promise-native");
 import * as zlib from 'zlib';
-import * as tls from 'tls';
 
 import { getLocal, Mockttp, CompletedResponse } from "../../..";
 import {
@@ -31,8 +30,7 @@ nodeOnly(() => {
         let server = getLocal({
             https: {
                 keyPath: './test/fixtures/test-ca.key',
-                certPath: './test/fixtures/test-ca.pem',
-                defaultDomain: 'test.com'
+                certPath: './test/fixtures/test-ca.pem'
             }
         });
 
@@ -48,29 +46,6 @@ nodeOnly(() => {
             await server.stop();
             await remoteServer.stop();
             process.env = INITIAL_ENV;
-        });
-
-        describe("bypass SNI", () => {
-            it("should return default domain", async () => {
-                await server.forAnyRequest().thenReply(200, "mocked data");
-                let options = {
-                    ca: fs.readFileSync('./test/fixtures/test-ca.pem'),
-                    key: fs.readFileSync('./test/fixtures/test-ca.key'),
-                    cert: fs.readFileSync('./test/fixtures/test-ca.pem'),
-                }
-                const tlsSocket = tls.connect(server.port, 'localhost', options, () => {
-                    process.stdin.pipe(tlsSocket);
-                    process.stdin.resume();
-                })
-
-                let expectedCommonName = 'localhost';
-
-                tlsSocket.once('secureConnect', () => {
-                    expectedCommonName = tlsSocket.getPeerCertificate().subject.CN;
-                })
-
-                expect(expectedCommonName).to.equal("test.com");     
-            });
         });
 
         describe("using request + process.env", () => {
