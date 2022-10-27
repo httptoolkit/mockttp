@@ -67,7 +67,13 @@ export interface TlsRequest {
     hostname?: string;
     remoteIpAddress: string;
     remotePort: number;
-    failureCause: 'closed' | 'reset' | 'cert-rejected' | 'no-shared-cipher' | 'unknown';
+    failureCause:
+        | 'closed'
+        | 'reset'
+        | 'cert-rejected'
+        | 'no-shared-cipher'
+        | 'handshake-timeout'
+        | 'unknown';
     tags: string[];
     timingEvents: TlsTimingEvents;
 }

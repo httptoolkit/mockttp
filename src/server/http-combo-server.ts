@@ -100,7 +100,9 @@ function getCauseFromError(error: Error & { code?: string }) {
     : (/ECONNRESET/.test(error.message) || error.code === 'ECONNRESET')
         // The client sent no TLS alert, it just hard RST'd the connection
         ? 'reset'
-    : 'unknown'; // Something \else.
+    : error.code === 'ERR_TLS_HANDSHAKE_TIMEOUT'
+        ? 'handshake-timeout'
+    : 'unknown'; // Something else.
 
     if (cause === 'unknown') console.log('Unknown TLS error:', error);
 
