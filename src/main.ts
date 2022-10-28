@@ -20,6 +20,14 @@ export type {
     PortRange
 };
 
+// Export now-renamed types with the old aliases to provide backward compat and
+// avoid unnecessary type breakage:
+export type { TlsHandshakeFailure as TlsRequest } from './types';
+export type {
+    CertDataOptions as HttpsOptions,
+    CertPathOptions as HttpsPathOptions
+} from './util/tls';
+
 // Export rule data builders & type definitions:
 import * as matchers from './rules/matchers';
 import * as requestHandlers from './rules/requests/request-handlers';
