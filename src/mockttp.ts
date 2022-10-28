@@ -12,7 +12,8 @@ import {
     Method,
     CompletedRequest,
     CompletedResponse,
-    TlsRequest,
+    TlsPassthroughEvent,
+    TlsHandshakeFailure,
     InitiatedRequest,
     ClientError,
     RulePriority,
@@ -470,6 +471,36 @@ export interface Mockttp {
     on(event: 'abort', callback: (req: AbortedRequest) => void): Promise<void>;
 
     /**
+     * Subscribe to hear about TLS connections that are passed through the proxy without
+     * interception, due to the `tlsPassthrough` HTTPS option.
+     *
+     * This is only useful in some niche use cases, such as logging all requests seen
+     * by the server, independently of the rules defined.
+     *
+     * The callback will be called asynchronously from connection handling. This function
+     * returns a promise, and the callback is not guaranteed to be registered until
+     * the promise is resolved.
+     *
+     * @category Events
+     */
+    on(event: 'tls-passthrough-opened', callback: (req: TlsPassthroughEvent) => void): Promise<void>;
+
+    /**
+     * Subscribe to hear about closure of TLS connections that were passed through the
+     * proxy without interception, due to the `tlsPassthrough` HTTPS option.
+     *
+     * This is only useful in some niche use cases, such as logging all requests seen
+     * by the server, independently of the rules defined.
+     *
+     * The callback will be called asynchronously from connection handling. This function
+     * returns a promise, and the callback is not guaranteed to be registered until
+     * the promise is resolved.
+     *
+     * @category Events
+     */
+    on(event: 'tls-passthrough-closed', callback: (req: TlsPassthroughEvent) => void): Promise<void>;
+
+    /**
      * Subscribe to hear about requests that start a TLS handshake, but fail to complete it.
      * Not all clients report TLS errors explicitly, so this event fires for explicitly
      * reported TLS errors, and for TLS connections that are immediately closed with no
@@ -488,7 +519,7 @@ export interface Mockttp {
      *
      * @category Events
      */
-    on(event: 'tls-client-error', callback: (req: TlsRequest) => void): Promise<void>;
+    on(event: 'tls-client-error', callback: (req: TlsHandshakeFailure) => void): Promise<void>;
 
     /**
      * Subscribe to hear about requests that fail before successfully sending their
@@ -730,6 +761,8 @@ export type SubscribableEvent =
     | 'websocket-message-sent'
     | 'websocket-close'
     | 'abort'
+    | 'tls-passthrough-opened'
+    | 'tls-passthrough-closed'
     | 'tls-client-error'
     | 'client-error';
 

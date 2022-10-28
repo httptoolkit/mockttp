@@ -10,14 +10,23 @@ export class SchemaIntrospector {
         return this.typeHasField('Query', queryType);
     }
 
+    public isTypeDefined(typeName: string): boolean {
+        return _.some(this.adminServerSchema.types, { name: typeName });
+    }
+
     public typeHasField(typeName: string, fieldName: string): boolean {
         const type: any = _.find(this.adminServerSchema.types, { name: typeName });
         if (!type) return false;
         return !!_.find(type.fields, { name: fieldName });
     }
 
-    public asOptionalField(typeName: string, fieldName: string): string {
-        return (this.typeHasField(typeName, fieldName))
+    public asOptionalField(typeName: string | string[], fieldName: string): string {
+        const possibleNames = !Array.isArray(typeName) ? [typeName] : typeName;
+
+        const firstAvailableName = possibleNames.find((name) => this.isTypeDefined(name));
+        if (!firstAvailableName) return '';
+
+        return (this.typeHasField(firstAvailableName, fieldName))
             ? fieldName
             : '';
     }

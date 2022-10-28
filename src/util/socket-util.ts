@@ -1,8 +1,11 @@
 import * as _ from 'lodash';
+import now = require("performance-now");
 import * as os from 'os';
 import * as net from 'net';
+import * as tls from 'tls';
 
 import { isNode } from './util';
+import { TlsConnectionEvent } from '../types';
 
 // Test if a local port for a given interface (IPv4/6) is currently in use
 export async function isLocalPortActive(interfaceIp: '::1' | '127.0.0.1', port: number) {
@@ -75,3 +78,31 @@ export const resetSocket = (socket: net.Socket) => {
 
     socket.resetAndDestroy();
 };
+
+export function buildSocketEventData(socket: net.Socket & Partial<tls.TLSSocket>): TlsConnectionEvent {
+    const timingInfo = socket.__timingInfo ||
+        socket._parent?.__timingInfo ||
+        buildSocketTimingInfo();
+
+    return {
+        hostname: socket.servername,
+        // These only work because of oncertcb monkeypatch above
+        remoteIpAddress: socket.remoteAddress || // Normal case
+            socket._parent?.remoteAddress || // Pre-certCB error, e.g. timeout
+            socket.initialRemoteAddress!, // Recorded by certCB monkeypatch
+        remotePort: socket.remotePort ||
+            socket._parent?.remotePort ||
+            socket.initialRemotePort!,
+        tags: [],
+        timingEvents: {
+            startTime: timingInfo.initialSocket,
+            connectTimestamp: timingInfo.initialSocketTimestamp,
+            tunnelTimestamp: timingInfo.tunnelSetupTimestamp,
+            handshakeTimestamp: timingInfo.tlsConnectedTimestamp
+        }
+    };
+}
+
+export function buildSocketTimingInfo(): Required<net.Socket>['__timingInfo'] {
+    return { initialSocket: Date.now(), initialSocketTimestamp: now() };
+}

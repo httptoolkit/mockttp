@@ -9,9 +9,10 @@ import { makeDestroyable, DestroyableServer } from 'destroyable-server';
 import httpolyglot = require('@httptoolkit/httpolyglot');
 import { NonTlsError, readTlsClientHello } from 'read-tls-client-hello';
 
-import { TlsRequest } from '../types';
+import { TlsHandshakeFailure } from '../types';
 import { getCA } from '../util/tls';
 import { delay } from '../util/util';
+import { buildSocketTimingInfo, buildSocketEventData } from '../util/socket-util';
 import { MockttpHttpsOptions } from '../mockttp';
 
 // Hardcore monkey-patching: force TLSSocket to link servername & remoteAddress to
@@ -111,37 +112,16 @@ function getCauseFromError(error: Error & { code?: string }) {
     return cause;
 }
 
-function buildTimingInfo(): Required<net.Socket>['__timingInfo'] {
-    return { initialSocket: Date.now(), initialSocketTimestamp: now() };
-}
-
 function buildTlsError(
     socket: tls.TLSSocket,
-    cause: TlsRequest['failureCause']
-): TlsRequest {
-    const timingInfo = socket.__timingInfo ||
-        socket._parent?.__timingInfo ||
-        buildTimingInfo();
+    cause: TlsHandshakeFailure['failureCause']
+): TlsHandshakeFailure {
+    const eventData = buildSocketEventData(socket) as TlsHandshakeFailure;
 
-    return {
-        failureCause: cause,
-        hostname: socket.servername,
-        // These only work because of oncertcb monkeypatch above
-        remoteIpAddress: socket.remoteAddress || // Normal case
-            socket._parent?.remoteAddress || // Pre-certCB error, e.g. timeout
-            socket.initialRemoteAddress!, // Recorded by certCB monkeypatch
-        remotePort: socket.remotePort ||
-            socket._parent?.remotePort ||
-            socket.initialRemotePort!,
-        tags: [],
-        timingEvents: {
-            startTime: timingInfo.initialSocket,
-            connectTimestamp: timingInfo.initialSocketTimestamp,
-            tunnelTimestamp: timingInfo.tunnelSetupTimestamp,
-            handshakeTimestamp: timingInfo.tlsConnectedTimestamp,
-            failureTimestamp: now()
-        }
-    };
+    eventData.failureCause = cause;
+    eventData.timingEvents.failureTimestamp = now();
+
+    return eventData;
 }
 
 // The low-level server that handles all the sockets & TLS. The server will correctly call the
@@ -150,7 +130,7 @@ function buildTlsError(
 export async function createComboServer(
     options: ComboServerOptions,
     requestListener: (req: http.IncomingMessage, res: http.ServerResponse) => void,
-    tlsClientErrorListener: (socket: tls.TLSSocket, req: TlsRequest) => void,
+    tlsClientErrorListener: (socket: tls.TLSSocket, req: TlsHandshakeFailure) => void,
     tlsPassthroughListener: (socket: net.Socket, address: string, port?: number) => void
 ): Promise<DestroyableServer<net.Server>> {
     let server: net.Server;
@@ -199,7 +179,7 @@ export async function createComboServer(
     }
 
     server.on('connection', (socket: net.Socket | http2.ServerHttp2Stream) => {
-        socket.__timingInfo = socket.__timingInfo || buildTimingInfo();
+        socket.__timingInfo = socket.__timingInfo || buildSocketTimingInfo();
 
         // All sockets are initially marked as using unencrypted upstream connections.
         // If TLS is used, this is upgraded to 'true' by secureConnection below.
@@ -218,7 +198,7 @@ export async function createComboServer(
             copyAddressDetails(parentSocket, socket);
             copyTimingDetails(parentSocket, socket);
         } else if (!socket.__timingInfo) {
-            socket.__timingInfo = buildTimingInfo();
+            socket.__timingInfo = buildSocketTimingInfo();
         }
 
         socket.__timingInfo!.tlsConnectedTimestamp = now();

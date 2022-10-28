@@ -18,12 +18,13 @@ import {
     CompletedRequest,
     OngoingResponse,
     CompletedResponse,
-    TlsRequest,
+    TlsHandshakeFailure,
     ClientError,
     TimingEvents,
     OngoingBody,
     WebSocketMessage,
-    WebSocketClose
+    WebSocketClose,
+    TlsPassthroughEvent
 } from "../types";
 import { DestroyableServer } from "destroyable-server";
 import {
@@ -41,7 +42,7 @@ import { Mutable } from "../util/type-utils";
 import { ErrorLike, isErrorLike } from "../util/error";
 import { makePropertyWritable } from "../util/util";
 
-import { isSocketLoop } from "../util/socket-util";
+import { buildSocketEventData, isSocketLoop } from "../util/socket-util";
 import {
     parseRequestBody,
     waitForCompletedRequest,
@@ -290,7 +291,9 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     public on(event: 'websocket-message-received', callback: (req: WebSocketMessage) => void): Promise<void>;
     public on(event: 'websocket-message-sent', callback: (req: WebSocketMessage) => void): Promise<void>;
     public on(event: 'websocket-close', callback: (close: WebSocketClose) => void): Promise<void>;
-    public on(event: 'tls-client-error', callback: (req: TlsRequest) => void): Promise<void>;
+    public on(event: 'tls-passthrough-opened', callback: (req: TlsPassthroughEvent) => void): Promise<void>;
+    public on(event: 'tls-passthrough-closed', callback: (req: TlsPassthroughEvent) => void): Promise<void>;
+    public on(event: 'tls-client-error', callback: (req: TlsHandshakeFailure) => void): Promise<void>;
     public on(event: 'client-error', callback: (error: ClientError) => void): Promise<void>;
     public on(event: string, callback: (...args: any[]) => void): Promise<void> {
         this.eventEmitter.on(event, callback);
@@ -502,7 +505,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         });
     }
 
-    private async announceTlsErrorAsync(socket: net.Socket, request: TlsRequest) {
+    private async announceTlsErrorAsync(socket: net.Socket, request: TlsHandshakeFailure) {
         // Ignore errors after TLS is setup, those are client errors
         if (socket instanceof tls.TLSSocket && socket.tlsSetupCompleted) return;
 
@@ -1036,15 +1039,32 @@ ${await this.suggestRule(request)}`
 
         if (socket.closed) return; // Nothing to do
 
+        const eventData = buildSocketEventData(socket as any) as TlsPassthroughEvent;
+        eventData.id = uuid();
+        eventData.hostname = host;
+        eventData.upstreamPort = targetPort;
+        setImmediate(() => this.eventEmitter.emit('tls-passthrough-opened', eventData));
+
         const upstreamSocket = net.connect({ host, port: targetPort });
 
         socket.pipe(upstreamSocket);
         upstreamSocket.pipe(socket);
 
-        socket.on('close', () => upstreamSocket.destroy());
-        upstreamSocket.on('close', () => socket.destroy());
         socket.on('error', () => upstreamSocket.destroy());
         upstreamSocket.on('error', () => socket.destroy());
+        upstreamSocket.on('close', () => socket.destroy());
+        socket.on('close', () => {
+            upstreamSocket.destroy();
+            setImmediate(() => {
+                this.eventEmitter.emit('tls-passthrough-closed', {
+                    ...eventData,
+                    timingEvents: {
+                        ...eventData.timingEvents,
+                        disconnectedTimestamp: now()
+                    }
+                });
+            });
+        });
 
         upstreamSocket.once('connect', () => this.outgoingPassthroughSockets.add(upstreamSocket));
         upstreamSocket.once('close', () => this.outgoingPassthroughSockets.delete(upstreamSocket));

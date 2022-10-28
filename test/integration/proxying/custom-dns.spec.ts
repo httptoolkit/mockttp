@@ -2,7 +2,7 @@ import _ = require("lodash");
 import * as net from 'net';
 import request = require("request-promise-native");
 
-import { getLocal } from "../../../dist/main";
+import { getLocal } from "../../..";
 import {
     expect,
     nodeOnly,

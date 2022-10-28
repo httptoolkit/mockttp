@@ -28,7 +28,9 @@ export const MockttpSchema = gql`
         webSocketMessageSent: WebSocketMessage!
         webSocketClose: WebSocketClose!
         requestAborted: AbortedRequest!
-        failedTlsRequest: TlsRequest!
+        tlsPassthroughOpened: TlsPassthroughEvent!
+        tlsPassthroughClosed: TlsPassthroughEvent!
+        failedTlsRequest: TlsHandshakeFailure!
         failedClientRequest: ClientError!
     }
 
@@ -55,8 +57,31 @@ export const MockttpSchema = gql`
         completionChecker: Raw
     }
 
+    type TlsPassthroughEvent {
+        id: String!
+        upstreamPort: Int!
+
+        hostname: String
+        remoteIpAddress: String!
+        remotePort: Int!
+        tags: [String!]!
+        timingEvents: Json!
+    }
+
+    type TlsHandshakeFailure {
+        failureCause: String!
+
+        hostname: String
+        remoteIpAddress: String!
+        remotePort: Int!
+        tags: [String!]!
+        timingEvents: Json!
+    }
+
+    # Old name for TlsHandshakeFailure, kept for backward compat
     type TlsRequest {
         failureCause: String!
+
         hostname: String
         remoteIpAddress: String!
         remotePort: Int!

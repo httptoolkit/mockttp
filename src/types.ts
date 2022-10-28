@@ -63,10 +63,20 @@ export interface Request {
     tags: string[];
 }
 
-export interface TlsRequest {
+export interface TlsConnectionEvent {
     hostname?: string;
     remoteIpAddress: string;
     remotePort: number;
+    tags: string[];
+    timingEvents: TlsTimingEvents;
+}
+
+export interface TlsPassthroughEvent extends TlsConnectionEvent {
+    id: string;
+    upstreamPort: number;
+}
+
+export interface TlsHandshakeFailure extends TlsConnectionEvent {
     failureCause:
         | 'closed'
         | 'reset'
@@ -74,19 +84,50 @@ export interface TlsRequest {
         | 'no-shared-cipher'
         | 'handshake-timeout'
         | 'unknown';
-    tags: string[];
-    timingEvents: TlsTimingEvents;
+    timingEvents: TlsFailureTimingEvents;
 }
 
 export interface TlsTimingEvents {
-    startTime: number; // Ms since unix epoch
+    /**
+     * When the socket initially connected, in MS since the unix
+     * epoch.
+     */
+    startTime: number;
 
-    // High-precision floating-point monotonically increasing timestamps.
-    // Comparable and precise, but not related to specific current time.
-    connectTimestamp: number; // When the socket initially connected
-    failureTimestamp: number; // When the error occurred
-    handshakeTimestamp?: number; // When the handshake completed (if it did)
-    tunnelTimestamp?: number; // When the outer tunnel was create (if present)
+    /**
+     * When the socket initially connected, equivalent to startTime.
+     *
+     * High-precision floating-point monotonically increasing timestamps.
+     * Comparable and precise, but not related to specific current time.
+     */
+    connectTimestamp: number;
+
+    /**
+     * When Mockttp's handshake for this connection was completed (if there
+     * was one). This is not set for passed through connections.
+     */
+    handshakeTimestamp?: number;
+
+    /**
+     * When the outer tunnel (e.g. a preceeding CONNECT request) was created,
+     * if there was one.
+     */
+    tunnelTimestamp?: number;
+
+    /**
+     * When the connection was closed, if it has been closed.
+     */
+    disconnectTimestamp?: number;
+}
+
+export interface TlsFailureTimingEvents extends TlsTimingEvents {
+    /**
+     * When the TLS connection failed. This may be due to a failed handshake
+     * (in which case `handshakeTimestamp` will be undefined) or due to a
+     * subsequent error which means the TLS connection was not usable (like
+     * an immediate closure due to an async certificate rejection).
+     */
+    failureTimestamp: number;
 }
 
 // Internal representation of an ongoing HTTP request whilst it's being processed

@@ -354,14 +354,38 @@ export class MockttpAdminRequestBuilder {
                     ${this.schema.asOptionalField('AbortedRequest', 'error')}
                 }
             }`,
+            'tls-passthrough-opened': gql`subscription OnTlsPassthroughOpened {
+                tlsPassthroughOpened {
+                    id
+                    upstreamPort
+
+                    hostname
+                    remoteIpAddress
+                    remotePort
+                    tags
+                    timingEvents
+                }
+            }`,
+            'tls-passthrough-closed': gql`subscription OnTlsPassthroughClosed {
+                tlsPassthroughClosed {
+                    id
+                    upstreamPort
+
+                    hostname
+                    remoteIpAddress
+                    remotePort
+                    tags
+                    timingEvents
+                }
+            }`,
             'tls-client-error': gql`subscription OnTlsClientError {
                 failedTlsRequest {
                     failureCause
                     hostname
                     remoteIpAddress
-                    ${this.schema.asOptionalField('TlsRequest', 'remotePort')}
-                    ${this.schema.asOptionalField('TlsRequest', 'tags')}
-                    ${this.schema.asOptionalField('TlsRequest', 'timingEvents')}
+                    ${this.schema.asOptionalField(['TlsHandshakeFailure', 'TlsRequest'], 'remotePort')}
+                    ${this.schema.asOptionalField(['TlsHandshakeFailure', 'TlsRequest'], 'tags')}
+                    ${this.schema.asOptionalField(['TlsHandshakeFailure', 'TlsRequest'], 'timingEvents')}
                 }
             }`,
             'client-error': gql`subscription OnClientError {

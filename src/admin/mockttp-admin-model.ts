@@ -28,6 +28,8 @@ const WEBSOCKET_MESSAGE_RECEIVED_TOPIC = 'websocket-message-received';
 const WEBSOCKET_MESSAGE_SENT_TOPIC = 'websocket-message-sent';
 const WEBSOCKET_CLOSE_TOPIC = 'websocket-close';
 const REQUEST_ABORTED_TOPIC = 'request-aborted';
+const TLS_PASSTHROUGH_OPENED_TOPIC = 'tls-passthrough-opened';
+const TLS_PASSTHROUGH_CLOSED_TOPIC = 'tls-passthrough-closed';
 const TLS_CLIENT_ERROR_TOPIC = 'tls-client-error';
 const CLIENT_ERROR_TOPIC = 'client-error';
 
@@ -102,6 +104,18 @@ export function buildAdminServerModel(
                 // removed and abort events can lose the 'body' in the schema.
                 body: Buffer.alloc(0)
             })
+        })
+    });
+
+    mockServer.on('tls-passthrough-opened', (evt) => {
+        pubsub.publish(TLS_PASSTHROUGH_OPENED_TOPIC, {
+            tlsPassthroughOpened: evt
+        })
+    });
+
+    mockServer.on('tls-passthrough-closed', (evt) => {
+        pubsub.publish(TLS_PASSTHROUGH_CLOSED_TOPIC, {
+            tlsPassthroughClosed: evt
         })
     });
 
@@ -203,6 +217,12 @@ export function buildAdminServerModel(
             },
             requestAborted: {
                 subscribe: () => pubsub.asyncIterator(REQUEST_ABORTED_TOPIC)
+            },
+            tlsPassthroughOpened: {
+                subscribe: () => pubsub.asyncIterator(TLS_PASSTHROUGH_OPENED_TOPIC)
+            },
+            tlsPassthroughClosed: {
+                subscribe: () => pubsub.asyncIterator(TLS_PASSTHROUGH_CLOSED_TOPIC)
             },
             failedTlsRequest: {
                 subscribe: () => pubsub.asyncIterator(TLS_CLIENT_ERROR_TOPIC)

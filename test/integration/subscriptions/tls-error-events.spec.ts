@@ -2,7 +2,11 @@ import * as _ from 'lodash';
 import HttpsProxyAgent = require('https-proxy-agent');
 import * as semver from 'semver';
 
-import { getLocal } from "../../..";
+import {
+    getLocal,
+    TlsHandshakeFailure,
+    ClientError
+} from "../../..";
 import {
     expect,
     fetch,
@@ -16,7 +20,6 @@ import {
     watchForEvent,
     http2DirectRequest
 } from "../../test-utils";
-import { TlsRequest, ClientError } from "../../../dist/types";
 
 describe("TLS error subscriptions", () => {
     let goodServer = getLocal({
@@ -46,7 +49,7 @@ describe("TLS error subscriptions", () => {
     ]));
 
     it("should not be sent for successful requests", async () => {
-        let seenTlsErrorPromise = getDeferred<TlsRequest>();
+        let seenTlsErrorPromise = getDeferred<TlsHandshakeFailure>();
         await goodServer.on('tls-client-error', (r) => seenTlsErrorPromise.resolve(r));
 
         await fetch(goodServer.urlFor("/").replace('http:', 'https:'));
@@ -61,7 +64,7 @@ describe("TLS error subscriptions", () => {
 
     nodeOnly(() => {
         it("should not be sent for successful HTTP/2 requests", async () => {
-            let seenTlsErrorPromise = getDeferred<TlsRequest>();
+            let seenTlsErrorPromise = getDeferred<TlsHandshakeFailure>();
             await goodServer.on('tls-client-error', (r) => seenTlsErrorPromise.resolve(r));
 
             await http2DirectRequest(goodServer, '/');
@@ -76,7 +79,7 @@ describe("TLS error subscriptions", () => {
     });
 
     it("should be sent for requests from clients that reject the certificate initially", async () => {
-        let seenTlsErrorPromise = getDeferred<TlsRequest>();
+        let seenTlsErrorPromise = getDeferred<TlsHandshakeFailure>();
         await badServer.on('tls-client-error', (r) => seenTlsErrorPromise.resolve(r));
 
         await expect(
@@ -108,7 +111,7 @@ describe("TLS error subscriptions", () => {
 
     nodeOnly(() => {
         it("should be sent for requests from clients that reject the certificate for the upstream server", async () => {
-            let seenTlsErrorPromise = getDeferred<TlsRequest>();
+            let seenTlsErrorPromise = getDeferred<TlsHandshakeFailure>();
             await badServer.on('tls-client-error', (r) => seenTlsErrorPromise.resolve(r));
             await badServer.forAnyRequest().thenPassThrough();
 
@@ -152,7 +155,7 @@ describe("TLS error subscriptions", () => {
         it("should not be sent for requests from TLS clients that reset later in the connection", async function () {
             this.retries(3); // Can be slightly unstable, due to the race for RESET
 
-            let seenTlsErrorPromise = getDeferred<TlsRequest>();
+            let seenTlsErrorPromise = getDeferred<TlsHandshakeFailure>();
             await goodServer.on('tls-client-error', (r) => seenTlsErrorPromise.resolve(r));
 
             let seenClientErrorPromise = getDeferred<ClientError>();
@@ -172,7 +175,7 @@ describe("TLS error subscriptions", () => {
         });
 
         it("should not be sent for requests from non-TLS clients that reset before sending anything", async () => {
-            let seenTlsErrorPromise = getDeferred<TlsRequest>();
+            let seenTlsErrorPromise = getDeferred<TlsHandshakeFailure>();
             await goodServer.on('tls-client-error', (r) => seenTlsErrorPromise.resolve(r));
 
             const tlsSocket = await openRawSocket(goodServer);
