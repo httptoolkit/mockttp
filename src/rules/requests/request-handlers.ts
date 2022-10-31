@@ -46,7 +46,8 @@ import {
     isLocalhostAddress,
     isLocalPortActive,
     isSocketLoop,
-    resetSocket
+    requireSocketResetSupport,
+    resetOrDestroySocket
 } from '../../util/socket-util';
 import {
     ClientServerChannel,
@@ -201,7 +202,8 @@ export class CallbackHandler extends CallbackHandlerDefinition {
             (request as any).socket.end();
             throw new AbortError('Connection closed intentionally by rule');
         } else if (outResponse === 'reset') {
-            resetSocket((request as any).socket);
+            requireSocketResetSupport();
+            resetOrDestroySocket((request as any).socket);
             throw new AbortError('Connection reset intentionally by rule');
         } else {
             await writeResponseFromCallback(outResponse, response);
@@ -576,7 +578,8 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                     throw new AbortError('Connection closed intentionally by rule');
                 } else if (modifiedReq.response === 'reset') {
                     const socket: net.Socket = (<any> clientReq).socket;
-                    resetSocket(socket);
+                    requireSocketResetSupport();
+                    resetOrDestroySocket(socket);
                     throw new AbortError('Connection reset intentionally by rule');
                 } else {
                     // The callback has provided a full response: don't passthrough at all, just use it.
@@ -851,9 +854,11 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                         (clientRes as any).socket.end();
                         throw new AbortError('Connection closed intentionally by rule');
                     } else if (modifiedRes === 'reset') {
+                        requireSocketResetSupport();
+
                         // Dump the real response data and kill the client socket:
                         serverRes.resume();
-                        resetSocket((clientRes as any).socket);
+                        resetOrDestroySocket((clientRes as any).socket);
                         throw new AbortError('Connection reset intentionally by rule');
                     }
 
@@ -970,11 +975,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 if (e.code === 'ECONNRESET' || e.code === 'ECONNREFUSED' || this.simulateConnectionErrors) {
                     // The upstream socket closed: forcibly close the downstream stream to match
                     const socket: net.Socket = (clientReq as any).socket;
-                    if ('resetAndDestroy' in socket) {
-                        socket.resetAndDestroy();
-                    } else {
-                        socket.destroy();
-                    }
+                    resetOrDestroySocket(socket);
 
                     reject(new AbortError(`Upstream connection error: ${
                         e.message ?? e
@@ -1126,15 +1127,13 @@ export class CloseConnectionHandler extends CloseConnectionHandlerDefinition {
 export class ResetConnectionHandler extends ResetConnectionHandlerDefinition {
     constructor() {
         super();
-
-        if (!net.Socket.prototype.resetAndDestroy) {
-            throw new Error('Reset handlers are only supported in Node v16.17+, v18.3.0+, or later');
-        }
+        requireSocketResetSupport();
     }
 
     async handle(request: OngoingRequest) {
         const socket: net.Socket = (<any> request).socket;
-        socket.resetAndDestroy();
+        requireSocketResetSupport();
+        resetOrDestroySocket(socket);
         throw new AbortError('Connection reset intentionally by rule');
     }
 
@@ -1142,10 +1141,7 @@ export class ResetConnectionHandler extends ResetConnectionHandlerDefinition {
      * @internal
      */
     static deserialize() {
-        if (!net.Socket.prototype.resetAndDestroy) {
-            throw new Error('Reset handlers are only supported in Node v16.17+, v18.3.0+, or later');
-        }
-
+        requireSocketResetSupport();
         return new ResetConnectionHandler();
     }
 }

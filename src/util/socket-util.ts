@@ -69,14 +69,23 @@ export const isSocketLoop = (outgoingSockets: net.Socket[] | Set<net.Socket>, in
         }
     });
 
-export const resetSocket = (socket: net.Socket) => {
-    if (!('resetAndDestroy' in socket)) {
+const isSocketResetSupported = isNode
+    ? !!net.Socket.prototype.resetAndDestroy
+    : false; // Avoid errors in browsers
+export const requireSocketResetSupport = () => {
+    if (!isSocketResetSupported) {
         throw new Error(
             'Connection reset is only supported in Node v16.17+, v18.3.0+, or later'
         );
     }
+};
 
-    socket.resetAndDestroy();
+export function resetOrDestroySocket(socket: net.Socket) {
+    if ('resetAndDestroy' in socket) {
+        socket.resetAndDestroy();
+    } else {
+        socket.destroy();
+    }
 };
 
 export function buildSocketEventData(socket: net.Socket & Partial<tls.TLSSocket>): TlsConnectionEvent {
