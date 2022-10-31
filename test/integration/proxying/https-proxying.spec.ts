@@ -591,8 +591,10 @@ nodeOnly(() => {
                 const response = await http2ProxyRequest(
                     server,
                     `https://localhost:${targetPort}/`,
-                    { ':method': 'POST' },
-                    'initial-body'
+                    {
+                        headers: { ':method': 'POST' },
+                        requestBody: 'initial-body'
+                    }
                 );
 
                 expect(response.headers[':status']).to.equal(200);
@@ -616,7 +618,10 @@ nodeOnly(() => {
                 const response = await http2ProxyRequest(
                     server,
                     `https://localhost:${targetPort}/`,
-                    { ':method': 'GET' } // GET isn't allowed a body
+                    {
+                        // GET isn't allowed a body
+                        headers: { ':method': 'GET' }
+                    }
                 );
 
                 expect(response.headers[':status']).to.equal(200);
@@ -636,8 +641,10 @@ nodeOnly(() => {
                 const response = await http2ProxyRequest(
                     server,
                     `https://localhost:${targetPort}/`,
-                    { ':method': 'POST' },
-                    'initial-body'
+                    {
+                        headers: { ':method': 'POST' },
+                        requestBody: 'initial-body'
+                    }
                 );
 
                 expect(response.headers[':status']).to.equal(200);
@@ -820,7 +827,10 @@ nodeOnly(() => {
                 const response = await http2ProxyRequest(
                     server,
                     `https://localhost:${targetPort}/`,
-                    { method: 'HEAD' } // HEAD must not have a response body
+                    {
+                        // HEAD must not have a response body
+                        headers: { method: 'HEAD' }
+                    }
                 );
 
                 expect(response.headers[':status']).to.equal(204);

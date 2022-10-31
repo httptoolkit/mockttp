@@ -47,7 +47,7 @@ import {
     isLocalPortActive,
     isSocketLoop,
     requireSocketResetSupport,
-    resetOrDestroySocket
+    resetOrDestroy
 } from '../../util/socket-util';
 import {
     ClientServerChannel,
@@ -203,7 +203,7 @@ export class CallbackHandler extends CallbackHandlerDefinition {
             throw new AbortError('Connection closed intentionally by rule');
         } else if (outResponse === 'reset') {
             requireSocketResetSupport();
-            resetOrDestroySocket((request as any).socket);
+            resetOrDestroy(request);
             throw new AbortError('Connection reset intentionally by rule');
         } else {
             await writeResponseFromCallback(outResponse, response);
@@ -577,9 +577,8 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                     socket.end();
                     throw new AbortError('Connection closed intentionally by rule');
                 } else if (modifiedReq.response === 'reset') {
-                    const socket: net.Socket = (<any> clientReq).socket;
                     requireSocketResetSupport();
-                    resetOrDestroySocket(socket);
+                    resetOrDestroy(clientReq);
                     throw new AbortError('Connection reset intentionally by rule');
                 } else {
                     // The callback has provided a full response: don't passthrough at all, just use it.
@@ -851,14 +850,14 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                     if (modifiedRes === 'close') {
                         // Dump the real response data and kill the client socket:
                         serverRes.resume();
-                        (clientRes as any).socket.end();
+                        (clientReq as any).socket.end();
                         throw new AbortError('Connection closed intentionally by rule');
                     } else if (modifiedRes === 'reset') {
                         requireSocketResetSupport();
 
                         // Dump the real response data and kill the client socket:
                         serverRes.resume();
-                        resetOrDestroySocket((clientRes as any).socket);
+                        resetOrDestroy(clientReq);
                         throw new AbortError('Connection reset intentionally by rule');
                     }
 
@@ -974,8 +973,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
 
                 if (e.code === 'ECONNRESET' || e.code === 'ECONNREFUSED' || this.simulateConnectionErrors) {
                     // The upstream socket closed: forcibly close the downstream stream to match
-                    const socket: net.Socket = (clientReq as any).socket;
-                    resetOrDestroySocket(socket);
+                    resetOrDestroy(clientReq);
 
                     reject(new AbortError(`Upstream connection error: ${
                         e.message ?? e
@@ -1131,9 +1129,8 @@ export class ResetConnectionHandler extends ResetConnectionHandlerDefinition {
     }
 
     async handle(request: OngoingRequest) {
-        const socket: net.Socket = (<any> request).socket;
         requireSocketResetSupport();
-        resetOrDestroySocket(socket);
+        resetOrDestroy(request);
         throw new AbortError('Connection reset intentionally by rule');
     }
 

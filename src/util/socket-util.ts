@@ -3,9 +3,10 @@ import now = require("performance-now");
 import * as os from 'os';
 import * as net from 'net';
 import * as tls from 'tls';
+import * as http2 from 'http2';
 
 import { isNode } from './util';
-import { TlsConnectionEvent } from '../types';
+import { OngoingRequest, TlsConnectionEvent } from '../types';
 
 // Test if a local port for a given interface (IPv4/6) is currently in use
 export async function isLocalPortActive(interfaceIp: '::1' | '127.0.0.1', port: number) {
@@ -69,6 +70,12 @@ export const isSocketLoop = (outgoingSockets: net.Socket[] | Set<net.Socket>, in
         }
     });
 
+export function getParentSocket(socket: net.Socket) {
+    return socket._parent || // TLS wrapper
+        socket.stream || // SocketWrapper
+        (socket as any)._handle?._parentWrap?.stream; // HTTP/2 CONNECT'd TLS wrapper
+}
+
 const isSocketResetSupported = isNode
     ? !!net.Socket.prototype.resetAndDestroy
     : false; // Avoid errors in browsers
@@ -80,11 +87,69 @@ export const requireSocketResetSupport = () => {
     }
 };
 
-export function resetOrDestroySocket(socket: net.Socket) {
-    if ('resetAndDestroy' in socket) {
-        socket.resetAndDestroy();
+const isHttp2Stream = (maybeStream: any): maybeStream is http2.Http2ServerRequest =>
+    'httpVersion' in maybeStream &&
+    maybeStream.httpVersion?.startsWith('2');
+
+/**
+ * Reset the socket where possible, or at least destroy it where that's not possible.
+ *
+ * This has a few cases for different layers of socket & tunneling, designed to
+ * simulate a real connection reset as closely as possible. That means, in general,
+ * we unwrap the connection as far as possible whilst still only affecting a single
+ * request.
+ *
+ * In practice, we unwrap HTTP/1 & TLS back as far as we can, until we hit either an
+ * HTTP/2 stream or a raw TCP connection. We then either send a RST_FRAME or a TCP RST
+ * to kill that connection.
+ */
+export function resetOrDestroy(requestOrSocket:
+    | net.Socket
+    | OngoingRequest & { socket?: net.Socket }
+    | http2.Http2ServerRequest
+) {
+    let socket: net.Socket | http2.Http2Stream =
+        isHttp2Stream(requestOrSocket)
+            ? requestOrSocket.stream
+        : ('socket' in requestOrSocket && requestOrSocket.socket)
+            ? requestOrSocket.socket
+        : requestOrSocket as net.Socket;
+
+    while (socket instanceof tls.TLSSocket) {
+        socket = getParentSocket(socket);
+    }
+
+    if ('rstCode' in socket) {
+        // It's an HTTP/2 stream instance - let's kill it here.
+
+        // If it's the innermost stream, i.e. this is the stream of the request we're
+        // resetting, then we want to send an internal error. If it's a tunneling
+        // stream, then we want to send a CONNECT error:
+        const isOuterSocket = socket === (requestOrSocket as any).stream;
+
+        const errorCode = isOuterSocket
+            ? http2.constants.NGHTTP2_INTERNAL_ERROR
+            : http2.constants.NGHTTP2_CONNECT_ERROR;
+
+        const h2Stream = socket as http2.ServerHttp2Stream;
+        h2Stream.close(errorCode);
     } else {
-        socket.destroy();
+        // Must be a net.Socket then, so we let's reset it for real:
+        if (isSocketResetSupported) {
+            try {
+                socket.resetAndDestroy!();
+            } catch (error) {
+                // This could fail in funky ways if the socket is not just the right kind
+                // of socket. We should still fail in that case, but it's useful to log
+                // some extra data first beforehand, so we can fix this if it ever happens:
+                console.warn(`Failed to reset on socket of type ${
+                    socket.constructor.name
+                } with parent of type ${getParentSocket(socket as any)?.constructor.name}`);
+                throw error;
+            }
+        } else {
+            socket.destroy();
+        }
     }
 };
 

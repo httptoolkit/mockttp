@@ -4,6 +4,8 @@ sourceMapSupport.install({ handleUncaughtExceptions: false });
 import * as _ from 'lodash';
 import * as net from 'net';
 import * as tls from 'tls';
+import * as http from 'http';
+import * as https from 'https';
 import * as http2 from 'http2';
 import * as http2Wrapper from 'http2-wrapper';
 import * as streams from 'stream';
@@ -229,6 +231,7 @@ export const H2_TLS_ON_TLS_SUPPORTED = ">=12.17";
 export const HTTP_ABORTSIGNAL_SUPPORTED = ">=14.17";
 export const OLD_TLS_SUPPORTED = "<17"; // In 17+ TLS < v1.2 is only available with legacy OpenSSL flag
 export const SOCKET_RESET_SUPPORTED = "^16.17 || >=18.3";
+export const BROKEN_H2_TUNNELLING = "^18.8"; // Some H1-over-H2 tests fail in Node 18 (but not 19)
 
 type Http2ResponseHeaders = http2.IncomingHttpHeaders & http2.IncomingHttpStatusHeader;
 
@@ -313,9 +316,14 @@ export function http2DirectRequest(
 export async function http2ProxyRequest(
     proxyServer: Mockttp,
     url: string,
-    headers: {} = {},
-    requestBody = ''
+    options: {
+        headers?: {},
+        requestBody?: string,
+        http1Within?: boolean
+    } = {}
 ) {
+    const { headers, requestBody, http1Within } = options;
+
     const parsedUrl = URL.parse(url);
     const isTLS = parsedUrl.protocol === 'https:';
 
@@ -334,22 +342,35 @@ export async function http2ProxyRequest(
             const proxyResponse = await getHttp2Response(proxyReq);
             expect(proxyResponse[':status']).to.equal(200);
 
-            resolve(http2Request(
-                url,
-                {
-                    ':path': parsedUrl.path,
-                    ...headers
-                },
-                requestBody,
-                () => isTLS
-                    ? tls.connect({
-                        host: targetHost,
-                        servername: targetHost,
-                        socket: proxyReq as any,
-                        ALPNProtocols: ['h2']
-                    })
-                    : proxyReq
-            ));
+            const createConnection = () => isTLS
+                ? tls.connect({
+                    host: targetHost,
+                    servername: targetHost,
+                    socket: proxyReq as any,
+                    ALPNProtocols: http1Within ? ['http/1.1'] : ['h2']
+                })
+                : proxyReq as unknown as net.Socket
+
+            if (!http1Within) {
+                resolve(http2Request(
+                    url,
+                    {
+                        ':path': parsedUrl.path,
+                        ...headers
+                    },
+                    requestBody,
+                    createConnection
+                ));
+            } else {
+                const req = (isTLS ? https : http).request(url, {
+                    headers: { host: `${targetHost}:${targetPort}` },
+                    createConnection
+                });
+                req.end(requestBody);
+
+                req.on('response', resolve);
+                req.on('error', reject);
+            }
         } catch (e) {
             reject(e);
         }

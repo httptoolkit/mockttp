@@ -12,7 +12,11 @@ import { NonTlsError, readTlsClientHello } from 'read-tls-client-hello';
 import { TlsHandshakeFailure } from '../types';
 import { getCA } from '../util/tls';
 import { delay } from '../util/util';
-import { buildSocketTimingInfo, buildSocketEventData } from '../util/socket-util';
+import {
+    getParentSocket,
+    buildSocketTimingInfo,
+    buildSocketEventData
+} from '../util/socket-util';
 import { MockttpHttpsOptions } from '../mockttp';
 
 // Hardcore monkey-patching: force TLSSocket to link servername & remoteAddress to
@@ -284,12 +288,6 @@ export async function createComboServer(
     }
 
     return makeDestroyable(server);
-}
-
-function getParentSocket(socket: net.Socket) {
-    return socket._parent || // TLS wrapper
-        socket.stream || // SocketWrapper
-        (socket as any)._handle?._parentWrap?.stream; // HTTP/2 CONNECT'd TLS wrapper
 }
 
 type SocketIsh<MinProps extends keyof net.Socket> =

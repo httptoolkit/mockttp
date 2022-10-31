@@ -42,7 +42,7 @@ import { Mutable } from "../util/type-utils";
 import { ErrorLike, isErrorLike } from "../util/error";
 import { makePropertyWritable } from "../util/util";
 
-import { buildSocketEventData, isSocketLoop, resetOrDestroySocket } from "../util/socket-util";
+import { buildSocketEventData, isSocketLoop, resetOrDestroy } from "../util/socket-util";
 import {
     parseRequestBody,
     waitForCompletedRequest,
@@ -1029,7 +1029,7 @@ ${await this.suggestRule(request)}`
             // require a repeated client request at each step) and b) the hostname points back to
             // us, and c) we're running on the default port. Still good to guard against though.
             console.warn(`Socket bypass loop for ${host}:${targetPort}`);
-            resetOrDestroySocket(socket);
+            resetOrDestroy(socket);
             return;
         }
 
