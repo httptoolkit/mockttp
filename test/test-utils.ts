@@ -232,6 +232,12 @@ export const SOCKET_RESET_SUPPORTED = "^16.17 || >=18.3";
 
 type Http2ResponseHeaders = http2.IncomingHttpHeaders & http2.IncomingHttpStatusHeader;
 
+type Http2TestRequestResult = {
+    alpnProtocol: string | undefined,
+    headers: http2.IncomingHttpHeaders,
+    body: Buffer
+};
+
 export function getHttp2Response(req: http2.ClientHttp2Stream) {
     return new Promise<Http2ResponseHeaders>((resolve, reject) => {
         req.on('response', resolve);
@@ -256,29 +262,41 @@ export function getHttp2Body(req: http2.ClientHttp2Stream) {
     });
 }
 
-async function http2Request(
+export async function http2Request(
     url: string,
     headers: {},
     requestBody = '',
     createConnection?: (() => streams.Duplex) | undefined
 ) {
     const client = http2.connect(url, { createConnection });
-    const req = client.request(headers, {
-        endStream: !requestBody
-    });
-    if (requestBody) req.end(requestBody);
+    return new Promise<Http2TestRequestResult>(async (resolve, reject) => {
+        try {
+            const req = client.request(headers, {
+                endStream: !requestBody
+            });
+            req.on('error', reject);
 
-    const responseHeaders = getHttp2Response(req);
-    const responseBody = await getHttp2Body(req);
-    const alpnProtocol = client.alpnProtocol;
+            if (requestBody) req.end(requestBody);
 
-    await cleanup(client);
+            const [
+                responseHeaders,
+                responseBody
+            ] = await Promise.all([
+                getHttp2Response(req),
+                getHttp2Body(req)
+            ]);
 
-    return {
-        alpnProtocol,
-        headers: await responseHeaders,
-        body: responseBody
-    };
+            const alpnProtocol = client.alpnProtocol;
+
+            resolve({
+                alpnProtocol,
+                headers: responseHeaders,
+                body: responseBody
+            });
+        } catch (e) {
+            reject(e);
+        }
+    }).finally(() => cleanup(client));
 }
 
 export function http2DirectRequest(
@@ -305,34 +323,37 @@ export async function http2ProxyRequest(
     const targetPort = parsedUrl.port! ?? (isTLS ? 443 : 80);
 
     const proxyClient = http2.connect(proxyServer.url);
-    const proxyReq = proxyClient.request({
-        ':method': 'CONNECT',
-        ':authority': `${targetHost}:${targetPort}`
-    });
+    return await new Promise<Http2TestRequestResult>(async (resolve, reject) => {
+        try {
+            const proxyReq = proxyClient.request({
+                ':method': 'CONNECT',
+                ':authority': `${targetHost}:${targetPort}`
+            });
+            proxyReq.on('error', reject);
 
-    const proxyResponse = await getHttp2Response(proxyReq);
-    expect(proxyResponse[':status']).to.equal(200);
+            const proxyResponse = await getHttp2Response(proxyReq);
+            expect(proxyResponse[':status']).to.equal(200);
 
-    const result = await http2Request(
-        url,
-        {
-            ':path': parsedUrl.path,
-            ...headers
-        },
-        requestBody,
-        () => isTLS
-            ? tls.connect({
-                host: targetHost,
-                servername: targetHost,
-                socket: proxyReq as any,
-                ALPNProtocols: ['h2']
-            })
-            : proxyReq
-    );
-
-    await cleanup(proxyClient);
-
-    return result;
+            resolve(http2Request(
+                url,
+                {
+                    ':path': parsedUrl.path,
+                    ...headers
+                },
+                requestBody,
+                () => isTLS
+                    ? tls.connect({
+                        host: targetHost,
+                        servername: targetHost,
+                        socket: proxyReq as any,
+                        ALPNProtocols: ['h2']
+                    })
+                    : proxyReq
+            ));
+        } catch (e) {
+            reject(e);
+        }
+    }).finally(() => cleanup(proxyClient));
 }
 
 export async function cleanup(
