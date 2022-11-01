@@ -272,8 +272,8 @@ nodeOnly(() => {
 
                     const seenResponse = await responsePromise;
                     expect(seenResponse.tags).to.deep.equal([
-                        'passthrough-tls-error:ssl-alert-70',
-                        'passthrough-error:EPROTO'
+                        'passthrough-error:EPROTO',
+                        'passthrough-tls-error:ssl-alert-70'
                     ]);
                 });
 

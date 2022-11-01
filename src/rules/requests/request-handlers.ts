@@ -681,7 +681,14 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
 
         let makeRequest = (
             shouldTryH2Upstream
-                ? h2Client.auto
+                ? (options: any, cb: any) =>
+                    h2Client.auto(options, cb).catch((e) => {
+                        // If an error occurs during auto detection via ALPN, that's an
+                        // TypeError implies it's an invalid HTTP/2 request that was rejected.
+                        // Anything else implies an upstream HTTP/2 issue.
+                        e.causedByUpstreamError = !(e instanceof TypeError);
+                        throw e;
+                    })
             // HTTP/1 + TLS
             : protocol === 'https:'
                 ? https.request
@@ -730,7 +737,10 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 ...clientCert,
                 ...caConfig
             }, (serverRes) => (async () => {
-                serverRes.on('error', reject);
+                serverRes.on('error', (e: any) => {
+                    e.causedByUpstreamError = true;
+                    reject(e);
+                });
 
                 let serverStatusCode = serverRes.statusCode!;
                 let serverStatusMessage = serverRes.statusMessage
@@ -959,30 +969,9 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
             }
             clientReq.on('aborted', abortUpstream);
             clientRes.once('finish', () => clientReq.removeListener('aborted', abortUpstream));
-
-            serverReq.on('error', (e: ErrorLike) => {
-                if ((<any>serverReq).aborted) return;
-
-                // Tag responses, so programmatic examination can react to this
-                // event, without having to parse response data or similar.
-                const tlsAlertMatch = /SSL alert number (\d+)/.exec(e.message ?? '');
-                if (tlsAlertMatch) {
-                    clientRes.tags.push('passthrough-tls-error:ssl-alert-' + tlsAlertMatch[1]);
-                }
-                clientRes.tags.push('passthrough-error:' + e.code);
-
-                if (e.code === 'ECONNRESET' || e.code === 'ECONNREFUSED' || this.simulateConnectionErrors) {
-                    // The upstream socket closed: forcibly close the downstream stream to match
-                    resetOrDestroy(clientReq);
-
-                    reject(new AbortError(`Upstream connection error: ${
-                        e.message ?? e
-                    }`, e.code));
-                } else {
-                    e.statusCode = 502;
-                    e.statusMessage = 'Error communicating with upstream server';
-                    reject(e);
-                }
+            serverReq.on('error', (e: any) => {
+                e.causedByUpstreamError = true;
+                reject(e);
             });
 
             // We always start upstream connections *immediately*. This might be less efficient, but it
@@ -991,12 +980,39 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
 
             // For similar reasons, we don't want any buffering on outgoing data at all if possible:
             serverReq.setNoDelay(true);
-        })().catch((e) => {
-            // Catch otherwise-unhandled sync or async errors in the above promise:
-            if (serverReq) serverReq.destroy();
+        })().catch(reject)
+        ).catch((e: ErrorLike) => {
+            // All errors anywhere above (thrown or from explicit reject()) should end up here.
+
+            // We tag the response with the error code, for debugging from events:
             clientRes.tags.push('passthrough-error:' + e.code);
-            reject(e);
-        }));
+
+            // Tag responses, so programmatic examination can react to this
+            // event, without having to parse response data or similar.
+            const tlsAlertMatch = /SSL alert number (\d+)/.exec(e.message ?? '');
+            if (tlsAlertMatch) {
+                clientRes.tags.push('passthrough-tls-error:ssl-alert-' + tlsAlertMatch[1]);
+            }
+
+            if ((e as any).causedByUpstreamError && !(serverReq as any)?.aborted) {
+                if (e.code === 'ECONNRESET' || e.code === 'ECONNREFUSED' || this.simulateConnectionErrors) {
+                    // The upstream socket failed: forcibly break the downstream stream to match. This could
+                    // happen due to a reset, TLS or DNS failures, or anything - but critically it's a
+                    // connection-level issue, so we try to create connection issues downstream.
+                    resetOrDestroy(clientReq);
+
+                    throw new AbortError(`Upstream connection error: ${
+                        e.message ?? e
+                    }`, e.code);
+                } else {
+                    e.statusCode = 502;
+                    e.statusMessage = 'Error communicating with upstream server';
+                    throw e;
+                }
+            } else {
+                throw e;
+            }
+        });
     }
 
     /**
