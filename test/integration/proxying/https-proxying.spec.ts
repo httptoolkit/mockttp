@@ -17,7 +17,8 @@ import {
     DestroyableServer,
     H2_TLS_ON_TLS_SUPPORTED,
     OLD_TLS_SUPPORTED,
-    ignoreNetworkError
+    ignoreNetworkError,
+    SOCKET_RESET_SUPPORTED
 } from "../../test-utils";
 import { CA } from "../../../src/util/tls";
 import { streamToBuffer } from "../../../src/util/buffer-utils";
@@ -262,6 +263,24 @@ nodeOnly(() => {
                     expect(response.body).to.include("SSL alert number 70");
                 });
 
+                it("should simulate a connection error if enabled", async () => {
+                    await server.forAnyRequest().thenPassThrough({
+                        simulateConnectionErrors: true
+                    });
+
+                    let result = await request.get(`https://localhost:${oldServerPort}`, {
+                        resolveWithFullResponse: true,
+                        simple: false
+                    }).catch(e => e);
+
+                    expect(result).to.be.instanceof(Error);
+                    if (semver.satisfies(process.version, SOCKET_RESET_SUPPORTED)) {
+                        expect((result as any).message).to.include('ECONNRESET');
+                    } else {
+                        expect((result as any).message).to.include('socket hang up');
+                    }
+                });
+
                 it("should tag failed requests", async () => {
                     await server.forAnyRequest().thenPassThrough();
 
@@ -397,6 +416,27 @@ nodeOnly(() => {
                 expect(response.headers[':status']).to.equal(200);
                 expect(response.headers['received-url']).to.equal('/');
                 expect(response.body.toString('utf8')).to.equal("Real HTTP/2 response");
+            });
+
+            it("should return a 502 for failing upstream requests by default", async () => {
+                await server.forAnyRequest().thenPassThrough();
+
+                const response = await http2ProxyRequest(server, `https://invalid.example`);
+
+                expect(response.headers[':status']).to.equal(502);
+                expect(response.body.toString('utf8')).to.include("ENOTFOUND invalid.example");
+            });
+
+            it("should simulate connection errors for failing upstream requests if enabled", async () => {
+                await server.forAnyRequest().thenPassThrough({
+                    simulateConnectionErrors: true
+                });
+
+                const result = await http2ProxyRequest(server, `https://invalid.example`)
+                    .catch(e => e);
+
+                expect(result).to.be.instanceof(Error);
+                expect((result as any).message).to.include('NGHTTP2_INTERNAL_ERROR');
             });
 
             it("can rewrite request URLs en route", async () => {
