@@ -59,7 +59,11 @@ describe("When configured for HTTPS", () => {
                 https: {
                     keyPath: './test/fixtures/test-ca.key',
                     certPath: './test/fixtures/test-ca.pem',
-                    defaultDomain: 'test.example'
+                    defaultDomain: 'test.example',
+                    countryName: 'UK',
+                    localityName: 'London',
+                    organizationName: 'Test Organiation'
+                    
                 }
             });
 
@@ -81,6 +85,7 @@ describe("When configured for HTTPS", () => {
 
                 // The server uses the default name, when no 'servername' option is set:
                 expect(tlsSocket.getPeerCertificate().subject.CN).to.equal("test.example");
+                expect(tlsSocket.getPeerCertificate().subject.C).to.equal("UK");
             });
 
             it("should still use the SNI name if one isis provided", async () => {
@@ -99,6 +104,7 @@ describe("When configured for HTTPS", () => {
 
                 // The SNI name is used, not the default:
                 expect(tlsSocket.getPeerCertificate().subject.CN).to.equal("sni-name.example");
+                expect(tlsSocket.getPeerCertificate().subject.C).to.equal("UK");
             });
 
         });

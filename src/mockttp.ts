@@ -660,7 +660,21 @@ export type MockttpHttpsOptions = CAOptions & {
      * connections which don't use SNI to request a specific domain.
      */
     defaultDomain?: string;
-
+    /**
+     * The countryName that will be used in the certificate for incoming TLS
+     * connections. 
+     */
+    countryName?: string; 
+    /**
+     * The localityName that will be used in the certificate for incoming TLS
+     * connections. 
+     */
+    localityName?: string;
+    /**
+     * The organizationName that will be used in the certificate for incoming TLS
+     * connections. 
+     */
+    organizationName?: string;
     /**
      * A list of hostnames where TLS interception should always be skipped.
      *

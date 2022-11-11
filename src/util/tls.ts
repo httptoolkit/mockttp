@@ -174,7 +174,7 @@ export class CA {
         }
     }
 
-    generateCertificate(domain: string): GeneratedCertificate {
+    generateCertificate(domain: string, countryName?: string, localityName?: string, organizationName?: string): GeneratedCertificate {
         // TODO: Expire domains from the cache? Based on their actual expiry?
         if (this.certCache[domain]) return this.certCache[domain];
 
@@ -214,9 +214,9 @@ export class CA {
                 ? [] // We skip the CN (deprecated, rarely used) for wildcards, since they can't be used here.
                 : [{ name: 'commonName', value: domain }]
             ),
-            { name: 'countryName', value: 'XX' }, // ISO-3166-1 alpha-2 'unknown country' code
-            { name: 'localityName', value: 'Unknown' },
-            { name: 'organizationName', value: 'Mockttp Cert - DO NOT TRUST' }
+            { name: 'countryName', value: countryName ?? 'XX' }, // ISO-3166-1 alpha-2 'unknown country' code
+            { name: 'localityName', value: localityName ?? 'Unknown' },
+            { name: 'organizationName', value: organizationName ?? 'Mockttp Cert - DO NOT TRUST' }
         ]);
         cert.setIssuer(this.caCert.subject.attributes);
 

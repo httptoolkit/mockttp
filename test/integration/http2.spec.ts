@@ -508,6 +508,7 @@ nodeOnly(() => {
                             ALPNProtocols: ['h2']
                         })
                     });
+                    
 
                     const proxiedRequest = proxiedClient.request({
                         ':path': '/'
