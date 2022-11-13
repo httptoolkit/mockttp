@@ -53,7 +53,7 @@ describe("When configured for HTTPS", () => {
     nodeOnly(() => {
         // These tests can't be run in browsers since we can't configure SNI/CONNECT params:
 
-        describe("with an overriden default domain", () => {
+        describe("with overriden cert parameters", () => {
 
             let server = getLocal({
                 https: {
@@ -88,7 +88,7 @@ describe("When configured for HTTPS", () => {
                 expect(tlsSocket.getPeerCertificate().subject.C).to.equal("UK");
             });
 
-            it("should still use the SNI name if one isis provided", async () => {
+            it("should still use the SNI name if one is provided", async () => {
                 const tlsSocket = tls.connect({
                     ca: fs.readFileSync('./test/fixtures/test-ca.pem'),
                     key: fs.readFileSync('./test/fixtures/test-ca.key'),
