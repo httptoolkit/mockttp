@@ -661,21 +661,6 @@ export type MockttpHttpsOptions = CAOptions & {
      */
     defaultDomain?: string;
     /**
-     * The countryName that will be used in the certificate for incoming TLS
-     * connections. 
-     */
-    countryName?: string; 
-    /**
-     * The localityName that will be used in the certificate for incoming TLS
-     * connections. 
-     */
-    localityName?: string;
-    /**
-     * The organizationName that will be used in the certificate for incoming TLS
-     * connections. 
-     */
-    organizationName?: string;
-    /**
      * A list of hostnames where TLS interception should always be skipped.
      *
      * When a TLS connection is started that references a matching hostname in its
