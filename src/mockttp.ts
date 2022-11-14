@@ -660,6 +660,7 @@ export type MockttpHttpsOptions = CAOptions & {
      * connections which don't use SNI to request a specific domain.
      */
     defaultDomain?: string;
+
     /**
      * A list of hostnames where TLS interception should always be skipped.
      *

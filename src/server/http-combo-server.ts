@@ -142,8 +142,7 @@ export async function createComboServer(
         server = httpolyglot.createServer(requestListener);
     } else {
         const ca = await getCA(options.https);
-        const defaultCert = ca.generateCertificate(
-            options.https.defaultDomain ?? 'localhost');
+        const defaultCert = ca.generateCertificate(options.https.defaultDomain ?? 'localhost');
 
         const tlsServer = tls.createServer({
             key: defaultCert.key,

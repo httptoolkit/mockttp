@@ -20,29 +20,27 @@ export interface CertPathOptions extends BaseCAOptions {
 
 export interface BaseCAOptions {
     /**
-     * The domain name that will be used in the certificate for incoming TLS
-     * connections which don't use SNI to request a specific domain.
-     */
-     defaultDomain?: string;
-    /**
      * Minimum key length when generating certificates. Defaults to 2048.
      */
     keyLength?: number;
+
     /**
      * The countryName that will be used in the certificate for incoming TLS
-     * connections. 
+     * connections.
      */
-     countryName?: string; 
-     /**
-      * The localityName that will be used in the certificate for incoming TLS
-      * connections. 
-      */
-     localityName?: string;
-     /**
-      * The organizationName that will be used in the certificate for incoming TLS
-      * connections. 
-      */
-     organizationName?: string;
+    countryName?: string;
+
+    /**
+     * The localityName that will be used in the certificate for incoming TLS
+     * connections.
+     */
+    localityName?: string;
+
+    /**
+     * The organizationName that will be used in the certificate for incoming TLS
+     * connections.
+     */
+    organizationName?: string;
 }
 
 export type PEM = string | string[] | Buffer | Buffer[];

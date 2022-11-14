@@ -63,7 +63,6 @@ describe("When configured for HTTPS", () => {
                     countryName: 'UK',
                     localityName: 'London',
                     organizationName: 'Test Organiation'
-                    
                 }
             });
 
