@@ -57,7 +57,7 @@ describe("TLS passthrough subscriptions", () => {
         await fetch(`https://other.localhost:${server.port}`).catch(() => {});
 
         const request = await requestPromise;
-        expect(request.url).to.equal('https://other.localhost:8000/');
+        expect(request.url).to.equal(`https://other.localhost:${server.port}/`);
     });
 
 
