@@ -145,16 +145,16 @@ export async function getCA(options: CAOptions): Promise<CA> {
             fs.readFile(options.keyPath, 'utf8'),
             fs.readFile(options.certPath, 'utf8')
         ]).then(([ keyContents, certContents ]) => ({
+            ..._.omit(options, ['keyPath', 'certPath']),
             key: keyContents,
-            cert: certContents,
-            keyLength: options.keyLength
+            cert: certContents
         }));
     }
     else {
         throw new Error('Unrecognized https options: you need to provide either a keyPath & certPath, or a key & cert.')
     }
 
-    return new CA(certOptions.key, certOptions.cert, certOptions.keyLength || 2048, options);
+    return new CA(certOptions);
 }
 
 // We share a single keypair across all certificates in this process, and
@@ -171,20 +171,17 @@ let KEY_PAIR: {
 export class CA {
     private caCert: forge.pki.Certificate;
     private caKey: forge.pki.PrivateKey;
-    private options?: CAOptions;
+    private options: CertDataOptions;
 
     private certCache: { [domain: string]: GeneratedCertificate };
 
-    constructor(
-        caKey: PEM,
-        caCert: PEM,
-        keyLength: number,
-        options?: CAOptions
-    ) {
-        this.caKey = pki.privateKeyFromPem(caKey.toString('utf8'));
-        this.caCert = pki.certificateFromPem(caCert.toString('utf8'));
+    constructor(options: CertDataOptions) {
+        this.caKey = pki.privateKeyFromPem(options.key.toString());
+        this.caCert = pki.certificateFromPem(options.cert.toString());
         this.certCache = {};
-        this.options = options;
+        this.options = options ?? {};
+
+        const keyLength = options.keyLength || 2048;
 
         if (!KEY_PAIR || KEY_PAIR.length < keyLength) {
             // If we have no key, or not a long enough one, generate one.

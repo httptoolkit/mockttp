@@ -227,7 +227,7 @@ nodeOnly(() => {
                 beforeEach(async () => {
                     const caKey = await fs.readFile('./test/fixtures/test-ca.key');
                     const caCert = await fs.readFile('./test/fixtures/test-ca.pem');
-                    const ca = new CA(caKey, caCert, 1024);
+                    const ca = new CA({ key: caKey.toString(), cert: caCert.toString(), keyLength: 1024 });
 
                     const cert = ca.generateCertificate('localhost');
 

@@ -15,7 +15,7 @@ nodeOnly(() => {
         let server: https.Server;
 
         it("can generate a certificate for a domain", async () => {
-            const ca = new CA(await caKey, await caCert, 1024);
+            const ca = new CA({ key: await caKey, cert: await caCert, keyLength: 1024 });
 
             const { cert, key } = ca.generateCertificate('localhost')
 
@@ -49,7 +49,7 @@ nodeOnly(() => {
 
         it("should generate a CA certificate that can be used to create domain certificates", async () => {
             const caCertificate = await caCertificatePromise;
-            const ca = new CA(caCertificate.key, caCertificate.cert, 1024);
+            const ca = new CA({ key: caCertificate.key, cert: caCertificate.cert, keyLength: 1024 });
 
             const { cert, key } = ca.generateCertificate('localhost');
 
@@ -91,7 +91,7 @@ nodeOnly(() => {
             this.timeout(5000); // Large cert + remote request can make this slow
 
             const caCertificate = await caCertificatePromise;
-            const ca = new CA(caCertificate.key, caCertificate.cert, 2048);
+            const ca = new CA({ key: caCertificate.key, cert: caCertificate.cert, keyLength: 2048 });
 
             const { cert } = ca.generateCertificate('httptoolkit.tech');
 
@@ -134,7 +134,7 @@ nodeOnly(() => {
             this.timeout(5000); // Large cert + remote request can make this slow
 
             const caCertificate = await caCertificatePromise;
-            const ca = new CA(caCertificate.key, caCertificate.cert, 2048);
+            const ca = new CA({ key: caCertificate.key, cert: caCertificate.cert, keyLength: 2048 });
 
             const { cert } = ca.generateCertificate('under_score.httptoolkit.tech');
 
