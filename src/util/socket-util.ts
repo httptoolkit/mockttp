@@ -158,9 +158,14 @@ export function buildSocketEventData(socket: net.Socket & Partial<tls.TLSSocket>
         socket._parent?.__timingInfo ||
         buildSocketTimingInfo();
 
+    // Attached in passThroughMatchingTls TLS sniffing logic in http-combo-server:
+    const tlsMetadata = socket.__tlsMetadata ||
+        socket._parent?.__tlsMetadata ||
+        {};
+
     return {
         hostname: socket.servername,
-        // These only work because of oncertcb monkeypatch above
+        // These only work because of oncertcb monkeypatch in http-combo-server:
         remoteIpAddress: socket.remoteAddress || // Normal case
             socket._parent?.remoteAddress || // Pre-certCB error, e.g. timeout
             socket.initialRemoteAddress!, // Recorded by certCB monkeypatch
@@ -173,7 +178,8 @@ export function buildSocketEventData(socket: net.Socket & Partial<tls.TLSSocket>
             connectTimestamp: timingInfo.initialSocketTimestamp,
             tunnelTimestamp: timingInfo.tunnelSetupTimestamp,
             handshakeTimestamp: timingInfo.tlsConnectedTimestamp
-        }
+        },
+        tlsMetadata
     };
 }
 

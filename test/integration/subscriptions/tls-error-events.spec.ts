@@ -106,6 +106,9 @@ describe("TLS error subscriptions", () => {
         expect(tlsError.timingEvents.failureTimestamp)
             .to.be.greaterThan(tlsError.timingEvents.connectTimestamp);
 
+        expect(tlsError.tlsMetadata.sniHostname).to.equal('localhost');
+        expect(tlsError.tlsMetadata.ja3Fingerprint!.length).to.equal(32);
+
         await expectNoClientErrors();
     });
 

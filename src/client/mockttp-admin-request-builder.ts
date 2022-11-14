@@ -7,8 +7,6 @@ import { MockedEndpoint, MockedEndpointData } from "../types";
 import { buildBodyReader } from '../util/request-utils';
 import { objectHeadersToRaw, rawHeadersToObject } from '../util/header-utils';
 
-import type { Serialized } from '../serialization/serialization';
-
 import { AdminQuery } from './admin-query';
 import { SchemaIntrospector } from './schema-introspection';
 
@@ -47,6 +45,16 @@ function normalizeHttpMessage(message: any, event?: SubscribableEvent) {
 
     // For backwards compat, all except errors should have tags if they're missing
     if (!message.tags) message.tags = [];
+
+    if (event?.startsWith('tls-')) {
+        // TLS passthrough & error events should have raw JSON socket metadata:
+        if (message.tlsMetadata) {
+            message.tlsMetadata = JSON.parse(message.tlsMetadata);
+        } else {
+            // For old servers, just use empty metadata:
+            message.tlsMetadata = {};
+        }
+    }
 }
 
 function normalizeWebSocketMessage(message: any) {
@@ -364,6 +372,7 @@ export class MockttpAdminRequestBuilder {
                     remotePort
                     tags
                     timingEvents
+                    ${this.schema.asOptionalField('TlsPassthroughEvent', 'tlsMetadata')}
                 }
             }`,
             'tls-passthrough-closed': gql`subscription OnTlsPassthroughClosed {
@@ -376,6 +385,7 @@ export class MockttpAdminRequestBuilder {
                     remotePort
                     tags
                     timingEvents
+                    ${this.schema.asOptionalField('TlsPassthroughEvent', 'tlsMetadata')}
                 }
             }`,
             'tls-client-error': gql`subscription OnTlsClientError {
@@ -386,6 +396,7 @@ export class MockttpAdminRequestBuilder {
                     ${this.schema.asOptionalField(['TlsHandshakeFailure', 'TlsRequest'], 'remotePort')}
                     ${this.schema.asOptionalField(['TlsHandshakeFailure', 'TlsRequest'], 'tags')}
                     ${this.schema.asOptionalField(['TlsHandshakeFailure', 'TlsRequest'], 'timingEvents')}
+                    ${this.schema.asOptionalField(['TlsHandshakeFailure', 'TlsRequest'], 'tlsMetadata')}
                 }
             }`,
             'client-error': gql`subscription OnClientError {

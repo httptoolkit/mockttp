@@ -69,6 +69,15 @@ export interface TlsConnectionEvent {
     remotePort: number;
     tags: string[];
     timingEvents: TlsTimingEvents;
+    tlsMetadata: TlsSocketMetadata;
+}
+
+export interface TlsSocketMetadata {
+    sniHostname?: string;
+    connectHostname?: string;
+    connectPort?: string;
+    clientAlpn?: string[];
+    ja3Fingerprint?: string;
 }
 
 export interface TlsPassthroughEvent extends TlsConnectionEvent {

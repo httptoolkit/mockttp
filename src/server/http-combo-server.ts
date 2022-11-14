@@ -7,7 +7,11 @@ import http2 = require('http2');
 import * as streams from 'stream';
 import { makeDestroyable, DestroyableServer } from 'destroyable-server';
 import httpolyglot = require('@httptoolkit/httpolyglot');
-import { NonTlsError, readTlsClientHello } from 'read-tls-client-hello';
+import {
+    calculateJa3FromFingerprintData,
+    NonTlsError,
+    readTlsClientHello
+} from 'read-tls-client-hello';
 
 import { TlsHandshakeFailure } from '../types';
 import { getCA } from '../util/tls';
@@ -171,13 +175,11 @@ export async function createComboServer(
             }
         });
 
-        if (options.https.tlsPassthrough?.length) {
-            passThroughMatchingTls(
-                tlsServer,
-                options.https.tlsPassthrough,
-                tlsPassthroughListener
-            );
-        }
+        analyzeAndMaybePassThroughTls(
+            tlsServer,
+            options.https.tlsPassthrough ?? [],
+            tlsPassthroughListener
+        );
 
         server = httpolyglot.createServer(tlsServer, requestListener);
     }
@@ -201,6 +203,9 @@ export async function createComboServer(
             // underlying socket details, so it's better to make sure we copy them up.
             copyAddressDetails(parentSocket, socket);
             copyTimingDetails(parentSocket, socket);
+            // With TLS metadata, we only propagate directly from parent sockets, not through
+            // CONNECT etc - we only want it if the final hop is TLS, previous values don't matter.
+            socket.__tlsMetadata ??= parentSocket.__tlsMetadata;
         } else if (!socket.__timingInfo) {
             socket.__timingInfo = buildSocketTimingInfo();
         }
@@ -328,14 +333,14 @@ function copyTimingDetails<T extends SocketIsh<'__timingInfo'>>(
 }
 
 /**
- * Takes a tls passthrough list, and reconfigures a given TLS server so that all
- * matching requests are passed to the given passthrough listener, instead of
- * beginning a full TLS handshake.
+ * Takes a tls passthrough list (may be empty), and reconfigures a given TLS server so that all
+ * client hellos are parsed, matching requests are passed to the given passthrough listener (without
+ * continuing setup) and client hello metadata is attached to all sockets.
  */
-function passThroughMatchingTls(
+function analyzeAndMaybePassThroughTls(
     server: tls.Server,
     passthroughList: Required<MockttpHttpsOptions>['tlsPassthrough'],
-    listener: (socket: net.Socket, address: string, port?: number) => void
+    passthroughListener: (socket: net.Socket, address: string, port?: number) => void
 ) {
     const hostnames = passthroughList.map(({ hostname }) => hostname);
 
@@ -348,11 +353,20 @@ function passThroughMatchingTls(
             const [connectHostname, connectPort] = socket.__lastHopConnectAddress?.split(':') ?? [];
             const sniHostname = helloData.serverName;
 
+            socket.__tlsMetadata = {
+                sniHostname,
+                connectHostname,
+                connectPort,
+                clientAlpn: helloData.alpnProtocols,
+                ja3Fingerprint: calculateJa3FromFingerprintData(helloData.fingerprintData)
+            };
+
             if (connectHostname && hostnames.includes(connectHostname)) {
-                listener(socket, connectHostname, connectPort ? parseInt(connectPort, 10) : undefined)
+                const upstreamPort = connectPort ? parseInt(connectPort, 10) : undefined;
+                passthroughListener(socket, connectHostname, upstreamPort);
                 return; // Do not continue with TLS
             } else if (sniHostname && hostnames.includes(sniHostname)) {
-                listener(socket, sniHostname); // Can't guess the port - it's not included in SNI
+                passthroughListener(socket, sniHostname); // Can't guess the port - not included in SNI
                 return; // Do not continue with TLS
             }
         } catch (e) {

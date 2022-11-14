@@ -16,6 +16,10 @@ declare module "net" {
         // last layer of the tunnelling so far.
         __lastHopConnectAddress?: string;
 
+        // Extra metadata attached to a TLS socket, taken from the client hello and
+        // preceeding tunneling steps.
+        __tlsMetadata?: {}; // Can't ref Mockttp real type here
+
         // Normally only defined on TLSSocket, but useful to explicitly include here
         // Undefined on plain HTTP, 'true' on TLSSocket.
         encrypted?: boolean;

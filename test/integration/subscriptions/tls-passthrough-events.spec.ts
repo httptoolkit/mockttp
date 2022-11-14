@@ -43,6 +43,16 @@ describe("TLS passthrough subscriptions", () => {
 
         expect(openEvent.hostname).to.equal('bypass.localhost');
         expect(openEvent.upstreamPort).to.equal(443);
+
+        const { tlsMetadata } = openEvent;
+        expect(tlsMetadata.sniHostname).to.equal('bypass.localhost');
+        expect(tlsMetadata.connectHostname).to.equal(undefined);
+        expect(tlsMetadata.connectPort).to.equal(undefined);
+        expect(tlsMetadata.clientAlpn).to.deep.equal(isNode
+            ? undefined
+            : ['h2', 'http/1.1']
+        );
+        expect(tlsMetadata.ja3Fingerprint.length).to.equal(32);
     });
 
     it("should not fire for TLS sockets are received and handled", async () => {

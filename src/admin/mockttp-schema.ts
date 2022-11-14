@@ -66,6 +66,7 @@ export const MockttpSchema = gql`
         remotePort: Int!
         tags: [String!]!
         timingEvents: Json!
+        tlsMetadata: Json!
     }
 
     type TlsHandshakeFailure {
@@ -76,6 +77,7 @@ export const MockttpSchema = gql`
         remotePort: Int!
         tags: [String!]!
         timingEvents: Json!
+        tlsMetadata: Json!
     }
 
     # Old name for TlsHandshakeFailure, kept for backward compat
