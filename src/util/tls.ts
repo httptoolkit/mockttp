@@ -23,6 +23,24 @@ export interface BaseCAOptions {
      * Minimum key length when generating certificates. Defaults to 2048.
      */
     keyLength?: number;
+
+    /**
+     * The countryName that will be used in the certificate for incoming TLS
+     * connections.
+     */
+    countryName?: string;
+
+    /**
+     * The localityName that will be used in the certificate for incoming TLS
+     * connections.
+     */
+    localityName?: string;
+
+    /**
+     * The organizationName that will be used in the certificate for incoming TLS
+     * connections.
+     */
+    organizationName?: string;
 }
 
 export type PEM = string | string[] | Buffer | Buffer[];
@@ -136,7 +154,7 @@ export async function getCA(options: CAOptions): Promise<CA> {
         throw new Error('Unrecognized https options: you need to provide either a keyPath & certPath, or a key & cert.')
     }
 
-    return new CA(certOptions.key, certOptions.cert, certOptions.keyLength || 2048);
+    return new CA(certOptions.key, certOptions.cert, certOptions.keyLength || 2048, options);
 }
 
 // We share a single keypair across all certificates in this process, and
@@ -153,17 +171,20 @@ let KEY_PAIR: {
 export class CA {
     private caCert: forge.pki.Certificate;
     private caKey: forge.pki.PrivateKey;
+    private options?: CAOptions;
 
     private certCache: { [domain: string]: GeneratedCertificate };
 
     constructor(
         caKey: PEM,
         caCert: PEM,
-        keyLength: number
+        keyLength: number,
+        options?: CAOptions
     ) {
         this.caKey = pki.privateKeyFromPem(caKey.toString('utf8'));
         this.caCert = pki.certificateFromPem(caCert.toString('utf8'));
         this.certCache = {};
+        this.options = options;
 
         if (!KEY_PAIR || KEY_PAIR.length < keyLength) {
             // If we have no key, or not a long enough one, generate one.
@@ -214,9 +235,9 @@ export class CA {
                 ? [] // We skip the CN (deprecated, rarely used) for wildcards, since they can't be used here.
                 : [{ name: 'commonName', value: domain }]
             ),
-            { name: 'countryName', value: 'XX' }, // ISO-3166-1 alpha-2 'unknown country' code
-            { name: 'localityName', value: 'Unknown' },
-            { name: 'organizationName', value: 'Mockttp Cert - DO NOT TRUST' }
+            { name: 'countryName', value: this.options?.countryName ?? 'XX' }, // ISO-3166-1 alpha-2 'unknown country' code
+            { name: 'localityName', value: this.options?.localityName ?? 'Unknown' },
+            { name: 'organizationName', value: this.options?.organizationName ?? 'Mockttp Cert - DO NOT TRUST' }
         ]);
         cert.setIssuer(this.caCert.subject.attributes);
 
