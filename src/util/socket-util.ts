@@ -46,6 +46,7 @@ const normalizeIp = (ip: string | null | undefined) =>
 
 export const isLocalhostAddress = (host: string | null | undefined) =>
     host === 'localhost' || // Most common
+    host?.endsWith('.localhost') ||
     host === '::1' || // IPv6
     normalizeIp(host)?.match(/^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/); // 127.0.0.0/8 range
 
