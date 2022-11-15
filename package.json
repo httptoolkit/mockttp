@@ -185,7 +185,7 @@
     "graphql-subscriptions": "^1.1.0",
     "graphql-tag": "^2.12.6",
     "http-encoding": "^1.5.1",
-    "http2-wrapper": "2.0.5",
+    "http2-wrapper": "^2.2.0",
     "https-proxy-agent": "^5.0.1",
     "isomorphic-ws": "^4.0.1",
     "lodash": "^4.16.4",
