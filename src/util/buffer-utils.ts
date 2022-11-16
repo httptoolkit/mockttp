@@ -53,6 +53,9 @@ export const streamToBuffer = (input: stream.Readable, maxSize = MAX_BUFFER_SIZE
 
     const bufferPromise = <BufferInProgress> new Promise(
         (resolve, reject) => {
+            // If stream has already finished, resolve immediately:
+            if (input.readableEnded) return resolve(Buffer.from([]));
+
             let currentSize = 0;
             input.on('data', (d: Buffer) => {
                 currentSize += d.length;
