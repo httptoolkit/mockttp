@@ -1,5 +1,5 @@
 import _ = require("lodash");
-import * as fs from 'fs-extra';
+import * as fs from 'fs/promises';
 import request = require("request-promise-native");
 
 import { getLocal, Mockttp, MockedEndpoint } from "../../..";

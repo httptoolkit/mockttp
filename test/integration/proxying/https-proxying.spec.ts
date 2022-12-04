@@ -1,7 +1,7 @@
 import _ = require("lodash");
-import * as fs from 'fs-extra';
 import * as https from 'https';
 import * as http2 from 'http2';
+import * as fs from 'fs/promises';
 import * as semver from 'semver';
 import portfinder = require('portfinder');
 import request = require("request-promise-native");
@@ -107,12 +107,12 @@ nodeOnly(() => {
                 ]);
             });
 
-            describe("given an untrusted upstream certificate", () => {
+            describe("given an untrusted upstream certificate", async () => {
 
                 let badServer: Mockttp;
 
                 const certPath = './test/fixtures/untrusted-ca.pem';
-                const cert = fs.readFileSync(certPath);
+                const cert = await fs.readFile(certPath);
 
                 beforeEach(async () => {
                     badServer = getLocal({
@@ -384,8 +384,8 @@ nodeOnly(() => {
             beforeEach(async () => {
                 http2Server = makeDestroyable(http2.createSecureServer({
                     allowHTTP1: false,
-                    key: fs.readFileSync('./test/fixtures/test-ca.key'),
-                    cert: fs.readFileSync('./test/fixtures/test-ca.pem')
+                    key: await fs.readFile('./test/fixtures/test-ca.key'),
+                    cert: await fs.readFile('./test/fixtures/test-ca.pem')
                 }, async (req, res) => {
                     res.writeHead(200, {
                         "received-url": req.url,

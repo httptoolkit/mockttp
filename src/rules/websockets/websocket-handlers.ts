@@ -3,6 +3,7 @@ import net = require('net');
 import * as url from 'url';
 import * as tls from 'tls';
 import * as http from 'http';
+import * as fs from 'fs/promises';
 import * as WebSocket from 'ws';
 import CacheableLookup from 'cacheable-lookup';
 
@@ -30,7 +31,6 @@ import {
 import { streamToBuffer } from '../../util/buffer-utils';
 import { isLocalhostAddress } from '../../util/socket-util';
 import { MaybePromise } from '../../util/type-utils';
-import { readFile } from '../../util/fs';
 
 import { getAgent } from '../http-agents';
 import { ProxySettingSource } from '../proxy-config';
@@ -200,7 +200,7 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
                         if ('cert' in certObject) {
                             return certObject.cert.toString('utf8');
                         } else {
-                            return readFile(certObject.certPath, 'utf8');
+                            return fs.readFile(certObject.certPath, 'utf8');
                         }
                     }))
             );

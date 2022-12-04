@@ -1,9 +1,9 @@
 import * as https from 'https';
 import * as path from 'path';
+import * as fs from 'fs/promises';
 import * as forge from 'node-forge';
 
 import { expect, fetch, ignoreNetworkError, nodeOnly } from "./test-utils";
-import * as fs from '../src/util/fs';
 
 import { CA, generateCACertificate } from '../src/util/tls';
 

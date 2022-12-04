@@ -5,6 +5,7 @@ import net = require('net');
 import tls = require('tls');
 import http = require('http');
 import https = require('https');
+import * as fs from 'fs/promises';
 import * as h2Client from 'http2-wrapper';
 import CacheableLookup from 'cacheable-lookup';
 import { decode as decodeBase64 } from 'base64-arraybuffer';
@@ -20,7 +21,6 @@ import {
 } from "../../types";
 
 import { MaybePromise } from '../../util/type-utils';
-import { readFile } from '../../util/fs';
 import {
     waitForCompletedRequest,
     buildBodyReader,
@@ -306,7 +306,7 @@ export class StreamHandler extends StreamHandlerDefinition {
 export class FileHandler extends FileHandlerDefinition {
     async handle(_request: OngoingRequest, response: OngoingResponse) {
         // Read the file first, to ensure we error cleanly if it's unavailable
-        const fileContents = await readFile(this.filePath, null);
+        const fileContents = await fs.readFile(this.filePath);
 
         if (this.headers) dropDefaultHeaders(response);
 
@@ -369,7 +369,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                         if ('cert' in certObject) {
                             return certObject.cert.toString('utf8');
                         } else {
-                            return readFile(certObject.certPath, 'utf8');
+                            return fs.readFile(certObject.certPath, 'utf8');
                         }
                     }))
             );
@@ -505,7 +505,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 // this can result in sending a request much more quickly!
                 reqBodyOverride = asBuffer(replaceBody);
             } else if (replaceBodyFromFile) {
-                reqBodyOverride = await readFile(replaceBodyFromFile, null);
+                reqBodyOverride = await fs.readFile(replaceBodyFromFile);
             } else if (updateJsonBody) {
                 const { body: realBody } = await waitForCompletedRequest(clientReq);
                 if (await realBody.getJson() === undefined) {
@@ -783,7 +783,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                         // this can result in sending a request much more quickly!
                         resBodyOverride = asBuffer(replaceBody);
                     } else if (replaceBodyFromFile) {
-                        resBodyOverride = await readFile(replaceBodyFromFile, null);
+                        resBodyOverride = await fs.readFile(replaceBodyFromFile);
                     } else if (updateJsonBody) {
                         const rawBody = await streamToBuffer(serverRes);
                         const realBody = buildBodyReader(rawBody, serverRes.headers);

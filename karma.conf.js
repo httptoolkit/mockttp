@@ -28,7 +28,6 @@ module.exports = function(config) {
                     "http-proxy-agent": require.resolve('./test/empty-stub.js'),
                     "https-proxy-agent": require.resolve('./test/empty-stub.js'),
                     "request-promise-native": require.resolve('./test/empty-stub.js'),
-                    "fs-extra": require.resolve('./test/empty-stub.js'),
                     "portfinder": require.resolve('./test/empty-stub.js'),
                     "dns2": require.resolve('./test/empty-stub.js'),
                     "ws": require.resolve('./test/empty-stub.js')
