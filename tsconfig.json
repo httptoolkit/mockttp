@@ -1,15 +1,13 @@
 {
     "compilerOptions": {
-        "target": "es6",
+        "target": "ES2020",
         "module": "commonjs",
         "outDir": "./dist",
         "declaration": true,
         "sourceMap": true,
         "strict": true,
         "lib": [
-            "dom",
-            "es2015",
-            "scripthost"
+            "ES2020",
         ],
         "paths": {
             "https-proxy-agent": ["./custom-typings/proxy-agent-modules.d.ts"],
