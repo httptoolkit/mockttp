@@ -423,13 +423,9 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             if (upgradeCompleted) return;
 
             if (data.length) {
-                const httpResponse = parseRawHttpResponse(data);
-                httpResponse.id = request.id;
-                httpResponse.tags = request.tags;
+                request.timingEvents.responseSentTimestamp = now();
 
-                httpResponse.timingEvents = request.timingEvents;
-                (httpResponse.timingEvents as TimingEvents).responseSentTimestamp = now();
-
+                const httpResponse = parseRawHttpResponse(data, request);
                 this.announceResponseAsync(httpResponse);
             } else {
                 // Connect closed during upgrade, before we responded:
@@ -445,13 +441,9 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             socket._write = originalWrite;
             socket._writev = originalWriteV;
 
-            const httpResponse = parseRawHttpResponse(data);
-            httpResponse.id = request.id;
-            httpResponse.tags = request.tags;
+            request.timingEvents.wsAcceptedTimestamp = now();
 
-            httpResponse.timingEvents = request.timingEvents;
-            (httpResponse.timingEvents as TimingEvents).wsAcceptedTimestamp = now();
-
+            const httpResponse = parseRawHttpResponse(data, request);
             this.announceWebSocketUpgradeAsync(httpResponse);
 
             ws.on('message', (data: Buffer, isBinary) => {
@@ -1000,7 +992,7 @@ ${await this.suggestRule(request)}`
                 httpVersion: '2',
 
                 // Best guesses:
-                timingEvents: { startTime: Date.now(), startTimestamp: now() } as TimingEvents,
+                timingEvents: { startTime: Date.now(), startTimestamp: now() },
                 protocol: isTLS ? "https" : "http",
                 url: isTLS ? `https://${
                     (socket as tls.TLSSocket).servername // Use the hostname from SNI

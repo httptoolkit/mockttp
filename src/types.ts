@@ -59,7 +59,7 @@ export interface Request {
     headers: Headers;
     rawHeaders: RawHeaders;
 
-    timingEvents: TimingEvents | {};
+    timingEvents: TimingEvents;
     tags: string[];
 }
 
@@ -141,9 +141,7 @@ export interface TlsFailureTimingEvents extends TlsTimingEvents {
 
 // Internal representation of an ongoing HTTP request whilst it's being processed
 export interface OngoingRequest extends Request, EventEmitter {
-    rawHeaders: RawHeaders; // Always set internally
     body: OngoingBody;
-    timingEvents: TimingEvents;
 }
 
 export interface OngoingBody {
@@ -191,9 +189,7 @@ export interface CompletedBody {
 }
 
 // Internal & external representation of an initiated (no body yet received) HTTP request.
-export interface InitiatedRequest extends Request {
-    timingEvents: TimingEvents;
-}
+export type InitiatedRequest = Request;
 
 export interface AbortedRequest extends InitiatedRequest {
     error?: {
@@ -242,7 +238,7 @@ export interface CompletedResponse {
     headers: Headers;
     rawHeaders: RawHeaders;
     body: CompletedBody;
-    timingEvents: TimingEvents | {};
+    timingEvents: TimingEvents;
     tags: string[];
 }
 
