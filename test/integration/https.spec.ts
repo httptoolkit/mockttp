@@ -1,7 +1,7 @@
-import * as fs from 'fs-extra';
 import * as http from 'http';
 import * as tls from 'tls';
 import * as https from 'https';
+import * as fs from 'fs/promises';
 
 import { getLocal } from "../..";
 import {
@@ -71,9 +71,9 @@ describe("When configured for HTTPS", () => {
 
             it("should use the default domain when no SNI is provided", async () => {
                 const tlsSocket = tls.connect({
-                    ca: fs.readFileSync('./test/fixtures/test-ca.pem'),
-                    key: fs.readFileSync('./test/fixtures/test-ca.key'),
-                    cert: fs.readFileSync('./test/fixtures/test-ca.pem'),
+                    ca: await fs.readFile('./test/fixtures/test-ca.pem'),
+                    key: await fs.readFile('./test/fixtures/test-ca.key'),
+                    cert: await fs.readFile('./test/fixtures/test-ca.pem'),
 
                     host: 'localhost',
                     port: server.port,
@@ -89,9 +89,9 @@ describe("When configured for HTTPS", () => {
 
             it("should still use the SNI name if one is provided", async () => {
                 const tlsSocket = tls.connect({
-                    ca: fs.readFileSync('./test/fixtures/test-ca.pem'),
-                    key: fs.readFileSync('./test/fixtures/test-ca.key'),
-                    cert: fs.readFileSync('./test/fixtures/test-ca.pem'),
+                    ca: await fs.readFile('./test/fixtures/test-ca.pem'),
+                    key: await fs.readFile('./test/fixtures/test-ca.key'),
+                    cert: await fs.readFile('./test/fixtures/test-ca.pem'),
 
                     host: 'localhost',
                     servername: 'sni-name.example', // <-- Set a name via SNI

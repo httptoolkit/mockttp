@@ -1,10 +1,9 @@
 import * as _ from 'lodash';
+import * as fs from 'fs/promises';
 import { v4 as uuid } from "uuid";
 import * as forge from 'node-forge';
 
 const { pki, md, util: { encode64 } } = forge;
-
-import * as fs from './fs';
 
 export type CAOptions = (CertDataOptions | CertPathOptions);
 
