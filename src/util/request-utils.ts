@@ -526,14 +526,15 @@ type PartiallyParsedHttpRequest = {
 // very lax, and will throw errors due to unexpected response data, but it's used when we
 // ourselves generate the data (for websocket responses that 'ws' writes directly to the
 // socket invisibly). Fortunately all responses are very simple:
-export function parseRawHttpResponse(input: Buffer): CompletedResponse {
-    const res: Partial<CompletedResponse> = {};
+export function parseRawHttpResponse(input: Buffer, request: OngoingRequest): CompletedResponse {
+    const { id, tags, timingEvents} = request;
 
     const lines = splitBuffer(input, '\r\n');
-    const responseLine = lines[0].slice(0, lines[0].length).toString('ascii');
-    const [_httpVersion, statusCode, ...messageParts] = responseLine.split(" ");
-    res.statusCode = parseInt(statusCode, 10);
-    res.statusMessage = messageParts.join(' ');
+    const responseLine = lines[0].subarray(0, lines[0].length).toString('ascii');
+    const [_httpVersion, rawStatusCode, ...restResponseLine] = responseLine.split(" ");
+
+    const statusCode = parseInt(rawStatusCode, 10);
+    const statusMessage = restResponseLine.join(' ');
 
     // An empty line delineates the headers from the body
     const emptyLineIndex = _.findIndex(lines, (line) => line.length === 0);
@@ -545,13 +546,17 @@ export function parseRawHttpResponse(input: Buffer): CompletedResponse {
             headerParts.map(p => p.toString('utf8').trim()) as [string, string]
         );
 
-    res.rawHeaders = rawHeaders;
-    res.headers = rawHeadersToObject(rawHeaders);
+    const headers = rawHeadersToObject(rawHeaders);
+    const body = buildBodyReader(Buffer.from([]), {});
 
-    res.body = buildBodyReader(Buffer.from([]), {});
-
-    res.timingEvents = {};
-    res.tags = [];
-
-    return res as CompletedResponse;
+    return {
+        id,
+        tags,
+        timingEvents,
+        statusCode,
+        statusMessage,
+        rawHeaders,
+        headers,
+        body
+    };
 }
