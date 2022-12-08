@@ -4,7 +4,6 @@ import * as zlib from 'zlib';
 
 import {
     getLocal,
-    InitiatedRequest,
     CompletedRequest,
     CompletedResponse,
     Mockttp,
@@ -17,28 +16,9 @@ import {
     nodeOnly,
     isNode,
     getDeferred,
-    delay
+    delay,
+    makeAbortableRequest
 } from "../../test-utils";
-
-function makeAbortableRequest(server: Mockttp, path: string) {
-    if (isNode) {
-        let req = http.request({
-            method: 'POST',
-            hostname: 'localhost',
-            port: server.port,
-            path
-        });
-        req.on('error', () => {});
-        return req;
-    } else {
-        let abortController = new AbortController();
-        fetch(server.urlFor(path), {
-            method: 'POST',
-            signal: abortController.signal as AbortSignal
-        }).catch(() => {});
-        return abortController;
-    }
-}
 
 describe("Response subscriptions", () => {
 

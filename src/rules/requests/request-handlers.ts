@@ -967,8 +967,18 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
             function abortUpstream() {
                 serverReq.abort();
             }
+
+            // Handle the case where the downstream connection is prematurely closed before
+            // fully sending the request or receiving the response.
             clientReq.on('aborted', abortUpstream);
-            clientRes.once('finish', () => clientReq.removeListener('aborted', abortUpstream));
+            clientRes.on('close', abortUpstream);
+
+            // Disable the upstream request abort handlers once the response has been received.
+            clientRes.once('finish', () => {
+                clientReq.off('aborted', abortUpstream);
+                clientRes.off('close', abortUpstream);
+            });
+
             serverReq.on('error', (e: any) => {
                 e.causedByUpstreamError = true;
                 reject(e);
@@ -994,7 +1004,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 clientRes.tags.push('passthrough-tls-error:ssl-alert-' + tlsAlertMatch[1]);
             }
 
-            if ((e as any).causedByUpstreamError && !(serverReq as any)?.aborted) {
+            if ((e as any).causedByUpstreamError && !serverReq?.aborted) {
                 if (e.code === 'ECONNRESET' || e.code === 'ECONNREFUSED' || this.simulateConnectionErrors) {
                     // The upstream socket failed: forcibly break the downstream stream to match. This could
                     // happen due to a reset, TLS or DNS failures, or anything - but critically it's a

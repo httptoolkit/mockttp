@@ -178,6 +178,26 @@ export async function writeAndReset(socket: net.Socket, content: string) {
     setTimeout(() => socket.destroy(), 0);
 }
 
+export function makeAbortableRequest(server: Mockttp, path: string) {
+    if (isNode) {
+        let req = http.request({
+            method: 'POST',
+            hostname: 'localhost',
+            port: server.port,
+            path
+        });
+        req.on('error', () => {});
+        return req;
+    } else {
+        let abortController = new AbortController();
+        fetch(server.urlFor(path), {
+            method: 'POST',
+            signal: abortController.signal as AbortSignal
+        }).catch(() => {});
+        return abortController;
+    }
+}
+
 export function watchForEvent(event: string, ...servers: Mockttp[]) {
     let eventResult: any;
 
