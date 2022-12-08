@@ -4,7 +4,6 @@ import * as zlib from 'zlib';
 
 import {
     getLocal,
-    InitiatedRequest,
     CompletedRequest,
     CompletedResponse,
     Mockttp,
@@ -17,28 +16,9 @@ import {
     nodeOnly,
     isNode,
     getDeferred,
-    delay
+    delay,
+    makeAbortableRequest
 } from "../../test-utils";
-
-function makeAbortableRequest(server: Mockttp, path: string) {
-    if (isNode) {
-        let req = http.request({
-            method: 'POST',
-            hostname: 'localhost',
-            port: server.port,
-            path
-        });
-        req.on('error', () => {});
-        return req;
-    } else {
-        let abortController = new AbortController();
-        fetch(server.urlFor(path), {
-            method: 'POST',
-            signal: abortController.signal as AbortSignal
-        }).catch(() => {});
-        return abortController;
-    }
-}
 
 describe("Response subscriptions", () => {
 
@@ -428,38 +408,6 @@ describe("Abort subscriptions", () => {
             expect(seenAbort.timingEvents.bodyReceivedTimestamp).to.equal(undefined);
             expect(seenAbort.error).to.equal(undefined); // Client abort, not an error
             expect(wasRequestSeen).to.equal(false);
-        });
-
-        describe('given client abort the request', () => {
-            const remoteServer = getLocal();
-
-            beforeEach(() => remoteServer.start());
-            afterEach(() => remoteServer.stop());
-
-            it('should abort upstream request', async () => {
-                const seenRequestPromise = getDeferred<CompletedRequest>();
-                remoteServer.on('request', (r) => seenRequestPromise.resolve(r));
-    
-                const seenAbortPromise = getDeferred<AbortedRequest>();
-                remoteServer.on('abort', (r) => seenAbortPromise.resolve(r));
-                
-                await remoteServer.forPost('/mocked-endpoint').thenTimeout();
-    
-                await server.forPost('/mocked-endpoint').thenPassThrough();
-    
-                const abortableRequest = makeAbortableRequest(
-                    server, 
-                    remoteServer.urlFor('/mocked-endpoint')
-                ) as http.ClientRequest;
-                abortableRequest.end();
-    
-                const seenRequest = await seenRequestPromise;
-                abortableRequest.abort();
-    
-                const seenAbort = await seenAbortPromise;
-                expect(seenRequest.id).to.equal(seenAbort.id);
-                expect(seenAbort.error).to.equal(undefined); // Client abort, not an error
-            });
         });
 
         describe("given a server that closes connections", () => {

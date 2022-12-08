@@ -963,20 +963,17 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
 
             // If the downstream connection aborts, before the response has been completed,
             // we also abort the upstream connection. Important to avoid unnecessary connections,
-            // and to correctly proxy client connection behavior to the upstream server.
+            // and to correctly proxy client connection behaviour to the upstream server.
             function abortUpstream() {
                 serverReq.abort();
             }
 
-            // Handle the case where the downstream connection is prematurely closes before 
-            // finishing sending the request.
+            // Handle the case where the downstream connection is prematurely closed before
+            // fully sending the request or receiving the response.
             clientReq.on('aborted', abortUpstream);
-
-            // Handle the case where the downstream connection is prematurely closed before 
-            // receiving the entire response.
             clientRes.on('close', abortUpstream);
 
-            // Cleanup the upstream request abort handler once the response has been sent.
+            // Disable the upstream request abort handlers once the response has been received.
             clientRes.once('finish', () => {
                 clientReq.off('aborted', abortUpstream);
                 clientRes.off('close', abortUpstream);

@@ -4,13 +4,19 @@ import portfinder = require('portfinder');
 import request = require("request-promise-native");
 import * as zlib from 'zlib';
 
-import { getLocal, Mockttp } from "../../..";
+import {
+    Mockttp,
+    getLocal,
+    AbortedRequest,
+    CompletedRequest
+} from "../../..";
 import {
     expect,
     nodeOnly,
     getDeferred,
     Deferred,
-    sendRawRequest
+    sendRawRequest,
+    makeAbortableRequest
 } from "../../test-utils";
 import { isLocalIPv6Available } from "../../../src/util/socket-util";
 
@@ -905,6 +911,30 @@ nodeOnly(() => {
                     'Error: socket hang up',
                     'Error: read ECONNRESET'
                 ]);
+            });
+
+            it('should abort upstream requests if downstream is aborted', async () => {
+                const seenRequestPromise = getDeferred<CompletedRequest>();
+                remoteServer.on('request', (r) => seenRequestPromise.resolve(r));
+
+                const seenAbortPromise = getDeferred<AbortedRequest>();
+                remoteServer.on('abort', (r) => seenAbortPromise.resolve(r));
+
+                await remoteServer.forPost('/mocked-endpoint').thenTimeout();
+                await server.forPost('/mocked-endpoint').thenPassThrough();
+
+                const abortableRequest = makeAbortableRequest(
+                    server,
+                    remoteServer.urlFor('/mocked-endpoint')
+                ) as http.ClientRequest;
+                abortableRequest.end();
+
+                const seenRequest = await seenRequestPromise;
+                abortableRequest.abort();
+
+                const seenAbort = await seenAbortPromise;
+                expect(seenRequest.id).to.equal(seenAbort.id);
+                expect(seenAbort.error).to.equal(undefined); // Client abort, not an error
             });
 
             describe("with an IPv6-only server", () => {
