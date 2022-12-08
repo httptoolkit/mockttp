@@ -430,6 +430,38 @@ describe("Abort subscriptions", () => {
             expect(wasRequestSeen).to.equal(false);
         });
 
+        describe('given client abort the request', () => {
+            const remoteServer = getLocal();
+
+            beforeEach(() => remoteServer.start());
+            afterEach(() => remoteServer.stop());
+
+            it('should abort upstream request', async () => {
+                const seenRequestPromise = getDeferred<CompletedRequest>();
+                remoteServer.on('request', (r) => seenRequestPromise.resolve(r));
+    
+                const seenAbortPromise = getDeferred<AbortedRequest>();
+                remoteServer.on('abort', (r) => seenAbortPromise.resolve(r));
+                
+                await remoteServer.forPost('/mocked-endpoint').thenTimeout();
+    
+                await server.forPost('/mocked-endpoint').thenPassThrough();
+    
+                const abortableRequest = makeAbortableRequest(
+                    server, 
+                    remoteServer.urlFor('/mocked-endpoint')
+                ) as http.ClientRequest;
+                abortableRequest.end();
+    
+                const seenRequest = await seenRequestPromise;
+                abortableRequest.abort();
+    
+                const seenAbort = await seenAbortPromise;
+                expect(seenRequest.id).to.equal(seenAbort.id);
+                expect(seenAbort.error).to.equal(undefined); // Client abort, not an error
+            });
+        });
+
         describe("given a server that closes connections", () => {
 
             const badServer = new http.Server((req, res) => {

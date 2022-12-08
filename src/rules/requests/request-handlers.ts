@@ -963,12 +963,25 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
 
             // If the downstream connection aborts, before the response has been completed,
             // we also abort the upstream connection. Important to avoid unnecessary connections,
-            // and to correctly proxy client connection behaviour to the upstream server.
+            // and to correctly proxy client connection behavior to the upstream server.
             function abortUpstream() {
                 serverReq.abort();
             }
+
+            // Handle the case where the downstream connection is prematurely closes before 
+            // finishing sending the request.
             clientReq.on('aborted', abortUpstream);
-            clientRes.once('finish', () => clientReq.removeListener('aborted', abortUpstream));
+
+            // Handle the case where the downstream connection is prematurely closed before 
+            // receiving the entire response.
+            clientRes.on('close', abortUpstream);
+
+            // Cleanup the upstream request abort handler once the response has been sent.
+            clientRes.once('finish', () => {
+                clientReq.off('aborted', abortUpstream);
+                clientRes.off('close', abortUpstream);
+            });
+
             serverReq.on('error', (e: any) => {
                 e.causedByUpstreamError = true;
                 reject(e);
@@ -994,7 +1007,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 clientRes.tags.push('passthrough-tls-error:ssl-alert-' + tlsAlertMatch[1]);
             }
 
-            if ((e as any).causedByUpstreamError && !(serverReq as any)?.aborted) {
+            if ((e as any).causedByUpstreamError && !serverReq?.aborted) {
                 if (e.code === 'ECONNRESET' || e.code === 'ECONNREFUSED' || this.simulateConnectionErrors) {
                     // The upstream socket failed: forcibly break the downstream stream to match. This could
                     // happen due to a reset, TLS or DNS failures, or anything - but critically it's a
