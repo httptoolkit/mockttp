@@ -17,6 +17,7 @@ import {
 } from '../test-utils';
 import { getCA } from '../../src/util/tls';
 import { delay } from '../../src/util/util';
+import { pairFlatRawHeaders } from '../../src/util/header-utils';
 
 browserOnly(() => {
     describe('Websocket requests', function() {
@@ -77,8 +78,10 @@ nodeOnly(() => {
             wsServer = new WebSocket.Server({ port: wsPort });
 
             wsServer.on('connection', (ws, request) => {
-                if (request.headers['echo-header']) {
-                    ws.send("echo-header: " + request.headers['echo-header']);
+                if (request.headers['echo-headers']) {
+                    // Send back the received headers, accurately preserving raw casing etc,
+                    // if requested by sending an 'echo-headers' header in the request.
+                    ws.send(JSON.stringify(pairFlatRawHeaders(request.rawHeaders)));
                 }
 
                 ws.on('message', (message, isBinary) => {
@@ -146,7 +149,8 @@ nodeOnly(() => {
                 const ws = new WebSocket(`ws://localhost:${wsPort}`, {
                     agent: new HttpProxyAgent(`http://localhost:${mockServer.port}`),
                     headers: {
-                        'echo-header': 'a=b'
+                        'echo-headers': 'true',
+                        'Funky-HEADER-casing': 'Header-Value'
                     }
                 });
 
@@ -156,7 +160,20 @@ nodeOnly(() => {
                 });
                 ws.close(1000);
 
-                expect(response.toString()).to.equal('echo-header: a=b');
+                const headers = JSON.parse(response.toString()).filter(([key]: [key: string]) =>
+                    // The key is random, so we don't check it here.
+                    key !== 'Sec-WebSocket-Key'
+                );
+
+                expect(headers).to.deep.equal([
+                    [ 'echo-headers', 'true' ],
+                    [ 'Funky-HEADER-casing', 'Header-Value' ],
+                    [ 'Host', `localhost:${wsPort}` ],
+                    [ 'Sec-WebSocket-Version', '13' ],
+                    [ 'Connection', 'Upgrade' ],
+                    [ 'Upgrade', 'websocket' ],
+                    [ 'Sec-WebSocket-Extensions', 'permessage-deflate; client_max_window_bits' ]
+                ]);
             });
 
             it("can handle & proxy invalid client frames upstream", async () => {

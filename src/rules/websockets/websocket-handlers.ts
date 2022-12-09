@@ -26,7 +26,7 @@ import {
     findRawHeader,
     objectHeadersToRaw,
     pairFlatRawHeaders,
-    rawHeadersToObject
+    rawHeadersToObjectPreservingCase
 } from '../../util/header-utils';
 import { streamToBuffer } from '../../util/buffer-utils';
 import { isLocalhostAddress } from '../../util/socket-util';
@@ -338,7 +338,7 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
 
         // We have to flatten the headers, as WS doesn't support raw headers - it builds its own
         // header object internally.
-        const headers = rawHeadersToObject(rawHeaders);
+        const headers = rawHeadersToObjectPreservingCase(rawHeaders);
 
         const upstreamWebSocket = new WebSocket(wsUrl, {
             maxPayload: 0,

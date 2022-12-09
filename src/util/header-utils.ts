@@ -46,10 +46,57 @@ export function flattenPairedRawHeaders(rawHeaders: RawHeaders): string[] {
 /**
  * Take a raw headers, and turn them into headers, but without some of Node's concessions
  * to ease of use, i.e. keeping multiple values as arrays.
+ *
+ * This lowercases all names along the way, to provide a convenient header API for most
+ * downstream use cases, and to match Node's own behaviour.
  */
 export function rawHeadersToObject(rawHeaders: RawHeaders): Headers {
     return rawHeaders.reduce<Headers>((headers, [key, value]) => {
         key = key.toLowerCase();
+
+        const existingValue = headers[key];
+
+        if (Array.isArray(existingValue)) {
+            existingValue.push(value);
+        } else if (existingValue) {
+            headers[key] = [existingValue, value];
+        } else {
+            headers[key] = value;
+        }
+
+        return headers;
+    }, {});
+}
+
+/**
+ * Take raw headers, and turn them into headers just like `rawHeadersToObject` but
+ * also preserves case en route.
+ *
+ * This is separated because our public APIs should _not_ do this, but there's a few
+ * internal use cases where we want to, notably including passing headers to WS which
+ * only accepts a headers object when sending upstream requests, but does preserve
+ * case from the object.
+ */
+export function rawHeadersToObjectPreservingCase(rawHeaders: RawHeaders): Headers {
+    // Duplicate keys with different cases in the final object clobber each other (last
+    // value wins) so we need to pick a single casing for each header name. We don't want
+    // to just use lowercase, because we want to preserve original casing wherever possible.
+    // To make that work, we use the casing from the first instance of each header, along with
+    // a lowercase -> first casing map here to look up that value later:
+    const headerNameMap: { [lowerName: string]: string } = {};
+
+    return rawHeaders.reduce<Headers>((headers, [key, value]) => {
+        const lowerCaseKey = key.toLowerCase();
+
+        if (headerNameMap[lowerCaseKey]) {
+            // If we've already seen this header, we need to use the same
+            // casing as before to avoid issues with duplicates:
+            key = headerNameMap[lowerCaseKey];
+        } else {
+            // If we haven't, we store this key as the canonical format
+            // to make it easy to merge with any duplicates:
+            headerNameMap[lowerCaseKey] = key;
+        }
 
         const existingValue = headers[key];
 
