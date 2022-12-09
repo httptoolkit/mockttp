@@ -37,6 +37,7 @@ import {
     h2HeadersToH1,
     objectHeadersToRaw,
     rawHeadersToObject,
+    rawHeadersToObjectPreservingCase,
     flattenPairedRawHeaders,
     findRawHeader,
     pairFlatRawHeaders
@@ -725,7 +726,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 family,
                 path,
                 headers: shouldTryH2Upstream
-                    ? rawHeadersToObject(rawHeaders)
+                    ? rawHeadersToObjectPreservingCase(rawHeaders)
                     : flattenPairedRawHeaders(rawHeaders) as any,
                 lookup: this.lookup() as typeof dns.lookup,
                 // ^ Cast required to handle __promisify__ type hack in the official Node types
