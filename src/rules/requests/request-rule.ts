@@ -2,7 +2,7 @@ import * as _ from 'lodash';
 import { v4 as uuid } from "uuid";
 
 import { OngoingRequest, CompletedRequest, OngoingResponse, Explainable, RulePriority } from "../../types";
-import { waitForCompletedRequest } from '../../util/request-utils';
+import { buildBodyReader, buildInitiatedRequest, waitForCompletedRequest } from '../../util/request-utils';
 import { MaybePromise } from '../../util/type-utils';
 
 import * as matchers from "../matchers";
@@ -82,6 +82,15 @@ export class RequestRule implements RequestRule {
                 ])
                 .catch(() => {}) // Ignore handler errors here - we're only tracking the request
                 .then(() => waitForCompletedRequest(req))
+                .catch((): CompletedRequest => {
+                    // If for some reason the request is not completed, we still want to record it.
+                    // TODO: Update the body to return the data that has been received so far.
+                    const initiatedRequest = buildInitiatedRequest(req);
+                    return {
+                        ...initiatedRequest,
+                        body: buildBodyReader(Buffer.from([]), req.headers)
+                    };
+                })
             );
         }
 

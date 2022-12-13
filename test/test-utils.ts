@@ -37,6 +37,12 @@ if (isNode) {
     require('./fixtures/websocket-test-server');
 }
 
+// In some cases, Mocha fails to properly surface unhandled rejections, so we do it ourselves.
+// https://github.com/mochajs/mocha/issues/2640
+process.on('unhandledRejection', (reason, promise) => {
+    throw reason;
+});
+
 chai.use(chaiAsPromised);
 chai.use(chaiFetch);
 
