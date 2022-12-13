@@ -8,7 +8,8 @@ import {
     Mockttp,
     getLocal,
     AbortedRequest,
-    CompletedRequest
+    CompletedRequest,
+    Request
 } from "../../..";
 import {
     expect,
@@ -938,10 +939,11 @@ nodeOnly(() => {
             });
 
             it('should gracefully handle client connection getting closed in the middle of the body', async () => {
+                const seenRequestPromise = getDeferred<Request>();
+                remoteServer.on('request-initiated', (r) => seenRequestPromise.resolve(r));
+                
                 const seenAbortPromise = getDeferred<AbortedRequest>();
-                remoteServer.on('abort', (r) => {
-                    seenAbortPromise.resolve(r)
-                });
+                remoteServer.on('abort', (r) => seenAbortPromise.resolve(r));
 
                 await remoteServer.forPost('/mocked-endpoint').thenTimeout();
                 const mockEndpoint = await server.forPost('/mocked-endpoint').thenPassThrough();
@@ -951,14 +953,20 @@ nodeOnly(() => {
                     remoteServer.urlFor('/mocked-endpoint')
                 ) as http.ClientRequest;
 
-                abortableRequest.write('some data', () => {
-                    abortableRequest.destroy()
-                });
+                abortableRequest.write('some data');
+
+                // Wait for the request to be seen by the upstream server, before aborting the 
+                // client request.
+                const seenRequest = await seenRequestPromise;
+                abortableRequest.abort();
 
                 const seenAbort = await seenAbortPromise;
+                const [recordedRequest] = await mockEndpoint.getSeenRequests();
 
-                expect(seenAbort).not.to.equal(undefined);
-                expect(mockEndpoint.getSeenRequests()).to.have.length(1);
+                expect(seenAbort.id).equal(seenRequest.id);
+
+                expect(recordedRequest.body.buffer).to.have.length(0);
+                expect(recordedRequest.timingEvents.abortedTimestamp).to.be.a('number');
             });
 
             describe("with an IPv6-only server", () => {

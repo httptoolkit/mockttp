@@ -350,9 +350,10 @@ export interface MockedEndpoint {
      * lists are immutable, so won't change if more requests arrive in future.
      * Call `getSeenRequests` again later to get an updated list.
      *
-     * Requests are included here once the response is completed, even if the
-     * responses failed or exceptions are thrown elsewhere. To watch for errors
-     * or detailed response info, look at the various server.on(event) methods.
+     * Requests are included here once the response is completed, even if the request 
+     * itself failed, the responses failed or exceptions are thrown elsewhere. To 
+     * watch for errors or detailed response info, look at the various server.on(event) 
+     * methods.
      */
     getSeenRequests(): Promise<CompletedRequest[]>;
 
