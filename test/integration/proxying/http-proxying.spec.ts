@@ -937,6 +937,30 @@ nodeOnly(() => {
                 expect(seenAbort.error).to.equal(undefined); // Client abort, not an error
             });
 
+            it('should gracefully handle client connection getting closed in the middle of the body', async () => {
+                const seenAbortPromise = getDeferred<AbortedRequest>();
+                remoteServer.on('abort', (r) => {
+                    seenAbortPromise.resolve(r)
+                });
+
+                await remoteServer.forPost('/mocked-endpoint').thenTimeout();
+                const mockEndpoint = await server.forPost('/mocked-endpoint').thenPassThrough();
+
+                const abortableRequest = makeAbortableRequest(
+                    server,
+                    remoteServer.urlFor('/mocked-endpoint')
+                ) as http.ClientRequest;
+
+                abortableRequest.write('some data', () => {
+                    abortableRequest.destroy()
+                });
+
+                const seenAbort = await seenAbortPromise;
+
+                expect(seenAbort).not.to.equal(undefined);
+                expect(mockEndpoint.getSeenRequests()).to.have.length(1);
+            });
+
             describe("with an IPv6-only server", () => {
                 if (!isLocalIPv6Available) return;
 
