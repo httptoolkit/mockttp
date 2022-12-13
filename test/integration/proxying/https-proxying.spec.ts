@@ -107,12 +107,16 @@ nodeOnly(() => {
                 ]);
             });
 
-            describe("given an untrusted upstream certificate", async () => {
+            describe("given an untrusted upstream certificate", () => {
 
                 let badServer: Mockttp;
+                let cert: Buffer;
 
                 const certPath = './test/fixtures/untrusted-ca.pem';
-                const cert = await fs.readFile(certPath);
+
+                before(async () => {
+                    cert = await fs.readFile(certPath);
+                });
 
                 beforeEach(async () => {
                     badServer = getLocal({
