@@ -82,11 +82,14 @@ export class RequestRule implements RequestRule {
                 ])
                 .catch(() => {}) // Ignore handler errors here - we're only tracking the request
                 .then(() => waitForCompletedRequest(req))
-                .catch(() => {
+                .catch((): CompletedRequest => {
                     // If for some reason the request is not completed, we still want to record it.
                     // TODO: Update the body to return the data that has been received so far.
-                    const completedRequest = buildInitiatedRequest(req);
-                    return {...completedRequest, body: buildBodyReader(Buffer.from([]), req.headers) };
+                    const initiatedRequest = buildInitiatedRequest(req);
+                    return {
+                        ...initiatedRequest,
+                        body: buildBodyReader(Buffer.from([]), req.headers)
+                    };
                 })
             );
         }

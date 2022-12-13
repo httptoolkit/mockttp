@@ -941,7 +941,7 @@ nodeOnly(() => {
             it('should gracefully handle client connection getting closed in the middle of the body', async () => {
                 const seenRequestPromise = getDeferred<Request>();
                 remoteServer.on('request-initiated', (r) => seenRequestPromise.resolve(r));
-                
+
                 const seenAbortPromise = getDeferred<AbortedRequest>();
                 remoteServer.on('abort', (r) => seenAbortPromise.resolve(r));
 
@@ -955,7 +955,7 @@ nodeOnly(() => {
 
                 abortableRequest.write('some data');
 
-                // Wait for the request to be seen by the upstream server, before aborting the 
+                // Wait for the request to be seen by the upstream server, before aborting the
                 // client request.
                 const seenRequest = await seenRequestPromise;
                 abortableRequest.abort();
