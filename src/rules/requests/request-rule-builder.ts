@@ -139,7 +139,7 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
      * Reply to matched requests with the given status & JSON and (optionally)
      * extra headers.
      *
-     * This method is shorthand for:
+     * This method is (approximately) shorthand for:
      * server.forGet(...).thenReply(status, JSON.stringify(data), { 'Content-Type': 'application/json' })
      *
      * Calling this method registers the rule with the server, so it
@@ -157,7 +157,11 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
 
         headers = merge({
             'Content-Type': 'application/json',
-            'Content-Length': byteLength(jsonData).toString()
+
+            'Content-Length': byteLength(jsonData).toString(),
+            'Connection': 'keep-alive'
+            // ^ Neither strictly required, but without both Node will close the server
+            // connection after the response is sent, which can confuse clients.
         }, headers);
 
         const rule: RequestRuleData = {

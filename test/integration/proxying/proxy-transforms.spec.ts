@@ -128,7 +128,7 @@ nodeOnly(() => {
                 'host': `localhost:${remoteServer.port}`,
                 'accept': 'application/json',
                 'content-type': 'application/json',
-                'connection': 'close',
+                'connection': 'close'
             });
 
             it("does nothing with an empty transform", async () => {
@@ -457,6 +457,7 @@ nodeOnly(() => {
                 expect(response.headers).to.deep.equal({
                     'content-type': 'application/json',
                     'content-length': '50',
+                    'connection': 'keep-alive',
                     'custom-response-header': 'custom-value'
                 });
                 expect(JSON.parse(response.body)).to.deep.equal({
@@ -482,6 +483,7 @@ nodeOnly(() => {
                 expect(response.headers).to.deep.equal({
                     'content-type': 'application/json',
                     'content-length': '50',
+                    'connection': 'keep-alive',
                     'custom-response-header': 'custom-value'
                 });
                 expect(JSON.parse(response.body)).to.deep.equal({
@@ -509,6 +511,7 @@ nodeOnly(() => {
                 expect(response.headers).to.deep.equal({
                     'content-type': 'application/json',
                     'content-length': '50',
+                    'connection': 'keep-alive',
                     'custom-response-header': 'custom-value',
                     'new-header': 'new-value'
                 });
@@ -537,6 +540,7 @@ nodeOnly(() => {
                 expect(response.headers).to.deep.equal({
                     'content-type': 'application/json',
                     'content-length': '50',
+                    'connection': 'keep-alive',
                     'custom-response-header': 'replaced-value',
                 });
                 expect(JSON.parse(response.body)).to.deep.equal({
@@ -587,6 +591,7 @@ nodeOnly(() => {
                 expect(response.headers).to.deep.equal({
                     'content-type': 'application/json',
                     'content-length': '16',
+                    'connection': 'keep-alive',
                     'custom-response-header': 'custom-value',
                 });
                 expect(response.body).to.equal('replacement-body');
@@ -609,6 +614,7 @@ nodeOnly(() => {
                 expect(response.headers).to.deep.equal({
                     'content-type': 'application/json',
                     'content-length': '18',
+                    'connection': 'keep-alive',
                     'custom-response-header': 'custom-value',
                 });
                 expect(response.body).to.equal('replacement buffer');
@@ -635,6 +641,7 @@ nodeOnly(() => {
                 expect(response.headers).to.deep.equal({
                     'content-type': 'text/plain',
                     'content-length': '23',
+                    'connection': 'keep-alive',
                     'custom-response-header': 'custom-value'
                 });
                 expect(response.body).to.equal('Response from text file');
@@ -674,6 +681,7 @@ nodeOnly(() => {
                 expect(response.headers).to.deep.equal({
                     'content-type': 'application/json',
                     'content-length': '36',
+                    'connection': 'keep-alive',
                     'custom-response-header': 'custom-value'
                 });
                 expect(JSON.parse(response.body)).to.deep.equal({
@@ -707,6 +715,7 @@ nodeOnly(() => {
                 expect(response.headers).to.deep.equal({
                     'content-type': 'application/json',
                     'content-length': '40',
+                    'connection': 'keep-alive',
                     'custom-response-header': 'custom-value',
                     'content-encoding': 'br'
                 });
