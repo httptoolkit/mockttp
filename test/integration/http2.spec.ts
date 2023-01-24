@@ -456,7 +456,7 @@ nodeOnly(() => {
                 const responseBody = await getHttp2Body(proxiedRequest);
                 expect(responseBody.toString('utf8')).to.equal("Proxied HTTP2 response!");
 
-                await cleanup(tunnelledSocket, client);
+                await cleanup(tunnelledSocket);
             });
 
             describe("to an HTTP/2-only target", () => {
