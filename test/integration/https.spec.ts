@@ -139,7 +139,9 @@ describe("When configured for HTTPS", () => {
                 expect(body).to.equal("Mock response");
             });
 
-            it("skips the server for matching HTTPS requests", async () => {
+            it("skips the server for matching HTTPS requests", async function () {
+                this.retries(3); // Example.com can be unreliable
+
                 const response: http.IncomingMessage = await new Promise((resolve, reject) =>
                     https.get({
                         host: 'localhost',
@@ -239,7 +241,9 @@ describe("When configured for HTTPS", () => {
                 expect(body).to.equal("Mock response"); // <-- Still intercepted by Mockttp
             });
 
-            it("bypasses Mockttp for TLS connections inside matching HTTP/2 CONNECT tunnel", async () => {
+            it("bypasses Mockttp for TLS connections inside matching HTTP/2 CONNECT tunnel", async function () {
+                this.retries(3); // Example.com can be unreliable
+
                 const response = await http2ProxyRequest(server, 'https://example.com');
 
                 expect(response.body.toString()).to.include(
