@@ -414,6 +414,10 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
         let { method, url: reqUrl, rawHeaders } = clientReq as OngoingRequest;
         let { protocol, hostname, port, path } = url.parse(reqUrl);
 
+        // We have to capture the request stream immediately, to make sure nothing is lost if it
+        // goes past its max length (truncating the data) before we start sending upstream.
+        const clientReqBody = clientReq.body.asStream();
+
         const isH2Downstream = isHttp2(clientReq);
 
         if (isLocalhostAddress(hostname) && clientReq.remoteIpAddress && !isLocalhostAddress(clientReq.remoteIpAddress)) {
@@ -951,15 +955,14 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
             });
 
             if (reqBodyOverride) {
-                clientReq.body.asStream().resume(); // Dump any remaining real request body
+                clientReqBody.resume(); // Dump any remaining real request body
 
                 if (reqBodyOverride.length > 0) serverReq.end(reqBodyOverride);
                 else serverReq.end(); // http2-wrapper fails given an empty buffer for methods that aren't allowed a body
             } else {
                 // asStream includes all content, including the body before this call
-                const reqBodyStream = clientReq.body.asStream();
-                reqBodyStream.pipe(serverReq);
-                reqBodyStream.on('error', () => serverReq.abort());
+                clientReqBody.pipe(serverReq);
+                clientReqBody.on('error', () => serverReq.abort());
             }
 
             // If the downstream connection aborts, before the response has been completed,

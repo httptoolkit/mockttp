@@ -236,7 +236,11 @@ describe("Request initiated subscriptions", () => {
 
 describe("Request subscriptions", () => {
     describe("with a local server", () => {
-        let server = getLocal();
+        let server = getLocal({
+            // Disabling this exposes some possible bugs, notably that the body may not
+            // be captured if the response finishes the request immediately.
+            recordTraffic: false
+        });
 
         beforeEach(() => server.start());
         afterEach(() => server.stop());
@@ -259,6 +263,20 @@ describe("Request subscriptions", () => {
             expect(seenRequest.remotePort).to.be.greaterThan(32768);
             expect(await seenRequest.body.getText()).to.equal('body-text');
             expect(seenRequest.tags).to.deep.equal([]);
+        });
+
+        it("should notify with the body even if the response does not wait for it", async () => {
+            // The only rule here does not process the request body at all, so it's not explicitly
+            // being read anywhere (except by our async event subscription)
+            await server.forAnyRequest().thenReply(200);
+
+            let seenRequestPromise = getDeferred<CompletedRequest>();
+            await server.on('request', (r) => seenRequestPromise.resolve(r));
+
+            fetch(server.urlFor("/mocked-endpoint"), { method: 'POST', body: 'body-text' });
+
+            let seenRequest = await seenRequestPromise;
+            expect(await seenRequest.body.getText()).to.equal('body-text');
         });
 
         it("should include the matched rule id", async () => {

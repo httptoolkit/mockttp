@@ -314,9 +314,9 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     }
 
     private announceCompletedRequestAsync(request: OngoingRequest) {
-        setImmediate(() => {
-            waitForCompletedRequest(request)
-            .then((completedReq: CompletedRequest) => {
+        waitForCompletedRequest(request)
+        .then((completedReq: CompletedRequest) => {
+            setImmediate(() => {
                 this.eventEmitter.emit('request', Object.assign(
                     completedReq,
                     {
@@ -324,35 +324,35 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
                         tags: _.clone(completedReq.tags)
                     }
                 ));
-            })
-            .catch(console.error);
-        });
+            });
+        })
+        .catch(console.error);
     }
 
     private announceResponseAsync(response: OngoingResponse | CompletedResponse) {
-        setImmediate(() => {
-            waitForCompletedResponse(response)
-            .then((res: CompletedResponse) => {
+        waitForCompletedResponse(response)
+        .then((res: CompletedResponse) => {
+            setImmediate(() => {
                 this.eventEmitter.emit('response', Object.assign(res, {
                     timingEvents: _.clone(res.timingEvents),
                     tags: _.clone(res.tags)
                 }));
-            })
-            .catch(console.error);
-        });
+            });
+        })
+        .catch(console.error);
     }
 
     private announceWebSocketRequestAsync(request: OngoingRequest) {
-        setImmediate(() => {
-            waitForCompletedRequest(request)
-            .then((completedReq: CompletedRequest) => {
+        waitForCompletedRequest(request)
+        .then((completedReq: CompletedRequest) => {
+            setImmediate(() => {
                 this.eventEmitter.emit('websocket-request', Object.assign(completedReq, {
                     timingEvents: _.clone(completedReq.timingEvents),
                     tags: _.clone(completedReq.tags)
                 }));
-            })
-            .catch(console.error);
-        });
+            });
+        })
+        .catch(console.error);
     }
 
     private announceWebSocketUpgradeAsync(response: CompletedResponse) {
