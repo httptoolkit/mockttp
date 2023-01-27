@@ -53,8 +53,14 @@ export const streamToBuffer = (input: stream.Readable, maxSize = MAX_BUFFER_SIZE
 
     const bufferPromise = <BufferInProgress> new Promise(
         (resolve, reject) => {
-            // If stream has already finished, resolve immediately:
+            function failWithAbortError() {
+                bufferPromise.failedWith = new Error('Aborted');
+                reject(bufferPromise.failedWith);
+            }
+
+            // If stream has already finished/aborted, resolve accordingly immediately:
             if (input.readableEnded) return resolve(Buffer.from([]));
+            if (input.readableAborted) return failWithAbortError();
 
             let currentSize = 0;
             input.on('data', (d: Buffer) => {
@@ -71,10 +77,7 @@ export const streamToBuffer = (input: stream.Readable, maxSize = MAX_BUFFER_SIZE
                 chunks.push(d);
             });
             input.once('end', () => resolve(Buffer.concat(chunks)));
-            input.once('aborted', () => {
-                bufferPromise.failedWith = new Error('Aborted');
-                reject(bufferPromise.failedWith);
-            });
+            input.once('aborted', failWithAbortError);
             input.on('error', (e) => {
                 bufferPromise.failedWith = bufferPromise.failedWith || e;
                 reject(e);

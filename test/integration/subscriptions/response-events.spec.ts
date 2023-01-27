@@ -6,7 +6,6 @@ import {
     getLocal,
     CompletedRequest,
     CompletedResponse,
-    Mockttp,
     TimingEvents,
     AbortedRequest
 } from "../../..";

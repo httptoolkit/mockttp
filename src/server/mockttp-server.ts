@@ -301,6 +301,8 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     }
 
     private announceInitialRequestAsync(request: OngoingRequest) {
+        if (this.eventEmitter.listenerCount('request-initiated') === 0) return;
+
         setImmediate(() => {
             const initiatedReq = buildInitiatedRequest(request);
             this.eventEmitter.emit('request-initiated', Object.assign(
@@ -314,6 +316,8 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     }
 
     private announceCompletedRequestAsync(request: OngoingRequest) {
+        if (this.eventEmitter.listenerCount('request') === 0) return;
+
         waitForCompletedRequest(request)
         .then((completedReq: CompletedRequest) => {
             setImmediate(() => {
@@ -330,6 +334,8 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     }
 
     private announceResponseAsync(response: OngoingResponse | CompletedResponse) {
+        if (this.eventEmitter.listenerCount('response') === 0) return;
+
         waitForCompletedResponse(response)
         .then((res: CompletedResponse) => {
             setImmediate(() => {
@@ -343,6 +349,8 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     }
 
     private announceWebSocketRequestAsync(request: OngoingRequest) {
+        if (this.eventEmitter.listenerCount('websocket-request') === 0) return;
+
         waitForCompletedRequest(request)
         .then((completedReq: CompletedRequest) => {
             setImmediate(() => {
@@ -356,6 +364,8 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     }
 
     private announceWebSocketUpgradeAsync(response: CompletedResponse) {
+        if (this.eventEmitter.listenerCount('websocket-accepted') === 0) return;
+
         setImmediate(() => {
             this.eventEmitter.emit('websocket-accepted', {
                 ...response,
@@ -371,8 +381,11 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         content: Buffer,
         isBinary: boolean
     ) {
+        const eventName = `websocket-message-${direction}`;
+        if (this.eventEmitter.listenerCount(eventName) === 0) return;
+
         setImmediate(() => {
-            this.eventEmitter.emit(`websocket-message-${direction}`, {
+            this.eventEmitter.emit(eventName, {
                 streamId: request.id,
 
                 direction,
@@ -391,6 +404,8 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         closeCode: number | undefined,
         closeReason?: string
     ) {
+        if (this.eventEmitter.listenerCount('websocket-close') === 0) return;
+
         setImmediate(() => {
             this.eventEmitter.emit('websocket-close', {
                 streamId: request.id,
@@ -563,8 +578,16 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         }
 
         const id = uuid();
-        const timingEvents = { startTime: Date.now(), startTimestamp: now() };
         const tags: string[] = [];
+
+        const timingEvents: TimingEvents = {
+            startTime: Date.now(),
+            startTimestamp: now()
+        };
+
+        req.on('end', () => {
+            timingEvents.bodyReceivedTimestamp ||= now();
+        });
 
         const rawHeaders = pairFlatRawHeaders(req.rawHeaders);
         const headers = rawHeadersToObject(rawHeaders);

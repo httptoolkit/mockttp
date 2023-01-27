@@ -294,8 +294,6 @@ export function buildInitiatedRequest(request: OngoingRequest): InitiatedRequest
  */
 export async function waitForCompletedRequest(request: OngoingRequest): Promise<CompletedRequest> {
     const body = await waitForBody(request.body, request.headers);
-    request.timingEvents.bodyReceivedTimestamp = request.timingEvents.bodyReceivedTimestamp || now();
-
     const requestData = buildInitiatedRequest(request);
     return { ...requestData, body };
 }
