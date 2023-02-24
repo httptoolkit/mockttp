@@ -631,13 +631,10 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
             rawHeaders = objectHeadersToRaw(headers);
         }
 
-        const hostWithPort = `${hostname}:${port}`
-
-        const strictHttpsChecks = shouldUseStrictHttps(
-            hostname as string, port as string, this.ignoreHostHttpsErrors
-        );
+        const strictHttpsChecks = shouldUseStrictHttps(hostname!, port!, this. ignoreHostHttpsErrors);
 
         // Use a client cert if it's listed for the host+port or whole hostname
+        const hostWithPort = `${hostname}:${port}`;
         const clientCert = this.clientCertificateHostMap[hostWithPort] ||
             this.clientCertificateHostMap[hostname!] ||
             {};

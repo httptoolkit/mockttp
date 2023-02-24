@@ -316,8 +316,8 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
     ) {
         const parsedUrl = url.parse(wsUrl);
         const checkServerCertificate = shouldUseStrictHttps(
-            parsedUrl.hostname as string,
-            parsedUrl.port as string,
+            parsedUrl.hostname!,
+            parsedUrl.port!,
             this.ignoreHostHttpsErrors
         );
 

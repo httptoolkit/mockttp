@@ -49,9 +49,12 @@ export interface PassThroughWebSocketHandlerOptions {
 
     /**
      * A list of hostnames for which server certificate and TLS version errors
-     * should be ignored (none, by default). If set to 'true', ignore HTTPS errors
-     * for all hosts. (WARNING: Use this at your own risk. This can open your
-     * application to MITM attacks)
+     * should be ignored (none, by default).
+     *
+     * If set to 'true', HTTPS errors will be ignored for all hosts. WARNING:
+     * Use this at your own risk. Setting this to `true` can open your
+     * application to MITM attacks and should never be used over any network
+     * that is not completed trusted end-to-end.
      */
     ignoreHostHttpsErrors?: string[] | boolean;
 
