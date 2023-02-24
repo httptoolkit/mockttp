@@ -188,6 +188,21 @@ nodeOnly(() => {
                     expect(response.statusCode).to.equal(502);
                 });
 
+                it("should allow passing through requests if all the hosts are whitelisted", async () => {
+                    await badServer.forAnyRequest().thenReply(200);
+
+                    await server.forAnyRequest().thenPassThrough({
+                        ignoreHostHttpsErrors: true
+                    });
+
+                    let response = await request.get(badServer.url, {
+                        resolveWithFullResponse: true,
+                        simple: false
+                    });
+
+                    expect(response.statusCode).to.equal(200);
+                });
+
                 it("should allow passing through requests if the certificate is specifically listed", async () => {
                     await badServer.forAnyRequest().thenReply(200);
 

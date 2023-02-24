@@ -49,9 +49,11 @@ export interface PassThroughWebSocketHandlerOptions {
 
     /**
      * A list of hostnames for which server certificate and TLS version errors
-     * should be ignored (none, by default).
+     * should be ignored (none, by default). If set to 'true', ignore HTTPS errors
+     * for all hosts. (WARNING: Use this at your own risk. This can open your
+     * application to MITM attacks)
      */
-    ignoreHostHttpsErrors?: string[];
+    ignoreHostHttpsErrors?: string[] | boolean;
 
     /**
      * An array of additional certificates, which should be trusted as certificate
@@ -99,7 +101,7 @@ export interface SerializedPassThroughWebSocketData {
     forwarding?: ForwardingOptions;
     lookupOptions?: PassThroughLookupOptions;
     proxyConfig?: SerializedProxyConfig;
-    ignoreHostCertificateErrors?: string[]; // Doesn't match option name, backward compat
+    ignoreHostCertificateErrors?: string[] | boolean; // Doesn't match option name, backward compat
     extraCACertificates?: Array<{ cert: string } | { certPath: string }>;
 }
 
@@ -111,17 +113,16 @@ export class PassThroughWebSocketHandlerDefinition extends Serializable implemen
     public readonly proxyConfig?: ProxyConfig;
 
     public readonly forwarding?: ForwardingOptions;
-    public readonly ignoreHostHttpsErrors: string[] = [];
+    public readonly ignoreHostHttpsErrors: string[] | boolean = [];
 
     public readonly extraCACertificates: Array<{ cert: string | Buffer } | { certPath: string }> = [];
 
     constructor(options: PassThroughWebSocketHandlerOptions = {}) {
         super();
 
-        this.ignoreHostHttpsErrors = options.ignoreHostHttpsErrors ||
-            [];
-        if (!Array.isArray(this.ignoreHostHttpsErrors)) {
-            throw new Error("ignoreHostHttpsErrors must be an array");
+        this.ignoreHostHttpsErrors = options.ignoreHostHttpsErrors || [];
+        if (!Array.isArray(this.ignoreHostHttpsErrors) && typeof this.ignoreHostHttpsErrors !== 'boolean') {
+            throw new Error("ignoreHostHttpsErrors must be an array or a boolean");
         }
 
         // If a location is provided, and it's not a bare hostname, it must be parseable

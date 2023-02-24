@@ -486,9 +486,11 @@ export interface PassThroughHandlerOptions {
 
     /**
      * A list of hostnames for which server certificate and TLS version errors
-     * should be ignored (none, by default).
+     * should be ignored (none, by default). If set to 'true', ignore HTTPS errors
+     * for all hosts. (WARNING: Use this at your own risk. This can open your
+     * application to MITM attacks)
      */
-    ignoreHostHttpsErrors?: string[];
+    ignoreHostHttpsErrors?: string[] | boolean;
 
     /**
      * An array of additional certificates, which should be trusted as certificate
@@ -746,7 +748,7 @@ export interface SerializedPassThroughData {
     forwardToLocation?: string;
     forwarding?: ForwardingOptions;
     proxyConfig?: SerializedProxyConfig;
-    ignoreHostCertificateErrors?: string[]; // Doesn't match option name, backward compat
+    ignoreHostCertificateErrors?: string[] | boolean; // Doesn't match option name, backward compat
     extraCACertificates?: Array<{ cert: string } | { certPath: string }>;
     clientCertificateHostMap?: { [host: string]: { pfx: string, passphrase?: string } };
     lookupOptions?: PassThroughLookupOptions;
@@ -800,7 +802,7 @@ export class PassThroughHandlerDefinition extends Serializable implements Reques
 
     public readonly forwarding?: ForwardingOptions;
 
-    public readonly ignoreHostHttpsErrors: string[] = [];
+    public readonly ignoreHostHttpsErrors: string[] | boolean = [];
     public readonly clientCertificateHostMap: {
         [host: string]: { pfx: Buffer, passphrase?: string }
     };
@@ -846,8 +848,8 @@ export class PassThroughHandlerDefinition extends Serializable implements Reques
         this.forwarding = forwarding;
 
         this.ignoreHostHttpsErrors = options.ignoreHostHttpsErrors || [];
-        if (!Array.isArray(this.ignoreHostHttpsErrors)) {
-            throw new Error("ignoreHostHttpsErrors must be an array");
+        if (!Array.isArray(this.ignoreHostHttpsErrors) && typeof this.ignoreHostHttpsErrors !== 'boolean') {
+            throw new Error("ignoreHostHttpsErrors must be an array or a boolean");
         }
 
         this.lookupOptions = options.lookupOptions;

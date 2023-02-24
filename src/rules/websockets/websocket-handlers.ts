@@ -35,7 +35,10 @@ import { MaybePromise } from '../../util/type-utils';
 import { getAgent } from '../http-agents';
 import { ProxySettingSource } from '../proxy-config';
 import { assertParamDereferenced, RuleParameters } from '../rule-parameters';
-import { UPSTREAM_TLS_OPTIONS } from '../passthrough-handling';
+import {
+    UPSTREAM_TLS_OPTIONS,
+    shouldUseStrictHttps
+} from '../passthrough-handling';
 
 import {
     EchoWebSocketHandlerDefinition,
@@ -311,10 +314,12 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
         incomingSocket: net.Socket,
         head: Buffer
     ) {
-        // Skip cert checks if the host or host+port are whitelisted
         const parsedUrl = url.parse(wsUrl);
-        const checkServerCertificate = !_.includes(this.ignoreHostHttpsErrors, parsedUrl.hostname) &&
-            !_.includes(this.ignoreHostHttpsErrors, parsedUrl.host);
+        const checkServerCertificate = shouldUseStrictHttps(
+            parsedUrl.hostname as string,
+            parsedUrl.port as string,
+            this.ignoreHostHttpsErrors
+        );
 
         const trustedCerts = await this.trustedCACertificates();
         const caConfig = trustedCerts

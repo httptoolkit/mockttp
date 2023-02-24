@@ -73,7 +73,8 @@ import {
     getH2HeadersAfterModification,
     OVERRIDABLE_REQUEST_PSEUDOHEADERS,
     buildOverriddenBody,
-    UPSTREAM_TLS_OPTIONS
+    UPSTREAM_TLS_OPTIONS,
+    shouldUseStrictHttps
 } from '../passthrough-handling';
 
 import {
@@ -632,9 +633,9 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
 
         const hostWithPort = `${hostname}:${port}`
 
-        // Ignore cert errors if the host+port or whole hostname is whitelisted
-        const strictHttpsChecks = !_.includes(this.ignoreHostHttpsErrors, hostname) &&
-            !_.includes(this.ignoreHostHttpsErrors, hostWithPort);
+        const strictHttpsChecks = shouldUseStrictHttps(
+            hostname as string, port as string, this.ignoreHostHttpsErrors
+        );
 
         // Use a client cert if it's listed for the host+port or whole hostname
         const clientCert = this.clientCertificateHostMap[hostWithPort] ||
