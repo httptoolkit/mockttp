@@ -247,3 +247,25 @@ export function getContentLengthAfterModification(
 
     return lengthOverride;
 }
+
+// Function to check if we should skip https errors for the current hostname and port,
+// based on the given config
+export function shouldUseStrictHttps(
+    hostname: string,
+    port: string,
+    ignoreHostHttpsErrors: string[] | boolean
+) {
+    let skipHttpsErrors = false;
+
+    if (ignoreHostHttpsErrors === true) {
+        // Ignore cert errors if `ignoreHostHttpsErrors` is set to true, or
+        skipHttpsErrors = true;
+    } else if (Array.isArray(ignoreHostHttpsErrors) && (
+        // if the whole hostname or host+port is whitelisted
+        _.includes(ignoreHostHttpsErrors, hostname) ||
+        _.includes(ignoreHostHttpsErrors, `${hostname}:${port}`)
+    )) {
+        skipHttpsErrors = true;
+    }
+    return !skipHttpsErrors;
+}
