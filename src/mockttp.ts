@@ -29,7 +29,8 @@ export type PortRange = { startPort: number, endPort: number };
 /**
  * A mockttp instance allow you to start and stop mock servers and control their behaviour.
  *
- * This should be created using the exported `getLocal()` or `getRemote()` methods, like:
+ * This should be created using the exported {@link getLocal} or {@link getRemote} methods, like
+ * so:
  *
  * ```
  * const mockServer = require('mockttp').getLocal()
