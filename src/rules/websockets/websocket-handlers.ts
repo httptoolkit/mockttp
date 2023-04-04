@@ -365,18 +365,33 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
             this.wsServer!.handleUpgrade(req, incomingSocket, head, (ws) => {
                 (<InterceptedWebSocket> ws).upstreamWebSocket = upstreamWebSocket;
                 incomingSocket.emit('ws-upgrade', ws);
-                this.wsServer!.emit('connection', ws);
+                this.wsServer!.emit('connection', ws); // This pipes the connections together
             });
         });
 
         // If the upstream says no, we say no too.
+        let unexpectedResponse = false;
         upstreamWebSocket.on('unexpected-response', (req, res) => {
             console.log(`Unexpected websocket response from ${wsUrl}: ${res.statusCode}`);
+
+            // Clean up the downstream connection
             mirrorRejection(incomingSocket, res);
+
+            // Clean up the upstream connection (WS would do this automatically, but doesn't if you listen to this event)
+            // See https://github.com/websockets/ws/blob/45e17acea791d865df6b255a55182e9c42e5877a/lib/websocket.js#L1050
+            // We don't match that perfectly, but this should be effectively equivalent:
+            req.destroy();
+            if (req.socket && !req.socket.destroyed) {
+                res.socket.destroy();
+            }
+            unexpectedResponse = true; // So that we ignore this in the error handler
+            upstreamWebSocket.terminate();
         });
 
         // If there's some other error, we just kill the socket:
         upstreamWebSocket.on('error', (e) => {
+            if (unexpectedResponse) return; // Handled separately above
+
             console.warn(e);
             incomingSocket.end();
         });
