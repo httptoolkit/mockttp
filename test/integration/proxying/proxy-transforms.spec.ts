@@ -4,7 +4,7 @@ import request = require("request-promise-native");
 import * as zlib from 'zlib';
 
 import { getLocal, Mockttp } from "../../..";
-import { expect, nodeOnly } from "../../test-utils";
+import { defaultNodeConnectionHeader, expect, nodeOnly } from "../../test-utils";
 
 const INITIAL_ENV = _.cloneDeep(process.env);
 
@@ -128,7 +128,7 @@ nodeOnly(() => {
                 'host': `localhost:${remoteServer.port}`,
                 'accept': 'application/json',
                 'content-type': 'application/json',
-                'connection': 'close'
+                'connection': defaultNodeConnectionHeader()
             });
 
             it("does nothing with an empty transform", async () => {
@@ -254,7 +254,7 @@ nodeOnly(() => {
                     method: 'POST',
                     headers: {
                         // Required unavoidable headers:
-                        'connection': 'close',
+                        'connection': defaultNodeConnectionHeader(),
                         'transfer-encoding': 'chunked', // Because we removed content-length
                         // No other headers, only injected value:
                         'custom-header': 'replaced-value'

@@ -14,7 +14,8 @@ import {
     nodeOnly,
     getDeferred,
     sendRawRequest,
-    isNode
+    isNode,
+    defaultNodeConnectionHeader
 } from "../../test-utils";
 import { TimingEvents } from "../../../dist/types";
 
@@ -126,12 +127,12 @@ describe("Request initiated subscriptions", () => {
                     ['UPPERCASEHEADER', 'VALUE'],
                     ['Dupe-Header', 'A'],
                     ['Dupe-Header', 'B'],
-                    ['Connection', 'close']
+                    ['Connection', defaultNodeConnectionHeader()]
                 ]);
 
                 // Parsed format:
                 expect(seenRequest.headers).to.deep.equal({
-                    connection: 'close',
+                    connection: defaultNodeConnectionHeader(),
                     uppercaseheader: 'VALUE',
                     'dupe-header': ['A', 'B']
                 });
@@ -220,12 +221,12 @@ describe("Request initiated subscriptions", () => {
                     ['UPPERCASEHEADER', 'VALUE'],
                     ['Dupe-Header', 'A'],
                     ['Dupe-Header', 'B'],
-                    ['Connection', 'close']
+                    ['Connection', defaultNodeConnectionHeader()]
                 ]);
 
                 // Parsed format:
                 expect(seenRequest.headers).to.deep.equal({
-                    connection: 'close',
+                    connection: defaultNodeConnectionHeader(),
                     uppercaseheader: 'VALUE',
                     'dupe-header': ['A', 'B']
                 });

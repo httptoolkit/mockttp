@@ -15,7 +15,15 @@ import {
     CompletedRequest,
     MOCKTTP_PARAM_REF
 } from "../..";
-import { expect, fetch, nodeOnly, browserOnly, delay, getDeferred } from "../test-utils";
+import {
+    expect,
+    fetch,
+    nodeOnly,
+    browserOnly,
+    delay,
+    getDeferred,
+    defaultNodeConnectionHeader
+} from "../test-utils";
 import type { MockttpClient } from "../../dist/client/mockttp-client";
 
 browserOnly(() => {
@@ -171,7 +179,7 @@ nodeOnly(() => {
                             host: `localhost:${targetServer.port}`,
                             accept: 'application/json',
                             'content-length': '12',
-                            connection: 'close'
+                            connection: defaultNodeConnectionHeader()
                         },
                         body: 'request-body'
                     });
@@ -232,7 +240,7 @@ nodeOnly(() => {
                             accept: 'application/json',
                             'content-type': 'application/json',
                             'content-length': '25',
-                            connection: 'close',
+                            connection: defaultNodeConnectionHeader(),
                             'injected-header': 'injected-value' // Only injected header remains
                         },
                         body: JSON.stringify({
@@ -316,7 +324,7 @@ nodeOnly(() => {
                             accept: 'application/json',
                             'content-type': 'application/json',
                             'content-length': '21',
-                            connection: 'close'
+                            connection: defaultNodeConnectionHeader()
                         },
                         body: JSON.stringify({
                             // Request body was separately transformed:
