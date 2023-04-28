@@ -7,6 +7,7 @@ import { CompletedBody, Headers } from '../types';
 import { byteLength } from '../util/util';
 import { asBuffer } from '../util/buffer-utils';
 import { isMockttpBody, encodeBodyBuffer } from '../util/request-utils';
+import { areFFDHECurvesSupported } from '../util/openssl-compat';
 
 import {
     CallbackRequestResult,
@@ -15,7 +16,7 @@ import {
 
 // TLS settings for proxied connections, intended to avoid TLS fingerprint blocking
 // issues so far as possible, by closely emulating a Firefox Client Hello:
-const NEW_CURVES_SUPPORTED = Number(process.versions.node.split('.')[0]) >= 17;
+const NEW_CURVES_SUPPORTED = areFFDHECurvesSupported(process.versions.openssl);
 
 const SSL_OP_TLSEXT_PADDING = 1 << 4;
 const SSL_OP_NO_ENCRYPT_THEN_MAC = 1 << 19;
