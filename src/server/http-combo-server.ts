@@ -184,6 +184,10 @@ export async function createComboServer(
         server = httpolyglot.createServer(tlsServer, requestListener);
     }
 
+    // In Node v20, this option was added, rejecting all requests with no host header. While that's good, in
+    // our case, we want to handle the garbage requests too, so we disable it:
+    (server as any)._httpServer.requireHostHeader = false;
+
     server.on('connection', (socket: net.Socket | http2.ServerHttp2Stream) => {
         socket.__timingInfo = socket.__timingInfo || buildSocketTimingInfo();
 
