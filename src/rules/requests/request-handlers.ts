@@ -1013,9 +1013,13 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                     // connection-level issue, so we try to create connection issues downstream.
                     resetOrDestroy(clientReq);
 
-                    throw new AbortError(`Upstream connection error: ${
-                        e.message ?? e
-                    }`, e.code);
+                    // Aggregate errors can be thrown if multiple (IPv4/6) addresses were tested. Note that
+                    // AggregateError only exists in Node 15+. If that happens, we need to combine errors:
+                    const errorMessage = typeof AggregateError !== 'undefined' && (e instanceof AggregateError)
+                        ? e.errors.map(e => e.message).join(', ')
+                        : (e.message ?? e.code ?? e);
+
+                    throw new AbortError(`Upstream connection error: ${errorMessage}`, e.code);
                 } else {
                     e.statusCode = 502;
                     e.statusMessage = 'Error communicating with upstream server';

@@ -113,3 +113,7 @@ declare module "http2" {
         __timingInfo?: net.Socket['__timingInfo'];
     }
 }
+
+declare class AggregateError extends Error {
+    errors: Error[]
+}

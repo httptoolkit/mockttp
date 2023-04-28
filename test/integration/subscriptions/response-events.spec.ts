@@ -473,7 +473,8 @@ describe("Abort subscriptions", () => {
 
                 expect(seenAbort.error!.message).to.be.oneOf([
                     'Upstream connection error: connect ECONNREFUSED 127.0.0.1:8999',
-                    'Upstream connection error: connect ECONNREFUSED ::1:8999'
+                    'Upstream connection error: connect ECONNREFUSED ::1:8999',
+                    'Upstream connection error: connect ECONNREFUSED ::1:8999, connect ECONNREFUSED 127.0.0.1:8999'
                 ]);
                 expect(seenAbort.error!.code).to.equal('ECONNREFUSED');
             });
