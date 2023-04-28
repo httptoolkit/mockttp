@@ -573,7 +573,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
             const completedRequest = await waitForCompletedRequest(clientReq);
             const modifiedReq = await this.beforeRequest({
                 ...completedRequest,
-                headers: _.cloneDeep(completedRequest.headers),
+                headers: _.cloneDeep(rawHeadersToObject(completedRequest.rawHeaders)),
                 rawHeaders: _.cloneDeep(completedRequest.rawHeaders)
             });
 
@@ -597,16 +597,18 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
             reqUrl = modifiedReq?.url || reqUrl;
 
             headersManuallyModified = !!modifiedReq?.headers;
-            let headers = modifiedReq?.headers || clientReq.headers;
-
-            Object.assign(headers,
-                isH2Downstream
-                    ? getH2HeadersAfterModification(reqUrl, clientReq.headers, modifiedReq?.headers)
-                    : { 'host': getHostAfterModification(reqUrl, clientReq.headers, modifiedReq?.headers) }
-            );
+            const clientHeaders = rawHeadersToObject(clientReq.rawHeaders)
+            let headers = modifiedReq?.headers || clientHeaders;
+            if (!this.forwarding || this.forwarding.updateHostHeader === false) {
+                Object.assign(headers,
+                    isH2Downstream
+                        ? getH2HeadersAfterModification(reqUrl, clientHeaders, modifiedReq?.headers)
+                        :  { 'host': getHostAfterModification(reqUrl, clientHeaders, modifiedReq?.headers) } 
+                );
+            }
 
             validateCustomHeaders(
-                clientReq.headers,
+                clientHeaders,
                 modifiedReq?.headers,
                 OVERRIDABLE_REQUEST_PSEUDOHEADERS // These are handled by getCorrectPseudoheaders above
             );
@@ -617,7 +619,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 // Automatically match the content-length to the body, unless it was explicitly overriden.
                 headers['content-length'] = getContentLengthAfterModification(
                     reqBodyOverride,
-                    clientReq.headers,
+                    clientHeaders,
                     modifiedReq?.headers
                 );
             }

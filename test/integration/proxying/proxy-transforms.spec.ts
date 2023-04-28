@@ -102,6 +102,19 @@ nodeOnly(() => {
                 let seenRequests = await remoteEndpointMock.getSeenRequests();
                 expect(seenRequests[0].headers.host).to.equal('google.com');
             });
+
+            it("can update the host header when used with beforeRequest", async () => {
+                let remoteEndpointMock = await remoteServer.forGet('/get').thenReply(200, "mocked data");
+                await server.forAnyRequest().thenForwardTo(remoteServer.url, {
+                    beforeRequest: () => {},
+                    forwarding: { updateHostHeader: true }
+                });
+
+                await request.get(server.urlFor("/get"));
+
+                let seenRequests = await remoteEndpointMock.getSeenRequests();
+                expect(seenRequests[0].headers.host).to.equal(`localhost:${remoteServer.port}`);
+            });
         });
 
         describe("that transforms requests automatically", () => {
