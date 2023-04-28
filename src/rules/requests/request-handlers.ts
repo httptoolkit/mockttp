@@ -599,13 +599,13 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
             headersManuallyModified = !!modifiedReq?.headers;
             const clientHeaders = rawHeadersToObject(clientReq.rawHeaders)
             let headers = modifiedReq?.headers || clientHeaders;
-            Object.assign(headers,
-                isH2Downstream
-                    ? getH2HeadersAfterModification(reqUrl, clientHeaders, modifiedReq?.headers)
-                    : !this.forwarding || !this.forwarding.updateHostHeader
-                        ? { 'host': getHostAfterModification(reqUrl, clientHeaders, modifiedReq?.headers) } 
-                        : {}
-            );
+            if (!this.forwarding || this.forwarding.updateHostHeader === false) {
+                Object.assign(headers,
+                    isH2Downstream
+                        ? getH2HeadersAfterModification(reqUrl, clientHeaders, modifiedReq?.headers)
+                        :  { 'host': getHostAfterModification(reqUrl, clientHeaders, modifiedReq?.headers) } 
+                );
+            }
 
             validateCustomHeaders(
                 clientHeaders,
