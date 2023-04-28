@@ -153,11 +153,12 @@ export async function createComboServer(
             cert: defaultCert.cert,
             ca: [defaultCert.ca],
             ALPNProtocols: options.http2 === true
-                ? ['h2', 'http/1.1']
+                ? ['h2', 'http/1.1', 'http 1.1'] // 'http 1.1' is non-standard, but used by https-proxy-agent
                     : options.http2 === 'fallback'
-                ? ['http/1.1', 'h2']
+                ? ['http/1.1', 'http 1.1', 'h2']
                     // false
-                : ['http/1.1'],
+                : ['http/1.1', 'http 1.1'],
+
             SNICallback: (domain: string, cb: Function) => {
                 if (options.debug) console.log(`Generating certificate for ${domain}`);
 
