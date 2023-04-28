@@ -415,6 +415,19 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
         let { method, url: reqUrl, rawHeaders } = clientReq as OngoingRequest;
         let { protocol, hostname, port, path } = url.parse(reqUrl);
 
+        // Check if this request is a request loop:
+        if (isSocketLoop(this.outgoingSockets, (<any> clientReq).socket)) {
+            throw new Error(oneLine`
+                Passthrough loop detected. This probably means you're sending a request directly
+                to a passthrough endpoint, which is forwarding it to the target URL, which is a
+                passthrough endpoint, which is forwarding it to the target URL, which is a
+                passthrough endpoint...` +
+                '\n\n' + oneLine`
+                You should either explicitly mock a response for this URL (${reqUrl}), or use
+                the server as a proxy, instead of making requests to it directly.
+            `);
+        }
+
         // We have to capture the request stream immediately, to make sure nothing is lost if it
         // goes past its max length (truncating the data) before we start sending upstream.
         const clientReqBody = clientReq.body.asStream();
@@ -456,19 +469,8 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 // If it's an explicit custom value, use that directly.
                 hostHeader[1] = updateHostHeader;
             } // Otherwise: falsey means don't touch it.
-        }
 
-        // Check if this request is a request loop:
-        if (isSocketLoop(this.outgoingSockets, (<any> clientReq).socket)) {
-            throw new Error(oneLine`
-                Passthrough loop detected. This probably means you're sending a request directly
-                to a passthrough endpoint, which is forwarding it to the target URL, which is a
-                passthrough endpoint, which is forwarding it to the target URL, which is a
-                passthrough endpoint...` +
-                '\n\n' + oneLine`
-                You should either explicitly mock a response for this URL (${reqUrl}), or use
-                the server as a proxy, instead of making requests to it directly.
-            `);
+            reqUrl = new URL(`${protocol}//${hostname}${(port ? `:${port}` : '')}/${path}`).toString();
         }
 
         // Override the request details, if a transform or callback is specified:
@@ -571,10 +573,14 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
             }
         } else if (this.beforeRequest) {
             const completedRequest = await waitForCompletedRequest(clientReq);
+            const clientRawHeaders = completedRequest.rawHeaders;
+            const clientHeaders = rawHeadersToObject(clientRawHeaders);
+
             const modifiedReq = await this.beforeRequest({
                 ...completedRequest,
-                headers: _.cloneDeep(rawHeadersToObject(completedRequest.rawHeaders)),
-                rawHeaders: _.cloneDeep(completedRequest.rawHeaders)
+                url: reqUrl, // May have been overwritten by forwarding
+                headers: _.cloneDeep(clientHeaders),
+                rawHeaders: _.cloneDeep(clientRawHeaders)
             });
 
             if (modifiedReq?.response) {
@@ -597,15 +603,24 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
             reqUrl = modifiedReq?.url || reqUrl;
 
             headersManuallyModified = !!modifiedReq?.headers;
-            const clientHeaders = rawHeadersToObject(clientReq.rawHeaders)
             let headers = modifiedReq?.headers || clientHeaders;
-            if (!this.forwarding || this.forwarding.updateHostHeader === false) {
-                Object.assign(headers,
-                    isH2Downstream
-                        ? getH2HeadersAfterModification(reqUrl, clientHeaders, modifiedReq?.headers)
-                        :  { 'host': getHostAfterModification(reqUrl, clientHeaders, modifiedReq?.headers) } 
+
+            // We need to make sure the Host/:authority header is updated correctly - following the user's returned value if
+            // they provided one, but updating it if not to match the effective target URL of the request:
+            const expectedTargetUrl = modifiedReq?.url
+                ?? (
+                    // If not overridden, we fall back to the original value, but we need to handle changes that forwarding
+                    // might have made as well, especially if it's intentionally left URL & headers out of sync:
+                    this.forwarding?.updateHostHeader === false
+                    ? clientReq.url
+                    : reqUrl
                 );
-            }
+
+            Object.assign(headers,
+                isH2Downstream
+                    ? getH2HeadersAfterModification(expectedTargetUrl, clientHeaders, modifiedReq?.headers)
+                    : { 'host': getHostAfterModification(expectedTargetUrl, clientHeaders, modifiedReq?.headers) }
+            );
 
             validateCustomHeaders(
                 clientHeaders,

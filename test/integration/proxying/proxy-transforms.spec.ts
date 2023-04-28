@@ -106,14 +106,65 @@ nodeOnly(() => {
             it("can update the host header when used with beforeRequest", async () => {
                 let remoteEndpointMock = await remoteServer.forGet('/get').thenReply(200, "mocked data");
                 await server.forAnyRequest().thenForwardTo(remoteServer.url, {
-                    beforeRequest: () => {},
-                    forwarding: { updateHostHeader: true }
+                    beforeRequest: () => {}
                 });
 
                 await request.get(server.urlFor("/get"));
 
                 let seenRequests = await remoteEndpointMock.getSeenRequests();
                 expect(seenRequests[0].headers.host).to.equal(`localhost:${remoteServer.port}`);
+            });
+
+            it("can avoid updating the host header when used with beforeRequest", async () => {
+                let remoteEndpointMock = await remoteServer.forGet('/get').thenReply(200, "mocked data");
+                await server.forAnyRequest().thenForwardTo(remoteServer.url, {
+                    beforeRequest: () => {},
+                    forwarding: { updateHostHeader: false }
+                });
+
+                await request.get(server.urlFor("/get"));
+
+                let seenRequests = await remoteEndpointMock.getSeenRequests();
+                expect(seenRequests[0].headers.host).to.equal(`localhost:${server.port}`);
+            });
+
+            it("doesn't override the host header if beforeRequest does instead", async () => {
+                let remoteEndpointMock = await remoteServer.forGet('/get').thenReply(200, "mocked data");
+                await server.forAnyRequest().thenForwardTo(remoteServer.url, {
+                    beforeRequest: () => ({ url: 'http://never.test' })
+                });
+
+                const response = await request.get(server.urlFor("/get")).catch(e => e);
+
+                expect(response).to.be.instanceOf(Error);
+                expect(response.message).to.include('ENOTFOUND never.test');
+            });
+
+            it("overrides the host header correctly if not set", async () => {
+                let remoteEndpointMock = await remoteServer.forGet('/get').thenReply(200, "mocked data");
+                await server.forAnyRequest().thenForwardTo(remoteServer.url, {
+                    beforeRequest: () => ({ headers: { 'other-header': 'injected-value' } })
+                });
+
+                await request.get(server.urlFor("/get")).catch(e => e);
+
+                let seenRequests = await remoteEndpointMock.getSeenRequests();
+                expect(seenRequests[0].headers.host).to.equal(`localhost:${remoteServer.port}`); // <-- Preserves new host
+                expect(seenRequests[0].headers['other-header']).to.equal('injected-value');
+            });
+
+            it("overrides the host header correctly if not set", async () => {
+                let remoteEndpointMock = await remoteServer.forGet('/get').thenReply(200, "mocked data");
+                await server.forAnyRequest().thenForwardTo(remoteServer.url, {
+                    beforeRequest: () => ({ headers: { 'other-header': 'injected-value' } }),
+                    forwarding: { updateHostHeader: false }
+                });
+
+                await request.get(server.urlFor("/get")).catch(e => e);
+
+                let seenRequests = await remoteEndpointMock.getSeenRequests();
+                expect(seenRequests[0].headers.host).to.equal(`localhost:${server.port}`); // <-- Preserves original host
+                expect(seenRequests[0].headers['other-header']).to.equal('injected-value');
             });
         });
 
