@@ -108,8 +108,8 @@ export async function ignoreNetworkError<T extends RequestPromise | Promise<Resp
     const TimeoutError = new Error('timeout');
 
     const result = await Promise.race([
-        request.catch(e => e),
-        delay(options.timeout ?? 1000).then(() => { throw TimeoutError })
+        request,
+        delay(options.timeout ?? 1000).then(() => { throw TimeoutError; })
     ]).catch(error => {
         console.log(error);
         if (error === TimeoutError) {

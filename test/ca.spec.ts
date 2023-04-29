@@ -60,6 +60,8 @@ nodeOnly(() => {
         });
 
         it("should be able to generate a CA certificate that passes lintcert checks", async function () {
+            this.retries(3); // Remote server can be unreliable
+
             const caCertificate = await caCertificatePromise;
 
             const { cert } = caCertificate;
@@ -89,6 +91,7 @@ nodeOnly(() => {
 
         it("should generate CA certs that can be used to create domain certs that pass lintcert checks", async function () {
             this.timeout(5000); // Large cert + remote request can make this slow
+            this.retries(3); // Remote server can be unreliable
 
             const caCertificate = await caCertificatePromise;
             const ca = new CA({ key: caCertificate.key, cert: caCertificate.cert, keyLength: 2048 });
@@ -132,6 +135,7 @@ nodeOnly(() => {
 
         it("should generate wildcard certs that pass lintcert checks for invalid subdomain names", async function () {
             this.timeout(5000); // Large cert + remote request can make this slow
+            this.retries(3); // Remote server can be unreliable
 
             const caCertificate = await caCertificatePromise;
             const ca = new CA({ key: caCertificate.key, cert: caCertificate.cert, keyLength: 2048 });
