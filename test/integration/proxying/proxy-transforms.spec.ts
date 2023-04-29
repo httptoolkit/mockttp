@@ -106,7 +106,11 @@ nodeOnly(() => {
             it("can update the host header when used with beforeRequest", async () => {
                 let remoteEndpointMock = await remoteServer.forGet('/get').thenReply(200, "mocked data");
                 await server.forAnyRequest().thenForwardTo(remoteServer.url, {
-                    beforeRequest: () => {}
+                    beforeRequest: (req) => {
+                        // Forwarding modifications should be applied before beforeRequest:
+                        expect(req.url).to.equal(remoteServer.urlFor('/get'));
+                        expect(req.headers.host).to.equal(`localhost:${remoteServer.port}`);
+                    }
                 });
 
                 await request.get(server.urlFor("/get"));
@@ -118,7 +122,11 @@ nodeOnly(() => {
             it("can avoid updating the host header when used with beforeRequest", async () => {
                 let remoteEndpointMock = await remoteServer.forGet('/get').thenReply(200, "mocked data");
                 await server.forAnyRequest().thenForwardTo(remoteServer.url, {
-                    beforeRequest: () => {},
+                    beforeRequest: (req) => {
+                        // Forwarding modifications should be applied before beforeRequest:
+                        expect(req.url).to.equal(remoteServer.urlFor('/get')); // <-- New destination
+                        expect(req.headers.host).to.equal(`localhost:${server.port}`); // <-- but old Host
+                    },
                     forwarding: { updateHostHeader: false }
                 });
 
@@ -129,7 +137,7 @@ nodeOnly(() => {
             });
 
             it("doesn't override the host header if beforeRequest does instead", async () => {
-                let remoteEndpointMock = await remoteServer.forGet('/get').thenReply(200, "mocked data");
+                await remoteServer.forGet('/get').thenReply(200, "mocked data");
                 await server.forAnyRequest().thenForwardTo(remoteServer.url, {
                     beforeRequest: () => ({ url: 'http://never.test' })
                 });

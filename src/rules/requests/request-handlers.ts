@@ -470,7 +470,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 hostHeader[1] = updateHostHeader;
             } // Otherwise: falsey means don't touch it.
 
-            reqUrl = new URL(`${protocol}//${hostname}${(port ? `:${port}` : '')}/${path}`).toString();
+            reqUrl = new URL(`${protocol}//${hostname}${(port ? `:${port}` : '')}${path}`).toString();
         }
 
         // Override the request details, if a transform or callback is specified:
