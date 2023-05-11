@@ -1045,6 +1045,37 @@ nodeOnly(() => {
                 expect(await proxiedRequestData.body.getText()).to.equal('');
             });
 
+            it("should still proxy larger request bodies even if beforeRequest is used", async () => {
+                const message = "A large request body";
+
+                const remoteEndpoint = await remoteServer.forAnyRequest().thenReply(200);
+                const proxyEndpoint = await server.forPost(remoteServer.url).thenPassThrough({
+                    beforeRequest: async (req) => {
+                        const bodyText = await req.body.getText();
+                        // Body is too long, and so should be truncated when examined (as here)
+                        expect(bodyText).to.equal('');
+                        return {};
+                    }
+                });
+
+                let response = await request.post({
+                    url: remoteServer.url,
+                    body: message,
+                    resolveWithFullResponse: true
+                });
+
+                expect(response.statusCode).to.equal(200);
+
+                // Even though it's truncated for buffering, the request data should still be proxied
+                // through successfully to the upstream server:
+                const resultingRequest = (await remoteEndpoint.getSeenRequests())[0];
+                expect(await resultingRequest.body.getText()).to.equal(message);
+
+                // But it's truncated in event data, not buffered
+                const proxiedRequestData = (await proxyEndpoint.getSeenRequests())[0];
+                expect(await proxiedRequestData.body.getText()).to.equal('');
+            });
+
             it("should still proxy larger response bodies", async () => {
                 await remoteServer.forAnyRequest().thenReply(200, "A large response body");
                 const proxyEndpoint = await server.forGet(remoteServer.url).thenPassThrough();

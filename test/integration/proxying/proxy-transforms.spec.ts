@@ -2,9 +2,15 @@ import _ = require("lodash");
 import * as path from 'path';
 import request = require("request-promise-native");
 import * as zlib from 'zlib';
+import * as semver from 'semver';
 
 import { getLocal, Mockttp } from "../../..";
-import { defaultNodeConnectionHeader, expect, nodeOnly } from "../../test-utils";
+import {
+    expect,
+    nodeOnly,
+    defaultNodeConnectionHeader,
+    CHUNKED_ENCODING_BUG
+} from "../../test-utils";
 
 const INITIAL_ENV = _.cloneDeep(process.env);
 
@@ -307,10 +313,18 @@ nodeOnly(() => {
             });
 
             it("can replace all headers", async () => {
+                // Auto chunked encoding on Node <16 duplicates the body
+                // somehow, so we have to use content-length:
+                const autoChunkingBroken = semver.satisfies(process.version, CHUNKED_ENCODING_BUG);
+
                 await server.forAnyRequest().thenPassThrough({
                     transformRequest: {
                         replaceHeaders: {
-                            'custom-header': 'replaced-value'
+                            'custom-header': 'replaced-value',
+
+                            ...(autoChunkingBroken
+                                ? { 'content-length': '7' }
+                                : {})
                         }
                     }
                 });
@@ -327,7 +341,10 @@ nodeOnly(() => {
                     headers: {
                         // Required unavoidable headers:
                         'connection': defaultNodeConnectionHeader(),
-                        'transfer-encoding': 'chunked', // Because we removed content-length
+                        ...(autoChunkingBroken
+                            ? { 'content-length': '7' }
+                            : { 'transfer-encoding': 'chunked'}),
+
                         // No other headers, only injected value:
                         'custom-header': 'replaced-value'
 

@@ -261,6 +261,7 @@ export const SOCKET_RESET_SUPPORTED = "^16.17 || >=18.3";
 export const BROKEN_H2_TUNNELLING = "^18.8"; // Some H1-over-H2 tests fail in Node 18 (but not 19)
 export const DEFAULT_KEEP_ALIVE = ">=19";
 export const FIXED_KEEP_ALIVE_BEHAVIOUR = ">=20";
+export const CHUNKED_ENCODING_BUG = "<16";
 
 export const defaultNodeConnectionHeader = () =>
     semver.satisfies(process.version, DEFAULT_KEEP_ALIVE)

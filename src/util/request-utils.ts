@@ -174,9 +174,14 @@ const parseBodyStream = (bodyStream: stream.Readable, maxSize: number, getHeader
         // and buffered data, and then continues with the live stream, if active.
         // Listeners to this stream *must* be attached synchronously after this call.
         asStream() {
-            return completedBuffer
-                ? bufferToStream(completedBuffer)
-                : bufferThenStream(body.asBuffer(), bodyStream);
+            // If we've already buffered the whole body, just stream it out:
+            if (completedBuffer) return bufferToStream(completedBuffer);
+
+            // Otherwise, we want to start buffering now, and wrap that with
+            // a stream that can live-stream the buffered data on demand:
+            const buffer = body.asBuffer();
+            buffer.catch(() => {}); // Errors will be handled via the stream, so silence unhandled rejections here.
+            return bufferThenStream(buffer, bodyStream);
         },
         asBuffer() {
             if (!bufferPromise) {
