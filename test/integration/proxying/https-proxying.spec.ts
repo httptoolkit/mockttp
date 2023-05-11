@@ -780,7 +780,8 @@ nodeOnly(() => {
                 const response = await http2ProxyRequest(server, `https://localhost:${targetPort}/`);
 
                 expect(
-                    _.omit(response.headers, 'date') // https://github.com/nodejs/node/issues/34841
+                    // N.b. https://github.com/nodejs/node/issues/34841
+                    _.omit(response.headers, ['date', http2.sensitiveHeaders])
                 ).to.deep.equal({
                     ':status': 200,
                     'replacement-header': 'added'

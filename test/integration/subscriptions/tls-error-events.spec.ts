@@ -98,7 +98,7 @@ describe("TLS error subscriptions", () => {
             '::ffff:127.0.0.1', // IPv4 localhost
             '::1' // IPv6 localhost
         ]);
-        expect(tlsError.remotePort).to.be.greaterThan(32768);
+        expect(tlsError.remotePort).to.be.greaterThanOrEqual(32768);
         expect(tlsError.tags).to.deep.equal([]);
 
         expect(tlsError.timingEvents.startTime).to.be.greaterThan(0);
@@ -137,7 +137,7 @@ describe("TLS error subscriptions", () => {
                 '::ffff:127.0.0.1', // IPv4 localhost
                 '::1' // IPv6 localhost
             ]);
-            expect(tlsError.remotePort).to.be.greaterThan(32768);
+            expect(tlsError.remotePort).to.be.greaterThanOrEqual(32768);
 
             expect(tlsError.timingEvents.startTime).to.be.greaterThan(0);
             expect(tlsError.timingEvents.connectTimestamp).to.be.greaterThan(0);

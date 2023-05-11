@@ -290,7 +290,9 @@ nodeOnly(() => {
 
                     const proxiedResponseHeaders = await getHttp2Response(proxiedRequest);
 
-                    expect(_.omit(proxiedResponseHeaders, 'date')).to.deep.equal({
+                    expect(
+                        _.omit(proxiedResponseHeaders, ['date', http2.sensitiveHeaders])
+                    ).to.deep.equal({
                         ':status': 200,
                         'header-key': 'HEADER-VALUE' // We lowercase all header keys
                         // Connection: close is omitted
@@ -414,7 +416,7 @@ nodeOnly(() => {
                     '::ffff:127.0.0.1', // IPv4 localhost
                     '::1' // IPv6 localhost
                 ]);
-                expect(seenRequest.remotePort).to.be.greaterThan(32768);
+                expect(seenRequest.remotePort).to.be.greaterThanOrEqual(32768);
 
                 await cleanup(proxiedClient, client);
             });

@@ -64,7 +64,7 @@ describe("Request initiated subscriptions", () => {
                 '::ffff:127.0.0.1', // IPv4 localhost
                 '::1' // IPv6 localhost
             ]);
-            expect(seenRequest.remotePort).to.be.greaterThan(32768);
+            expect(seenRequest.remotePort).to.be.greaterThanOrEqual(32768);
             expect((seenRequest as any).body).to.equal(undefined); // No body included yet
 
             const matchableHeaders = _.omit(seenRequest.headers, INCONSISTENT_HEADERS);
@@ -261,7 +261,7 @@ describe("Request subscriptions", () => {
                 '::ffff:127.0.0.1', // IPv4 localhost
                 '::1' // IPv6 localhost
             ]);
-            expect(seenRequest.remotePort).to.be.greaterThan(32768);
+            expect(seenRequest.remotePort).to.be.greaterThanOrEqual(32768);
             expect(await seenRequest.body.getText()).to.equal('body-text');
             expect(seenRequest.tags).to.deep.equal([]);
         });
