@@ -19,9 +19,7 @@ jobs:
           cache: 'npm'
           cache-dependency-path: 'package.json'
 
-      - run: npm install -g npm@6
-
-      - run: npm install --no-package-lock
+      - run: npm install
       - run: npm run ci-tests
 
       - name: Deploy docs
