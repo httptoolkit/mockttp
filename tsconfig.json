@@ -5,6 +5,7 @@
         "outDir": "./dist",
         "declaration": true,
         "sourceMap": true,
+        "declarationMap": true,
         "strict": true,
         "lib": [
             "ES2020",
