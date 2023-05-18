@@ -13,6 +13,7 @@ import {
     CallbackRequestResult,
     CallbackResponseMessageResult
 } from './requests/request-handler-definitions';
+import { Readable } from 'stream';
 
 // TLS settings for proxied connections, intended to avoid TLS fingerprint blocking
 // issues so far as possible, by closely emulating a Firefox Client Hello:
@@ -86,7 +87,24 @@ export async function buildOverriddenBody(
     headers: Headers
 ) {
     // Raw bodies are easy: use them as is.
-    if (callbackResult?.rawBody) return callbackResult?.rawBody!;
+    if (callbackResult?.rawBody instanceof Readable) {
+        return new Promise<Buffer>((resolve, reject) => {
+            let buf = new Array<any>();
+            let readable = callbackResult?.rawBody as Readable;
+            readable.on('data', data => {
+                buf.push(data);
+            });
+
+            readable.on('end', () => {
+                resolve(Buffer.from(buf));
+            });
+
+            readable.on('error', (err) => {
+                reject(err);
+            })
+        });
+    } else if (callbackResult?.rawBody) return callbackResult?.rawBody!;
+
 
     // In the json/body case, we need to get the body and transform it into a buffer
     // for consistent handling later, and encode it to match the headers.
