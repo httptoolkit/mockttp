@@ -98,9 +98,9 @@ export function nodeOnly(body: Function) {
 }
 
 // Wrap a test promise that might fail due to irrelevant remote network issues, and it'll skip the test
-// if there's a timeout or 502 response (but still throw any other errors). This allows us to write tests
-// that will fail if a remote server explicitly rejects something, but make them resilient to the remote
-// server simply being entirely unavailable.
+// if there's a timeout, connection error or 502 response (but still throw any other errors). This allows
+// us to write tests that will fail if a remote server explicitly rejects something, but make them
+// resilient to the remote server simply being entirely unavailable.
 export async function ignoreNetworkError<T extends RequestPromise | Promise<Response>>(request: T, options: {
     context: Mocha.Context,
     timeout?: number
@@ -112,7 +112,7 @@ export async function ignoreNetworkError<T extends RequestPromise | Promise<Resp
         delay(options.timeout ?? 1000).then(() => { throw TimeoutError; })
     ]).catch(error => {
         console.log(error);
-        if (error === TimeoutError) {
+        if (error === TimeoutError || error.name === 'FetchError') {
             console.warn(`Skipping test due to network error: ${error.message || error}`);
             if ('abort' in request) request.abort();
             throw options.context.skip();
