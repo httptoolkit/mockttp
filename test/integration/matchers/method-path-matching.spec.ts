@@ -120,6 +120,30 @@ responses by hand.`);
         await expect(result).to.have.responseText('Fake file');
     });
 
+    it("should regex match requests for a matching full URL", async () => {
+        await server.forGet(/localhost:\d+\/[\w\-]+.txt/).thenReply(200, 'Fake file');
+
+        let result = await fetch(server.urlFor('/matching-file.txt'));
+
+        await expect(result).to.have.responseText('Fake file');
+    });
+
+    it("should regex match requests for a matching URL with negative regexp -- pass", async () => {
+        await server.forGet(/^(?!.*localhost)/).thenReply(200, 'Fake file');
+        
+        let result = await fetch(server.urlFor('/matching-file.txt'));
+
+        await expect(result).to.have.responseText('Fake file');          
+    });
+
+    it("should regex match requests for a matching URL with negative regexp -- catch", async () => {
+        await server.forGet().withUrlMatching(/^(?!.*localhost)/).thenReply(200, 'Fake file');
+        
+        let result2 = await fetch(server.urlFor('/matching-file.txt'));
+
+        await expect(result2).to.have.responseText(/^.*No rules*./);        
+    });
+
     it("should reject requests for the wrong path", async () => {
         await server.forGet("/specific-endpoint").thenReply(200, "mocked data");
 
@@ -135,6 +159,7 @@ responses by hand.`);
 
         expect(result.status).to.equal(503);
     });
+    
 
     it("should match requests ignoring the query string", async () => {
         await server.forGet('/path').thenReply(200, 'Matched path');
