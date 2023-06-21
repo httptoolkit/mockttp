@@ -30,7 +30,8 @@ import {
     CallbackMatcher,
     HostnameMatcher,
     PortMatcher,
-    ProtocolMatcher
+    ProtocolMatcher,
+    RegexUrlMatcher,
 } from "./matchers";
 
 /**
@@ -241,6 +242,15 @@ export abstract class BaseRuleBuilder {
      */
     withProtocol(protocol: "http" | "https" | "ws" | "wss"): this {
         this.matchers.push(new ProtocolMatcher(protocol));
+        return this;
+    }
+
+    /**
+     * Match only requests that has absolute url matching the given RegExp.
+     * @category Matching
+     */
+    withUrlMatching(pattern: RegExp): this {
+        this.matchers.push(new RegexUrlMatcher(pattern));
         return this;
     }
 

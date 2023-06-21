@@ -260,6 +260,33 @@ export class RegexPathMatcher extends Serializable implements RequestMatcher {
 
 }
 
+export class RegexUrlMatcher extends Serializable implements RequestMatcher {
+    readonly type = 'regex-url';
+
+    readonly regexSource: string;
+    readonly regexFlags: string;
+
+    constructor(regex: RegExp) {
+        super();
+        this.regexSource = regex.source;
+        this.regexFlags = regex.flags;
+    }
+
+    matches(request: OngoingRequest) {
+        const absoluteUrl = normalizeUrl(request.url);
+        const urlPath = getPathFromAbsoluteUrl(absoluteUrl);
+
+        // Test the matcher against both the path alone & the full URL
+        const urlMatcher = new RegExp(this.regexSource, this.regexFlags);
+        return urlMatcher.test(absoluteUrl);
+    }
+
+    explain() {
+        return `matching /${unescapeRegexp(this.regexSource)}/${this.regexFlags ?? ''}`;
+    }
+
+}
+
 export class HeaderMatcher extends Serializable implements RequestMatcher {
     readonly type = 'header';
 
@@ -590,6 +617,7 @@ export const MatcherLookup = {
     'port': PortMatcher,
     'simple-path': SimplePathMatcher,
     'regex-path': RegexPathMatcher,
+    'regex-url': RegexUrlMatcher,
     'header': HeaderMatcher,
     'query': QueryMatcher,
     'exact-query-string': ExactQueryMatcher,
