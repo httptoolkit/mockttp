@@ -276,7 +276,7 @@ export class RegexUrlMatcher extends Serializable implements RequestMatcher {
         const absoluteUrl = normalizeUrl(request.url);
         const urlPath = getPathFromAbsoluteUrl(absoluteUrl);
 
-        // Test the matcher against both the path alone & the full URL
+        // Test the matcher against the full URL
         const urlMatcher = new RegExp(this.regexSource, this.regexFlags);
         return urlMatcher.test(absoluteUrl);
     }
