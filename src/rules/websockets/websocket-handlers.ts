@@ -5,7 +5,6 @@ import * as tls from 'tls';
 import * as http from 'http';
 import * as fs from 'fs/promises';
 import * as WebSocket from 'ws';
-import CacheableLookup from 'cacheable-lookup';
 
 import {
     ClientServerChannel,
@@ -29,7 +28,6 @@ import {
     rawHeadersToObjectPreservingCase
 } from '../../util/header-utils';
 import { streamToBuffer } from '../../util/buffer-utils';
-import { isLocalhostAddress } from '../../util/socket-util';
 import { MaybePromise } from '../../util/type-utils';
 
 import { getAgent } from '../http-agents';
@@ -37,6 +35,8 @@ import { ProxySettingSource } from '../proxy-config';
 import { assertParamDereferenced, RuleParameters } from '../rule-parameters';
 import {
     UPSTREAM_TLS_OPTIONS,
+    getClientRelativeHostname,
+    getDnsLookupFunction,
     shouldUseStrictHttps
 } from '../passthrough-handling';
 
@@ -212,26 +212,6 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
         return this._trustedCACertificates;
     }
 
-    private _cacheableLookupInstance: CacheableLookup | undefined;
-    private lookup() {
-        if (!this.lookupOptions) return undefined;
-
-        if (!this._cacheableLookupInstance) {
-            this._cacheableLookupInstance = new CacheableLookup({
-                maxTtl: this.lookupOptions.maxTtl,
-                errorTtl: this.lookupOptions.errorTtl,
-                // As little caching of "use the fallback server" as possible:
-                fallbackDuration: 0
-            });
-
-            if (this.lookupOptions.servers) {
-                this._cacheableLookupInstance.servers = this.lookupOptions.servers;
-            }
-        }
-
-        return this._cacheableLookupInstance.lookup;
-    }
-
     async handle(req: OngoingRequest, socket: net.Socket, head: Buffer) {
         this.initializeWsServer();
 
@@ -242,14 +222,11 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
         const isH2Downstream = isHttp2(req);
         const hostHeaderName = isH2Downstream ? ':authority' : 'host';
 
-        if (isLocalhostAddress(hostname) && req.remoteIpAddress && !isLocalhostAddress(req.remoteIpAddress)) {
-            // If we're proxying localhost traffic from another remote machine, then we should really be proxying
-            // back to that machine, not back to ourselves! Best example is docker containers: if we capture & inspect
-            // their localhost traffic, it should still be sent back into that docker container.
-            hostname = req.remoteIpAddress;
-
-            // We don't update the host header - from the POV of the target, it's still localhost traffic.
-        }
+        hostname = await getClientRelativeHostname(
+            hostname,
+            req.remoteIpAddress,
+            getDnsLookupFunction(this.lookupOptions)
+        );
 
         if (this.forwarding) {
             const { targetHost, updateHostHeader } = this.forwarding;
@@ -348,7 +325,7 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
         const upstreamWebSocket = new WebSocket(wsUrl, {
             maxPayload: 0,
             agent,
-            lookup: this.lookup(),
+            lookup: getDnsLookupFunction(this.lookupOptions),
             headers: _.omitBy(headers, (_v, headerName) =>
                 headerName.toLowerCase().startsWith('sec-websocket') ||
                 headerName.toLowerCase() === 'connection' ||

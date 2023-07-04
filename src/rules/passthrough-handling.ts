@@ -2,16 +2,20 @@ import * as _ from 'lodash';
 import * as tls from 'tls';
 import url = require('url');
 import { oneLine } from 'common-tags';
+import CacheableLookup from 'cacheable-lookup';
 
 import { CompletedBody, Headers } from '../types';
 import { byteLength } from '../util/util';
 import { asBuffer } from '../util/buffer-utils';
+import { isLocalhostAddress } from '../util/socket-util';
+import { CachedDns, dnsLookup, DnsLookupFunction } from '../util/dns';
 import { isMockttpBody, encodeBodyBuffer } from '../util/request-utils';
 import { areFFDHECurvesSupported } from '../util/openssl-compat';
 
 import {
     CallbackRequestResult,
-    CallbackResponseMessageResult
+    CallbackResponseMessageResult,
+    PassThroughLookupOptions
 } from './requests/request-handler-definitions';
 
 // TLS settings for proxied connections, intended to avoid TLS fingerprint blocking
@@ -269,4 +273,56 @@ export function shouldUseStrictHttps(
         skipHttpsErrors = true;
     }
     return !skipHttpsErrors;
+}
+
+export const getDnsLookupFunction = _.memoize((lookupOptions: PassThroughLookupOptions | undefined) => {
+    if (!lookupOptions) {
+        // By default, use 10s caching of hostnames, just to reduce the delay from
+        // endlessly 10ms query delay for 'localhost' with every request.
+        return new CachedDns(10000).lookup;
+    } else {
+        // Or if options are provided, use those to configure advanced DNS cases:
+        const cacheableLookup = new CacheableLookup({
+            maxTtl: lookupOptions.maxTtl,
+            errorTtl: lookupOptions.errorTtl,
+            // As little caching of "use the fallback server" as possible:
+            fallbackDuration: 0
+        });
+
+        if (lookupOptions.servers) {
+            cacheableLookup.servers = lookupOptions.servers;
+        }
+
+        return cacheableLookup.lookup;
+    }
+});
+
+export async function getClientRelativeHostname(
+    hostname: string | null,
+    remoteIp: string | undefined,
+    lookupFn: DnsLookupFunction
+) {
+    if (!hostname || !remoteIp || isLocalhostAddress(remoteIp)) return hostname;
+
+    // Otherwise, we have a request from a different machine (or Docker container/VM/etc) and we need
+    // to make sure that 'localhost' means _that_ machine, not ourselves.
+
+    // This check must be run before req modifications. If a modification changes the address to localhost,
+    // then presumably it really does mean *this* localhost.
+
+    if (
+        // If the hostname is a known localhost address, we're done:
+        isLocalhostAddress(hostname) ||
+        // Otherwise, we look up the IP, so we can accurately check for localhost-bound requests. This adds a little
+        // delay, but since it's cached we save the equivalent delay in request lookup later, so it should be
+        // effectively free. We ignore errors to delegate unresolvable etc to request processing later.
+        isLocalhostAddress(await dnsLookup(lookupFn, hostname).catch(() => null))
+    ) {
+        return remoteIp;
+
+        // Note that we just redirect - we don't update the host header. From the POV of the target, it's still
+        // 'localhost' traffic that should appear identical to normal.
+    } else {
+        return hostname;
+    }
 }

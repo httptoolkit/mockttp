@@ -7,7 +7,6 @@ import http = require('http');
 import https = require('https');
 import * as fs from 'fs/promises';
 import * as h2Client from 'http2-wrapper';
-import CacheableLookup from 'cacheable-lookup';
 import { decode as decodeBase64 } from 'base64-arraybuffer';
 import { Transform } from 'stream';
 import { stripIndent, oneLine } from 'common-tags';
@@ -60,7 +59,6 @@ import {
     withDeserializedCallbackBuffers,
     WithSerializedCallbackBuffers
 } from '../../serialization/body-serialization';
-import { CachedDns, DnsLookupFunction } from '../../util/dns';
 import { ErrorLike, isErrorLike } from '../../util/error';
 
 import { assertParamDereferenced, RuleParameters } from '../rule-parameters';
@@ -74,7 +72,9 @@ import {
     OVERRIDABLE_REQUEST_PSEUDOHEADERS,
     buildOverriddenBody,
     UPSTREAM_TLS_OPTIONS,
-    shouldUseStrictHttps
+    shouldUseStrictHttps,
+    getClientRelativeHostname,
+    getDnsLookupFunction
 } from '../passthrough-handling';
 
 import {
@@ -380,33 +380,6 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
         return this._trustedCACertificates;
     }
 
-    private _cacheableLookupInstance: CacheableLookup | CachedDns | undefined;
-    private lookup(): DnsLookupFunction {
-        if (!this.lookupOptions) {
-            if (!this._cacheableLookupInstance) {
-                // By default, use 10s caching of hostnames, just to reduce the delay from
-                // endlessly 10ms query delay for 'localhost' with every request.
-                this._cacheableLookupInstance = new CachedDns(10000);
-            }
-            return this._cacheableLookupInstance.lookup;
-        } else {
-            if (!this._cacheableLookupInstance) {
-                this._cacheableLookupInstance = new CacheableLookup({
-                    maxTtl: this.lookupOptions.maxTtl,
-                    errorTtl: this.lookupOptions.errorTtl,
-                    // As little caching of "use the fallback server" as possible:
-                    fallbackDuration: 0
-                });
-
-                if (this.lookupOptions.servers) {
-                    this._cacheableLookupInstance.servers = this.lookupOptions.servers;
-                }
-            }
-
-            return this._cacheableLookupInstance.lookup;
-        }
-    }
-
     async handle(clientReq: OngoingRequest, clientRes: OngoingResponse) {
         // Don't let Node add any default standard headers - we want full control
         dropDefaultHeaders(clientRes);
@@ -434,14 +407,11 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
 
         const isH2Downstream = isHttp2(clientReq);
 
-        if (isLocalhostAddress(hostname) && clientReq.remoteIpAddress && !isLocalhostAddress(clientReq.remoteIpAddress)) {
-            // If we're proxying localhost traffic from another remote machine, then we should really be proxying
-            // back to that machine, not back to ourselves! Best example is docker containers: if we capture & inspect
-            // their localhost traffic, it should still be sent back into that docker container.
-            hostname = clientReq.remoteIpAddress;
-
-            // We don't update the host header - from the POV of the target, it's still localhost traffic.
-        }
+        hostname = await getClientRelativeHostname(
+            hostname,
+            clientReq.remoteIpAddress,
+            getDnsLookupFunction(this.lookupOptions)
+        );
 
         if (this.forwarding) {
             const { targetHost, updateHostHeader } = this.forwarding;
@@ -747,7 +717,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 headers: shouldTryH2Upstream
                     ? rawHeadersToObjectPreservingCase(rawHeaders)
                     : flattenPairedRawHeaders(rawHeaders) as any,
-                lookup: this.lookup() as typeof dns.lookup,
+                lookup: getDnsLookupFunction(this.lookupOptions) as typeof dns.lookup,
                 // ^ Cast required to handle __promisify__ type hack in the official Node types
                 agent,
                 // TLS options:

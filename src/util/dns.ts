@@ -41,3 +41,12 @@ export class CachedDns {
     }
 
 }
+
+export function dnsLookup(lookupFn: typeof dns.lookup | DnsLookupFunction, hostname: string) {
+    return new Promise<string>((resolve, reject) => {
+        (lookupFn as typeof dns.lookup)(hostname!, (err, address) => {
+            if (err) reject(err);
+            else resolve(address);
+        });
+    })
+}

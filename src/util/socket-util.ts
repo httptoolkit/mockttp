@@ -45,10 +45,12 @@ const normalizeIp = (ip: string | null | undefined) =>
         : ip;
 
 export const isLocalhostAddress = (host: string | null | undefined) =>
-    host === 'localhost' || // Most common
-    host?.endsWith('.localhost') ||
-    host === '::1' || // IPv6
-    normalizeIp(host)?.match(/^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/); // 127.0.0.0/8 range
+    !!host && ( // Null/undef are something else weird, but not localhost
+        host === 'localhost' || // Most common
+        host.endsWith('.localhost') ||
+        host === '::1' || // IPv6
+        normalizeIp(host)!.match(/^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/) // 127.0.0.0/8 range
+    );
 
 
 // Check whether an incoming socket is the other end of one of our outgoing sockets:
