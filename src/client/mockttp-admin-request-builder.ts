@@ -435,6 +435,14 @@ export class MockttpAdminRequestBuilder {
                         body
                     }
                 }
+            }`,
+            'rule-event': gql`subscription OnRuleEvent {
+                ruleEvent {
+                    requestId
+                    ruleId
+                    eventType
+                    eventData
+                }
             }`
         }[event];
 
@@ -460,6 +468,13 @@ export class MockttpAdminRequestBuilder {
                 } else if (event === 'abort') {
                     normalizeHttpMessage(data, event);
                     data.error = data.error ? JSON.parse(data.error) : undefined;
+                } else if (event === 'rule-event') {
+                    const { eventData } = data;
+
+                    // Events may include raw body data buffers, serialized as base64:
+                    if (eventData.rawBody !== undefined) {
+                        eventData.rawBody = Buffer.from(eventData.rawBody, 'base64');
+                    }
                 } else {
                     normalizeHttpMessage(data, event);
                 }
@@ -477,6 +492,7 @@ export class MockttpAdminRequestBuilder {
                     query GetEndpointData($id: ID!) {
                         mockedEndpoint(id: $id) {
                             seenRequests {
+                                id,
                                 protocol,
                                 method,
                                 url,

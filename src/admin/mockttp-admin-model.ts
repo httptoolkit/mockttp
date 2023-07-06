@@ -32,6 +32,7 @@ const TLS_PASSTHROUGH_OPENED_TOPIC = 'tls-passthrough-opened';
 const TLS_PASSTHROUGH_CLOSED_TOPIC = 'tls-passthrough-closed';
 const TLS_CLIENT_ERROR_TOPIC = 'tls-client-error';
 const CLIENT_ERROR_TOPIC = 'client-error';
+const RULE_EVENT_TOPIC = 'rule-event';
 
 async function buildMockedEndpointData(endpoint: ServerMockedEndpoint): Promise<MockedEndpointData> {
     return {
@@ -128,6 +129,12 @@ export function buildAdminServerModel(
     mockServer.on('client-error', (evt) => {
         pubsub.publish(CLIENT_ERROR_TOPIC, {
             failedClientRequest: evt
+        })
+    });
+
+    mockServer.on('rule-event', (evt) => {
+        pubsub.publish(RULE_EVENT_TOPIC, {
+            ruleEvent: evt
         })
     });
 
@@ -229,6 +236,9 @@ export function buildAdminServerModel(
             },
             failedClientRequest: {
                 subscribe: () => pubsub.asyncIterator(CLIENT_ERROR_TOPIC)
+            },
+            ruleEvent: {
+                subscribe: () => pubsub.asyncIterator(RULE_EVENT_TOPIC)
             }
         },
 

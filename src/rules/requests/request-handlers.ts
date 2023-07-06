@@ -140,7 +140,15 @@ function isSerializedBuffer(obj: any): obj is SerializedBuffer {
 }
 
 export interface RequestHandler extends RequestHandlerDefinition {
-    handle(request: OngoingRequest, response: OngoingResponse): Promise<void>;
+    handle(
+        request: OngoingRequest,
+        response: OngoingResponse,
+        options: RequestHandlerOptions
+    ): Promise<void>;
+}
+
+export interface RequestHandlerOptions {
+    emitEventCallback?: (type: string, event: unknown) => void;
 }
 
 export class SimpleHandler extends SimpleHandlerDefinition {
@@ -380,7 +388,11 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
         return this._trustedCACertificates;
     }
 
-    async handle(clientReq: OngoingRequest, clientRes: OngoingResponse) {
+    async handle(
+        clientReq: OngoingRequest,
+        clientRes: OngoingResponse,
+        options: RequestHandlerOptions
+    ) {
         // Don't let Node add any default standard headers - we want full control
         dropDefaultHeaders(clientRes);
 
@@ -735,7 +747,23 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 let serverStatusCode = serverRes.statusCode!;
                 let serverStatusMessage = serverRes.statusMessage
                 let serverRawHeaders = pairFlatRawHeaders(serverRes.rawHeaders);
+
+                // This is only set if we need to read the body here, for a callback or similar. If so,
+                // we keep the buffer in case we need it afterwards (if the cb doesn't replace it).
+                let originalBody: Buffer | undefined;
+
+                // This is set when we override the body data. Note that this doesn't mean we actually
+                // read & buffered the original data! With a fixed replacement body we can skip that.
                 let resBodyOverride: Uint8Array | undefined;
+
+                if (options.emitEventCallback) {
+                    options.emitEventCallback('passthrough-response-head', {
+                        statusCode: serverStatusCode,
+                        statusMessage: serverStatusMessage,
+                        httpVersion: serverRes.httpVersion,
+                        rawHeaders: serverRawHeaders
+                    });
+                }
 
                 if (isH2Downstream) {
                     serverRawHeaders = h1HeadersToH2(serverRawHeaders);
@@ -775,8 +803,8 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                     } else if (replaceBodyFromFile) {
                         resBodyOverride = await fs.readFile(replaceBodyFromFile);
                     } else if (updateJsonBody) {
-                        const rawBody = await streamToBuffer(serverRes);
-                        const realBody = buildBodyReader(rawBody, serverRes.headers);
+                        originalBody = await streamToBuffer(serverRes);
+                        const realBody = buildBodyReader(originalBody, serverRes.headers);
 
                         if (await realBody.getJson() === undefined) {
                             throw new Error("Can't transform non-JSON response body");
@@ -795,26 +823,27 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
 
                         resBodyOverride = asBuffer(JSON.stringify(updatedBody));
                     } else if (matchReplaceBody) {
-                        const rawBody = await streamToBuffer(serverRes);
-                        const realBody = buildBodyReader(rawBody, serverRes.headers);
+                        originalBody = await streamToBuffer(serverRes);
+                        const realBody = buildBodyReader(originalBody, serverRes.headers);
 
-                        const originalBody = await realBody.getText();
-                        if (originalBody === undefined) {
+                        const originalBodyText = await realBody.getText();
+                        if (originalBodyText === undefined) {
                             throw new Error("Can't match & replace non-decodeable response body");
                         }
 
-                        let replacedBody = originalBody;
+                        let replacedBody = originalBodyText;
                         for (let [match, result] of matchReplaceBody) {
                             replacedBody = replacedBody!.replace(match, result);
                         }
 
-                        if (replacedBody !== originalBody) {
+                        if (replacedBody !== originalBodyText) {
                             resBodyOverride = asBuffer(replacedBody);
                         }
                     }
 
                     if (resBodyOverride) {
-                        // We always re-encode the body to match the resulting content-encoding header:
+                        // In the above cases, the overriding data is assumed to always be in decoded form,
+                        // so we re-encode the body to match the resulting content-encoding header:
                         resBodyOverride = await encodeBodyBuffer(
                             resBodyOverride,
                             serverHeaders
@@ -833,9 +862,8 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                     serverRawHeaders = objectHeadersToRaw(serverHeaders);
                 } else if (this.beforeResponse) {
                     let modifiedRes: CallbackResponseResult | void;
-                    let body: Buffer;
 
-                    body = await streamToBuffer(serverRes);
+                    originalBody = await streamToBuffer(serverRes);
                     let serverHeaders = rawHeadersToObject(serverRawHeaders);
 
                     modifiedRes = await this.beforeResponse({
@@ -844,19 +872,14 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                         statusMessage: serverRes.statusMessage,
                         headers: serverHeaders,
                         rawHeaders: _.cloneDeep(serverRawHeaders),
-                        body: buildBodyReader(body, serverHeaders)
+                        body: buildBodyReader(originalBody, serverHeaders)
                     });
 
                     if (modifiedRes === 'close') {
-                        // Dump the real response data and kill the client socket:
-                        serverRes.resume();
                         (clientReq as any).socket.end();
                         throw new AbortError('Connection closed intentionally by rule');
                     } else if (modifiedRes === 'reset') {
                         requireSocketResetSupport();
-
-                        // Dump the real response data and kill the client socket:
-                        serverRes.resume();
                         resetOrDestroy(clientReq);
                         throw new AbortError('Connection reset intentionally by rule');
                     }
@@ -880,11 +903,6 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                             modifiedRes?.headers,
                             method === 'HEAD' // HEAD responses are allowed mismatched content-length
                         );
-                    } else {
-                        // If you don't specify a body override, we need to use the real
-                        // body anyway, because as we've read it already streaming it to
-                        // the response won't work
-                        resBodyOverride = body;
                     }
 
                     serverRawHeaders = objectHeadersToRaw(serverHeaders);
@@ -910,13 +928,39 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 if (resBodyOverride) {
                     // Return the override data to the client:
                     clientRes.end(resBodyOverride);
-                    // Dump the real response data:
-                    serverRes.resume();
 
+                    // Dump the real response data, in case that body wasn't read yet:
+                    serverRes.resume();
+                    resolve();
+                } else if (originalBody) {
+                    // If the original body was read, and not overridden, then send it
+                    // onward directly:
+                    clientRes.end(originalBody);
                     resolve();
                 } else {
+                    // Otherwise the body hasn't been read - stream it live:
                     serverRes.pipe(clientRes);
                     serverRes.once('end', resolve);
+                }
+
+                if (options.emitEventCallback) {
+                    if (!!resBodyOverride) {
+                        (originalBody
+                            ? Promise.resolve(originalBody)
+                            : streamToBuffer(serverRes)
+                        ).then((upstreamBody) => {
+                            options.emitEventCallback!('passthrough-response-body', {
+                                overridden: true,
+                                rawBody: upstreamBody
+                            });
+                        });
+                    } else {
+                        options.emitEventCallback('passthrough-response-body', {
+                            overridden: false
+                            // We don't bother buffering & re-sending the body if
+                            // it's the same as the one being sent to the client.
+                        });
+                    }
                 }
             })().catch(reject));
 
@@ -979,6 +1023,30 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
 
             // For similar reasons, we don't want any buffering on outgoing data at all if possible:
             serverReq.setNoDelay(true);
+
+            // Fire rule events, to allow in-depth debugging of upstream traffic & modifications,
+            // so anybody interested can see _exactly_ what we're sending upstream here:
+            if (options.emitEventCallback) {
+                options.emitEventCallback('passthrough-request-head', {
+                    method,
+                    protocol: protocol!.replace(/:$/, ''),
+                    hostname,
+                    port,
+                    path,
+                    rawHeaders
+                });
+
+                if (!!reqBodyOverride) {
+                    options.emitEventCallback('passthrough-request-body', {
+                        overridden: true,
+                        rawBody: reqBodyOverride
+                    });
+                } else {
+                    options.emitEventCallback!('passthrough-request-body', {
+                        overridden: false
+                    });
+                }
+            }
         })().catch(reject)
         ).catch((e: ErrorLike) => {
             // All errors anywhere above (thrown or from explicit reject()) should end up here.

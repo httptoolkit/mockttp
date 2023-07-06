@@ -19,7 +19,8 @@ import {
     RulePriority,
     WebSocketMessage,
     WebSocketClose,
-    AbortedRequest
+    AbortedRequest,
+    RuleEvent
 } from "./types";
 import type { RequestRuleData } from "./rules/requests/request-rule";
 import type { WebSocketRuleData } from "./rules/websockets/websocket-rule";
@@ -545,6 +546,25 @@ export interface Mockttp {
     on(event: 'client-error', callback: (error: ClientError) => void): Promise<void>;
 
     /**
+     * Some rules may emit events with metadata about request processing. For example,
+     * passthrough rules may emit events about upstream server interactions.
+     *
+     * You can listen to rule-event to hear about all these events. When emitted,
+     * this will include the id of the request being processed, the id of the rule
+     * that fired the event, the type of the event, and the event data itself.
+     *
+     * This is only useful in some niche use cases, such as logging all proxied upstream
+     * requests made by the server, separately from the client connections handled.
+     *
+     * The callback will be called asynchronously from request handling. This function
+     * returns a promise, and the callback is not guaranteed to be registered until
+     * the promise is resolved.
+     *
+     * @category Events
+     */
+    on<T = unknown>(event: 'rule-event', callback: (event: RuleEvent<T>) => void): Promise<void>;
+
+    /**
      * Adds the given HTTP request rules to the server.
      *
      * This API is only useful if you're manually building rules, rather than
@@ -765,7 +785,8 @@ export type SubscribableEvent =
     | 'tls-passthrough-opened'
     | 'tls-passthrough-closed'
     | 'tls-client-error'
-    | 'client-error';
+    | 'client-error'
+    | 'rule-event';
 
 /**
  * @hidden

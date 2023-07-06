@@ -336,6 +336,16 @@ export interface ClientError {
 }
 
 /**
+ * An event fired from an individual rule during request processing.
+ */
+export interface RuleEvent<T = unknown> {
+    requestId: string;
+    ruleId: string;
+    eventType: string;
+    eventData: T;
+}
+
+/**
  * A mocked endpoint provides methods to see the current state of
  * a mock rule.
  */

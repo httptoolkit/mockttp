@@ -24,7 +24,8 @@ import {
     OngoingBody,
     WebSocketMessage,
     WebSocketClose,
-    TlsPassthroughEvent
+    TlsPassthroughEvent,
+    RuleEvent
 } from "../types";
 import { DestroyableServer } from "destroyable-server";
 import {
@@ -295,6 +296,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     public on(event: 'tls-passthrough-closed', callback: (req: TlsPassthroughEvent) => void): Promise<void>;
     public on(event: 'tls-client-error', callback: (req: TlsHandshakeFailure) => void): Promise<void>;
     public on(event: 'client-error', callback: (error: ClientError) => void): Promise<void>;
+    public on<T = unknown>(event: 'rule-event', callback: (event: RuleEvent<T>) => void): Promise<void>;
     public on(event: string, callback: (...args: any[]) => void): Promise<void> {
         this.eventEmitter.on(event, callback);
         return Promise.resolve();
@@ -538,6 +540,17 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         });
     }
 
+    private async announceRuleEventAsync(requestId: string, ruleId: string, eventType: string, eventData: unknown) {
+        setImmediate(() => {
+            this.eventEmitter.emit('rule-event', {
+                requestId,
+                ruleId,
+                eventType,
+                eventData
+            });
+        });
+    }
+
     private preprocessRequest(req: ExtendedRawRequest, type: 'request' | 'websocket'): OngoingRequest {
         parseRequestBody(req, { maxSize: this.maxBodySize });
 
@@ -654,7 +667,12 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             let nextRule = await nextRulePromise;
             if (nextRule) {
                 if (this.debug) console.log(`Request matched rule: ${nextRule.explain()}`);
-                await nextRule.handle(request, response, this.recordTraffic);
+                await nextRule.handle(request, response, {
+                    record: this.recordTraffic,
+                    emitEventCallback: (this.eventEmitter.listenerCount('rule-event') !== 0)
+                        ? (type, event) => this.announceRuleEventAsync(request.id, nextRule!.id, type, event)
+                        : undefined
+                });
             } else {
                 await this.sendUnmatchedRequestError(request, response);
             }
