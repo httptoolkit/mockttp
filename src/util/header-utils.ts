@@ -24,6 +24,9 @@ with. Those are:
 export const findRawHeader = (rawHeaders: RawHeaders, targetKey: string) =>
     rawHeaders.find(([key]) => key.toLowerCase() === targetKey);
 
+export const findRawHeaderIndex = (rawHeaders: RawHeaders, targetKey: string) =>
+    rawHeaders.findIndex(([key]) => key.toLowerCase() === targetKey);
+
 const findRawHeaders = (rawHeaders: RawHeaders, targetKey: string) =>
     rawHeaders.filter(([key]) => key.toLowerCase() === targetKey);
 

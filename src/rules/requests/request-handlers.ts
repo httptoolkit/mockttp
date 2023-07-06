@@ -39,7 +39,8 @@ import {
     rawHeadersToObjectPreservingCase,
     flattenPairedRawHeaders,
     findRawHeader,
-    pairFlatRawHeaders
+    pairFlatRawHeaders,
+    findRawHeaderIndex
 } from '../../util/header-utils';
 import { streamToBuffer, asBuffer } from '../../util/buffer-utils';
 import {
@@ -437,12 +438,18 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
 
             const hostHeaderName = isH2Downstream ? ':authority' : 'host';
 
-            let hostHeader = findRawHeader(rawHeaders, hostHeaderName);
-            if (!hostHeader) {
+            let hostHeaderIndex = findRawHeaderIndex(rawHeaders, hostHeaderName);
+            let hostHeader: [string, string];
+
+            if (hostHeaderIndex === -1) {
                 // Should never happen really, but just in case:
                 hostHeader = [hostHeaderName, hostname!];
-                rawHeaders.unshift(hostHeader);
-            };
+                hostHeaderIndex = rawHeaders.length;
+            } else {
+                // Clone this - we don't want to modify the original headers, as they're used for events
+                hostHeader = _.clone(rawHeaders[hostHeaderIndex]);
+            }
+            rawHeaders[hostHeaderIndex] = hostHeader;
 
             if (updateHostHeader === undefined || updateHostHeader === true) {
                 // If updateHostHeader is true, or just not specified, match the new target
@@ -554,9 +561,10 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 rawHeaders = objectHeadersToRaw(headers);
             }
         } else if (this.beforeRequest) {
-            const completedRequest = await waitForCompletedRequest(clientReq);
-            const clientRawHeaders = completedRequest.rawHeaders;
+            const clientRawHeaders = rawHeaders;
             const clientHeaders = rawHeadersToObject(clientRawHeaders);
+
+            const completedRequest = await waitForCompletedRequest(clientReq);
 
             const modifiedReq = await this.beforeRequest({
                 ...completedRequest,
