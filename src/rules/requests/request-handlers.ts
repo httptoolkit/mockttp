@@ -205,6 +205,7 @@ export class CallbackHandler extends CallbackHandlerDefinition {
             outResponse = await this.callback(req);
         } catch (error) {
             writeHead(response, 500, 'Callback handler threw an exception');
+            console.warn(`Callback handler exception: ${(error as ErrorLike).message ?? error}`);
             response.end(isErrorLike(error) ? error.toString() : error);
             return;
         }
