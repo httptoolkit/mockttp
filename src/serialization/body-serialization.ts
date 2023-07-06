@@ -7,6 +7,7 @@ import { buildBodyReader, isMockttpBody } from "../util/request-utils";
 import { Replace } from "../util/type-utils";
 
 import { deserializeBuffer, serializeBuffer } from "./serialization";
+import { Readable } from 'stream';
 
 export function withSerializedBodyReader<T extends {
     body: CompletedBody
@@ -33,7 +34,7 @@ export function withDeserializedBodyReader<T extends { headers: Headers, body: C
  */
 export function withSerializedCallbackBuffers<T extends {
     body?: CompletedBody | Buffer | Uint8Array | ArrayBuffer | string,
-    rawBody?: Buffer | Uint8Array
+    rawBody?: Buffer | Uint8Array | Readable
 }>(input: T): Replace<T, { body: string | undefined }> {
     let serializedBody: string | undefined;
 
@@ -52,7 +53,7 @@ export function withSerializedCallbackBuffers<T extends {
     return {
         ...input,
         body: serializedBody,
-        rawBody: input.rawBody
+        rawBody: input.rawBody && !(input.rawBody instanceof Readable)
             ? serializeBuffer(asBuffer(input.rawBody))
             : undefined
     };

@@ -8,7 +8,7 @@ import https = require('https');
 import * as fs from 'fs/promises';
 import * as h2Client from 'http2-wrapper';
 import { decode as decodeBase64 } from 'base64-arraybuffer';
-import { Transform } from 'stream';
+import { Readable, Transform } from 'stream';
 import { stripIndent, oneLine } from 'common-tags';
 import { TypedError } from 'typed-error';
 
@@ -183,7 +183,12 @@ async function writeResponseFromCallback(result: CallbackResponseMessageResult, 
         result.statusMessage,
         result.headers
     );
-    response.end(result.rawBody || "");
+
+    if (result.rawBody instanceof Readable) {
+        (result.rawBody as Readable).pipe(response);
+    } else {
+        response.end(result.rawBody || "");
+    }
 }
 
 export class CallbackHandler extends CallbackHandlerDefinition {

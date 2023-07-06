@@ -204,7 +204,7 @@ export interface CallbackResponseMessageResult {
      * You should only return one body field: either `body`, `rawBody` or
      * `json`.
      */
-    rawBody?: Buffer | Uint8Array;
+    rawBody?: Buffer | Uint8Array | Readable;
 
     /**
      * A JSON value, which will be stringified and send as a JSON-encoded

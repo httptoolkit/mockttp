@@ -1,6 +1,9 @@
 import * as zlib from 'zlib';
 import { getLocal } from "../../..";
 import { expect, fetch, isNode, isWeb, headersToObject } from "../../test-utils";
+import * as http from 'node:http';
+import { Readable } from 'stream';
+import { IncomingMessage } from 'http2-wrapper';
 
 describe("Callback response handlers", function () {
 
@@ -12,6 +15,40 @@ describe("Callback response handlers", function () {
 
     beforeEach(() => server.start());
     afterEach(() => server.stop());
+
+    it("should allow returning a stream", async () => {
+        await server.forGet("/upstream").thenJson(
+            200,
+            { "hello": "world!" },
+            { "x-test": "success" }
+        );
+
+        await server.forGet("/mocked-endpoint").thenCallback(async () => {
+            let { protocol, hostname, pathname, port } = new URL(server.urlFor("/upstream"));
+            let opts = {
+                hostname, method: "GET", path: pathname, protocol, port
+            };
+
+            let upstreamMessage = await new Promise<IncomingMessage>((resolve, reject) => {
+                let upstreamReq = http.request(opts, (res) => {
+                    resolve(res);
+                });
+                upstreamReq.end();
+            });
+
+            return {
+                headers: upstreamMessage.headers,
+                rawBody: upstreamMessage as Readable
+            };
+        });
+
+        let response = await fetch(server.urlFor("/mocked-endpoint"));
+
+        expect(response.status).to.equal(200);
+        let resJson = await response.json();
+        expect(resJson["hello"]).to.equal("world!");
+        expect(response.headers.get("x-test")).to.equal("success");
+    });
 
     it("should allow mocking the status with a callback", async () => {
         await server.forGet("/mocked-endpoint").thenCallback(() => {
