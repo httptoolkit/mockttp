@@ -8,6 +8,7 @@ import * as WebSocket from 'ws';
 
 import {
     ClientServerChannel,
+    deserializeBuffer,
     deserializeProxyConfig
 } from "../../serialization/serialization";
 
@@ -296,11 +297,17 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
 
         const effectivePort = getEffectivePort(parsedUrl);
 
-        const checkServerCertificate = shouldUseStrictHttps(
+        const strictHttpsChecks = shouldUseStrictHttps(
             parsedUrl.hostname!,
             effectivePort,
             this.ignoreHostHttpsErrors
         );
+
+        // Use a client cert if it's listed for the host+port or whole hostname
+        const hostWithPort = `${parsedUrl.hostname}:${effectivePort}`;
+        const clientCert = this.clientCertificateHostMap[hostWithPort] ||
+            this.clientCertificateHostMap[parsedUrl.hostname!] ||
+            {};
 
         const trustedCerts = await this.trustedCACertificates();
         const caConfig = trustedCerts
@@ -334,7 +341,10 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
 
             // TLS options:
             ...UPSTREAM_TLS_OPTIONS,
-            rejectUnauthorized: checkServerCertificate,
+            // Allow TLSv1, if !strict:
+            minVersion: strictHttpsChecks ? tls.DEFAULT_MIN_VERSION : 'TLSv1',
+            rejectUnauthorized: strictHttpsChecks,
+            ...clientCert,
             ...caConfig
         } as WebSocket.ClientOptions & { lookup: any, maxPayload: number });
 
@@ -387,9 +397,12 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
         // By default, we assume we just need to assign the right prototype
         return _.create(this.prototype, {
             ...data,
-            extraCACertificates: data.extraCACertificates || [],
             proxyConfig: deserializeProxyConfig(data.proxyConfig, channel, ruleParams),
-            ignoreHostHttpsErrors: data.ignoreHostCertificateErrors
+            extraCACertificates: data.extraCACertificates || [],
+            ignoreHostHttpsErrors: data.ignoreHostCertificateErrors,
+            clientCertificateHostMap: _.mapValues(data.clientCertificateHostMap,
+                ({ pfx, passphrase }) => ({ pfx: deserializeBuffer(pfx), passphrase })
+            ),
         });
     }
 }

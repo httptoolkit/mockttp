@@ -771,8 +771,8 @@ export class PassThroughHandlerDefinition extends Serializable implements Reques
         this.proxyConfig = options.proxyConfig;
         this.simulateConnectionErrors = !!options.simulateConnectionErrors;
 
-        this.clientCertificateHostMap = options.clientCertificateHostMap || {};
         this.extraCACertificates = options.trustAdditionalCAs || [];
+        this.clientCertificateHostMap = options.clientCertificateHostMap || {};
 
         if (options.beforeRequest && options.transformRequest && !_.isEmpty(options.transformRequest)) {
             throw new Error("BeforeRequest and transformRequest options are mutually exclusive");
@@ -874,8 +874,9 @@ export class PassThroughHandlerDefinition extends Serializable implements Reques
         return {
             type: this.type,
             ...this.forwarding ? {
-                forwardToLocation: this.forwarding.targetHost,
-                forwarding: this.forwarding
+                forwarding: this.forwarding,
+                // Backward compat:
+                forwardToLocation: this.forwarding.targetHost
             } : {},
             proxyConfig: serializeProxyConfig(this.proxyConfig, channel),
             lookupOptions: this.lookupOptions,

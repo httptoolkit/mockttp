@@ -6,7 +6,8 @@ import {
     ClientServerChannel,
     Serializable,
     SerializedProxyConfig,
-    serializeProxyConfig
+    serializeProxyConfig,
+    serializeBuffer
 } from "../../serialization/serialization";
 
 import { Explainable, Headers } from "../../types";
@@ -52,6 +53,7 @@ export interface SerializedPassThroughWebSocketData {
     proxyConfig?: SerializedProxyConfig;
     ignoreHostCertificateErrors?: string[] | boolean; // Doesn't match option name, backward compat
     extraCACertificates?: Array<{ cert: string } | { certPath: string }>;
+    clientCertificateHostMap?: { [host: string]: { pfx: string, passphrase?: string } };
 }
 
 export class PassThroughWebSocketHandlerDefinition extends Serializable implements WebSocketHandlerDefinition {
@@ -63,16 +65,14 @@ export class PassThroughWebSocketHandlerDefinition extends Serializable implemen
 
     public readonly forwarding?: ForwardingOptions;
     public readonly ignoreHostHttpsErrors: string[] | boolean = [];
+    public readonly clientCertificateHostMap: {
+        [host: string]: { pfx: Buffer, passphrase?: string }
+    };
 
     public readonly extraCACertificates: Array<{ cert: string | Buffer } | { certPath: string }> = [];
 
     constructor(options: PassThroughWebSocketHandlerOptions = {}) {
         super();
-
-        this.ignoreHostHttpsErrors = options.ignoreHostHttpsErrors || [];
-        if (!Array.isArray(this.ignoreHostHttpsErrors) && typeof this.ignoreHostHttpsErrors !== 'boolean') {
-            throw new Error("ignoreHostHttpsErrors must be an array or a boolean");
-        }
 
         // If a location is provided, and it's not a bare hostname, it must be parseable
         const { forwarding } = options;
@@ -87,10 +87,19 @@ export class PassThroughWebSocketHandlerDefinition extends Serializable implemen
                 `);
             }
         }
+
         this.forwarding = options.forwarding;
+
+        this.ignoreHostHttpsErrors = options.ignoreHostHttpsErrors || [];
+        if (!Array.isArray(this.ignoreHostHttpsErrors) && typeof this.ignoreHostHttpsErrors !== 'boolean') {
+            throw new Error("ignoreHostHttpsErrors must be an array or a boolean");
+        }
 
         this.lookupOptions = options.lookupOptions;
         this.proxyConfig = options.proxyConfig;
+
+        this.extraCACertificates = options.trustAdditionalCAs || [];
+        this.clientCertificateHostMap = options.clientCertificateHostMap || {};
     }
 
     explain() {
@@ -120,6 +129,9 @@ export class PassThroughWebSocketHandlerDefinition extends Serializable implemen
                     return certObject;
                 }
             }),
+            clientCertificateHostMap: _.mapValues(this.clientCertificateHostMap,
+                ({ pfx, passphrase }) => ({ pfx: serializeBuffer(pfx), passphrase })
+            )
         };
     }
 }

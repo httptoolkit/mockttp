@@ -746,9 +746,11 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 lookup: getDnsLookupFunction(this.lookupOptions) as typeof dns.lookup,
                 // ^ Cast required to handle __promisify__ type hack in the official Node types
                 agent,
+
                 // TLS options:
                 ...UPSTREAM_TLS_OPTIONS,
-                minVersion: strictHttpsChecks ? tls.DEFAULT_MIN_VERSION : 'TLSv1', // Allow TLSv1, if !strict
+                // Allow TLSv1, if !strict
+                minVersion: strictHttpsChecks ? tls.DEFAULT_MIN_VERSION : 'TLSv1',
                 rejectUnauthorized: strictHttpsChecks,
                 ...clientCert,
                 ...caConfig
