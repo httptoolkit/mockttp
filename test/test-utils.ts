@@ -29,6 +29,7 @@ import { Mockttp } from "..";
 export { getDeferred, Deferred } from '../src/util/promise';
 import { makeDestroyable, DestroyableServer } from "destroyable-server";
 import { isNode, isWeb, delay } from '../src/util/util';
+import { getEffectivePort } from '../src/util/request-utils';
 export { isNode, isWeb, delay, makeDestroyable, DestroyableServer };
 
 if (isNode) {
@@ -363,7 +364,7 @@ export async function http2ProxyRequest(
     const isTLS = parsedUrl.protocol === 'https:';
 
     const targetHost = parsedUrl.hostname!;
-    const targetPort = parsedUrl.port! ?? (isTLS ? 443 : 80);
+    const targetPort = getEffectivePort(parsedUrl);
 
     const proxyClient = http2.connect(proxyServer.url);
     return await new Promise<Http2TestRequestResult>(async (resolve, reject) => {

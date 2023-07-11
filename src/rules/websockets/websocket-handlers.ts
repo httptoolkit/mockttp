@@ -19,6 +19,7 @@ import {
     TimeoutHandler
 } from '../requests/request-handlers';
 import {
+    getEffectivePort,
     isHttp2
 } from '../../util/request-utils';
 import {
@@ -293,9 +294,7 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
     ) {
         const parsedUrl = url.parse(wsUrl);
 
-        const effectivePort = !!parsedUrl.port
-            ? parseInt(parsedUrl.port, 10)
-            : parsedUrl.protocol == 'wss:' ? 443 : 80;
+        const effectivePort = getEffectivePort(parsedUrl);
 
         const checkServerCertificate = shouldUseStrictHttps(
             parsedUrl.hostname!,

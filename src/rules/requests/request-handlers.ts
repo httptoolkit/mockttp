@@ -29,7 +29,8 @@ import {
     isAbsoluteUrl,
     writeHead,
     encodeBodyBuffer,
-    validateHeader
+    validateHeader,
+    getEffectivePort
 } from '../../util/request-utils';
 import {
     h1HeadersToH2,
@@ -639,13 +640,11 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
             rawHeaders = objectHeadersToRaw(headers);
         }
 
-        const effectivePort = !!port
-            ? parseInt(port, 10)
-            : (protocol === 'https:' ? 443 : 80);
+        const effectivePort = getEffectivePort({ protocol, port });
 
         const strictHttpsChecks = shouldUseStrictHttps(
             hostname!,
-            effectivePort!,
+            effectivePort,
             this.ignoreHostHttpsErrors
         );
 
