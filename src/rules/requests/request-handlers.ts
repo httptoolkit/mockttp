@@ -639,10 +639,18 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
             rawHeaders = objectHeadersToRaw(headers);
         }
 
-        const strictHttpsChecks = shouldUseStrictHttps(hostname!, port!, this. ignoreHostHttpsErrors);
+        const effectivePort = !!port
+            ? parseInt(port, 10)
+            : (protocol === 'https:' ? 443 : 80);
+
+        const strictHttpsChecks = shouldUseStrictHttps(
+            hostname!,
+            effectivePort!,
+            this.ignoreHostHttpsErrors
+        );
 
         // Use a client cert if it's listed for the host+port or whole hostname
-        const hostWithPort = `${hostname}:${port}`;
+        const hostWithPort = `${hostname}:${effectivePort}`;
         const clientCert = this.clientCertificateHostMap[hostWithPort] ||
             this.clientCertificateHostMap[hostname!] ||
             {};
@@ -655,10 +663,6 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
         // We only do H2 upstream for HTTPS. Http2-wrapper doesn't support H2C, it's rarely used
         // and we can't use ALPN to detect HTTP/2 support cleanly.
         let shouldTryH2Upstream = isH2Downstream && protocol === 'https:';
-
-        const effectivePort = !!port
-            ? parseInt(port, 10)
-            : (protocol === 'https:' ? 443 : 80);
 
         let family: undefined | 4 | 6;
         if (hostname === 'localhost') {

@@ -292,9 +292,14 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
         head: Buffer
     ) {
         const parsedUrl = url.parse(wsUrl);
+
+        const effectivePort = !!parsedUrl.port
+            ? parseInt(parsedUrl.port, 10)
+            : parsedUrl.protocol == 'wss:' ? 443 : 80;
+
         const checkServerCertificate = shouldUseStrictHttps(
             parsedUrl.hostname!,
-            parsedUrl.port!,
+            effectivePort,
             this.ignoreHostHttpsErrors
         );
 
@@ -302,10 +307,6 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
         const caConfig = trustedCerts
             ? { ca: trustedCerts }
             : {};
-
-        const effectivePort = !!parsedUrl.port
-            ? parseInt(parsedUrl.port, 10)
-            : parsedUrl.protocol == 'wss:' ? 443 : 80;
 
         const proxySettingSource = assertParamDereferenced(this.proxyConfig) as ProxySettingSource;
 

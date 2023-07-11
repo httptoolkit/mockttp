@@ -257,7 +257,7 @@ export function getContentLengthAfterModification(
 // based on the given config
 export function shouldUseStrictHttps(
     hostname: string,
-    port: string,
+    port: number,
     ignoreHostHttpsErrors: string[] | boolean
 ) {
     let skipHttpsErrors = false;
