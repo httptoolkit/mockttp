@@ -56,6 +56,11 @@ export type {
     ProxySettingCallback,
     ProxySettingCallbackParams
 } from './rules/proxy-config';
+export type {
+    ForwardingOptions,
+    PassThroughLookupOptions,
+    PassThroughHandlerConnectionOptions
+} from './rules/passthrough-handling-definitions';
 
 export type { RequestRuleBuilder } from "./rules/requests/request-rule-builder";
 export type { WebSocketRuleBuilder } from "./rules/websockets/websocket-rule-builder";

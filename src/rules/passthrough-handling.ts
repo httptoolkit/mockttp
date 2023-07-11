@@ -14,9 +14,11 @@ import { areFFDHECurvesSupported } from '../util/openssl-compat';
 
 import {
     CallbackRequestResult,
-    CallbackResponseMessageResult,
-    PassThroughLookupOptions
+    CallbackResponseMessageResult
 } from './requests/request-handler-definitions';
+import {
+    PassThroughLookupOptions
+} from './passthrough-handling-definitions';
 
 // TLS settings for proxied connections, intended to avoid TLS fingerprint blocking
 // issues so far as possible, by closely emulating a Firefox Client Hello:

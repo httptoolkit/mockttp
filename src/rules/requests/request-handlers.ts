@@ -68,6 +68,10 @@ import { assertParamDereferenced, RuleParameters } from '../rule-parameters';
 import { getAgent } from '../http-agents';
 import { ProxySettingSource } from '../proxy-config';
 import {
+    ForwardingOptions,
+    PassThroughLookupOptions,
+} from '../passthrough-handling-definitions';
+import {
     getContentLengthAfterModification,
     getHostAfterModification,
     getH2HeadersAfterModification,
@@ -89,12 +93,10 @@ import {
     CallbackResponseResult,
     CloseConnectionHandlerDefinition,
     FileHandlerDefinition,
-    ForwardingOptions,
     HandlerDefinitionLookup,
     JsonRpcResponseHandlerDefinition,
     PassThroughHandlerDefinition,
     PassThroughHandlerOptions,
-    PassThroughLookupOptions,
     PassThroughResponse,
     RequestHandlerDefinition,
     RequestTransform,

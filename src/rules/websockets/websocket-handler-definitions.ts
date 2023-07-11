@@ -11,14 +11,17 @@ import {
 
 import { Explainable, Headers } from "../../types";
 
+import { ProxyConfig } from '../proxy-config';
+import {
+    PassThroughHandlerConnectionOptions,
+    ForwardingOptions,
+    PassThroughLookupOptions
+} from '../passthrough-handling-definitions';
 import {
     CloseConnectionHandlerDefinition,
     ResetConnectionHandlerDefinition,
-    TimeoutHandlerDefinition,
-    ForwardingOptions,
-    PassThroughLookupOptions
+    TimeoutHandlerDefinition
 } from '../requests/request-handler-definitions';
-import { ProxyConfig } from '../proxy-config';
 
 /*
 This file defines websocket handler *definitions*, which includes everything necessary to define
@@ -37,64 +40,7 @@ export interface WebSocketHandlerDefinition extends Explainable, Serializable {
     type: keyof typeof WsHandlerDefinitionLookup;
 }
 
-export interface PassThroughWebSocketHandlerOptions {
-    /**
-     * The forwarding configuration for the passthrough rule.
-     * This generally shouldn't be used explicitly unless you're
-     * building rule data by hand. Instead, call `thenPassThrough`
-     * to send data directly or `thenForwardTo` with options to
-     * configure traffic forwarding.
-     */
-    forwarding?: ForwardingOptions,
-
-    /**
-     * A list of hostnames for which server certificate and TLS version errors
-     * should be ignored (none, by default).
-     *
-     * If set to 'true', HTTPS errors will be ignored for all hosts. WARNING:
-     * Use this at your own risk. Setting this to `true` can open your
-     * application to MITM attacks and should never be used over any network
-     * that is not completed trusted end-to-end.
-     */
-    ignoreHostHttpsErrors?: string[] | boolean;
-
-    /**
-     * An array of additional certificates, which should be trusted as certificate
-     * authorities for upstream hosts, in addition to Node.js's built-in certificate
-     * authorities.
-     *
-     * Each certificate should be an object with either a `cert` key and a string
-     * or buffer value containing the PEM certificate, or a `certPath` key and a
-     * string value containing the local path to the PEM certificate.
-     */
-    trustAdditionalCAs?: Array<{ cert: string | Buffer } | { certPath: string }>;
-
-    /**
-     * Upstream proxy configuration: pass through websockets via this proxy.
-     *
-     * If this is undefined, no proxy will be used. To configure a proxy
-     * provide either:
-     * - a ProxySettings object
-     * - a callback which will be called with an object containing the
-     *   hostname, and must return a ProxySettings object or undefined.
-     * - an array of ProxySettings or callbacks. The array will be
-     *   processed in order, and the first not-undefined ProxySettings
-     *   found will be used.
-     *
-     * When using a remote client, this parameter or individual array
-     * values may be passed by reference, using the name of a rule
-     * parameter configured in the admin server.
-     */
-    proxyConfig?: ProxyConfig;
-
-    /**
-     * Custom DNS options, to allow configuration of the resolver used
-     * when forwarding requests upstream. Passing any option switches
-     * from using node's default dns.lookup function to using the
-     * cacheable-lookup module, which will cache responses.
-     */
-    lookupOptions?: PassThroughLookupOptions;
-}
+export type PassThroughWebSocketHandlerOptions = PassThroughHandlerConnectionOptions;
 
 /**
  * @internal
