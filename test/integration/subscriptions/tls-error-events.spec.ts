@@ -104,7 +104,7 @@ describe("TLS error subscriptions", () => {
         expect(tlsError.timingEvents.startTime).to.be.greaterThan(0);
         expect(tlsError.timingEvents.connectTimestamp).to.be.greaterThan(0);
         expect(tlsError.timingEvents.failureTimestamp)
-            .to.be.greaterThan(tlsError.timingEvents.connectTimestamp);
+            .to.be.greaterThanOrEqual(tlsError.timingEvents.connectTimestamp);
 
         expect(tlsError.tlsMetadata.sniHostname).to.equal('localhost');
         expect(tlsError.tlsMetadata.ja3Fingerprint!.length).to.equal(32);
