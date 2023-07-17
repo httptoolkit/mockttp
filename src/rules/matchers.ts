@@ -274,7 +274,6 @@ export class RegexUrlMatcher extends Serializable implements RequestMatcher {
 
     matches(request: OngoingRequest) {
         const absoluteUrl = normalizeUrl(request.url);
-        const urlPath = getPathFromAbsoluteUrl(absoluteUrl);
 
         // Test the matcher against the full URL
         const urlMatcher = new RegExp(this.regexSource, this.regexFlags);
@@ -282,7 +281,7 @@ export class RegexUrlMatcher extends Serializable implements RequestMatcher {
     }
 
     explain() {
-        return `matching /${unescapeRegexp(this.regexSource)}/${this.regexFlags ?? ''}`;
+        return `matching URL /${unescapeRegexp(this.regexSource)}/${this.regexFlags ?? ''}`;
     }
 
 }

@@ -128,20 +128,24 @@ responses by hand.`);
         await expect(result).to.have.responseText('Fake file');
     });
 
-    it("should regex match requests for a matching URL with negative regexp -- pass", async () => {
+    it("should not negative-regex match requests by full URL with forX matchers", async () => {
+        // It's not so much that this is desired behaviour - more that it follows from the
+        // definition of forGet matching, and we want to preserve it for now, as opposed
+        // to usage of withUrlMatching (below) which does _not_ behave like this.
+
         await server.forGet(/^(?!.*localhost)/).thenReply(200, 'Fake file');
-        
+
         let result = await fetch(server.urlFor('/matching-file.txt'));
 
-        await expect(result).to.have.responseText('Fake file');          
+        await expect(result).to.have.responseText('Fake file');
     });
 
-    it("should regex match requests for a matching URL with negative regexp -- catch", async () => {
+    it("should negative-regex match requests by full URL with withUrlMatching", async () => {
         await server.forGet().withUrlMatching(/^(?!.*localhost)/).thenReply(200, 'Fake file');
-        
+
         let result2 = await fetch(server.urlFor('/matching-file.txt'));
 
-        await expect(result2).to.have.responseText(/^.*No rules*./);        
+        await expect(result2).to.have.responseText(/^.*No rules*./);
     });
 
     it("should reject requests for the wrong path", async () => {
@@ -159,7 +163,6 @@ responses by hand.`);
 
         expect(result.status).to.equal(503);
     });
-    
 
     it("should match requests ignoring the query string", async () => {
         await server.forGet('/path').thenReply(200, 'Matched path');
