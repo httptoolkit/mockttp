@@ -189,7 +189,7 @@
     "lru-cache": "^7.14.0",
     "native-duplexpair": "^1.0.0",
     "node-forge": "^1.2.1",
-    "pac-proxy-agent": "^5.0.0",
+    "pac-proxy-agent": "^7.0.0",
     "parse-multipart-data": "^1.4.0",
     "performance-now": "^2.1.0",
     "portfinder": "1.0.28",
