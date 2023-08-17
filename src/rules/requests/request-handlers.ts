@@ -24,12 +24,10 @@ import {
     waitForCompletedRequest,
     buildBodyReader,
     shouldKeepAlive,
-    dropDefaultHeaders,
     isHttp2,
     isAbsoluteUrl,
     writeHead,
     encodeBodyBuffer,
-    validateHeader,
     getEffectivePort
 } from '../../util/request-utils';
 import {
@@ -39,13 +37,13 @@ import {
     rawHeadersToObject,
     rawHeadersToObjectPreservingCase,
     flattenPairedRawHeaders,
-    findRawHeader,
     pairFlatRawHeaders,
-    findRawHeaderIndex
+    findRawHeaderIndex,
+    dropDefaultHeaders,
+    validateHeader
 } from '../../util/header-utils';
 import { streamToBuffer, asBuffer } from '../../util/buffer-utils';
 import {
-    isLocalhostAddress,
     isLocalPortActive,
     isSocketLoop,
     requireSocketResetSupport,

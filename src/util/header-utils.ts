@@ -1,5 +1,8 @@
+import * as http from 'http';
+
 import {
     Headers,
+    OngoingResponse,
     RawHeaders
 } from "../types";
 
@@ -190,4 +193,28 @@ export function h1HeadersToH2(headers: RawHeaders): RawHeaders {
     return headers.filter(([key]) =>
         !HTTP2_ILLEGAL_HEADERS.includes(key.toLowerCase())
     );
+}
+
+// If the user explicitly specifies headers, we tell Node not to handle them,
+// so the user-defined headers are the full set.
+export function dropDefaultHeaders(response: OngoingResponse) {
+    // Drop the default headers, so only the headers we explicitly configure are included
+    [
+        'connection',
+        'content-length',
+        'transfer-encoding',
+        'date'
+    ].forEach((defaultHeader) =>
+        response.removeHeader(defaultHeader)
+    );
+}
+
+export function validateHeader(name: string, value: string | string[]): boolean {
+    try {
+        http.validateHeaderName(name);
+        http.validateHeaderValue(name, value);
+        return true;
+    } catch (e) {
+        return false;
+    }
 }
