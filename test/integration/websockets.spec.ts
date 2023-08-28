@@ -146,13 +146,17 @@ nodeOnly(() => {
             it("forwards the incoming requests's headers", async () => {
                 mockServer.forAnyWebSocket().thenPassThrough();
 
-                const ws = new WebSocket(`ws://localhost:${wsPort}`, {
-                    agent: new HttpProxyAgent(`http://localhost:${mockServer.port}`),
-                    headers: {
-                        'echo-headers': 'true',
-                        'Funky-HEADER-casing': 'Header-Value'
+                const ws = new WebSocket(
+                    `ws://localhost:${wsPort}`,
+                    ['subprotocol-a', 'subprotocol-b'],
+                    {
+                        agent: new HttpProxyAgent(`http://localhost:${mockServer.port}`),
+                        headers: {
+                            'echo-headers': 'true',
+                            'Funky-HEADER-casing': 'Header-Value'
+                        }
                     }
-                });
+                );
 
                 const response = await new Promise<Buffer>((resolve, reject) => {
                     ws.on('message', resolve);
@@ -172,7 +176,8 @@ nodeOnly(() => {
                     [ 'Sec-WebSocket-Version', '13' ],
                     [ 'Connection', 'Upgrade' ],
                     [ 'Upgrade', 'websocket' ],
-                    [ 'Sec-WebSocket-Extensions', 'permessage-deflate; client_max_window_bits' ]
+                    [ 'Sec-WebSocket-Extensions', 'permessage-deflate; client_max_window_bits' ],
+                    [ 'Sec-WebSocket-Protocol', 'subprotocol-a,subprotocol-b' ]
                 ]);
             });
 

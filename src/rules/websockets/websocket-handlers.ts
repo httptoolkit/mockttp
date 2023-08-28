@@ -25,6 +25,7 @@ import {
 } from '../../util/request-utils';
 import {
     findRawHeader,
+    findRawHeaders,
     objectHeadersToRaw,
     pairFlatRawHeaders,
     rawHeadersToObjectPreservingCase
@@ -329,7 +330,12 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
         // header object internally.
         const headers = rawHeadersToObjectPreservingCase(rawHeaders);
 
-        const upstreamWebSocket = new WebSocket(wsUrl, {
+        // Subprotocols have to be handled explicitly. WS takes control of the headers itself,
+        // and checks the response, so we need to parse the client headers and use them manually:
+        const subprotocols = findRawHeaders(rawHeaders, 'sec-websocket-protocol')
+            .flatMap(([_k, value]) => value.split(',').map(p => p.trim()));
+
+        const upstreamWebSocket = new WebSocket(wsUrl, subprotocols, {
             maxPayload: 0,
             agent,
             lookup: getDnsLookupFunction(this.lookupOptions),
