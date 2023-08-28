@@ -26,6 +26,9 @@ const INCONSISTENT_HEADERS = [
     'origin',
     'referer',
 
+    // Varies on browser vs various Node versions:
+    'connection',
+
     // Varies on OS config:
     'accept-language',
 
@@ -69,7 +72,6 @@ describe("Request initiated subscriptions", () => {
 
             const matchableHeaders = _.omit(seenRequest.headers, INCONSISTENT_HEADERS);
             expect(matchableHeaders).to.deep.equal({
-                'connection': isNode ? 'close' : 'keep-alive',
                 'accept': '*/*',
                 'content-length': '9',
                 'content-type': 'text/plain;charset=UTF-8',
@@ -166,7 +168,6 @@ describe("Request initiated subscriptions", () => {
 
             const matchableHeaders = _.omit(seenRequest.headers, INCONSISTENT_HEADERS);
             expect(matchableHeaders).to.deep.equal({
-                'connection': isNode ? 'close' : 'keep-alive',
                 'accept': '*/*',
                 'content-length': '9',
                 'content-type': 'text/plain;charset=UTF-8',
