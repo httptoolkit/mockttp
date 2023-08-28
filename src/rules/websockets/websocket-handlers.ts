@@ -65,6 +65,10 @@ export interface WebSocketHandler extends WebSocketHandlerDefinition {
     ): Promise<void>;
 }
 
+interface InterceptedWebSocketRequest extends http.IncomingMessage {
+    upstreamWebSocketProtocol?: string | false;
+}
+
 interface InterceptedWebSocket extends WebSocket {
     upstreamWebSocket: WebSocket;
 }
@@ -188,7 +192,17 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
     private initializeWsServer() {
         if (this.wsServer) return;
 
-        this.wsServer = new WebSocket.Server({ noServer: true });
+        this.wsServer = new WebSocket.Server({
+            noServer: true,
+            // Mirror subprotocols back to the client:
+            handleProtocols(protocols, request: InterceptedWebSocketRequest) {
+                return request.upstreamWebSocketProtocol
+                    // If there's no upstream socket, default to mirroring the first protocol. This matches
+                    // WS's default behaviour - we could be stricter, but it'd be a breaking change.
+                    ?? protocols.values().next().value
+                    ?? false; // If there were no protocols specific and this is called for some reason
+            },
+        });
         this.wsServer.on('connection', (ws: InterceptedWebSocket) => {
             pipeWebSocket(ws, ws.upstreamWebSocket);
             pipeWebSocket(ws.upstreamWebSocket, ws);
@@ -355,6 +369,9 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
         } as WebSocket.ClientOptions & { lookup: any, maxPayload: number });
 
         upstreamWebSocket.once('open', () => {
+            // Used in the subprotocol selection handler during the upgrade:
+            (req as InterceptedWebSocketRequest).upstreamWebSocketProtocol = upstreamWebSocket.protocol || false;
+
             this.wsServer!.handleUpgrade(req, incomingSocket, head, (ws) => {
                 (<InterceptedWebSocket> ws).upstreamWebSocket = upstreamWebSocket;
                 incomingSocket.emit('ws-upgrade', ws);

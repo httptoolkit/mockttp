@@ -75,7 +75,19 @@ nodeOnly(() => {
 
             // Real server that echoes every message
             wsPort = await portfinder.getPortPromise();
-            wsServer = new WebSocket.Server({ port: wsPort });
+            wsServer = new WebSocket.Server({
+                port: wsPort,
+                handleProtocols: (protocols, request) => {
+                    const protocolIndex = request.headers['echo-ws-protocol-index'];
+                    if (protocolIndex !== undefined) {
+                        return [...protocols.values()][
+                            parseInt(protocolIndex as string)
+                        ];
+                    } else {
+                        return false;
+                    }
+                }
+            });
 
             wsServer.on('connection', (ws, request) => {
                 if (request.headers['echo-headers']) {
@@ -146,17 +158,13 @@ nodeOnly(() => {
             it("forwards the incoming requests's headers", async () => {
                 mockServer.forAnyWebSocket().thenPassThrough();
 
-                const ws = new WebSocket(
-                    `ws://localhost:${wsPort}`,
-                    ['subprotocol-a', 'subprotocol-b'],
-                    {
-                        agent: new HttpProxyAgent(`http://localhost:${mockServer.port}`),
-                        headers: {
-                            'echo-headers': 'true',
-                            'Funky-HEADER-casing': 'Header-Value'
-                        }
+                const ws = new WebSocket(`ws://localhost:${wsPort}`, {
+                    agent: new HttpProxyAgent(`http://localhost:${mockServer.port}`),
+                    headers: {
+                        'echo-headers': 'true',
+                        'Funky-HEADER-casing': 'Header-Value'
                     }
-                );
+                });
 
                 const response = await new Promise<Buffer>((resolve, reject) => {
                     ws.on('message', resolve);
@@ -176,7 +184,43 @@ nodeOnly(() => {
                     [ 'Sec-WebSocket-Version', '13' ],
                     [ 'Connection', 'Upgrade' ],
                     [ 'Upgrade', 'websocket' ],
-                    [ 'Sec-WebSocket-Extensions', 'permessage-deflate; client_max_window_bits' ],
+                    [ 'Sec-WebSocket-Extensions', 'permessage-deflate; client_max_window_bits' ]
+                ]);
+            });
+
+
+            it("forwards the incoming requests' & resulting response's subprotocols", async () => {
+                mockServer.forAnyWebSocket().thenPassThrough();
+
+                const ws = new WebSocket(
+                    `ws://localhost:${wsPort}`,
+                    ['subprotocol-a', 'subprotocol-b'], // Request two sub protocols
+                    {
+                        agent: new HttpProxyAgent(`http://localhost:${mockServer.port}`),
+                        headers: {
+                            'echo-headers': 'true',
+                            'echo-ws-protocol-index': 1 // Server should select index 1 (2nd)
+                        }
+                    }
+                );
+
+                const response = await new Promise<Buffer>((resolve, reject) => {
+                    ws.on('message', resolve);
+                    ws.on('error', reject);
+                });
+
+                // The server's selected subprotocol should be mirrored back to the client:
+                expect(ws.protocol).to.equal('subprotocol-b');
+
+                ws.close(1000);
+
+                const protocolHeaders = JSON.parse(response.toString()).filter(([key]: [key: string]) =>
+                    // The key is random, so we don't check it here.
+                    key == 'Sec-WebSocket-Protocol'
+                );
+
+                // Server should have seen both requested protocols:
+                expect(protocolHeaders).to.deep.equal([
                     [ 'Sec-WebSocket-Protocol', 'subprotocol-a,subprotocol-b' ]
                 ]);
             });
