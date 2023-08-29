@@ -1,5 +1,6 @@
 import * as net from 'net';
 import * as WebSocket from 'isomorphic-ws';
+import * as http from 'http';
 import * as https from 'https';
 import HttpProxyAgent = require('http-proxy-agent');
 import HttpsProxyAgent = require('https-proxy-agent');
@@ -188,7 +189,6 @@ nodeOnly(() => {
                 ]);
             });
 
-
             it("forwards the incoming requests' & resulting response's subprotocols", async () => {
                 mockServer.forAnyWebSocket().thenPassThrough();
 
@@ -223,6 +223,54 @@ nodeOnly(() => {
                 expect(protocolHeaders).to.deep.equal([
                     [ 'Sec-WebSocket-Protocol', 'subprotocol-a,subprotocol-b' ]
                 ]);
+            });
+
+            it("ignores mildly invalid blank (empty string) subprotocol headers in incoming requests", async () => {
+                await mockServer.forAnyWebSocket().thenPassThrough();
+                const request = https.request(`https://localhost:${wsPort}`, {
+                    agent: new HttpProxyAgent(`http://localhost:${mockServer.port}`),
+                    headers: {
+                        'Connection': 'Upgrade',
+                        'Upgrade': 'websocket',
+                        'Sec-WebSocket-Version': 13,
+                        'Sec-WebSocket-Key': 'DxfWc2xtQqmWYmU/n8WUWg==',
+                        'Sec-WebSocket-Protocol': ' ' // Empty headers are invalid
+                    }
+                }).end();
+
+                const response = await new Promise<http.IncomingMessage>((resolve, reject) => {
+                    request.on('response', resolve);
+                    request.on('upgrade', resolve);
+                    request.on('error', reject);
+                });
+
+                expect(response.statusCode).to.equal(101);
+                expect(response.headers['sec-websocket-protocol']).to.equal(undefined);
+            });
+
+            it("handles mildly invalid non-empty subprotocol headers in incoming requests", async () => {
+                await mockServer.forAnyWebSocket().thenPassThrough();
+                const request = https.request(`https://localhost:${wsPort}`, {
+                    agent: new HttpProxyAgent(`http://localhost:${mockServer.port}`),
+                    headers: {
+                        'Connection': 'Upgrade',
+                        'Upgrade': 'websocket',
+                        'Sec-WebSocket-Version': 13,
+                        'Sec-WebSocket-Key': 'DxfWc2xtQqmWYmU/n8WUWg==',
+                        'Sec-WebSocket-Protocol': ' ', // Empty headers are invalid
+                        'sec-webSocket-protocol': 'a,,b', // Badly formatted other protocols
+                        'echo-ws-protocol-index': '0'
+                    }
+                }).end();
+
+                const response = await new Promise<http.IncomingMessage>((resolve, reject) => {
+                    request.on('response', resolve);
+                    request.on('upgrade', resolve);
+                    request.on('error', reject);
+                });
+
+                expect(response.statusCode).to.equal(101);
+                expect(response.headers['sec-websocket-protocol']).to.equal('a');
             });
 
             it("can handle & proxy invalid client frames upstream", async () => {

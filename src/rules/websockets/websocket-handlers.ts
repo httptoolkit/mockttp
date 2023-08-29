@@ -346,10 +346,25 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
 
         // Subprotocols have to be handled explicitly. WS takes control of the headers itself,
         // and checks the response, so we need to parse the client headers and use them manually:
-        const subprotocols = findRawHeaders(rawHeaders, 'sec-websocket-protocol')
+        const originalSubprotocols = findRawHeaders(rawHeaders, 'sec-websocket-protocol')
             .flatMap(([_k, value]) => value.split(',').map(p => p.trim()));
 
-        const upstreamWebSocket = new WebSocket(wsUrl, subprotocols, {
+        // Drop empty subprotocols, to better handle mildly badly behaved clients
+        const filteredSubprotocols = originalSubprotocols.filter(p => !!p);
+
+        // If the subprotocols are invalid (there are some empty strings, or an entirely empty value) then
+        // WS will reject the upgrade. With this, we reset the header to the 'equivalent' valid version, to
+        // avoid unnecessarily rejecting clients who send mildly wrong headers (empty protocol values).
+        if (originalSubprotocols.length !== filteredSubprotocols.length) {
+            if (filteredSubprotocols.length) {
+                 // Note that req.headers is auto-lowercased by Node, so we can ignore case
+                req.headers['sec-websocket-protocol'] = filteredSubprotocols.join(',')
+            } else {
+                delete req.headers['sec-websocket-protocol'];
+            }
+        }
+
+        const upstreamWebSocket = new WebSocket(wsUrl, filteredSubprotocols, {
             maxPayload: 0,
             agent,
             lookup: getDnsLookupFunction(this.lookupOptions),
