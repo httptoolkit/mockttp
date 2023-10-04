@@ -8,7 +8,7 @@ import * as bodyParser from 'body-parser';
 import * as Ws from 'ws';
 import { v4 as uuid } from "uuid";
 
-import { graphqlHTTP } from 'express-graphql';
+import { createHandler as createGraphQLHandler } from 'graphql-http/lib/use/express';
 import { execute, formatError, GraphQLScalarType, subscribe } from 'graphql';
 import gql from 'graphql-tag';
 import { makeExecutableSchema } from '@graphql-tools/schema';
@@ -475,11 +475,13 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
         });
 
         mockSessionRouter.use(
-            graphqlHTTP({
+            createGraphQLHandler({
                 schema,
-                customFormatErrorFn: (error) => {
+
+                // Add console logging of all GQL errors:
+                formatError: (error) => {
                     console.error(error.stack);
-                    return formatError(error);
+                    return error;
                 }
             }
         ));
