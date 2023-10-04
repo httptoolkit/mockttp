@@ -1,10 +1,12 @@
 import _ = require('lodash');
-import now = require("performance-now");
+import now = require('performance-now');
 import net = require('net');
 import tls = require('tls');
 import http = require('http');
 import http2 = require('http2');
 import * as streams from 'stream';
+
+import * as semver from 'semver';
 import { makeDestroyable, DestroyableServer } from 'destroyable-server';
 import httpolyglot = require('@httptoolkit/httpolyglot');
 import {
@@ -148,17 +150,37 @@ export async function createComboServer(
         const ca = await getCA(options.https);
         const defaultCert = ca.generateCertificate(options.https.defaultDomain ?? 'localhost');
 
+        const serverProtocolPreferences = options.http2 === true
+            ? ['h2', 'http/1.1', 'http 1.1'] // 'http 1.1' is non-standard, but used by https-proxy-agent
+                : options.http2 === 'fallback'
+            ? ['http/1.1', 'http 1.1', 'h2']
+                // options.http2 === false:
+            : ['http/1.1', 'http 1.1'];
+
+        const ALPNOption: tls.TlsOptions = semver.satisfies(process.version, '>=20.4.0')
+            ? {
+                // In modern Node (20+), ALPNProtocols will reject unknown protocols. To allow those (so we can
+                // at least read the request, and hopefully handle HTTP-like cases - not uncommon) we use the new
+                // ALPNCallback feature instead, which lets us dynamically accept unrecognized protocols:
+                ALPNCallback: ({ protocols: clientProtocols }) => {
+                    const preferredProtocol = serverProtocolPreferences.find(p => clientProtocols.includes(p));
+
+                    // Wherever possible, we tell the client to use our preferred protocol
+                    if (preferredProtocol) return preferredProtocol;
+
+                    // If the client only offers protocols that we don't understand, shrug and accept:
+                    else return clientProtocols[1];
+                }
+            } : {
+                // In Node versions without ALPNCallback, we just set preferences directly:
+                ALPNProtocols: serverProtocolPreferences
+            }
+
         const tlsServer = tls.createServer({
             key: defaultCert.key,
             cert: defaultCert.cert,
             ca: [defaultCert.ca],
-            ALPNProtocols: options.http2 === true
-                ? ['h2', 'http/1.1', 'http 1.1'] // 'http 1.1' is non-standard, but used by https-proxy-agent
-                    : options.http2 === 'fallback'
-                ? ['http/1.1', 'http 1.1', 'h2']
-                    // false
-                : ['http/1.1', 'http 1.1'],
-
+            ...ALPNOption,
             SNICallback: (domain: string, cb: Function) => {
                 if (options.debug) console.log(`Generating certificate for ${domain}`);
 
