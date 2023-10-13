@@ -24,12 +24,13 @@ import {
 // issues so far as possible, by closely emulating a Firefox Client Hello:
 const NEW_CURVES_SUPPORTED = areFFDHECurvesSupported(process.versions.openssl);
 
+const SSL_OP_LEGACY_SERVER_CONNECT = 1 << 2;
 const SSL_OP_TLSEXT_PADDING = 1 << 4;
 const SSL_OP_NO_ENCRYPT_THEN_MAC = 1 << 19;
 
 // All settings are designed to exactly match Firefox v103, since that's a good baseline
 // that seems to be widely accepted and is easy to emulate from Node.js.
-export const UPSTREAM_TLS_OPTIONS: tls.SecureContextOptions = {
+export const getUpstreamTlsOptions = (strictChecks: boolean): tls.SecureContextOptions => ({
     ecdhCurve: [
         'X25519',
         'prime256v1', // N.B. Equivalent to secp256r1
@@ -74,12 +75,20 @@ export const UPSTREAM_TLS_OPTIONS: tls.SecureContextOptions = {
         'AES128-SHA',
         'AES256-SHA'
     ].join(':'),
-    secureOptions: SSL_OP_TLSEXT_PADDING | SSL_OP_NO_ENCRYPT_THEN_MAC,
+    secureOptions: strictChecks
+        ? SSL_OP_TLSEXT_PADDING | SSL_OP_NO_ENCRYPT_THEN_MAC
+        : SSL_OP_TLSEXT_PADDING | SSL_OP_NO_ENCRYPT_THEN_MAC | SSL_OP_LEGACY_SERVER_CONNECT,
     ...({
         // Valid, but not included in Node.js TLS module types:
         requestOSCP: true
-    } as any)
-};
+    } as any),
+
+    // Allow TLSv1, if !strict:
+    minVersion: strictChecks ? tls.DEFAULT_MIN_VERSION : 'TLSv1',
+
+    // Skip certificate validation entirely, if not strict:
+    rejectUnauthorized: strictChecks,
+});
 
 // --- Various helpers for deriving parts of request/response data given partial overrides: ---
 

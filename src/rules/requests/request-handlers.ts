@@ -75,7 +75,7 @@ import {
     getH2HeadersAfterModification,
     OVERRIDABLE_REQUEST_PSEUDOHEADERS,
     buildOverriddenBody,
-    UPSTREAM_TLS_OPTIONS,
+    getUpstreamTlsOptions,
     shouldUseStrictHttps,
     getClientRelativeHostname,
     getDnsLookupFunction
@@ -746,10 +746,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 agent,
 
                 // TLS options:
-                ...UPSTREAM_TLS_OPTIONS,
-                // Allow TLSv1, if !strict
-                minVersion: strictHttpsChecks ? tls.DEFAULT_MIN_VERSION : 'TLSv1',
-                rejectUnauthorized: strictHttpsChecks,
+                ...getUpstreamTlsOptions(strictHttpsChecks),
                 ...clientCert,
                 ...caConfig
             }, (serverRes) => (async () => {

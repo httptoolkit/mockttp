@@ -37,7 +37,7 @@ import { getAgent } from '../http-agents';
 import { ProxySettingSource } from '../proxy-config';
 import { assertParamDereferenced, RuleParameters } from '../rule-parameters';
 import {
-    UPSTREAM_TLS_OPTIONS,
+    getUpstreamTlsOptions,
     getClientRelativeHostname,
     getDnsLookupFunction,
     shouldUseStrictHttps
@@ -375,10 +375,7 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
             ) as { [key: string]: string }, // Simplify to string - doesn't matter though, only used by http module anyway
 
             // TLS options:
-            ...UPSTREAM_TLS_OPTIONS,
-            // Allow TLSv1, if !strict:
-            minVersion: strictHttpsChecks ? tls.DEFAULT_MIN_VERSION : 'TLSv1',
-            rejectUnauthorized: strictHttpsChecks,
+            ...getUpstreamTlsOptions(strictHttpsChecks),
             ...clientCert,
             ...caConfig
         } as WebSocket.ClientOptions & { lookup: any, maxPayload: number });
