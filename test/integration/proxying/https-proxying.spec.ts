@@ -1020,17 +1020,19 @@ nodeOnly(() => {
                     expect(receivedRequest.headers['host']).to.equal(`localhost:${remoteH1Server.port}`);
                 });
 
-                it("should fail given overridden HTTP/2 pseudoheaders", async () => {
-                    // 'Should' is a bit strong - it'd be better to somehow ignore/translate
-                    // in this case, but that's not possible with http2-wrapper, so for
-                    // now we just expect the request to hard fail with a clear error.
+                it("should handle overridden HTTP/2 pseudoheaders", async () => {
+                    await remoteH1Server.forAnyRequest().thenCallback((req) => {
+                        return {
+                            statusCode: 200,
+                            body: `Host was ${req.headers['host']}`
+                        };
+                    });
 
                     await server.forAnyRequest().thenPassThrough({
                         beforeRequest: (req) => {
                             return {
                                 headers: Object.assign(req.headers, {
-                                    ':scheme': 'magic',
-                                    ':authority': 'google.com'
+                                    ':authority': 'example.com'
                                 })
                             }
                         }
@@ -1038,10 +1040,8 @@ nodeOnly(() => {
 
                     const response = await http2ProxyRequest(server, remoteH1Server.url);
 
-                    expect(response.headers[':status']).to.equal(500);
-                    expect(response.body.toString()).to.match(
-                        /TypeError \[ERR_INVALID_HTTP_TOKEN\]: Header name must be a valid HTTP token \[":(scheme|authority)"\]/
-                    );
+                    expect(response.headers[':status']).to.equal(200);
+                    expect(response.body.toString()).to.equal("Host was example.com");
                 });
             });
         });
