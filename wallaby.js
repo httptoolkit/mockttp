@@ -1,6 +1,6 @@
-module.exports = (wallaby) => {
-  process.env.NODE_EXTRA_CA_CERTS = './test/fixtures/test-ca.pem'
+const path = require('path');
 
+module.exports = (wallaby) => {
   return {
     files: [
       'package.json',
@@ -34,7 +34,10 @@ module.exports = (wallaby) => {
 
     testFramework: 'mocha',
     env: {
-      type: 'node'
+      type: 'node',
+      params: {
+        env: `NODE_EXTRA_CA_CERTS=${path.resolve(__dirname, 'test/fixtures/test-ca.pem')}`
+      }
     },
     debug: true
   };
