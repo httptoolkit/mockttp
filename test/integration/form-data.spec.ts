@@ -1,5 +1,5 @@
 import { getLocal } from "../..";
-import { expect, fetch as utilFetch, nodeOnly } from "../test-utils";
+import { expect, File, fetch as utilFetch } from "../test-utils";
 
 // workaround to use real fetch in node v18 and later
 const fetch = (typeof globalThis.fetch === 'undefined') ? utilFetch : globalThis.fetch;
@@ -41,11 +41,12 @@ describe("FormData", () => {
         formData.append("id", "456");
         formData.append("id", "789");
         formData.append("order", "desc");
+        formData.append("readme", new File(["file content"], "file.txt", { type: "text/plain" }));
         await expect(
             fetch(server.urlFor("/mocked-endpoint"), {
                 method: "POST",
                 body: formData,
             })
-        ).to.responseText("{\"id\":[\"123\",\"456\",\"789\"],\"order\":\"desc\"}");
+        ).to.responseText("{\"id\":[\"123\",\"456\",\"789\"],\"order\":\"desc\",\"readme\":\"file content\"}");
     });
 });
