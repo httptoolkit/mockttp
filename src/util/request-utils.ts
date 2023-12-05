@@ -5,6 +5,7 @@ import * as http from 'http';
 import * as http2 from 'http2';
 import * as stream from 'stream';
 import * as querystring from 'querystring';
+import * as multipart from 'parse-multipart-data';
 import now = require("performance-now");
 import * as url from 'url';
 import type { SUPPORTED_ENCODING } from 'http-encoding';
@@ -237,8 +238,35 @@ export const buildBodyReader = (body: Buffer, headers: Headers): CompletedBody =
         },
         async getFormData() {
             return runAsyncOrUndefined(async () => {
-                const text = await completedBody.getText();
-                return text ? querystring.parse(text) : undefined;
+                const contentType = headers["content-type"];
+                if (contentType?.includes("multipart/form-data")) {
+                    const boundary = contentType.match(/;\s*boundary=(\S+)/);
+                    if (!boundary) {
+                        // TODO: What to do when no boundary?
+                        return undefined;
+                    }
+                    const multipartBodyBuffer = asBuffer(await decodeBodyBuffer(this.buffer, headers));
+                    const parsedBody = multipart.parse(multipartBodyBuffer, boundary[1]);
+                    const formData : { [key: string]: string | string[] | undefined} = {};
+                    parsedBody.forEach((part) => {
+                        // TODO: What to do if no name?
+                        // TODO: What to do with the filename?
+                        if (part.name) {
+                            const prevValue = formData[part.name];
+                            if (typeof prevValue === "undefined") {
+                                formData[part.name] = part.data.toString();
+                            } else if (typeof prevValue === "string") {
+                                formData[part.name] = [prevValue, part.data.toString()];
+                            } else {
+                                prevValue.push(part.data.toString());
+                            }
+                        }
+                    })
+                    return formData;
+                } else {
+                    const text = await completedBody.getText();
+                    return text ? querystring.parse(text) : undefined;
+                }
             });
         }
     };
