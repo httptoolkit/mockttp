@@ -66,7 +66,7 @@ describe("Body getXFormData methods", () => {
     describe("given multipart/form-data", () => {
         before(function () {
             // Polyfill fetch encodes polyfill FormData into "[object FormData]", which is not parsable
-            if (!semver.satisfies(process.version, NATIVE_FETCH_SUPPORTED)) this.skip();
+            if (process.version && !semver.satisfies(process.version, NATIVE_FETCH_SUPPORTED)) this.skip();
         });
 
         it("should automatically parse as form data", async () => {
