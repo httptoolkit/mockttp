@@ -181,11 +181,32 @@ export interface CompletedBody {
     getJson(): Promise<object | undefined>;
 
     /**
-     * The contents of the response, decoded, parsed as UTF-8 string, and
-     * then parsed form-encoded data. The response is decoded and returned
-     * asynchronously as a Promise.
+     * The contents of the response, decoded, and then parsed automatically as
+     * either one of the form encoding types (either URL-encoded or multipart),
+     * determined automatically from the message content-type header.
+     *
+     * This method is convenient and offers a single mechanism to parse both
+     * formats, but you may want to consider parsing on format explicitly with
+     * the `getUrlEncodedFormData()` or `getMultipartFormData()` methods instead.
+     *
+     * After parsing & decoding, the result is returned asynchronously as a
+     * Promise for a key-value(s) object.
      */
     getFormData(): Promise<{ [key: string]: string | string[] | undefined } | undefined>;
+
+    /**
+     * The contents of the response, decoded, parsed as UTF-8 string, and then
+     * parsed as URL-encoded form data. After parsing & decoding, the result is
+     * returned asynchronously as a Promise for a key-value(s) object.
+     */
+    getUrlEncodedFormData(): Promise<{ [key: string]: string | string[] | undefined } | undefined>;
+
+    /**
+     * The contents of the response, decoded, and then parsed as multi-part
+     * form data. The response is result is returned asynchronously as a
+     * Promise for an array of parts with their names, data and metadata.
+     */
+    getMultipartFormData(): Promise<Array<{ name?: string, filename?: string, type?: string, data: Buffer }> | undefined>;
 }
 
 // Internal & external representation of an initiated (no body yet received) HTTP request.
