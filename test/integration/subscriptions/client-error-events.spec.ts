@@ -242,12 +242,12 @@ describe("Client error subscription", () => {
                 let errorPromise = getDeferred<ClientError>();
                 await server.on('client-error', (e) => errorPromise.resolve(e));
 
-                sendRawRequest(server, 'QWE https://example.com HTTP/1.1\r\n\r\n');
+                sendRawRequest(server, 'AABB https://example.com HTTP/1.1\r\n\r\n');
 
                 let clientError = await errorPromise;
 
                 expect(clientError.errorCode).to.equal("HPE_INVALID_METHOD");
-                expect(clientError.request.method).to.equal("QWE");
+                expect(clientError.request.method).to.equal("AABB");
                 expect(clientError.request.httpVersion).to.equal("1.1");
                 expect(clientError.request.url).to.equal("https://example.com");
 

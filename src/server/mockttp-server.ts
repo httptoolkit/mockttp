@@ -917,8 +917,9 @@ ${await this.suggestRule(request)}`
             // We use HTTP peeked data to catch extra data the parser sees due to httpolyglot peeking,
             // but which gets lost from the raw packet. If that data alone causes an error though
             // (e.g. Q as first char) then this packet data does get thrown! Eugh. In that case,
-            // we need to avoid using both by accident, so we use just the non-peeked data instead.
-            rawPacket: error.rawPacket === socket.__httpPeekedData
+            // we need to avoid using both by accident, so we use just the non-peeked data instead
+            // if the initial data is _exactly_ identical.
+            rawPacket: !error.rawPacket || socket.__httpPeekedData?.equals(error.rawPacket)
                 ? undefined
                 : error.rawPacket
         };
