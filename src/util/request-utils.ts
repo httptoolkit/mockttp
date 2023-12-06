@@ -236,27 +236,34 @@ export const buildBodyReader = (body: Buffer, headers: Headers): CompletedBody =
                 JSON.parse((await completedBody.getText())!)
             )
         },
-        async getFormData() {
+        async getFormData(): Promise<querystring.ParsedUrlQuery | undefined> {
             return runAsyncOrUndefined(async () => {
                 const contentType = headers["content-type"];
                 if (contentType?.includes("multipart/form-data")) {
                     const boundary = contentType.match(/;\s*boundary=(\S+)/);
                     if (!boundary) {
-                        // TODO: What to do when no boundary?
+                        // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Type#boundary
+                        // `boundary` is required for multipart entities.
+                        // So let's ignore content without boundary, assuming invalid multipart data
                         return undefined;
                     }
                     const multipartBodyBuffer = asBuffer(await decodeBodyBuffer(this.buffer, headers));
                     const parsedBody = multipart.parse(multipartBodyBuffer, boundary[1]);
-                    const formData : { [key: string]: string | string[] | undefined} = {};
+                    const formData: querystring.ParsedUrlQuery = {};
                     parsedBody.forEach((part) => {
-                        // TODO: What to do if no name?
-                        // TODO: What to do with the filename?
-                        if (part.name) {
-                            const prevValue = formData[part.name];
+                        const name = part.name;
+                        if (name === undefined) {
+                            // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Disposition#as_a_header_for_a_multipart_body,
+                            // The header must include `name` property to identify the field name.
+                            // So let's ignore parts without a name, assuming invalid multipart data.
+                        } else {
+                            // We do not use `input.filename` here because return value of `getFormData` must be string or string array.
+
+                            const prevValue = formData[name];
                             if (typeof prevValue === "undefined") {
-                                formData[part.name] = part.data.toString();
+                                formData[name] = part.data.toString();
                             } else if (typeof prevValue === "string") {
-                                formData[part.name] = [prevValue, part.data.toString()];
+                                formData[name] = [prevValue, part.data.toString()];
                             } else {
                                 prevValue.push(part.data.toString());
                             }
