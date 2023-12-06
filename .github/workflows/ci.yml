@@ -24,7 +24,7 @@ jobs:
 
       - name: Deploy docs
         if: github.ref == 'refs/heads/main' && matrix.node-version == 'v20.8.0'
-        uses: JamesIves/github-pages-deploy-action@v4.2.2
+        uses: JamesIves/github-pages-deploy-action@v4
         with:
           single-commit: true
           branch: gh-pages
