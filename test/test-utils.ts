@@ -258,6 +258,7 @@ export async function startDnsServer(callback: (question: dns2.DnsQuestion) => s
 export const H2_TLS_ON_TLS_SUPPORTED = ">=12.17";
 export const HTTP_ABORTSIGNAL_SUPPORTED = ">=14.17";
 export const OLD_TLS_SUPPORTED = "<17"; // In 17+ TLS < v1.2 is only available with legacy OpenSSL flag
+export const NATIVE_FETCH_SUPPORTED = ">=18";
 export const SOCKET_RESET_SUPPORTED = "^16.17 || >=18.3";
 export const BROKEN_H2_TUNNELLING = "^18.8"; // Some H1-over-H2 tests fail in Node 18 (but not 19)
 export const DEFAULT_KEEP_ALIVE = ">=19";

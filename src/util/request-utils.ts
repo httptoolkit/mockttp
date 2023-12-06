@@ -5,6 +5,7 @@ import * as http from 'http';
 import * as http2 from 'http2';
 import * as stream from 'stream';
 import * as querystring from 'querystring';
+import * as multipart from 'parse-multipart-data';
 import now = require("performance-now");
 import * as url from 'url';
 import type { SUPPORTED_ENCODING } from 'http-encoding';
@@ -235,10 +236,44 @@ export const buildBodyReader = (body: Buffer, headers: Headers): CompletedBody =
                 JSON.parse((await completedBody.getText())!)
             )
         },
-        async getFormData() {
+        async getFormData(): Promise<querystring.ParsedUrlQuery | undefined> {
             return runAsyncOrUndefined(async () => {
-                const text = await completedBody.getText();
-                return text ? querystring.parse(text) : undefined;
+                const contentType = headers["content-type"];
+                if (contentType?.includes("multipart/form-data")) {
+                    const boundary = contentType.match(/;\s*boundary=(\S+)/);
+                    if (!boundary) {
+                        // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Type#boundary
+                        // `boundary` is required for multipart entities.
+                        // So let's ignore content without boundary, assuming invalid multipart data
+                        return undefined;
+                    }
+                    const multipartBodyBuffer = asBuffer(await decodeBodyBuffer(this.buffer, headers));
+                    const parsedBody = multipart.parse(multipartBodyBuffer, boundary[1]);
+                    const formData: querystring.ParsedUrlQuery = {};
+                    parsedBody.forEach((part) => {
+                        const name = part.name;
+                        if (name === undefined) {
+                            // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Disposition#as_a_header_for_a_multipart_body,
+                            // The header must include `name` property to identify the field name.
+                            // So let's ignore parts without a name, assuming invalid multipart data.
+                        } else {
+                            // We do not use `input.filename` here because return value of `getFormData` must be string or string array.
+
+                            const prevValue = formData[name];
+                            if (typeof prevValue === "undefined") {
+                                formData[name] = part.data.toString();
+                            } else if (typeof prevValue === "string") {
+                                formData[name] = [prevValue, part.data.toString()];
+                            } else {
+                                prevValue.push(part.data.toString());
+                            }
+                        }
+                    })
+                    return formData;
+                } else {
+                    const text = await completedBody.getText();
+                    return text ? querystring.parse(text) : undefined;
+                }
             });
         }
     };
