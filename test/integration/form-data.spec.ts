@@ -1,9 +1,14 @@
-import { getLocal } from "../..";
-import {expect, File, fetch as utilFetch, NATIVE_FETCH_SUPPORTED} from "../test-utils";
-import semver = require("semver/preload");
+import * as semver from 'semver';
 
-// workaround to use real fetch in node v18 and later
-const fetch = (typeof globalThis.fetch === 'undefined') ? utilFetch : globalThis.fetch;
+import { getLocal } from "../..";
+import {
+    expect,
+    File,
+    fetch as fetchPolyfill,
+    NATIVE_FETCH_SUPPORTED
+} from "../test-utils";
+
+const fetch = globalThis.fetch ?? fetchPolyfill;
 
 describe("FormData", () => {
     let server = getLocal();
