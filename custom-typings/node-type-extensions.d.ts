@@ -29,10 +29,6 @@ declare module "net" {
         // into a single response & error event.
         clientErrorInProgress?: { rawPacket?: Buffer; }
 
-        // Data that was peeked by httpolyglot, and thereby probably lost from the
-        // HTTP parser errors, but which might be useful for debugging later
-        __httpPeekedData?: Buffer;
-
         // Our recordings of various timestamps, used for monitoring &
         // performance analysis later on
         __timingInfo?: {

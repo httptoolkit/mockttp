@@ -919,9 +919,7 @@ ${await this.suggestRule(request)}`
             // (e.g. Q as first char) then this packet data does get thrown! Eugh. In that case,
             // we need to avoid using both by accident, so we use just the non-peeked data instead
             // if the initial data is _exactly_ identical.
-            rawPacket: !error.rawPacket || socket.__httpPeekedData?.equals(error.rawPacket)
-                ? undefined
-                : error.rawPacket
+            rawPacket: error.rawPacket
         };
 
         setImmediate(async () => {
@@ -934,20 +932,8 @@ ${await this.suggestRule(request)}`
                 timingEvents: { startTime: Date.now(), startTimestamp: now() } as TimingEvents
             };
 
-            // Initially _httpMessage is undefined, until at least one request has been parsed.
-            // Later it's set to the current ServerResponse, and then null when the socket is
-            // detached, but never back to undefined. Avoids issues with using old peeked data
-            // on subsequent requests within keep-alive connections.
-            const isFirstRequest = (socket as any)._httpMessage === undefined;
-
-            // HTTPolyglot's byte-peeking can sometimes lose the initial byte from the parser's
-            // exposed buffer. If that's happened, we need to get it back:
-            const rawPacket = Buffer.concat(
-                [
-                    isFirstRequest && socket.__httpPeekedData,
-                    socket.clientErrorInProgress?.rawPacket
-                ].filter((data) => !!data) as Buffer[]
-            );
+            const rawPacket = socket.clientErrorInProgress?.rawPacket
+                ?? Buffer.from([]);
 
             // For packets where we get more than just httpolyglot-peeked data, guess-parse them:
             const parsedRequest = rawPacket.byteLength > 1
