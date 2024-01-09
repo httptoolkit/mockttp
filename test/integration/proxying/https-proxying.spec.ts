@@ -173,6 +173,22 @@ nodeOnly(() => {
                     expect(response.statusCode).to.equal(200);
                 });
 
+                it("should allow passing through requests if the IP host is specifically listed", async () => {
+                    await badServer.forAnyRequest().thenReply(200);
+
+                    await server.forAnyRequest().thenPassThrough({
+                        ignoreHostHttpsErrors: ['127.0.0.1']
+                    });
+
+                    let response = await request.get(`https://127.0.0.1:${badServer.port}`, {
+                        strictSSL: false,
+                        resolveWithFullResponse: true,
+                        simple: false
+                    });
+
+                    expect(response.statusCode).to.equal(200);
+                });
+
                 it("should refuse to pass through requests if a non-matching host is listed", async () => {
                     await badServer.forAnyRequest().thenReply(200);
 
