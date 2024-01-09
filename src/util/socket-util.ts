@@ -112,14 +112,16 @@ export function resetOrDestroy(requestOrSocket:
     | http2.Http2ServerRequest
 ) {
     let socket: net.Socket | http2.Http2Stream =
-        isHttp2Stream(requestOrSocket)
+        (isHttp2Stream(requestOrSocket) && requestOrSocket.stream)
             ? requestOrSocket.stream
         : ('socket' in requestOrSocket && requestOrSocket.socket)
             ? requestOrSocket.socket
         : requestOrSocket as net.Socket;
 
     while (socket instanceof tls.TLSSocket) {
-        socket = getParentSocket(socket);
+        const parent = getParentSocket(socket);
+        if (!parent) break; // Not clear why, but it seems in some cases we run out of parents here
+        socket = parent;
     }
 
     if ('rstCode' in socket) {
