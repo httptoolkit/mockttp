@@ -86,12 +86,16 @@ export const writeHead = (
     statusMessage?: string | undefined,
     headers?: Headers | RawHeaders | undefined
 ) => {
-    const flatHeaders =
+    const flatHeaders: http.OutgoingHttpHeaders | string[] =
         headers === undefined
             ? {}
+        : isHttp2(response) && Array.isArray(headers)
+            // H2 raw headers support is poor so we map to object here.
+            // We should revert to flat headers once the below is resolved in LTS:
+            // https://github.com/nodejs/node/issues/51402
+            ? rawHeadersToObject(headers)
         : isHttp2(response)
-            // Due to a Node.js bug, H2 never expects flat headers
-            ? headers as {}
+            ? headers as Headers // H2 supports object headers just fine
         : !Array.isArray(headers)
             ? objectHeadersToFlat(headers)
         // RawHeaders for H1, must be flattened:
@@ -102,9 +106,10 @@ export const writeHead = (
     // different casing can't be represented with setHeader at all (the latter overwrites).
 
     if (statusMessage === undefined) {
-        response.writeHead(status, flatHeaders);
+        // Cast is required as Node H2 types don't know about raw headers:
+        response.writeHead(status, flatHeaders as http.OutgoingHttpHeaders);
     } else {
-        response.writeHead(status, statusMessage, flatHeaders);
+        response.writeHead(status, statusMessage, flatHeaders as http.OutgoingHttpHeaders);
     }
 };
 

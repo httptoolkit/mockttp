@@ -300,6 +300,43 @@ nodeOnly(() => {
 
                     await cleanup(proxiedRequest, proxiedClient, client);
                 });
+
+                it("preserves duplicated-key HTTP/2 response headers", async () => {
+                    const mockedEndpoint = await remoteServer.forGet('/mocked-endpoint')
+                        .thenReply(200, "Remote HTTP2 response!", {
+                            'set-cookie': ['a', 'b']
+                        });
+                    await server.forGet(remoteServer.urlFor('/mocked-endpoint'))
+                        .thenPassThrough();
+
+                    const client = http2.connect(server.url);
+
+                    const req = client.request({
+                        ':method': 'CONNECT',
+                        ':authority': `localhost:${remoteServer.port}`
+                    });
+
+                    // Initial response, so the proxy has set up our tunnel:
+                    const responseHeaders = await getHttp2Response(req);
+                    expect(responseHeaders[':status']).to.equal(200);
+
+                    // We can now read/write to req as a raw TCP socket to remoteServer:
+                    const proxiedClient = http2.connect(remoteServer.url, {
+                        // Tunnel this request through the proxy stream
+                        createConnection: () => req
+                    });
+
+                    const proxiedReq = proxiedClient.request({
+                        ':path': '/mocked-endpoint'
+                    });
+                    const response = await getHttp2Response(proxiedReq);
+
+                    expect(response['set-cookie']).to.deep.equal(
+                        ['a', 'b']
+                    );
+
+                    await cleanup(proxiedReq, proxiedClient, client);
+                });
             });
 
         });
