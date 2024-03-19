@@ -339,9 +339,11 @@ function copyAddressDetails(
     source: SocketIsh<typeof SOCKET_ADDRESS_METADATA_FIELDS[number]>,
     target: SocketIsh<typeof SOCKET_ADDRESS_METADATA_FIELDS[number]>
 ) {
-    Object.defineProperties(target, _.zipObject(SOCKET_ADDRESS_METADATA_FIELDS,
+    Object.defineProperties(target, _.zipObject(
+        SOCKET_ADDRESS_METADATA_FIELDS,
         _.range(SOCKET_ADDRESS_METADATA_FIELDS.length).map(() => ({ writable: true }))
-    ));
+    ) as PropertyDescriptorMap);
+
     SOCKET_ADDRESS_METADATA_FIELDS.forEach((fieldName) => {
         if (target[fieldName] === undefined) {
             (target as any)[fieldName] = source[fieldName];
