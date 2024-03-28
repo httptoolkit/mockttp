@@ -201,6 +201,7 @@ export async function createComboServer(
         analyzeAndMaybePassThroughTls(
             tlsServer,
             options.https.tlsPassthrough ?? [],
+            options.https.tlsIntercept ?? [],
             tlsPassthroughListener
         );
 
@@ -369,9 +370,14 @@ function copyTimingDetails<T extends SocketIsh<'__timingInfo'>>(
 function analyzeAndMaybePassThroughTls(
     server: tls.Server,
     passthroughList: Required<MockttpHttpsOptions>['tlsPassthrough'],
+    interceptList: Required<MockttpHttpsOptions>['tlsIntercept'],
     passthroughListener: (socket: net.Socket, address: string, port?: number) => void
 ) {
-    const hostnames = passthroughList.map(({ hostname }) => hostname);
+    if (passthroughList.length > 0 && interceptList.length > 0){
+        throw new Error('Cannot use both tlsPassthrough and tlsIntercept at the same time.');
+    }
+    const passThroughHostnames = passthroughList.map(({ hostname }) => hostname);
+    const interceptHostnames = interceptList.map(({ hostname }) => hostname);
 
     const tlsConnectionListener = server.listeners('connection')[0] as (socket: net.Socket) => {};
     server.removeListener('connection', tlsConnectionListener);
@@ -389,12 +395,21 @@ function analyzeAndMaybePassThroughTls(
                 clientAlpn: helloData.alpnProtocols,
                 ja3Fingerprint: calculateJa3FromFingerprintData(helloData.fingerprintData)
             };
-
-            if (connectHostname && hostnames.includes(connectHostname)) {
+            
+            if (interceptHostnames.length > 0 && connectHostname && !interceptHostnames.includes(connectHostname)) {
                 const upstreamPort = connectPort ? parseInt(connectPort, 10) : undefined;
                 passthroughListener(socket, connectHostname, upstreamPort);
                 return; // Do not continue with TLS
-            } else if (sniHostname && hostnames.includes(sniHostname)) {
+            } else if (interceptHostnames.length > 0 && sniHostname && !interceptHostnames.includes(sniHostname)) {
+                passthroughListener(socket, sniHostname); // Can't guess the port - not included in SNI
+                return; // Do not continue with TLS
+            }
+
+            if (connectHostname && passThroughHostnames.includes(connectHostname)) {
+                const upstreamPort = connectPort ? parseInt(connectPort, 10) : undefined;
+                passthroughListener(socket, connectHostname, upstreamPort);
+                return; // Do not continue with TLS
+            } else if (sniHostname && passThroughHostnames.includes(sniHostname)) {
                 passthroughListener(socket, sniHostname); // Can't guess the port - not included in SNI
                 return; // Do not continue with TLS
             }

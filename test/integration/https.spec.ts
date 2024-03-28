@@ -252,5 +252,59 @@ describe("When configured for HTTPS", () => {
             });
         });
 
+        describe("with some hostnames included", () => {
+            let server = getLocal({
+                https: {
+                    keyPath: './test/fixtures/test-ca.key',
+                    certPath: './test/fixtures/test-ca.pem',
+                    tlsIntercept: [
+                        { hostname: 'wikipedia.org' }
+                    ]
+                }
+            });
+
+            beforeEach(async () => {
+                await server.start();
+                await server.forGet('/').thenReply(200, "Mock response");
+            });
+
+            afterEach(async () => {
+                await server.stop()
+            });
+
+            it("handles matching HTTPS requests", async () => {
+                const response: http.IncomingMessage = await new Promise((resolve) =>
+                    https.get({
+                        host: 'localhost',
+                        port: server.port,
+                        servername: 'wikipedia.org',
+                        headers: { 'Host': 'wikipedia.org' }
+                    }).on('response', resolve)
+                );
+
+                expect(response.statusCode).to.equal(200);
+                const body = (await streamToBuffer(response)).toString();
+                expect(body).to.equal("Mock response");
+            });
+
+            it("skips the server for non-matching HTTPS requests", async function () {
+                this.retries(3); // Example.com can be unreliable
+
+                const response: http.IncomingMessage = await new Promise((resolve, reject) =>
+                    https.get({
+                        host: 'localhost',
+                        port: server.port,
+                        servername: 'example.com',
+                        headers: { 'Host': 'example.com' }
+                    }).on('response', resolve).on('error', reject)
+                );
+
+                expect(response.statusCode).to.equal(200);
+                const body = (await streamToBuffer(response)).toString();
+                expect(body).to.include(
+                    "This domain is for use in illustrative examples in documents."
+                );
+            });
+        });
     });
 });

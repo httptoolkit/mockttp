@@ -696,6 +696,18 @@ export type MockttpHttpsOptions = CAOptions & {
      * here for additional configuration of this behaviour.
      */
     tlsPassthrough?: Array<{ hostname: string }>
+
+    /**
+     * A list of hostnames that should only be intercepted.
+     * 
+     * When set, only connections to these hostnames will be intercepted, and all
+     * other connections will be passed through without interception.
+     * 
+     * Each element in the list must be an object with a 'hostname' field for the
+     * hostname that should be matched. In future more options may be supported
+     * here for additional configuration of this behaviour.
+     */
+    tlsIntercept?: Array<{ hostname: string }>
 };
 
 export interface MockttpOptions {
