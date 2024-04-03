@@ -257,7 +257,7 @@ describe("When configured for HTTPS", () => {
                 https: {
                     keyPath: './test/fixtures/test-ca.key',
                     certPath: './test/fixtures/test-ca.pem',
-                    tlsIntercept: [
+                    tlsInterceptOnly: [
                         { hostname: 'wikipedia.org' }
                     ]
                 }

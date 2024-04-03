@@ -200,8 +200,8 @@ export async function createComboServer(
 
         analyzeAndMaybePassThroughTls(
             tlsServer,
-            options.https.tlsPassthrough ?? [],
-            options.https.tlsIntercept ?? [],
+            options.https.tlsPassthrough,
+            options.https.tlsInterceptOnly,
             tlsPassthroughListener
         );
 
@@ -363,21 +363,21 @@ function copyTimingDetails<T extends SocketIsh<'__timingInfo'>>(
 }
 
 /**
- * Takes a tls passthrough list (may be empty), and reconfigures a given TLS server so that all
+ * Takes tls passthrough configuration (may be empty) and reconfigures a given TLS server so that all
  * client hellos are parsed, matching requests are passed to the given passthrough listener (without
  * continuing setup) and client hello metadata is attached to all sockets.
  */
 function analyzeAndMaybePassThroughTls(
     server: tls.Server,
-    passthroughList: Required<MockttpHttpsOptions>['tlsPassthrough'],
-    interceptList: Required<MockttpHttpsOptions>['tlsIntercept'],
+    passthroughList: Required<MockttpHttpsOptions>['tlsPassthrough'] | undefined,
+    interceptOnlyList: Required<MockttpHttpsOptions>['tlsInterceptOnly'] | undefined,
     passthroughListener: (socket: net.Socket, address: string, port?: number) => void
 ) {
-    if (passthroughList.length > 0 && interceptList.length > 0){
-        throw new Error('Cannot use both tlsPassthrough and tlsIntercept at the same time.');
+    if (passthroughList && interceptOnlyList){
+        throw new Error('Cannot use both tlsPassthrough and tlsInterceptOnly options at the same time.');
     }
-    const passThroughHostnames = passthroughList.map(({ hostname }) => hostname);
-    const interceptHostnames = interceptList.map(({ hostname }) => hostname);
+    const passThroughHostnames = passthroughList?.map(({ hostname }) => hostname) ?? [];
+    const interceptOnlyHostnames = interceptOnlyList?.map(({ hostname }) => hostname);
 
     const tlsConnectionListener = server.listeners('connection')[0] as (socket: net.Socket) => {};
     server.removeListener('connection', tlsConnectionListener);
@@ -395,22 +395,13 @@ function analyzeAndMaybePassThroughTls(
                 clientAlpn: helloData.alpnProtocols,
                 ja3Fingerprint: calculateJa3FromFingerprintData(helloData.fingerprintData)
             };
-            
-            if (interceptHostnames.length > 0 && connectHostname && !interceptHostnames.includes(connectHostname)) {
-                const upstreamPort = connectPort ? parseInt(connectPort, 10) : undefined;
-                passthroughListener(socket, connectHostname, upstreamPort);
-                return; // Do not continue with TLS
-            } else if (interceptHostnames.length > 0 && sniHostname && !interceptHostnames.includes(sniHostname)) {
-                passthroughListener(socket, sniHostname); // Can't guess the port - not included in SNI
-                return; // Do not continue with TLS
-            }
 
-            if (connectHostname && passThroughHostnames.includes(connectHostname)) {
+            if (shouldPassThrough(connectHostname, passThroughHostnames, interceptOnlyHostnames)) {
                 const upstreamPort = connectPort ? parseInt(connectPort, 10) : undefined;
                 passthroughListener(socket, connectHostname, upstreamPort);
                 return; // Do not continue with TLS
-            } else if (sniHostname && passThroughHostnames.includes(sniHostname)) {
-                passthroughListener(socket, sniHostname); // Can't guess the port - not included in SNI
+            } else if (shouldPassThrough(sniHostname, passThroughHostnames, interceptOnlyHostnames)) {
+                passthroughListener(socket, sniHostname!); // Can't guess the port - not included in SNI
                 return; // Do not continue with TLS
             }
         } catch (e) {
@@ -424,4 +415,19 @@ function analyzeAndMaybePassThroughTls(
         // Didn't match a passthrough hostname - continue with TLS setup
         tlsConnectionListener.call(server, socket);
     });
+}
+
+function shouldPassThrough(
+    hostname: string | undefined,
+    // Only one of these two should have values (validated above):
+    passThroughHostnames: string[],
+    interceptOnlyHostnames: string[] | undefined
+): boolean {
+    if (!hostname) return false;
+
+    if (interceptOnlyHostnames) {
+        return !interceptOnlyHostnames.includes(hostname);
+    }
+
+    return passThroughHostnames.includes(hostname);
 }
