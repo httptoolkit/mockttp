@@ -691,11 +691,30 @@ export type MockttpHttpsOptions = CAOptions & {
      * sent raw to the upstream hostname, without handling TLS within Mockttp (i.e.
      * with no TLS interception performed).
      *
-     * Each element in the list must be an object with a 'hostname' field for the
+     * This option is mutually exclusive with `tlsInterceptOnly` and setting both
+     * options will throw an error.
+     *
+     * Each element in this list must be an object with a 'hostname' field for the
      * hostname that should be matched. In future more options may be supported
      * here for additional configuration of this behaviour.
      */
-    tlsPassthrough?: Array<{ hostname: string }>
+    tlsPassthrough?: Array<{ hostname: string }>;
+
+    /**
+     * A limited list of the only hostnames whose TLS should be intercepted.
+     *
+     * This is the opposite of `tlsPassthrough`. When set, only connections
+     * to these hostnames will be intercepted, and all other TLS connections will
+     * be passed through without interception.
+     *
+     * This option is mutually exclusive with `tlsPassthrough` and setting both
+     * options will throw an error.
+     *
+     * Each element in this list must be an object with a 'hostname' field for the
+     * hostname that should be matched. In future more options may be supported
+     * here for additional configuration of this behaviour.
+     */
+    tlsInterceptOnly?: Array<{ hostname: string }>;
 };
 
 export interface MockttpOptions {
