@@ -19,6 +19,7 @@ import {
     cleanup,
     fetch,
     H2_TLS_ON_TLS_SUPPORTED,
+    BROKEN_H2_OVER_H2_TUNNELLING,
     getDeferred
 } from "../test-utils";
 
@@ -77,7 +78,9 @@ browserOnly(() => {
 nodeOnly(() => {
     describe("Using Mockttp with HTTP/2", function () {
 
-        describe("without TLS", () => {
+        describe("without TLS", function () {
+
+            if (semver.satisfies(process.version, BROKEN_H2_OVER_H2_TUNNELLING)) return;
 
             const server = getLocal();
 

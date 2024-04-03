@@ -11,7 +11,7 @@ import {
     SOCKET_RESET_SUPPORTED,
     openRawTlsSocket,
     http2ProxyRequest,
-    BROKEN_H2_TUNNELLING
+    BROKEN_H1_OVER_H2_TUNNELLING
 } from "../../test-utils";
 
 describe("Broken response handlers", function () {
@@ -108,7 +108,7 @@ describe("Broken response handlers", function () {
 
             it("should allow forcibly closing h1.1-over-h2 proxy connections", async function () {
                 if (!semver.satisfies(process.version, SOCKET_RESET_SUPPORTED)) this.skip();
-                if (semver.satisfies(process.version, BROKEN_H2_TUNNELLING)) this.skip();
+                if (semver.satisfies(process.version, BROKEN_H1_OVER_H2_TUNNELLING)) this.skip();
 
                 await server.forGet('example.com').thenResetConnection();
 

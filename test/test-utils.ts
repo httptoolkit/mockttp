@@ -260,10 +260,11 @@ export const HTTP_ABORTSIGNAL_SUPPORTED = ">=14.17";
 export const OLD_TLS_SUPPORTED = "<17"; // In 17+ TLS < v1.2 is only available with legacy OpenSSL flag
 export const NATIVE_FETCH_SUPPORTED = ">=18";
 export const SOCKET_RESET_SUPPORTED = "^16.17 || >=18.3";
-export const BROKEN_H2_TUNNELLING = "^18.8"; // Some H1-over-H2 tests fail in Node 18 (but not 19)
+export const BROKEN_H1_OVER_H2_TUNNELLING = "^18.8";
 export const DEFAULT_KEEP_ALIVE = ">=19";
 export const FIXED_KEEP_ALIVE_BEHAVIOUR = ">=20";
 export const CHUNKED_ENCODING_BUG = "<16";
+export const BROKEN_H2_OVER_H2_TUNNELLING = "~20.12"; // https://github.com/nodejs/node/issues/52344
 
 export const defaultNodeConnectionHeader = () =>
     semver.satisfies(process.version, DEFAULT_KEEP_ALIVE)
