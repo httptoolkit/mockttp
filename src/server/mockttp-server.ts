@@ -11,6 +11,7 @@ import { v4 as uuid } from "uuid";
 import cors = require("cors");
 import now = require("performance-now");
 import WebSocket = require("ws");
+import { Mutex } from 'async-mutex';
 
 import {
     InitiatedRequest,
@@ -71,6 +72,8 @@ type ExtendedRawRequest = (http.IncomingMessage | http2.Http2ServerRequest) & {
     path?: string;
 };
 
+const serverPortCheckMutex = new Mutex();
+
 /**
  * A in-process Mockttp implementation. This starts servers on the local machine in the
  * current process, and exposes methods to directly manage them.
@@ -123,22 +126,24 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     }
 
     async start(portParam: number | PortRange = { startPort: 8000, endPort: 65535 }): Promise<void> {
-        const port = _.isNumber(portParam)
-            ? portParam
-            : await portfinder.getPortPromise({
-                port: portParam.startPort,
-                stopPort: portParam.endPort
-            });
-
-        if (this.debug) console.log(`Starting mock server on port ${port}`);
-
         this.server = await createComboServer({
             debug: this.debug,
             https: this.httpsOptions,
             http2: this.isHttp2Enabled,
         }, this.app, this.announceTlsErrorAsync.bind(this), this.passthroughSocket.bind(this));
 
-        this.server!.listen(port);
+        // We use a mutex here to avoid contention on ports with parallel setup
+        await serverPortCheckMutex.runExclusive(async () => {
+            const port = _.isNumber(portParam)
+                ? portParam
+                : await portfinder.getPortPromise({
+                    port: portParam.startPort,
+                    stopPort: portParam.endPort
+                });
+
+            if (this.debug) console.log(`Starting mock server on port ${port}`);
+            this.server!.listen(port);
+        });
 
         // Handle & report client request errors
         this.server!.on('clientError', this.handleInvalidHttp1Request.bind(this));
