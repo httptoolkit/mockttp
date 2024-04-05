@@ -273,7 +273,11 @@ export async function createComboServer(
     function handleH1Connect(req: http.IncomingMessage, socket: net.Socket) {
         // Clients may disconnect at this point (for all sorts of reasons), but here
         // nothing else is listening, so we need to catch errors on the socket:
-        socket.once('error', (e) => console.log('Error on client socket', e));
+        socket.once('error', (e) => {
+            if (options.debug) {
+                console.log('Error on client socket', e);
+            }
+        });
 
         const connectUrl = req.url || req.headers['host'];
         if (!connectUrl) {
