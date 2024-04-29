@@ -755,6 +755,33 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                     reject(e);
                 });
 
+                // Forward server trailers, if we receive any:
+                serverRes.on('end', () => {
+                    if (!serverRes.rawTrailers?.length) return;
+
+                    const trailersToForward = pairFlatRawHeaders(serverRes.rawTrailers)
+                        .filter(([key, value]) => {
+                            if (!validateHeader(key, value)) {
+                                console.warn(`Not forwarding invalid trailer: "${key}: ${value}"`);
+                                // Nothing else we can do in this case regardless - setHeaders will
+                                // throw within Node if we try to set this value.
+                                return false;
+                            }
+                            return true;
+                        });
+
+                    try {
+                        clientRes.addTrailers(
+                            isHttp2(clientReq)
+                            // HTTP/2 compat doesn't support raw headers here (yet)
+                            ? rawHeadersToObjectPreservingCase(trailersToForward)
+                            : trailersToForward
+                        );
+                    } catch (e) {
+                        console.warn(`Failed to forward response trailers: ${e}`);
+                    }
+                });
+
                 let serverStatusCode = serverRes.statusCode!;
                 let serverStatusMessage = serverRes.statusMessage
                 let serverRawHeaders = pairFlatRawHeaders(serverRes.rawHeaders);

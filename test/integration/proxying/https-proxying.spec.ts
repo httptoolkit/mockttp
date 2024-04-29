@@ -428,6 +428,7 @@ nodeOnly(() => {
                         "received-headers": JSON.stringify(req.headers),
                         "received-body": (await streamToBuffer(req)).toString('utf8') || ''
                     });
+                    res.addTrailers({ 'test-response-trailer': 'trailer-value' });
                     res.end("Real HTTP/2 response");
                 }));
 
@@ -451,6 +452,19 @@ nodeOnly(() => {
                 expect(response.headers[':status']).to.equal(200);
                 expect(response.headers['received-url']).to.equal('/');
                 expect(response.body.toString('utf8')).to.equal("Real HTTP/2 response");
+            });
+
+            it("can pass through response trailers successfully", async () => {
+                await server.forAnyRequest().thenPassThrough({
+                    ignoreHostHttpsErrors: ['localhost']
+                });
+
+                const response = await http2ProxyRequest(server, `https://localhost:${targetPort}`, {
+                    headers: { ':method': 'GET' }
+                });
+
+                expect(response.headers[':status']).to.equal(200);
+                expect(response.trailers['test-response-trailer']).to.equal('trailer-value');
             });
 
             it("should return a 502 for failing upstream requests by default", async () => {

@@ -276,7 +276,8 @@ type Http2ResponseHeaders = http2.IncomingHttpHeaders & http2.IncomingHttpStatus
 type Http2TestRequestResult = {
     alpnProtocol: string | undefined,
     headers: http2.IncomingHttpHeaders,
-    body: Buffer
+    body: Buffer,
+    trailers: http2.IncomingHttpHeaders
 };
 
 export function getHttp2Response(req: http2.ClientHttp2Stream) {
@@ -303,6 +304,14 @@ export function getHttp2Body(req: http2.ClientHttp2Stream) {
     });
 }
 
+export function getHttp2ResponseTrailers(req: http2.ClientHttp2Stream) {
+    return new Promise<Http2ResponseHeaders>((resolve, reject) => {
+        req.on('trailers', resolve);
+        req.on('end', () => resolve({}));
+        req.on('error', reject);
+    });
+}
+
 export async function http2Request(
     url: string,
     headers: {},
@@ -321,10 +330,12 @@ export async function http2Request(
 
             const [
                 responseHeaders,
-                responseBody
+                responseBody,
+                responseTrailers
             ] = await Promise.all([
                 getHttp2Response(req),
-                getHttp2Body(req)
+                getHttp2Body(req),
+                getHttp2ResponseTrailers(req)
             ]);
 
             const alpnProtocol = client.alpnProtocol;
@@ -332,7 +343,8 @@ export async function http2Request(
             resolve({
                 alpnProtocol,
                 headers: responseHeaders,
-                body: responseBody
+                body: responseBody,
+                trailers: responseTrailers
             });
         } catch (e) {
             reject(e);
