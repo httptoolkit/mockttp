@@ -175,7 +175,7 @@
     "cors": "^2.8.4",
     "cors-gate": "^1.1.3",
     "cross-fetch": "^3.1.5",
-    "destroyable-server": "^1.0.0",
+    "destroyable-server": "^1.0.2",
     "express": "^4.14.0",
     "graphql": "^14.0.2 || ^15.5",
     "graphql-http": "^1.22.0",
