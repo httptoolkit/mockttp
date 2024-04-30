@@ -70,7 +70,7 @@ nodeOnly(() => {
             it("should mock proxied HTTP matching badly formatted URLs with empty paths", async () => {
                 await server.forGet('/').thenReply(200, 'Mock response');
 
-                const response = await sendRawRequest(server, 'GET http://example.com HTTP/1.1\n\n');
+                const response = await sendRawRequest(server, 'GET http://example.com HTTP/1.1\r\n\r\n');
                 expect(response).to.include('HTTP/1.1 200 OK');
                 expect(response).to.include('Mock response');
             });

@@ -312,7 +312,7 @@ describe("Request subscriptions", () => {
                 let seenRequestPromise = getDeferred<CompletedRequest>();
                 await server.on('request', (r) => seenRequestPromise.resolve(r));
 
-                sendRawRequest(server, 'GET http://example.com HTTP/1.1\n\n');
+                sendRawRequest(server, 'GET http://example.com HTTP/1.1\r\n\r\n');
 
                 let seenRequest = await seenRequestPromise;
                 expect(seenRequest.url).to.equal('http://example.com');
