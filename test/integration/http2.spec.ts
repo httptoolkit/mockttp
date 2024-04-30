@@ -8,7 +8,7 @@ import * as semver from 'semver';
 import * as fs from 'fs';
 import * as portfinder from 'portfinder';
 
-import { CompletedRequest, getLocal } from "../..";
+import { CompletedRequest, CompletedResponse, getLocal } from "../..";
 import {
     expect,
     nodeOnly,
@@ -457,6 +457,59 @@ nodeOnly(() => {
                     '::1' // IPv6 localhost
                 ]);
                 expect(seenRequest.remotePort).to.be.greaterThanOrEqual(32768);
+
+                await cleanup(proxiedClient, client);
+            });
+
+            it("should include should metadata in events for proxied HTTP/2 responses", async function() {
+                if (!semver.satisfies(process.version, H2_TLS_ON_TLS_SUPPORTED)) this.skip();
+
+                let seenResponsePromise = getDeferred<CompletedResponse>();
+                await server.on('response', (r) => seenResponsePromise.resolve(r));
+
+                await server.forGet('https://example.com/mocked-endpoint')
+                    .thenReply(200, "Proxied HTTP2 response!", {
+                        'TEST-header': 'value'
+                    });
+
+                const client = http2.connect(server.url);
+
+                const req = client.request({
+                    ':method': 'CONNECT',
+                    ':authority': 'example.com:443'
+                });
+
+                // Initial response, the proxy has set up our tunnel:
+                const responseHeaders = await getHttp2Response(req);
+                expect(responseHeaders[':status']).to.equal(200);
+
+                // We can now read/write to req as a raw TCP socket to example.com:
+                const proxiedClient = http2.connect('https://example.com', {
+                     // Tunnel this request through the proxy stream
+                    createConnection: () => tls.connect({
+                        socket: req as any,
+                        ALPNProtocols: ['h2']
+                    })
+                });
+
+                const proxiedRequest = proxiedClient.request({
+                    ':path': '/mocked-endpoint'
+                });
+                await getHttp2Response(proxiedRequest);
+                await getHttp2Body(proxiedRequest)
+
+                const seenResponse = await seenResponsePromise;
+                expect(seenResponse.statusCode).to.equal(200);
+                expect(seenResponse.statusMessage).to.equal('');
+                expect(seenResponse.headers).to.deep.equal({
+                    ':status': '200',
+                    'test-header': 'value'
+                });
+                expect(seenResponse.rawHeaders).to.deep.equal([
+                    [':status', '200'],
+                    ['TEST-header', 'value']
+                ]);
+                expect(await seenResponse.body.getText()).to.equal('Proxied HTTP2 response!');
 
                 await cleanup(proxiedClient, client);
             });

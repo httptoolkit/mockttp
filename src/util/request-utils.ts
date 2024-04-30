@@ -402,6 +402,10 @@ export function trackResponse(
             writtenHeaders = objectHeadersToRaw(headersArg ?? {});
         }
 
+        if (isHttp2(trackedResponse)) {
+            writtenHeaders.unshift([':status', args[0].toString()]);
+        }
+
         // Headers might also have been set with setHeader before. They'll be combined, with headers
         // here taking precendence. We simulate this by pulling in all values from getHeaders() and
         // remembering any of those that we're not about to override.
