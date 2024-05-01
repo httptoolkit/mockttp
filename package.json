@@ -50,7 +50,7 @@
     "@httptoolkit/proxy-agent": false
   },
   "bin": {
-    "mockttp": "./dist/admin/admin-bin.js"
+    "mockttp": "dist/admin/admin-bin.js"
   },
   "runkitExampleFilename": "./docs/runkitExample.js",
   "files": [
