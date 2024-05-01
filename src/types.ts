@@ -42,6 +42,7 @@ export interface Trailers {
 }
 
 export type RawHeaders = Array<[key: string, value: string]>;
+export type RawTrailers = RawHeaders; // Just a convenient alias
 
 export interface Request {
     id: string;
@@ -147,6 +148,7 @@ export interface TlsFailureTimingEvents extends TlsTimingEvents {
 // Internal representation of an ongoing HTTP request whilst it's being processed
 export interface OngoingRequest extends Request, EventEmitter {
     body: OngoingBody;
+    rawTrailers?: RawHeaders;
 }
 
 export interface OngoingBody {
@@ -229,6 +231,8 @@ export interface AbortedRequest extends InitiatedRequest {
 // Internal & external representation of a fully completed HTTP request
 export interface CompletedRequest extends Request {
     body: CompletedBody;
+    rawTrailers: RawTrailers;
+    trailers: Trailers;
 }
 
 export interface TimingEvents {
@@ -253,6 +257,7 @@ export interface OngoingResponse extends http.ServerResponse {
     getHeaders(): Headers;
     getRawHeaders(): RawHeaders;
     body: OngoingBody;
+    getRawTrailers(): RawTrailers;
     timingEvents: TimingEvents;
     tags: string[];
 }
@@ -264,6 +269,8 @@ export interface CompletedResponse {
     headers: Headers;
     rawHeaders: RawHeaders;
     body: CompletedBody;
+    rawTrailers: RawTrailers;
+    trailers: Trailers;
     timingEvents: TimingEvents;
     tags: string[];
 }

@@ -344,8 +344,33 @@ export function buildInitiatedRequest(request: OngoingRequest): InitiatedRequest
 export async function waitForCompletedRequest(request: OngoingRequest): Promise<CompletedRequest> {
     const body = await waitForBody(request.body, request.headers);
     const requestData = buildInitiatedRequest(request);
-    return { ...requestData, body };
+    return {
+        ...requestData,
+        body,
+        rawTrailers: request.rawTrailers ?? [],
+        trailers: rawHeadersToObject(request.rawTrailers ?? [])
+    };
 }
+
+/**
+ * Parse the accepted format of the headers argument for writeHead and addTrailers
+ * into a single consistent paired-tuple format.
+ */
+const getHeaderPairsFromArgument = (headersArg: any) => {
+    // Two legal formats of header args (flat & object), one unofficial (tuple array)
+    if (Array.isArray(headersArg)) {
+        if (!Array.isArray(headersArg[0])) {
+            // Flat -> Raw tuples
+            return pairFlatRawHeaders(headersArg);
+        } else {
+            // Already raw tuples, cheeky
+            return headersArg;
+        }
+    } else {
+        // Headers object -> raw tuples
+        return objectHeadersToRaw(headersArg ?? {});
+    }
+};
 
 export function trackResponse(
     response: http.ServerResponse,
@@ -365,6 +390,7 @@ export function trackResponse(
     const originalWriteHeader = trackedResponse.writeHead;
     const originalWrite = trackedResponse.write;
     const originalEnd = trackedResponse.end;
+    const originalAddTrailers = trackedResponse.addTrailers;
     const originalGetHeaders = trackedResponse.getHeaders;
 
     let writtenHeaders: RawHeaders | undefined;
@@ -388,19 +414,7 @@ export function trackResponse(
             headersArg = args[1];
         }
 
-        // Two legal formats of header args (flat & object), one unofficial (tuple array)
-        if (Array.isArray(headersArg)) {
-            if (!Array.isArray(headersArg[0])) {
-                // Flat -> Raw tuples
-                writtenHeaders = pairFlatRawHeaders(headersArg);
-            } else {
-                // Already raw tuples, cheeky
-                writtenHeaders = headersArg;
-            }
-        } else {
-            // Headers object -> raw tuples
-            writtenHeaders = objectHeadersToRaw(headersArg ?? {});
-        }
+        writtenHeaders = getHeaderPairsFromArgument(headersArg);
 
         if (isHttp2(trackedResponse)) {
             writtenHeaders.unshift([':status', args[0].toString()]);
@@ -427,7 +441,16 @@ export function trackResponse(
         }
 
         return originalWriteHeader.apply(this, args);
-    }
+    };
+
+    let writtenTrailers: RawHeaders | undefined;
+    trackedResponse.getRawTrailers = () => writtenTrailers ?? [];
+
+    trackedResponse.addTrailers = function (this: typeof trackedResponse, ...args: any) {
+        const trailersArg = args[0];
+        writtenTrailers = getHeaderPairsFromArgument(trailersArg);
+        return originalAddTrailers.apply(this, args);
+    };
 
     const trackingWrite = function (this: typeof trackedResponse, ...args: any) {
         trackingStream.write.apply(trackingStream, args);
@@ -484,9 +507,14 @@ export async function waitForCompletedResponse(
         'tags'
     ]).assign({
         statusMessage: '',
+
         headers: response.getHeaders(),
         rawHeaders: response.getRawHeaders(),
-        body: body
+
+        body: body,
+
+        rawTrailers: response.getRawTrailers(),
+        trailers: rawHeadersToObject(response.getRawTrailers())
     }).valueOf();
 
     if (!(response instanceof http2.Http2ServerResponse)) {
@@ -608,6 +636,8 @@ export function parseRawHttpResponse(input: Buffer, request: OngoingRequest): Co
         statusMessage,
         rawHeaders,
         headers,
-        body
+        body,
+        rawTrailers: [],
+        trailers: {}
     };
 }

@@ -96,7 +96,9 @@ export class RequestRule implements RequestRule {
                     const initiatedRequest = buildInitiatedRequest(req);
                     return {
                         ...initiatedRequest,
-                        body: buildBodyReader(Buffer.from([]), req.headers)
+                        body: buildBodyReader(Buffer.from([]), req.headers),
+                        rawTrailers: [],
+                        trailers: {}
                     };
                 })
             );

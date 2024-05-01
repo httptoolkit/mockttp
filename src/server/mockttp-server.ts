@@ -26,7 +26,8 @@ import {
     WebSocketMessage,
     WebSocketClose,
     TlsPassthroughEvent,
-    RuleEvent
+    RuleEvent,
+    RawTrailers
 } from "../types";
 import { DestroyableServer } from "destroyable-server";
 import {
@@ -614,10 +615,21 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         makePropertyWritable(req, 'headers');
         makePropertyWritable(req, 'rawHeaders');
 
+        let rawTrailers: RawTrailers | undefined;
+        Object.defineProperty(req, 'rawTrailers', {
+            get: () => rawTrailers,
+            set: (flatRawTrailers) => {
+                rawTrailers = flatRawTrailers
+                    ? pairFlatRawHeaders(flatRawTrailers)
+                    : undefined;
+            }
+        });
+
         return Object.assign(req, {
             id,
             headers,
             rawHeaders,
+            rawTrailers, // Just makes the type happy - really managed by property above
             remoteIpAddress: req.socket.remoteAddress,
             remotePort: req.socket.remotePort,
             timingEvents,
@@ -967,6 +979,8 @@ ${await this.suggestRule(request)}`
                     ...commonParams,
                     headers: { 'connection': 'close' },
                     rawHeaders: [['Connection', 'close']],
+                    trailers: {},
+                    rawTrailers: [],
                     statusCode:
                         isHeaderOverflow
                             ? 431

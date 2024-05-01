@@ -159,6 +159,7 @@ export const MockttpSchema = gql`
         rawHeaders: Json!
 
         body: Buffer!
+        rawTrailers: Json!
     }
 
     type AbortedRequest {
@@ -195,6 +196,7 @@ export const MockttpSchema = gql`
         headers: Json!
         rawHeaders: Json!
         body: Buffer!
+        rawTrailers: Json!
     }
 
     type WebSocketMessage {

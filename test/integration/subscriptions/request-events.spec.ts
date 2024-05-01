@@ -68,7 +68,10 @@ describe("Request initiated subscriptions", () => {
                 '::1' // IPv6 localhost
             ]);
             expect(seenRequest.remotePort).to.be.greaterThanOrEqual(32768);
+
             expect((seenRequest as any).body).to.equal(undefined); // No body included yet
+            expect((seenRequest as any).trailers).to.equal(undefined); // No trailers yet
+            expect((seenRequest as any).rawTrailers).to.equal(undefined);
 
             const matchableHeaders = _.omit(seenRequest.headers, INCONSISTENT_HEADERS);
             expect(matchableHeaders).to.deep.equal({
@@ -100,11 +103,18 @@ describe("Request initiated subscriptions", () => {
                 expect(seenInitialRequest.protocol).to.equal('http');
                 expect(seenInitialRequest.httpVersion).to.equal('1.1');
                 expect(seenInitialRequest.url).to.equal(server.urlFor('/'));
-                expect((seenInitialRequest as any).body).to.equal(undefined);
 
+                expect((seenInitialRequest as any).body).to.equal(undefined);
+                expect((seenInitialRequest as any).trailers).to.equal(undefined);
+                expect((seenInitialRequest as any).rawTrailers).to.equal(undefined);
+
+                req.addTrailers({ 'test-trailer': 'hello' });
                 req.end('end body');
+
                 let seenCompletedRequest = await seenCompletedRequestPromise;
                 expect(await seenCompletedRequest.body.getText()).to.equal('start body\nend body');
+                expect(seenCompletedRequest.trailers).to.deep.equal({ 'test-trailer': 'hello' });
+                expect(seenCompletedRequest.rawTrailers).to.deep.equal([['test-trailer', 'hello']]);
             });
 
             it("should include the raw request headers", async () => {
@@ -165,6 +175,8 @@ describe("Request initiated subscriptions", () => {
             expect(seenRequest.httpVersion).to.equal('1.1');
             expect(seenRequest.url).to.equal(server.urlFor("/mocked-endpoint"));
             expect((seenRequest as any).body).to.equal(undefined); // No body included yet
+            expect((seenRequest as any).trailers).to.equal(undefined); // No trailers yet
+            expect((seenRequest as any).rawTrailers).to.equal(undefined);
 
             const matchableHeaders = _.omit(seenRequest.headers, INCONSISTENT_HEADERS);
             expect(matchableHeaders).to.deep.equal({
@@ -198,6 +210,8 @@ describe("Request initiated subscriptions", () => {
                 expect(seenRequest.httpVersion).to.equal('1.1');
                 expect(seenRequest.url).to.equal(client.urlFor("/mocked-endpoint"));
                 expect((seenRequest as any).body).to.equal(undefined); // No body included yet
+                expect((seenRequest as any).trailers).to.equal(undefined); // No trailers yet
+                expect((seenRequest as any).rawTrailers).to.equal(undefined);
             });
 
             it("should include the raw request headers", async () => {
@@ -264,6 +278,8 @@ describe("Request subscriptions", () => {
             ]);
             expect(seenRequest.remotePort).to.be.greaterThanOrEqual(32768);
             expect(await seenRequest.body.getText()).to.equal('body-text');
+            expect(seenRequest.rawTrailers).to.deep.equal([]);
+            expect(seenRequest.trailers).to.deep.equal({});
             expect(seenRequest.tags).to.deep.equal([]);
         });
 
@@ -374,7 +390,34 @@ describe("Request subscriptions", () => {
                     `http://localhost:${client.port}/mocked-endpoint`
                 );
                 expect(await seenRequest.body.getText()).to.equal('body-text');
+                expect(seenRequest.rawTrailers).to.deep.equal([]);
+                expect(seenRequest.trailers).to.deep.equal({});
                 expect(seenRequest.tags).to.deep.equal([]);
+            });
+
+            it("should include request trailer details", async () => {
+                let seenRequestPromise = getDeferred<CompletedRequest>();
+                await client.on('request', (r) => seenRequestPromise.resolve(r));
+
+                const req = http.request({
+                    method: 'POST',
+                    hostname: 'localhost',
+                    port: client.port
+                });
+
+                req.write('hello');
+                req.addTrailers([
+                    ['test-TRAILER', 'goodbye']
+                ])
+                req.end();
+
+                let seenRequest = await seenRequestPromise;
+                expect(seenRequest.rawTrailers).to.deep.equal([
+                    ['test-TRAILER', 'goodbye']
+                ]);
+                expect(seenRequest.trailers).to.deep.equal({
+                    'test-trailer': 'goodbye'
+                });
             });
         });
     });

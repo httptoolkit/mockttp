@@ -38,6 +38,14 @@ function normalizeHttpMessage(message: any, event?: SubscribableEvent) {
         message.rawHeaders = objectHeadersToRaw(message.headers);
     }
 
+    if (message.rawTrailers) {
+        message.rawTrailers = JSON.parse(message.rawTrailers);
+        message.trailers = rawHeadersToObject(message.rawTrailers);
+    } else if (message.rawHeaders && message.body) { // HTTP events with bodies should have trailers
+        message.rawTrailers = [];
+        message.trailers = {};
+    }
+
     if (message.body !== undefined) {
         // Body is serialized as the raw encoded buffer in base64
         message.body = buildBodyReader(Buffer.from(message.body, 'base64'), message.headers);
@@ -218,42 +226,44 @@ export class MockttpAdminRequestBuilder {
         const query = {
             'request-initiated': gql`subscription OnRequestInitiated {
                 requestInitiated {
-                    id,
-                    protocol,
-                    method,
-                    url,
-                    path,
-                    ${this.schema.asOptionalField('InitiatedRequest', 'remoteIpAddress')},
-                    ${this.schema.asOptionalField('InitiatedRequest', 'remotePort')},
-                    hostname,
+                    id
+                    protocol
+                    method
+                    url
+                    path
+                    ${this.schema.asOptionalField('InitiatedRequest', 'remoteIpAddress')}
+                    ${this.schema.asOptionalField('InitiatedRequest', 'remotePort')}
+                    hostname
 
                     ${this.schema.typeHasField('InitiatedRequest', 'rawHeaders')
                         ? 'rawHeaders'
                         : 'headers'
                     }
-                    timingEvents,
-                    httpVersion,
+                    timingEvents
+                    httpVersion
                     ${this.schema.asOptionalField('InitiatedRequest', 'tags')}
                 }
             }`,
             request: gql`subscription OnRequest {
                 requestReceived {
-                    id,
+                    id
                     ${this.schema.asOptionalField('Request', 'matchedRuleId')}
-                    protocol,
-                    method,
-                    url,
-                    path,
-                    ${this.schema.asOptionalField('Request', 'remoteIpAddress')},
-                    ${this.schema.asOptionalField('Request', 'remotePort')},
-                    hostname,
+                    protocol
+                    method
+                    url
+                    path
+                    ${this.schema.asOptionalField('Request', 'remoteIpAddress')}
+                    ${this.schema.asOptionalField('Request', 'remotePort')}
+                    hostname
 
                     ${this.schema.typeHasField('Request', 'rawHeaders')
                         ? 'rawHeaders'
                         : 'headers'
                     }
 
-                    body,
+                    body
+                    ${this.schema.asOptionalField('Request', 'rawTrailers')}
+
                     ${this.schema.asOptionalField('Request', 'timingEvents')}
                     ${this.schema.asOptionalField('Request', 'httpVersion')}
                     ${this.schema.asOptionalField('Request', 'tags')}
@@ -261,85 +271,89 @@ export class MockttpAdminRequestBuilder {
             }`,
             response: gql`subscription OnResponse {
                 responseCompleted {
-                    id,
-                    statusCode,
-                    statusMessage,
+                    id
+                    statusCode
+                    statusMessage
 
                     ${this.schema.typeHasField('Response', 'rawHeaders')
                         ? 'rawHeaders'
                         : 'headers'
                     }
 
-                    body,
+                    body
+                    ${this.schema.asOptionalField('Response', 'rawTrailers')}
+
                     ${this.schema.asOptionalField('Response', 'timingEvents')}
                     ${this.schema.asOptionalField('Response', 'tags')}
                 }
             }`,
             'websocket-request': gql`subscription OnWebSocketRequest {
                 webSocketRequest {
-                    id,
-                    matchedRuleId,
-                    protocol,
-                    method,
-                    url,
-                    path,
-                    remoteIpAddress,
-                    remotePort,
-                    hostname,
+                    id
+                    matchedRuleId
+                    protocol
+                    method
+                    url
+                    path
+                    remoteIpAddress
+                    remotePort
+                    hostname
 
-                    rawHeaders,
-                    body,
+                    rawHeaders
+                    body
+                    ${this.schema.asOptionalField('Request', 'rawTrailers')}
 
-                    timingEvents,
-                    httpVersion,
+                    timingEvents
+                    httpVersion
                     tags
                 }
             }`,
             'websocket-accepted': gql`subscription OnWebSocketAccepted {
                 webSocketAccepted {
-                    id,
-                    statusCode,
-                    statusMessage,
+                    id
+                    statusCode
+                    statusMessage
 
-                    rawHeaders,
-                    body,
+                    rawHeaders
+                    body
+                    ${this.schema.asOptionalField('Response', 'rawTrailers')}
 
-                    timingEvents,
+                    timingEvents
                     tags
                 }
             }`,
             'websocket-message-received': gql`subscription OnWebSocketMessageReceived {
                 webSocketMessageReceived {
-                    streamId,
-                    direction,
-                    content,
-                    isBinary,
-                    eventTimestamp,
+                    streamId
+                    direction
+                    content
+                    isBinary
+                    eventTimestamp
 
-                    timingEvents,
+                    timingEvents
                     tags
                 }
             }`,
             'websocket-message-sent': gql`subscription OnWebSocketMessageSent {
                 webSocketMessageSent {
-                    streamId,
-                    direction,
-                    content,
-                    isBinary,
-                    eventTimestamp,
+                    streamId
+                    direction
+                    content
+                    isBinary
+                    eventTimestamp
 
-                    timingEvents,
+                    timingEvents
                     tags
                 }
             }`,
             'websocket-close': gql`subscription OnWebSocketClose {
                 webSocketClose {
-                    streamId,
+                    streamId
 
-                    closeCode,
-                    closeReason,
+                    closeCode
+                    closeReason
 
-                    timingEvents,
+                    timingEvents
                     tags
                 }
             }`,
@@ -417,8 +431,8 @@ export class MockttpAdminRequestBuilder {
                             : 'headers'
                         }
 
-                        ${this.schema.asOptionalField('ClientErrorRequest', 'remoteIpAddress')},
-                        ${this.schema.asOptionalField('ClientErrorRequest', 'remotePort')},
+                        ${this.schema.asOptionalField('ClientErrorRequest', 'remoteIpAddress')}
+                        ${this.schema.asOptionalField('ClientErrorRequest', 'remotePort')}
                     }
                     response {
                         id
@@ -433,6 +447,7 @@ export class MockttpAdminRequestBuilder {
                         }
 
                         body
+                        ${this.schema.asOptionalField('Response', 'rawTrailers')}
                     }
                 }
             }`,

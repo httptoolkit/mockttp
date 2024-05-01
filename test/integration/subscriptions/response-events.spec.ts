@@ -52,6 +52,8 @@ describe("Response subscriptions", () => {
                     'access-control-allow-origin': '*'
                 }
             );
+            expect(seenResponse.trailers).to.deep.equal({});
+            expect(seenResponse.rawTrailers).to.deep.equal([]);
         });
 
         it("should expose ungzipped bodies as .text", async () => {
@@ -165,6 +167,25 @@ describe("Response subscriptions", () => {
                 ["first-header", "1"],
                 ["UPPERCASE-header", "value"],
                 ["last-header", "2"]
+            ]);
+        });
+
+        it("should include raw trailer data", async () => {
+            await server.forGet('/mocked-endpoint').thenReply(200, undefined, {}, {
+                "custom-TRAILER": "TRAILER-value"
+            });
+
+            let seenResponsePromise = getDeferred<CompletedResponse>();
+            await server.on('response', (r) => seenResponsePromise.resolve(r));
+
+            fetch(server.urlFor("/mocked-endpoint"));
+
+            let seenResponse = await seenResponsePromise;
+            expect(seenResponse.trailers).to.deep.equal({
+                "custom-trailer": "TRAILER-value"
+            });
+            expect(seenResponse.rawTrailers).to.deep.equal([
+                ["custom-TRAILER", "TRAILER-value"]
             ]);
         });
     });
