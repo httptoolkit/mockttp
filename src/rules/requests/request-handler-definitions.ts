@@ -279,7 +279,7 @@ export class SimpleHandlerDefinition extends Serializable implements RequestHand
         validateCustomHeaders({}, headers);
         validateCustomHeaders({}, trailers);
 
-        if (!_.isEmpty(trailers) && !_.isEmpty(headers)) {
+        if (!_.isEmpty(trailers) && headers) {
             if (!Object.entries(headers!).some(([key, value]) =>
                 key.toLowerCase() === 'transfer-encoding' && value === 'chunked'
             )) {

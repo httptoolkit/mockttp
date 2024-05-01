@@ -171,7 +171,7 @@ describe("Response subscriptions", () => {
         });
 
         it("should include raw trailer data", async () => {
-            await server.forGet('/mocked-endpoint').thenReply(200, undefined, {}, {
+            await server.forGet('/mocked-endpoint').thenReply(200, undefined, undefined, {
                 "custom-TRAILER": "TRAILER-value"
             });
 
