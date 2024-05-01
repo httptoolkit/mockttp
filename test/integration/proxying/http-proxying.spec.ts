@@ -21,6 +21,7 @@ import {
     defaultNodeConnectionHeader
 } from "../../test-utils";
 import { isLocalIPv6Available } from "../../../src/util/socket-util";
+import { streamToBuffer } from "../../../src/util/buffer-utils";
 
 const INITIAL_ENV = _.cloneDeep(process.env);
 
@@ -138,6 +139,43 @@ nodeOnly(() => {
                 expect(response.statusCode).to.equal(200); // Callback expectations should run OK
             });
 
+            it("should be able to pass through request trailers", async () => {
+                await remoteServer.forAnyRequest().thenCallback(async (req) => {
+                    const trailers = req.rawTrailers;
+                    expect(trailers).to.deep.equal([
+                        ['trailer-NAME', 'trailer-value']
+                    ]);
+
+                    return {
+                        statusCode: 200,
+                        body: 'Found expected trailers'
+                    };
+                });
+
+                await server.forAnyRequest().thenPassThrough();
+
+                const request = http.request({
+                    method: 'POST',
+                    hostname: 'localhost',
+                    port: server.port,
+                    headers: {
+                        'Trailer': 'trailer-name',
+                        'Host': `localhost:${remoteServer.port}` // Manually proxy upstream
+                    }
+                });
+
+                request.addTrailers({ 'trailer-NAME': 'trailer-value' });
+                request.end();
+
+                const response = await new Promise<http.IncomingMessage>((resolve) =>
+                    request.on('response', resolve)
+                );
+
+                expect(response.statusCode).to.equal(200);
+                expect((await streamToBuffer(response)).toString('utf8'))
+                    .to.equal('Found expected trailers');
+            });
+
             it("should be able to pass back response headers", async () => {
                 await remoteServer.forAnyRequest().thenCallback(async (req) => ({
                     statusCode: 200,
@@ -163,6 +201,40 @@ nodeOnly(() => {
                     'first', 'hi',
                     'second', 'bye', // Preserves order!
                     'my-UPPERCASE-header', '123' // Preserves case!
+                ]);
+            });
+
+            it("should be able to pass back response trailers", async () => {
+                await remoteServer.forAnyRequest().thenCallback(async (req) => ({
+                    statusCode: 200,
+                    body: await req.body.getText(),
+                    headers: {
+                        'Trailer': 'trailer-name',
+                        'Transfer-Encoding': 'chunked'
+                    },
+                    trailers: {
+                        'Trailer-Name': 'trailer-value' // N.b thenCallback is not case sensitive (yet?)
+                    }
+                }));
+
+                await server.forAnyRequest().thenPassThrough();
+
+                const request = http.request({
+                    method: 'GET',
+                    hostname: 'localhost',
+                    port: server.port,
+                    headers: {
+                        'Host': `localhost:${remoteServer.port}` // Manually proxy upstream
+                    }
+                }).end();
+
+                const response = await new Promise<http.IncomingMessage>((resolve) =>
+                    request.on('response', resolve)
+                );
+
+                await streamToBuffer(response); // Wait for response to complete
+                expect(response.rawTrailers).to.deep.equal([
+                    'Trailer-Name', 'trailer-value'
                 ]);
             });
 

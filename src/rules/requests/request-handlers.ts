@@ -1033,6 +1033,26 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 socket.once('close', () => this.outgoingSockets.delete(socket));
             });
 
+            // Forward any request trailers received from the client:
+            const forwardTrailers = () => {
+                if (clientReq.rawTrailers?.length) {
+                    if (serverReq.addTrailers) {
+                        serverReq.addTrailers(clientReq.rawTrailers);
+                    } else {
+                        // See https://github.com/szmarczak/http2-wrapper/issues/103
+                        console.warn('Not forwarding request trailers - not yet supported for HTTP/2');
+                    }
+                }
+            };
+            // This has to be above the pipe setup below, or we end the stream before adding the
+            // trailers, and they're lost.
+            if (clientReqBody.readableEnded) {
+                forwardTrailers();
+            } else {
+                clientReqBody.once('end', forwardTrailers);
+            }
+
+            // Forward the request body to the upstream server:
             if (reqBodyOverride) {
                 clientReqBody.resume(); // Dump any remaining real request body
 
