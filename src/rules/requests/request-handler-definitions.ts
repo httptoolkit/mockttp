@@ -7,6 +7,7 @@ import { stripIndent } from 'common-tags';
 
 import {
     Headers,
+    Trailers,
     CompletedRequest,
     CompletedBody,
     Explainable,
@@ -179,6 +180,15 @@ export interface CallbackResponseMessageResult {
      * Defaults to a minimum set of standard required headers if not set.
      */
     headers?: Headers;
+
+    /**
+     * The replacement HTTP trailers, as an object of string keys and either
+     * single string or array of string values. Note that there are not all
+     * header fields are valid as trailers, and there are other requirements
+     * such as chunked encoding that must be met for trailers to be sent
+     * successfully.
+     */
+    trailers?: Trailers;
 
     /**
      * A string or buffer, which replaces the response body if set. This will

@@ -166,9 +166,14 @@ export class SimpleHandler extends SimpleHandlerDefinition {
     }
 }
 
-async function writeResponseFromCallback(result: CallbackResponseMessageResult, response: OngoingResponse) {
+async function writeResponseFromCallback(
+    result: CallbackResponseMessageResult,
+    response: OngoingResponse
+) {
     if (result.json !== undefined) {
-        result.headers = _.assign(result.headers || {}, { 'Content-Type': 'application/json' });
+        result.headers = Object.assign(result.headers || {}, {
+            'Content-Type': 'application/json'
+        });
         result.body = JSON.stringify(result.json);
         delete result.json;
     }
@@ -193,6 +198,9 @@ async function writeResponseFromCallback(result: CallbackResponseMessageResult, 
         result.statusMessage,
         result.headers
     );
+
+    if (result.trailers) response.addTrailers(result.trailers);
+
     response.end(result.rawBody || "");
 }
 

@@ -36,6 +36,11 @@ export interface Headers {
     [key: string]: undefined | string | string[];
 }
 
+export interface Trailers {
+    // 0+ of any trailer
+    [key: string]: undefined | string | string[];
+}
+
 export type RawHeaders = Array<[key: string, value: string]>;
 
 export interface Request {

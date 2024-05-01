@@ -1,6 +1,15 @@
 import * as zlib from 'zlib';
+import * as http from 'http';
+
 import { getLocal } from "../../..";
-import { expect, fetch, isNode, isWeb, headersToObject } from "../../test-utils";
+import {
+    expect,
+    fetch,
+    isNode,
+    isWeb,
+    headersToObject,
+    nodeOnly
+} from "../../test-utils";
 
 describe("Callback response handlers", function () {
 
@@ -69,6 +78,34 @@ describe("Callback response handlers", function () {
 
         expect(response.status).to.equal(500);
         expect(await response.text()).to.equal("Error: Cannot set custom :status pseudoheader values");
+    });
+
+    nodeOnly(() => { // Browsers can't read trailers
+        it("should allow mocking response trailers with a callback", async () => {
+            await server.forGet("/mocked-endpoint").thenCallback(() => {
+                return {
+                    statusCode: 200,
+                    trailers: {
+                        'mock-trailer': 'set'
+                    }
+                };
+            });
+
+            const response = await new Promise<http.IncomingMessage>((resolve, reject) => {
+                const req = http.request(server.urlFor("/mocked-endpoint")).end();
+                req.on('response', (res) => {
+                    // Wait until everything is 100% done, so we definitely have trailers
+                    res.resume();
+                    res.on('end', () => resolve(res));
+                });
+                req.on('error', reject);
+            });
+
+            expect(response.statusCode).to.equal(200);
+            expect(response.trailers).to.deep.equal({
+                'mock-trailer': 'set'
+            });
+        });
     });
 
     it("should allow mocking body as json with callback", async () => {
