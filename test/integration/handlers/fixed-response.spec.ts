@@ -1,5 +1,7 @@
+import * as http from 'http';
+
 import { getLocal } from "../../..";
-import { expect, fetch, isNode } from "../../test-utils";
+import { expect, fetch, isNode, nodeOnly } from "../../test-utils";
 
 describe("Simple fixed response handler", function () {
 
@@ -72,6 +74,37 @@ describe("Simple fixed response handler", function () {
         expect(response.headers.get("Date")).to.equal(null);
         expect(response.headers.get('Content-Length')).to.equal(null);
         expect(response.headers.get('Transfer-Encoding')).to.equal(null);
+    });
+
+    nodeOnly(() => { // Browsers can't read trailers
+        it("should allow mocking everything with trailers too", async () => {
+            await server.forGet("/mocked-endpoint").thenReply(200, "status message", "body", {
+                "header": "hello",
+                "Transfer-Encoding": "chunked" // Required to send trailers
+            }, {
+                "trailer": "goodbye"
+            });
+
+            const response = await new Promise<http.IncomingMessage>((resolve, reject) => {
+                const req = http.request(server.urlFor("/mocked-endpoint")).end();
+                req.on('response', (res) => {
+                    // Wait until everything is 100% done, so we definitely have trailers
+                    res.resume();
+                    res.on('end', () => resolve(res));
+                });
+                req.on('error', reject);
+            });
+
+            expect(response.statusCode).to.equal(200);
+            expect(response.statusMessage).to.equal('status message');
+            expect(response.headers).to.deep.equal({
+                'header': 'hello',
+                'transfer-encoding': 'chunked'
+            });
+            expect(response.trailers).to.deep.equal({
+                'trailer': 'goodbye'
+            });
+        });
     });
 
     it("should not allow mocking HTTP/2 pseudoheaders", async function () {

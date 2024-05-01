@@ -162,6 +162,10 @@ export class SimpleHandler extends SimpleHandlerDefinition {
             this.data = Buffer.from(<any> this.data);
         }
 
+        if (this.trailers) {
+            response.addTrailers(this.trailers);
+        }
+
         response.end(this.data || "");
     }
 }

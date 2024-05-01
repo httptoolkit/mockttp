@@ -1,7 +1,7 @@
 import { merge, isString, isBuffer } from "lodash";
 import { Readable } from "stream";
 
-import { Headers, CompletedRequest, Method, MockedEndpoint } from "../../types";
+import { Headers, CompletedRequest, Method, MockedEndpoint, Trailers } from "../../types";
 import type { RequestRuleData } from "./request-rule";
 
 import {
@@ -87,10 +87,10 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
 
     /**
      * Reply to matched requests with a given status code and (optionally) status message,
-     * body and headers.
+     * body, headers & trailers.
      *
      * If one string argument is provided, it's used as the body. If two are
-     * provided (even if one is empty), then 1st is the status message, and
+     * provided (even if one is empty) then the 1st is the status message, and
      * the 2nd the body. If no headers are provided, only the standard required
      * headers are set, e.g. Date and Transfer-Encoding.
      *
@@ -104,32 +104,49 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
      *
      * @category Responses
      */
-    thenReply(status: number, data?: string | Buffer, headers?: Headers): Promise<MockedEndpoint>;
+    thenReply(
+        status: number,
+        data?: string | Buffer,
+        headers?: Headers,
+        trailers?: Trailers
+    ): Promise<MockedEndpoint>;
     thenReply(
         status: number,
         statusMessage: string,
         data: string | Buffer,
-        headers?: Headers
+        headers?: Headers,
+        trailers?: Trailers
     ): Promise<MockedEndpoint>
     thenReply(
         status: number,
         dataOrMessage?: string | Buffer,
         dataOrHeaders?: string | Buffer | Headers,
-        headers?: Headers
+        headersOrTrailers?: Headers | Trailers,
+        trailers?: Trailers
     ): Promise<MockedEndpoint> {
         let data: string | Buffer | undefined;
         let statusMessage: string | undefined;
+        let headers: Headers | undefined;
+
         if (isBuffer(dataOrHeaders) || isString(dataOrHeaders)) {
             data = dataOrHeaders as (Buffer | string);
             statusMessage = dataOrMessage as string;
+            headers = headersOrTrailers as Headers;
         } else {
             data = dataOrMessage as string | Buffer | undefined;
             headers = dataOrHeaders as Headers | undefined;
+            trailers = headersOrTrailers as Trailers | undefined;
         }
 
         const rule: RequestRuleData = {
             ...this.buildBaseRuleData(),
-            handler: new SimpleHandlerDefinition(status, statusMessage, data, headers)
+            handler: new SimpleHandlerDefinition(
+                status,
+                statusMessage,
+                data,
+                headers,
+                trailers
+            )
         };
 
         return this.addRule(rule);

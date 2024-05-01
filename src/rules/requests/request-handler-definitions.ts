@@ -271,18 +271,29 @@ export class SimpleHandlerDefinition extends Serializable implements RequestHand
         public status: number,
         public statusMessage?: string,
         public data?: string | Uint8Array | Buffer | SerializedBuffer,
-        public headers?: Headers
+        public headers?: Headers,
+        public trailers?: Trailers
     ) {
         super();
 
         validateCustomHeaders({}, headers);
+        validateCustomHeaders({}, trailers);
+
+        if (!_.isEmpty(trailers) && !_.isEmpty(headers)) {
+            if (!Object.entries(headers!).some(([key, value]) =>
+                key.toLowerCase() === 'transfer-encoding' && value === 'chunked'
+            )) {
+                throw new Error("Trailers can only be set when using chunked transfer encoding");
+            }
+        }
     }
 
     explain() {
         return `respond with status ${this.status}` +
             (this.statusMessage ? ` (${this.statusMessage})`: "") +
             (this.headers ? `, headers ${JSON.stringify(this.headers)}` : "") +
-            (this.data ? ` and body "${this.data}"` : "");
+            (this.data ? ` and body "${this.data}"` : "") +
+            (this.trailers ? `then trailers ${JSON.stringify(this.trailers)}` : "");
     }
 }
 
