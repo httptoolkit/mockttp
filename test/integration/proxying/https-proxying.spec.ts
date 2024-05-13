@@ -16,7 +16,6 @@ import {
     makeDestroyable,
     DestroyableServer,
     H2_TLS_ON_TLS_SUPPORTED,
-    OLD_TLS_SUPPORTED,
     ignoreNetworkError,
     SOCKET_RESET_SUPPORTED
 } from "../../test-utils";
@@ -252,10 +251,6 @@ nodeOnly(() => {
 
             describe("given a TLSv1 upstream server", () => {
 
-                before(function () {
-                    if (!semver.satisfies(process.version, OLD_TLS_SUPPORTED)) this.skip();
-                });
-
                 let oldServerPort: number;
                 let oldServer: DestroyableServer<https.Server>;
 
@@ -270,6 +265,7 @@ nodeOnly(() => {
                         ...cert,
                         minVersion: 'TLSv1',
                         maxVersion: 'TLSv1',
+                        ciphers: 'DEFAULT@SECLEVEL=0'
                     }, (_req, res) => {
                         res.writeHead(200);
                         res.end('OK');

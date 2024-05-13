@@ -73,7 +73,14 @@ export const getUpstreamTlsOptions = (strictChecks: boolean): tls.SecureContextO
         'AES128-GCM-SHA256',
         'AES256-GCM-SHA384',
         'AES128-SHA',
-        'AES256-SHA'
+        'AES256-SHA',
+
+        // This magic cipher is the very obtuse way that OpenSSL downgrades the overall
+        // security level to allow various legacy settings, protocols & ciphers:
+        ...(!strictChecks
+            ? ['@SECLEVEL=0']
+            : []
+        )
     ].join(':'),
     secureOptions: strictChecks
         ? SSL_OP_TLSEXT_PADDING | SSL_OP_NO_ENCRYPT_THEN_MAC
