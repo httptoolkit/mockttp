@@ -96,11 +96,11 @@ nodeOnly(() => {
             const caCertificate = await caCertificatePromise;
             const ca = new CA({ key: caCertificate.key, cert: caCertificate.cert, keyLength: 2048 });
 
-            const { cert } = ca.generateCertificate('httptoolkit.tech');
+            const { cert } = ca.generateCertificate('httptoolkit.com');
 
 
             const certData = forge.pki.certificateFromPem(cert);
-            expect((certData.getExtension('subjectAltName') as any).altNames[0].value).to.equal('httptoolkit.tech');
+            expect((certData.getExtension('subjectAltName') as any).altNames[0].value).to.equal('httptoolkit.com');
 
             const response = await ignoreNetworkError(
                 fetch('https://crt.sh/lintcert', {
@@ -140,10 +140,10 @@ nodeOnly(() => {
             const caCertificate = await caCertificatePromise;
             const ca = new CA({ key: caCertificate.key, cert: caCertificate.cert, keyLength: 2048 });
 
-            const { cert } = ca.generateCertificate('under_score.httptoolkit.tech');
+            const { cert } = ca.generateCertificate('under_score.httptoolkit.com');
 
             const certData = forge.pki.certificateFromPem(cert);
-            expect((certData.getExtension('subjectAltName') as any).altNames[0].value).to.equal('*.httptoolkit.tech');
+            expect((certData.getExtension('subjectAltName') as any).altNames[0].value).to.equal('*.httptoolkit.com');
 
             const response = await ignoreNetworkError(
                 fetch('https://crt.sh/lintcert', {

@@ -1,6 +1,6 @@
 # Mockttp [![Build Status](https://github.com/httptoolkit/mockttp/workflows/CI/badge.svg)](https://github.com/httptoolkit/mockttp/actions) [![Available on NPM](https://img.shields.io/npm/v/mockttp.svg)](https://npmjs.com/package/mockttp)  [![Try Mockttp on RunKit](https://badge.runkitcdn.com/mockttp.svg)](https://npm.runkit.com/mockttp)
 
-> _Part of [HTTP Toolkit](https://httptoolkit.tech): powerful tools for building, testing & debugging HTTP(S)_
+> _Part of [HTTP Toolkit](https://httptoolkit.com): powerful tools for building, testing & debugging HTTP(S)_
 
 These are the API reference docs for Mockttp. If you're not sure what Mockttp is, it's best to start from the [README](https://github.com/httptoolkit/mockttp/#readme) instead.
 

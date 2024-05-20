@@ -1,6 +1,6 @@
 # Mockttp [![Build Status](https://github.com/httptoolkit/mockttp/workflows/CI/badge.svg)](https://github.com/httptoolkit/mockttp/actions) [![Available on NPM](https://img.shields.io/npm/v/mockttp.svg)](https://npmjs.com/package/mockttp)  [![Try Mockttp on RunKit](https://badge.runkitcdn.com/mockttp.svg)](https://npm.runkit.com/mockttp)
 
-> _Part of [HTTP Toolkit](https://httptoolkit.tech): powerful tools for building, testing & debugging HTTP(S)_
+> _Part of [HTTP Toolkit](https://httptoolkit.com): powerful tools for building, testing & debugging HTTP(S)_
 
 **Mockttp lets you intercept, transform or test HTTP requests & responses in JavaScript - quickly, reliably & anywhere.**
 
@@ -10,7 +10,7 @@ HTTP testing is the most common and well supported use case. There's a lot of to
 
 Mockttp meanwhile allows you to do accurate true integration testing, writing one set of tests that works out of the box in node or browsers, with support for transparent proxying & HTTPS, strong typing & promises throughout, fast & safe parallel testing, and with debuggability built-in at every stage.
 
-Mockttp is also battle-tested as a scriptable rewriting proxy, powering all the HTTP internals of [HTTP Toolkit](https://httptoolkit.tech). Anything you can do with HTTP Toolkit, you can automate with Mockttp as a headless script.
+Mockttp is also battle-tested as a scriptable rewriting proxy, powering all the HTTP internals of [HTTP Toolkit](https://httptoolkit.com). Anything you can do with HTTP Toolkit, you can automate with Mockttp as a headless script.
 
 ## Features
 

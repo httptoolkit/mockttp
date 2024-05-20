@@ -158,7 +158,7 @@ export function objectHeadersToFlat(headers: Headers): string[] {
     return flatHeaders;
 }
 
-// See https://httptoolkit.tech/blog/translating-http-2-into-http-1/ for details on the
+// See https://httptoolkit.com/blog/translating-http-2-into-http-1/ for details on the
 // transformations required between H2 & H1 when proxying.
 export function h2HeadersToH1(h2Headers: RawHeaders): RawHeaders {
     let h1Headers = h2Headers.filter(([key]) => key[0] !== ':');
