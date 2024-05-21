@@ -2,7 +2,9 @@ import * as zlib from 'zlib';
 import * as brotliPromise from 'brotli-wasm';
 import { ZstdCodec, ZstdStreaming } from 'zstd-codec';
 
-import { expect } from './test-utils';
+import * as semver from 'semver';
+
+import { expect, BROKEN_WASM_BUFFER_ISSUE } from './test-utils';
 import { buildBodyReader } from '../src/util/request-utils';
 
 const zstd: Promise<ZstdStreaming> = new Promise((resolve) =>
@@ -74,6 +76,7 @@ describe("buildBodyReader", () => {
         });
 
         it('can decode zstandard bodies', async function () {
+            if (semver.satisfies(process.version, BROKEN_WASM_BUFFER_ISSUE)) this.skip();
             this.timeout(5000); // Zstd can be slow to load (inside the body reader, not just here)
 
             const content = Buffer.from((await zstd).compress(Buffer.from('hello zstd zstd zstd world')));
