@@ -1,3 +1,4 @@
+import { URLPattern } from "urlpattern-polyfill";
 import { shouldPassThrough } from "../src/server/http-combo-server";
 import { expect } from "./test-utils";
 
@@ -21,7 +22,7 @@ describe("shouldPassThrough", () => {
     it("should return true when hostname is in passThroughHostnames", () => {
       const should = shouldPassThrough(
         "example.org",
-        ["example.org"],
+        [new URLPattern("https://example.org")],
         undefined
       );
       expect(should).to.be.true;
@@ -30,30 +31,46 @@ describe("shouldPassThrough", () => {
     it("should return false when hostname is not in passThroughHostnames", () => {
       const should = shouldPassThrough(
         "example.org",
-        ["example.com"],
+        [new URLPattern("https://example.com")],
         undefined
       );
       expect(should).to.be.false;
     });
 
     it("should return true when hostname match a wildcard", () => {
-      const should = shouldPassThrough("example.org", ["*.org"], undefined);
+      const should = shouldPassThrough(
+        "example.org",
+        [new URLPattern("https://*.org")],
+        undefined
+      );
       expect(should).to.be.true;
     });
   });
   describe("interceptOnlyHostnames", () => {
     it("should return false when hostname is in interceptOnlyHostnames", () => {
-      const should = shouldPassThrough("example.org", [], ["example.org"]);
+      const should = shouldPassThrough(
+        "example.org",
+        [],
+        [new URLPattern("https://example.org")]
+      );
       expect(should).to.be.false;
     });
 
     it("should return true when hostname is not in interceptOnlyHostnames", () => {
-      const should = shouldPassThrough("example.org", [], ["example.com"]);
+      const should = shouldPassThrough(
+        "example.org",
+        [],
+        [new URLPattern("https://example.com")]
+      );
       expect(should).to.be.true;
     });
 
     it("should return false when hostname match a wildcard", () => {
-      const should = shouldPassThrough("example.org", [], ["*.org"]);
+      const should = shouldPassThrough(
+        "example.org",
+        [],
+        [new URLPattern("https://*.org")]
+      );
       expect(should).to.be.false;
     });
   });
