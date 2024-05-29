@@ -421,7 +421,7 @@ function analyzeAndMaybePassThroughTls(
     });
 }
 
-function shouldPassThrough(
+export function shouldPassThrough(
     hostname: string | undefined,
     // Only one of these two should have values (validated above):
     passThroughHostnames: string[],
