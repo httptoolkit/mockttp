@@ -197,6 +197,7 @@
     "semver": "^7.5.3",
     "socks-proxy-agent": "^7.0.0",
     "typed-error": "^3.0.2",
+    "urlpattern-polyfill": "^10.0.0",
     "uuid": "^8.3.2",
     "ws": "^8.8.0"
   }

@@ -14,6 +14,7 @@ import {
     NonTlsError,
     readTlsClientHello
 } from 'read-tls-client-hello';
+import { URLPattern } from "urlpattern-polyfill";
 
 import { TlsHandshakeFailure } from '../types';
 import { getCA } from '../util/tls';
@@ -426,12 +427,16 @@ export function shouldPassThrough(
     // Only one of these two should have values (validated above):
     passThroughHostnames: string[],
     interceptOnlyHostnames: string[] | undefined
-): boolean {
+  ): boolean {
     if (!hostname) return false;
-
+  
     if (interceptOnlyHostnames) {
-        return !interceptOnlyHostnames.includes(hostname);
+      return !interceptOnlyHostnames.some((hn) =>
+        new URLPattern(`https://${hn}`).test(`https://${hostname}`)
+      );
     }
-
-    return passThroughHostnames.includes(hostname);
-}
+  
+    return passThroughHostnames.some((hn) =>
+      new URLPattern(`https://${hn}`).test(`https://${hostname}`)
+    );
+  }

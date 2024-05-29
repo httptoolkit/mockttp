@@ -35,6 +35,11 @@ describe("shouldPassThrough", () => {
       );
       expect(should).to.be.false;
     });
+
+    it("should return true when hostname match a wildcard", () => {
+      const should = shouldPassThrough("example.org", ["*.org"], undefined);
+      expect(should).to.be.true;
+    });
   });
   describe("interceptOnlyHostnames", () => {
     it("should return false when hostname is in interceptOnlyHostnames", () => {
@@ -45,6 +50,11 @@ describe("shouldPassThrough", () => {
     it("should return true when hostname is not in interceptOnlyHostnames", () => {
       const should = shouldPassThrough("example.org", [], ["example.com"]);
       expect(should).to.be.true;
+    });
+
+    it("should return false when hostname match a wildcard", () => {
+      const should = shouldPassThrough("example.org", [], ["*.org"]);
+      expect(should).to.be.false;
     });
   });
 });
