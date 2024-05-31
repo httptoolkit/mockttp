@@ -695,7 +695,11 @@ export type MockttpHttpsOptions = CAOptions & {
      * options will throw an error.
      *
      * Each element in this list must be an object with a 'hostname' field for the
-     * hostname that should be matched. In future more options may be supported
+     * hostname that should be matched. Wildcards are supported (following the 
+     * [URLPattern specification](https://developer.mozilla.org/en-US/docs/Web/API/URL_Pattern_API)),
+     * eg. `{hostname: '*.example.com'}`.
+     * 
+     * In future more options may be supported
      * here for additional configuration of this behaviour.
      */
     tlsPassthrough?: Array<{ hostname: string }>;
@@ -711,7 +715,11 @@ export type MockttpHttpsOptions = CAOptions & {
      * options will throw an error.
      *
      * Each element in this list must be an object with a 'hostname' field for the
-     * hostname that should be matched. In future more options may be supported
+     * hostname that should be matched. Wildcards are supported (following the 
+     * [URLPattern specification](https://developer.mozilla.org/en-US/docs/Web/API/URL_Pattern_API)),
+     * eg. `{hostname: '*.example.com'}`.
+     * 
+     * In future more options may be supported
      * here for additional configuration of this behaviour.
      */
     tlsInterceptOnly?: Array<{ hostname: string }>;
