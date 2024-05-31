@@ -439,4 +439,4 @@ export function shouldPassThrough(
     return passThroughPatterns.some((pattern) =>
         pattern.test(`https://${hostname}`)
     );
-  }
+}
