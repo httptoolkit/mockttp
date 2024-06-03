@@ -14,10 +14,12 @@ import {
     NonTlsError,
     readTlsClientHello
 } from 'read-tls-client-hello';
+import { URLPattern } from "urlpattern-polyfill";
 
 import { TlsHandshakeFailure } from '../types';
 import { getCA } from '../util/tls';
 import { delay } from '../util/util';
+import { shouldPassThrough } from '../util/server-utils';
 import {
     getParentSocket,
     buildSocketTimingInfo,
@@ -380,8 +382,8 @@ function analyzeAndMaybePassThroughTls(
     if (passthroughList && interceptOnlyList){
         throw new Error('Cannot use both tlsPassthrough and tlsInterceptOnly options at the same time.');
     }
-    const passThroughHostnames = passthroughList?.map(({ hostname }) => hostname) ?? [];
-    const interceptOnlyHostnames = interceptOnlyList?.map(({ hostname }) => hostname);
+    const passThroughPatterns = passthroughList?.map(({ hostname }) => new URLPattern(`https://${hostname}`)) ?? [];
+    const interceptOnlyPatterns = interceptOnlyList?.map(({ hostname }) => new URLPattern(`https://${hostname}`));
 
     const tlsConnectionListener = server.listeners('connection')[0] as (socket: net.Socket) => {};
     server.removeListener('connection', tlsConnectionListener);
@@ -400,11 +402,11 @@ function analyzeAndMaybePassThroughTls(
                 ja3Fingerprint: calculateJa3FromFingerprintData(helloData.fingerprintData)
             };
 
-            if (shouldPassThrough(connectHostname, passThroughHostnames, interceptOnlyHostnames)) {
+            if (shouldPassThrough(connectHostname, passThroughPatterns, interceptOnlyPatterns)) {
                 const upstreamPort = connectPort ? parseInt(connectPort, 10) : undefined;
                 passthroughListener(socket, connectHostname, upstreamPort);
                 return; // Do not continue with TLS
-            } else if (shouldPassThrough(sniHostname, passThroughHostnames, interceptOnlyHostnames)) {
+            } else if (shouldPassThrough(sniHostname, passThroughPatterns, interceptOnlyPatterns)) {
                 passthroughListener(socket, sniHostname!); // Can't guess the port - not included in SNI
                 return; // Do not continue with TLS
             }
@@ -419,19 +421,4 @@ function analyzeAndMaybePassThroughTls(
         // Didn't match a passthrough hostname - continue with TLS setup
         tlsConnectionListener.call(server, socket);
     });
-}
-
-function shouldPassThrough(
-    hostname: string | undefined,
-    // Only one of these two should have values (validated above):
-    passThroughHostnames: string[],
-    interceptOnlyHostnames: string[] | undefined
-): boolean {
-    if (!hostname) return false;
-
-    if (interceptOnlyHostnames) {
-        return !interceptOnlyHostnames.includes(hostname);
-    }
-
-    return passThroughHostnames.includes(hostname);
 }
