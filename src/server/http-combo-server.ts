@@ -19,6 +19,7 @@ import { URLPattern } from "urlpattern-polyfill";
 import { TlsHandshakeFailure } from '../types';
 import { getCA } from '../util/tls';
 import { delay } from '../util/util';
+import { shouldPassThrough } from '../util/server-utils';
 import {
     getParentSocket,
     buildSocketTimingInfo,
@@ -420,23 +421,4 @@ function analyzeAndMaybePassThroughTls(
         // Didn't match a passthrough hostname - continue with TLS setup
         tlsConnectionListener.call(server, socket);
     });
-}
-
-export function shouldPassThrough(
-    hostname: string | undefined,
-    // Only one of these two should have values (validated above):
-    passThroughPatterns: URLPattern[],
-    interceptOnlyPatterns: URLPattern[] | undefined
-  ): boolean {
-    if (!hostname) return false;
-  
-    if (interceptOnlyPatterns) {
-      return !interceptOnlyPatterns.some((pattern) =>
-        pattern.test(`https://${hostname}`)
-      );
-    }
-  
-    return passThroughPatterns.some((pattern) =>
-        pattern.test(`https://${hostname}`)
-    );
 }

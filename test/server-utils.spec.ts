@@ -1,6 +1,6 @@
 import { URLPattern } from "urlpattern-polyfill";
-import { shouldPassThrough } from "../src/server/http-combo-server";
 import { expect } from "./test-utils";
+import { shouldPassThrough } from "../src/util/server-utils";
 
 describe("shouldPassThrough", () => {
   it("should return false when passThroughHostnames is empty and interceptOnlyHostnames is undefined", async () => {
