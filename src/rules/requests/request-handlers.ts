@@ -20,15 +20,14 @@ import {
 } from "../../types";
 
 import { MaybePromise } from '../../util/type-utils';
+import { isAbsoluteUrl, getEffectivePort } from '../../util/url';
 import {
     waitForCompletedRequest,
     buildBodyReader,
     shouldKeepAlive,
     isHttp2,
-    isAbsoluteUrl,
     writeHead,
-    encodeBodyBuffer,
-    getEffectivePort
+    encodeBodyBuffer
 } from '../../util/request-utils';
 import {
     h1HeadersToH2,

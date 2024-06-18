@@ -19,10 +19,8 @@ import {
     ResetConnectionHandler,
     TimeoutHandler
 } from '../requests/request-handlers';
-import {
-    getEffectivePort,
-    isHttp2
-} from '../../util/request-utils';
+import { getEffectivePort } from '../../util/url';
+import { isHttp2 } from '../../util/request-utils';
 import {
     findRawHeader,
     findRawHeaders,

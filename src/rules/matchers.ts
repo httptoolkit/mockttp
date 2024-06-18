@@ -9,12 +9,12 @@ import {
     getPathFromAbsoluteUrl,
     isRelativeUrl,
     getUrlWithoutProtocol,
-    waitForCompletedRequest
-} from '../util/request-utils';
+    normalizeUrl
+} from '../util/url';
+import { waitForCompletedRequest } from '../util/request-utils';
 import { Serializable, ClientServerChannel } from "../serialization/serialization";
 import { withDeserializedBodyReader, withSerializedBodyReader } from '../serialization/body-serialization';
 import { MaybePromise, Replace } from '../util/type-utils';
-import { normalizeUrl } from '../util/normalize-url';
 
 export interface RequestMatcher extends Explainable, Serializable {
     type: keyof typeof MatcherLookup;

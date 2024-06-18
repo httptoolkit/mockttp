@@ -45,17 +45,16 @@ import { Mutable } from "../util/type-utils";
 import { ErrorLike, isErrorLike } from "../util/error";
 import { makePropertyWritable } from "../util/util";
 
+import { isAbsoluteUrl, getPathFromAbsoluteUrl } from "../util/url";
 import { buildSocketEventData, isSocketLoop, resetOrDestroy } from "../util/socket-util";
 import {
     parseRequestBody,
     waitForCompletedRequest,
     trackResponse,
     waitForCompletedResponse,
-    isAbsoluteUrl,
     buildInitiatedRequest,
     tryToParseHttpRequest,
     buildBodyReader,
-    getPathFromAbsoluteUrl,
     parseRawHttpResponse
 } from "../util/request-utils";
 import { asBuffer } from "../util/buffer-utils";

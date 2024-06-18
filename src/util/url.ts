@@ -1,7 +1,42 @@
 import * as url from 'url';
 import * as _ from 'lodash';
 
-import { isAbsoluteProtocollessUrl } from './request-utils';
+import { nthIndexOf } from './util';
+
+// Is this URL fully qualified?
+// Note that this supports only HTTP - no websockets or anything else.
+export const isAbsoluteUrl = (url: string) =>
+    url.toLowerCase().startsWith('http://') ||
+    url.toLowerCase().startsWith('https://');
+
+export const isRelativeUrl = (url: string) =>
+    url.startsWith('/');
+
+export const isAbsoluteProtocollessUrl = (url: string) =>
+    !isAbsoluteUrl(url) && !isRelativeUrl(url);
+
+export const getUrlWithoutProtocol = (url: string): string => {
+    return url.split('://', 2).slice(-1).join('');
+}
+
+export const getPathFromAbsoluteUrl = (url: string) => {
+    const pathIndex = nthIndexOf(url, '/', 3);
+    if (pathIndex !== -1) {
+        return url.slice(pathIndex);
+    } else {
+        return '';
+    }
+}
+
+export const getEffectivePort = (url: { protocol: string | null, port: string | null }) => {
+    if (url.port) {
+        return parseInt(url.port, 10);
+    } else if (url.protocol === 'https:' || url.protocol === 'wss:') {
+        return 443;
+    } else {
+        return 80;
+    }
+}
 
 /**
  * Normalizes URLs to the form used when matching them.

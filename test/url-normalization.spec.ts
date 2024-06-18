@@ -1,4 +1,4 @@
-import { normalizeUrl } from '../src/util/normalize-url';
+import { normalizeUrl } from '../src/util/url';
 
 import { expect } from "./test-utils";
 

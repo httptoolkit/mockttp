@@ -29,7 +29,7 @@ import { Mockttp } from "..";
 export { getDeferred, Deferred } from '../src/util/promise';
 import { makeDestroyable, DestroyableServer } from "destroyable-server";
 import { isNode, isWeb, delay } from '../src/util/util';
-import { getEffectivePort } from '../src/util/request-utils';
+import { getEffectivePort } from '../src/util/url';
 export { isNode, isWeb, delay, makeDestroyable, DestroyableServer };
 
 if (isNode) {
