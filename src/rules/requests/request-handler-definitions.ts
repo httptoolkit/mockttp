@@ -4,6 +4,10 @@ import type * as net from 'net';
 import { encode as encodeBase64 } from 'base64-arraybuffer';
 import { Readable, Transform } from 'stream';
 import { stripIndent } from 'common-tags';
+import {
+    Operation as JsonPatchOperation,
+    validate as validateJsonPatch
+} from 'fast-json-patch';
 
 import {
     Headers,
@@ -597,12 +601,24 @@ export interface RequestTransform {
 
     /**
      * A JSON object which will be merged with the real request body. Undefined values
-     * will be removed. Any requests which are received with an invalid JSON body that
-     * match this rule will fail.
+     * will be removed, and other values will be merged directly with the target value
+     * recursively.
+     *
+     * Any requests which are received with an invalid JSON body that match this rule
+     * will fail.
      */
     updateJsonBody?: {
         [key: string]: any;
     };
+
+    /**
+     * A series of operations to apply to the request body in JSON Patch format (RFC
+     * 6902).
+     *
+     * Any requests which are received with an invalid JSON body that match this rule
+     * will fail.
+     */
+    patchJsonBody?: Array<JsonPatchOperation>;
 
     /**
      * Perform a series of string match & replace operations on the request body.
@@ -810,9 +826,15 @@ export class PassThroughHandlerDefinition extends Serializable implements Reques
                 options.transformRequest.replaceBody,
                 options.transformRequest.replaceBodyFromFile,
                 options.transformRequest.updateJsonBody,
+                options.transformRequest.patchJsonBody,
                 options.transformRequest.matchReplaceBody
             ].filter(o => !!o).length > 1) {
                 throw new Error("Only one request body transform can be specified at a time");
+            }
+
+            if (options.transformRequest.patchJsonBody) {
+                const validationError = validateJsonPatch(options.transformRequest.patchJsonBody);
+                if (validationError) throw validationError;
             }
 
             this.transformRequest = options.transformRequest;

@@ -451,7 +451,8 @@ nodeOnly(() => {
             it("can update a JSON body with new fields", async () => {
                 await server.forAnyRequest().thenPassThrough({
                     transformRequest: {
-                        updateJsonBody:{
+                        // Same update as the JSON Patch below, in simpler merge form:
+                        updateJsonBody: {
                             a: 100, // Update
                             b: undefined, // Remove
                             c: 2 // Add
@@ -480,7 +481,8 @@ nodeOnly(() => {
             it("can update a JSON body while handling encoding automatically", async () => {
                 await server.forAnyRequest().thenPassThrough({
                     transformRequest: {
-                        updateJsonBody:{
+                        // Same update as the JSON Patch below, in simpler merge form:
+                        updateJsonBody: {
                             a: 100, // Update
                             b: undefined, // Remove
                             c: 2 // Add
@@ -508,6 +510,36 @@ nodeOnly(() => {
                         ...baseHeaders(),
                         'content-encoding': 'gzip',
                         'content-length': '35',
+                        'custom-header': 'a-value'
+                    },
+                    body: JSON.stringify({ a: 100, c: 2 })
+                });
+            });
+
+            it("can update a JSON body with a JSON patch", async () => {
+                await server.forAnyRequest().thenPassThrough({
+                    transformRequest: {
+                        patchJsonBody: [
+                            // Same logic as the update above, in JSON Patch form:
+                            { op: 'replace', path: '/a', value: 100 },
+                            { op: 'remove', path: '/b' },
+                            { op: 'add', path: '/c', value: 2 }
+                        ]
+                    }
+                });
+
+                let response = await request.post(remoteServer.urlFor("/abc"), {
+                    headers: { 'custom-header': 'a-value' },
+                    body: { a: 1, b: 2 },
+                    json: true
+                });
+
+                expect(response).to.deep.equal({
+                    url: remoteServer.urlFor("/abc"),
+                    method: 'POST',
+                    headers: {
+                        ...baseHeaders(),
+                        'content-length': '15',
                         'custom-header': 'a-value'
                     },
                     body: JSON.stringify({ a: 100, c: 2 })

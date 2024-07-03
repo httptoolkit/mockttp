@@ -11,6 +11,7 @@ import { decode as decodeBase64 } from 'base64-arraybuffer';
 import { Transform } from 'stream';
 import { stripIndent, oneLine } from 'common-tags';
 import { TypedError } from 'typed-error';
+import { applyPatch as applyJsonPatch } from 'fast-json-patch';
 
 import {
     Headers,
@@ -492,6 +493,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 replaceBody,
                 replaceBodyFromFile,
                 updateJsonBody,
+                patchJsonBody,
                 matchReplaceBody
             } = this.transformRequest;
 
@@ -518,22 +520,28 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 reqBodyOverride = await fs.readFile(replaceBodyFromFile);
             } else if (updateJsonBody) {
                 const { body: realBody } = await waitForCompletedRequest(clientReq);
-                if (await realBody.getJson() === undefined) {
-                    throw new Error("Can't transform non-JSON request body");
+                const jsonBody = await realBody.getJson();
+                if (jsonBody === undefined) {
+                    throw new Error("Can't update JSON in non-JSON request body");
                 }
 
-                const updatedBody = _.mergeWith(
-                    await realBody.getJson(),
-                    updateJsonBody,
-                    (_oldValue, newValue) => {
-                        // We want to remove values with undefines, but Lodash ignores
-                        // undefined return values here. Fortunately, JSON.stringify
-                        // ignores Symbols, omitting them from the result.
-                        if (newValue === undefined) return OMIT_SYMBOL;
-                    }
-                );
+                const updatedBody = _.mergeWith(jsonBody, updateJsonBody, (_oldValue, newValue) => {
+                    // We want to remove values with undefines, but Lodash ignores
+                    // undefined return values here. Fortunately, JSON.stringify
+                    // ignores Symbols, omitting them from the result.
+                    if (newValue === undefined) return OMIT_SYMBOL;
+                });
 
                 reqBodyOverride = asBuffer(JSON.stringify(updatedBody));
+            } else if (patchJsonBody) {
+                const { body: realBody } = await waitForCompletedRequest(clientReq);
+                const jsonBody = await realBody.getJson();
+                if (jsonBody === undefined) {
+                    throw new Error("Can't patch JSON in non-JSON request body");
+                }
+
+                applyJsonPatch(jsonBody, patchJsonBody, true); // Mutates the JSON body returned above
+                reqBodyOverride = asBuffer(JSON.stringify(jsonBody));
             } else if (matchReplaceBody) {
                 const { body: realBody } = await waitForCompletedRequest(clientReq);
 
