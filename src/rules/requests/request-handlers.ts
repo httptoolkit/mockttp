@@ -836,6 +836,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                         replaceBody,
                         replaceBodyFromFile,
                         updateJsonBody,
+                        patchJsonBody,
                         matchReplaceBody
                     } = this.transformResponse;
 
@@ -862,23 +863,31 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                     } else if (updateJsonBody) {
                         originalBody = await streamToBuffer(serverRes);
                         const realBody = buildBodyReader(originalBody, serverRes.headers);
+                        const jsonBody = await realBody.getJson();
 
-                        if (await realBody.getJson() === undefined) {
-                            throw new Error("Can't transform non-JSON response body");
+                        if (jsonBody === undefined) {
+                            throw new Error("Can't update JSON in non-JSON response body");
                         }
 
-                        const updatedBody = _.mergeWith(
-                            await realBody.getJson(),
-                            updateJsonBody,
-                            (_oldValue, newValue) => {
-                                // We want to remove values with undefines, but Lodash ignores
-                                // undefined return values here. Fortunately, JSON.stringify
-                                // ignores Symbols, omitting them from the result.
-                                if (newValue === undefined) return OMIT_SYMBOL;
-                            }
-                        );
+                        const updatedBody = _.mergeWith(jsonBody, updateJsonBody, (_oldValue, newValue) => {
+                            // We want to remove values with undefines, but Lodash ignores
+                            // undefined return values here. Fortunately, JSON.stringify
+                            // ignores Symbols, omitting them from the result.
+                            if (newValue === undefined) return OMIT_SYMBOL;
+                        });
 
                         resBodyOverride = asBuffer(JSON.stringify(updatedBody));
+                    } else if (patchJsonBody) {
+                        originalBody = await streamToBuffer(serverRes);
+                        const realBody = buildBodyReader(originalBody, serverRes.headers);
+                        const jsonBody = await realBody.getJson();
+
+                        if (jsonBody === undefined) {
+                            throw new Error("Can't patch JSON in non-JSON response body");
+                        }
+
+                        applyJsonPatch(jsonBody, patchJsonBody, true); // Mutates the JSON body returned above
+                        resBodyOverride = asBuffer(JSON.stringify(jsonBody));
                     } else if (matchReplaceBody) {
                         originalBody = await streamToBuffer(serverRes);
                         const realBody = buildBodyReader(originalBody, serverRes.headers);

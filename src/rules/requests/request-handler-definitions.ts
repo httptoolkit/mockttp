@@ -672,12 +672,24 @@ export interface ResponseTransform {
 
     /**
      * A JSON object which will be merged with the real response body. Undefined values
-     * will be removed. Any responses which are received with an invalid JSON body that
-     * match this rule will fail.
+     * will be removed, and other values will be merged directly with the target value
+     * recursively.
+     *
+     * Any responses which are received with an invalid JSON body that match this rule
+     * will fail.
      */
     updateJsonBody?: {
         [key: string]: any;
     };
+
+    /**
+     * A series of operations to apply to the response body in JSON Patch format (RFC
+     * 6902).
+     *
+     * Any responses which are received with an invalid JSON body that match this rule
+     * will fail.
+     */
+    patchJsonBody?: Array<JsonPatchOperation>;
 
     /**
      * Perform a series of string match & replace operations on the response body.
@@ -855,9 +867,15 @@ export class PassThroughHandlerDefinition extends Serializable implements Reques
                 options.transformResponse.replaceBody,
                 options.transformResponse.replaceBodyFromFile,
                 options.transformResponse.updateJsonBody,
+                options.transformResponse.patchJsonBody,
                 options.transformResponse.matchReplaceBody
             ].filter(o => !!o).length > 1) {
                 throw new Error("Only one response body transform can be specified at a time");
+            }
+
+            if (options.transformResponse.patchJsonBody) {
+                const validationError = validateJsonPatch(options.transformResponse.patchJsonBody);
+                if (validationError) throw validationError;
             }
 
             this.transformResponse = options.transformResponse;

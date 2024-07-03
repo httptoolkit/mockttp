@@ -784,7 +784,8 @@ nodeOnly(() => {
             it("can update a JSON body with new fields", async () => {
                 await server.forAnyRequest().thenPassThrough({
                     transformResponse: {
-                        updateJsonBody:{
+                        // Same update as the JSON Patch below, in simpler merge form:
+                        updateJsonBody: {
                             'body-value': false, // Update
                             'another-body-value': undefined, // Remove
                             'new-value': 123 // Add
@@ -817,6 +818,7 @@ nodeOnly(() => {
                         updateHeaders: {
                             'content-encoding': 'br'
                         },
+                        // Same update as the JSON Patch below, in simpler merge form:
                         updateJsonBody:{
                             'body-value': false, // Update
                             'another-body-value': undefined, // Remove
@@ -848,6 +850,37 @@ nodeOnly(() => {
                         ).toString('utf8')
                     )
                 ).to.deep.equal({
+                    'body-value': false,
+                    'new-value': 123
+                });
+            });
+
+            it("can update a JSON body with a JSON patch", async () => {
+                await server.forAnyRequest().thenPassThrough({
+                    transformResponse: {
+                        patchJsonBody: [
+                            // Same logic as the update above, in JSON Patch form:
+                            { op: 'replace', path: '/body-value', value: false },
+                            { op: 'remove', path: '/another-body-value' },
+                            { op: 'add', path: '/new-value', value: 123 }
+                        ]
+                    }
+                });
+
+                let response = await request.post(remoteServer.url, {
+                    resolveWithFullResponse: true,
+                    simple: false
+                });
+
+                expect(response.statusCode).to.equal(200);
+                expect(response.statusMessage).to.equal('OK');
+                expect(response.headers).to.deep.equal({
+                    'content-type': 'application/json',
+                    'content-length': '36',
+                    'connection': 'keep-alive',
+                    'custom-response-header': 'custom-value'
+                });
+                expect(JSON.parse(response.body)).to.deep.equal({
                     'body-value': false,
                     'new-value': 123
                 });
