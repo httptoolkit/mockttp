@@ -64,7 +64,9 @@ export async function generateCACertificate(options: {
     organizationName?: string,
     countryName?: string,
     bits?: number,
-    contrainToDomains?: string[]
+    nameConstraints?: {
+        permitted?: string[]
+    }
 } = {}) {
     options = _.defaults({}, options, {
         commonName: 'Mockttp Testing CA - DO NOT TRUST - TESTING ONLY',
@@ -104,12 +106,13 @@ export async function generateCACertificate(options: {
         { name: 'keyUsage', keyCertSign: true, digitalSignature: true, nonRepudiation: true, cRLSign: true, critical: true },
         { name: 'subjectKeyIdentifier' },
     ];
-    if(options.contrainToDomains && options.contrainToDomains.length > 0) {
+    const permittedDomains = options.nameConstraints?.permitted || [];
+    if(permittedDomains.length > 0) {
         extensions.push({
             critical: true,
             name: 'nameConstraints',
             value: generateNameConstraints({
-              permitted: options.contrainToDomains,
+              permitted: permittedDomains,
             }),
         })
     }
@@ -130,11 +133,6 @@ export async function generateCACertificate(options: {
 
 type GenerateNameConstraintsInput = {
     /**
-     * Array of excluded domains
-     */
-    excluded?: string[];
-
-    /**
      * Array of permitted domains
      */
     permitted?: string[];
@@ -147,7 +145,7 @@ type GenerateNameConstraintsInput = {
 function generateNameConstraints(
     input: GenerateNameConstraintsInput
 ): forge.asn1.Asn1 {
-    const ipsToSequence = (ips: string[]) =>
+    const domainsToSequence = (ips: string[]) =>
         ips.map((domain) => {
             return asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, [
                 asn1.create(
@@ -161,24 +159,13 @@ function generateNameConstraints(
 
     const permittedAndExcluded: forge.asn1.Asn1[] = [];
 
-    if (input.permitted !== undefined) {
+    if (input.permitted && input.permitted.length > 0) {
         permittedAndExcluded.push(
             asn1.create(
                 asn1.Class.CONTEXT_SPECIFIC,
                 0,
                 true,
-                ipsToSequence(input.permitted)
-            )
-        );
-    }
-
-    if (input.excluded !== undefined) {
-        permittedAndExcluded.push(
-            asn1.create(
-                asn1.Class.CONTEXT_SPECIFIC,
-                1,
-                true,
-                ipsToSequence(input.excluded)
+                domainsToSequence(input.permitted)
             )
         );
     }
