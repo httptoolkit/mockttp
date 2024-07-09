@@ -10,7 +10,7 @@ import { CA, generateCACertificate } from '../src/util/tls';
 const nodeMajorVersion = parseInt(process.versions.node.split('.')[0], 10);
 
 nodeOnly(() => {
-    describe.only("Certificate generation", () => {
+    describe("Certificate generation", () => {
         const caKey = fs.readFile(path.join(__dirname, 'fixtures', 'test-ca.key'), 'utf8');
         const caCert = fs.readFile(path.join(__dirname, 'fixtures', 'test-ca.pem'), 'utf8');
 
