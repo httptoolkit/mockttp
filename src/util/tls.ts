@@ -110,6 +110,7 @@ export async function generateCACertificate(options: {
     if(permittedDomains.length > 0) {
         extensions.push({
             critical: true,
+            id: '2.5.29.30',
             name: 'nameConstraints',
             value: generateNameConstraints({
               permitted: permittedDomains,
