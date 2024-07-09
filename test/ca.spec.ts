@@ -7,8 +7,10 @@ import { expect, fetch, ignoreNetworkError, nodeOnly } from "./test-utils";
 
 import { CA, generateCACertificate } from '../src/util/tls';
 
+const nodeMajorVersion = parseInt(process.versions.node.split('.')[0], 10);
+
 nodeOnly(() => {
-    describe("Certificate generation", () => {
+    describe.only("Certificate generation", () => {
         const caKey = fs.readFile(path.join(__dirname, 'fixtures', 'test-ca.key'), 'utf8');
         const caCert = fs.readFile(path.join(__dirname, 'fixtures', 'test-ca.pem'), 'utf8');
 
@@ -58,7 +60,11 @@ nodeOnly(() => {
                             port: 4430,
                             ca: [constrainedCaCert],
                             lookup: (hostname, options, callback) => {
-                                callback(null, [{ address: "127.0.0.1", family: 4 }]);
+                                if (nodeMajorVersion <= 18) {
+                                    callback(null, "127.0.0.1", 4);
+                                } else {
+                                    callback(null, [{ address: "127.0.0.1", family: 4 }]);
+                                }
                             },
                         },
                         (res) => {
@@ -90,7 +96,11 @@ nodeOnly(() => {
                             port: 4430,
                             ca: [constrainedCaCert],
                             lookup: (hostname, options, callback) => {
-                                callback(null, [{ address: "127.0.0.1", family: 4 }]);
+                                if (nodeMajorVersion <= 18) {
+                                    callback(null, "127.0.0.1", 4);
+                                } else {
+                                    callback(null, [{ address: "127.0.0.1", family: 4 }]);
+                                }
                             },
                         },
                     );
