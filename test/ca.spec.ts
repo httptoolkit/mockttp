@@ -58,7 +58,7 @@ nodeOnly(() => {
                             port: 4430,
                             ca: [constrainedCaCert],
                             lookup: (hostname, options, callback) => {
-                                callback(null, "127.0.0.1", 4);
+                                callback(null, [{ address: "127.0.0.1", family: 4 }]);
                             },
                         },
                         (res) => {
@@ -90,7 +90,7 @@ nodeOnly(() => {
                             port: 4430,
                             ca: [constrainedCaCert],
                             lookup: (hostname, options, callback) => {
-                                callback(null, "127.0.0.1", 4);
+                                callback(null, [{ address: "127.0.0.1", family: 4 }]);
                             },
                         },
                     );
