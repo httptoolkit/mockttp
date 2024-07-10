@@ -29,6 +29,83 @@ nodeOnly(() => {
             await expect(fetch('https://localhost:4430')).to.have.responseText('signed response!');
         });
 
+        describe("constrained CA", () => {
+            let constrainedCA: CA;
+            let constrainedCaCert: string;
+
+            function localhostRequest({ hostname, port }: { hostname: string; port: number }) {
+                return https.request({
+                    hostname,
+                    port,
+                    ca: [constrainedCaCert],
+                    lookup: (_, options, callback) => {
+                        if (options.all) {
+                            callback(null, [{ address: "127.0.0.1", family: 4 }]);
+                        } else {
+                            callback(null, "127.0.0.1", 4);
+                        }
+                    },
+                });
+            }
+
+            beforeEach(async () => {
+                const rootCa = await generateCACertificate({
+                    nameConstraints: { permitted: ["example.com"] },
+                });
+                constrainedCaCert = rootCa.cert;
+                constrainedCA = new CA(rootCa);
+            });
+
+            it("can generate a valid certificate for a domain included in a constrained CA", async () => {
+                
+                const { cert, key } = constrainedCA.generateCertificate("hello.example.com");
+
+                server = https.createServer({ cert, key }, (req: any, res: any) => {
+                    res.writeHead(200);
+                    res.end("signed response!");
+                });
+                await new Promise<void>((resolve) => server.listen(4430, resolve));
+
+                const req = localhostRequest({hostname: "hello.example.com", port: 4430});
+                return new Promise<void>((resolve, reject) => {
+                    req.on("response", (res) => {
+                        expect(res.statusCode).to.equal(200);
+                        res.on("data", (data) => {
+                            expect(data.toString()).to.equal("signed response!");
+                            resolve();
+                        });
+                    });
+                    req.on("error", (err) => {
+                        reject(err);
+                    });
+                    req.end();
+                });
+                
+            });
+
+            it("can not generate a valid certificate for a domain not included in a constrained CA", async () => {
+                const { cert, key } = constrainedCA.generateCertificate("hello.other.com");
+
+                server = https.createServer({ cert, key }, (req: any, res: any) => {
+                    res.writeHead(200);
+                    res.end("signed response!");
+                });
+                await new Promise<void>((resolve) => server.listen(4430, resolve));
+
+                const req = localhostRequest({hostname: "hello.other.com", port: 4430});
+                return new Promise<void>((resolve, reject) => {
+                    req.on("error", (err) => {
+                        expect(err.message).to.equal("permitted subtree violation");
+                        resolve();
+                    });
+                    req.on("response", (res) => {
+                        expect.fail("Unexpected response received");
+                    });
+                    req.end();
+                });
+            });
+        });
+
         afterEach((done) => {
             if (server) server.close(done);
         });
@@ -172,6 +249,40 @@ nodeOnly(() => {
                     !message.includes("OCSP") &&
                     !message.includes("authorityInformationAccess")
                 );
+
+            expect(errors.join('\n')).to.equal('');
+        });
+
+        it("should generate a CA cert constrained to a domain that pass lintcert checks", async function(){
+            this.retries(3); // Remote server can be unreliable
+
+            const caCertificate = await generateCACertificate({
+                nameConstraints: {
+                    permitted: ['example.com']
+                }
+            });
+
+            const { cert } = caCertificate;
+
+            const response = await ignoreNetworkError(
+                fetch('https://crt.sh/lintcert', {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({'b64cert': cert})
+                }),
+                { context: this }
+            );
+
+            const lintOutput = await response.text();
+
+            const lintResults = lintOutput
+                .split('\n')
+                .map(line => line.split('\t').slice(1))
+                .filter(line => line.length > 1);
+
+            const errors = lintResults
+                .filter(([level]) => level === 'ERROR')
+                .map(([_level, message]) => message);
 
             expect(errors.join('\n')).to.equal('');
         });

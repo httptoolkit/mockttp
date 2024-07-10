@@ -3,7 +3,7 @@ import * as fs from 'fs/promises';
 import { v4 as uuid } from "uuid";
 import * as forge from 'node-forge';
 
-const { pki, md, util: { encode64 } } = forge;
+const { asn1, pki, md, util } = forge;
 
 export type CAOptions = (CertDataOptions | CertPathOptions);
 
@@ -63,7 +63,10 @@ export async function generateCACertificate(options: {
     commonName?: string,
     organizationName?: string,
     countryName?: string,
-    bits?: number
+    bits?: number,
+    nameConstraints?: {
+        permitted?: string[]
+    }
 } = {}) {
     options = _.defaults({}, options, {
         commonName: 'Mockttp Testing CA - DO NOT TRUST - TESTING ONLY',
@@ -98,11 +101,23 @@ export async function generateCACertificate(options: {
         { name: 'organizationName', value: options.organizationName }
     ]);
 
-    cert.setExtensions([
+    const extensions: any[] = [
         { name: 'basicConstraints', cA: true, critical: true },
         { name: 'keyUsage', keyCertSign: true, digitalSignature: true, nonRepudiation: true, cRLSign: true, critical: true },
-        { name: 'subjectKeyIdentifier' }
-    ]);
+        { name: 'subjectKeyIdentifier' },
+    ];
+    const permittedDomains = options.nameConstraints?.permitted || [];
+    if(permittedDomains.length > 0) {
+        extensions.push({
+            critical: true,
+            id: '2.5.29.30',
+            name: 'nameConstraints',
+            value: generateNameConstraints({
+              permitted: permittedDomains,
+            }),
+        })
+    }
+    cert.setExtensions(extensions);
 
     // Self-issued too
     cert.setIssuer(cert.subject.attributes);
@@ -116,9 +131,57 @@ export async function generateCACertificate(options: {
     };
 }
 
+
+type GenerateNameConstraintsInput = {
+    /**
+     * Array of permitted domains
+     */
+    permitted?: string[];
+};
+
+/**
+ * Generate name constraints in conformance with
+ * [RFC 5280 § 4.2.1.10](https://datatracker.ietf.org/doc/html/rfc5280#section-4.2.1.10)
+ */
+function generateNameConstraints(
+    input: GenerateNameConstraintsInput
+): forge.asn1.Asn1 {
+    const domainsToSequence = (ips: string[]) =>
+        ips.map((domain) => {
+            return asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, [
+                asn1.create(
+                    asn1.Class.CONTEXT_SPECIFIC,
+                    2,
+                    false,
+                    util.encodeUtf8(domain)
+                ),
+            ]);
+        });
+
+    const permittedAndExcluded: forge.asn1.Asn1[] = [];
+
+    if (input.permitted && input.permitted.length > 0) {
+        permittedAndExcluded.push(
+            asn1.create(
+                asn1.Class.CONTEXT_SPECIFIC,
+                0,
+                true,
+                domainsToSequence(input.permitted)
+            )
+        );
+    }
+
+    return asn1.create(
+        asn1.Class.UNIVERSAL,
+        asn1.Type.SEQUENCE,
+        true,
+        permittedAndExcluded
+    );
+}
+
 export function generateSPKIFingerprint(certPem: PEM) {
     let cert = pki.certificateFromPem(certPem.toString('utf8'));
-    return encode64(
+    return util.encode64(
         pki.getPublicKeyFingerprint(cert.publicKey, {
             type: 'SubjectPublicKeyInfo',
             md: md.sha256.create(),
