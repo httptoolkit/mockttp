@@ -28,6 +28,10 @@ export interface PassThroughLookupOptions {
     servers?: string[];
 }
 
+export type CADefinition =
+    | { cert: string | Buffer }
+    | { certPath: string };
+
 /**
  * This defines the upstream connection parameters. These passthrough parameters
  * are shared between both WebSocket & Request passthrough rules.
@@ -62,7 +66,7 @@ export interface PassThroughHandlerConnectionOptions {
      * or buffer value containing the PEM certificate, or a `certPath` key and a
      * string value containing the local path to the PEM certificate.
      */
-    trustAdditionalCAs?: Array<{ cert: string | Buffer } | { certPath: string }>;
+    trustAdditionalCAs?: Array<CADefinition>;
 
     /**
      * A mapping of hosts to client certificates to use, in the form of

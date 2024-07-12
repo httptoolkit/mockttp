@@ -12,6 +12,7 @@ const getSocksProxyAgent = (opts: any) => new SocksProxyAgent(opts);
 
 import { isNode } from "../util/util";
 import { getProxySetting, matchesNoProxy, ProxySettingSource } from './proxy-config';
+import { getTrustedCAs } from './passthrough-handling';
 
 const KeepAliveAgents = isNode
     ? { // These are only used (and only available) on the node server side
@@ -70,12 +71,21 @@ export async function getAgent({
 
             const cacheKey = getCacheKey({
                 url: proxySetting.proxyUrl,
-                ca: proxySetting.trustedCAs
+                trustedCAs: proxySetting.trustedCAs,
+                additionalTrustedCAs: proxySetting.additionalTrustedCAs
             });
 
             if (!proxyAgentCache.has(cacheKey)) {
                 const { protocol, auth, hostname, port } = url.parse(proxySetting.proxyUrl);
                 const buildProxyAgent = ProxyAgentFactoryMap[protocol as keyof typeof ProxyAgentFactoryMap];
+
+                // If you specify trusted CAs, we override the CAs used for this connection, i.e. the trusted
+                // CA for the certificate of an HTTPS proxy. This is *not* the CAs trusted for upstream servers
+                // on the otherside of the proxy - see the corresponding passthrough options for that.
+                const trustedCerts = await getTrustedCAs(
+                    proxySetting.trustedCAs,
+                    proxySetting.additionalTrustedCAs
+                );
 
                 proxyAgentCache.set(cacheKey, buildProxyAgent({
                     protocol,
@@ -83,11 +93,8 @@ export async function getAgent({
                     hostname,
                     port,
 
-                    // If you specify trusted CAs, we override the CAs used for this connection, i.e. the trusted
-                    // CA for the certificate of an HTTPS proxy. This is *not* the CAs trusted for upstream servers
-                    // on the otherside of the proxy - see the `trustAdditionalCAs` passthrough option for that.
-                    ...(proxySetting.trustedCAs
-                        ? { ca: proxySetting.trustedCAs }
+                    ...(trustedCerts
+                        ? { ca: trustedCerts }
                         : {}
                     )
                 }));

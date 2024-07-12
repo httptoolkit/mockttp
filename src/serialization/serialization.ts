@@ -286,13 +286,9 @@ export function deserializeBuffer(buffer: string): Buffer {
 const SERIALIZED_PARAM_REFERENCE = "__mockttp__param__reference__";
 export type SerializedRuleParameterReference<R> = { [SERIALIZED_PARAM_REFERENCE]: string };
 
-export function maybeSerializeParam<T, R>(value: T | RuleParameterReference<R>): T | SerializedRuleParameterReference<R> {
-    if (isParamReference(value)) {
-        // Swap the symbol for a string, since we can't serialize symbols in JSON:
-        return { [SERIALIZED_PARAM_REFERENCE]: value[MOCKTTP_PARAM_REF] };
-    } else {
-        return value;
-    }
+function serializeParam<R>(value: RuleParameterReference<R>): SerializedRuleParameterReference<R> {
+    // Swap the symbol for a string, since we can't serialize symbols in JSON:
+    return { [SERIALIZED_PARAM_REFERENCE]: value[MOCKTTP_PARAM_REF] };
 }
 
 function isSerializedRuleParam(value: any): value is SerializedRuleParameterReference<unknown> {
@@ -335,8 +331,22 @@ export function serializeProxyConfig(
         return callbackId;
     } else if (_.isArray(proxyConfig)) {
         return proxyConfig.map((config) => serializeProxyConfig(config, channel));
-    } else {
-        return maybeSerializeParam(proxyConfig);
+    } else if (isParamReference(proxyConfig)) {
+        return serializeParam(proxyConfig);
+    } else if (proxyConfig) {
+        return {
+            ...proxyConfig,
+            trustedCAs: proxyConfig.trustedCAs?.map((caDefinition) =>
+                typeof caDefinition !== 'string' && 'cert' in caDefinition
+                    ? { cert: caDefinition.cert.toString('utf8') } // Stringify in case of buffers
+                    : caDefinition
+            ),
+            additionalTrustedCAs: proxyConfig.additionalTrustedCAs?.map((caDefinition) =>
+                'cert' in caDefinition
+                    ? { cert: caDefinition.cert.toString('utf8') } // Stringify in case of buffers
+                    : caDefinition
+            )
+        }
     }
 }
 

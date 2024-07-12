@@ -1,4 +1,5 @@
 import * as _ from 'lodash';
+import * as fs from 'fs/promises';
 import * as tls from 'tls';
 import url = require('url');
 import { oneLine } from 'common-tags';
@@ -17,6 +18,7 @@ import {
     CallbackResponseMessageResult
 } from './requests/request-handler-definitions';
 import {
+    CADefinition,
     PassThroughLookupOptions
 } from './passthrough-handling-definitions';
 
@@ -96,6 +98,34 @@ export const getUpstreamTlsOptions = (strictChecks: boolean): tls.SecureContextO
     // Skip certificate validation entirely, if not strict:
     rejectUnauthorized: strictChecks,
 });
+
+export async function getTrustedCAs(
+    trustedCAs: Array<string | CADefinition> | undefined,
+    additionalTrustedCAs: Array<CADefinition> | undefined
+): Promise<Array<string> | undefined> {
+    if (trustedCAs && additionalTrustedCAs) {
+        throw new Error(`trustedCAs and additionalTrustedCAs options are mutually exclusive`);
+    }
+
+    if (trustedCAs) {
+        return Promise.all(trustedCAs.map((caDefinition) =>  getCA(caDefinition)));
+    }
+
+    if (additionalTrustedCAs) {
+        const CAs = await Promise.all(additionalTrustedCAs.map((caDefinition) =>  getCA(caDefinition)));
+        return tls.rootCertificates.concat(CAs);
+    }
+}
+
+const getCA = async (caDefinition: string | CADefinition) => {
+    return typeof caDefinition === 'string'
+        ? caDefinition
+    : 'certPath' in caDefinition
+        ? await fs.readFile(caDefinition.certPath, 'utf8')
+    // 'cert' in caDefinition
+        : caDefinition.cert.toString('utf8')
+}
+
 
 // --- Various helpers for deriving parts of request/response data given partial overrides: ---
 

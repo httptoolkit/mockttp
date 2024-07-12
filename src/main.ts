@@ -57,6 +57,7 @@ export type {
     ProxySettingCallbackParams
 } from './rules/proxy-config';
 export type {
+    CADefinition,
     ForwardingOptions,
     PassThroughLookupOptions,
     PassThroughHandlerConnectionOptions

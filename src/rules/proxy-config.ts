@@ -2,6 +2,7 @@ import * as _ from 'lodash';
 
 import { MaybePromise } from '../util/type-utils';
 import { RuleParameterReference } from './rule-parameters';
+import { CADefinition } from './passthrough-handling-definitions';
 
 /**
  * A ProxySetting is a specific proxy setting to use, which is passed to a proxy agent
@@ -41,10 +42,27 @@ export interface ProxySetting {
      * the proxy is not HTTPS. If not specified, this will default to the Node
      * defaults, or you can override them here completely.
      *
-     * Note that unlike passthrough rule's `trustAdditionalCAs` option, this sets the
-     * complete list of trusted CAs - not just additional ones.
+     * This sets the complete list of trusted CAs, and is mutually exclusive with the
+     * `additionalTrustedCAs` option, which adds additional CAs (but also trusts the
+     * Node default CAs too).
+     *
+     * This should be specified as either a { cert: string | Buffer } object or a
+     * { certPath: string } object (to read the cert from disk). The previous
+     * simple string format is supported but deprecated.
      */
-    trustedCAs?: string[];
+    trustedCAs?: Array<
+        | string // Deprecated
+        | CADefinition
+    >;
+
+    /**
+     * Extra CAs to trust for HTTPS connections to the proxy. Ignored if the connection
+     * to the proxy is not HTTPS.
+     *
+     * This appends to the list of trusted CAs, and is mutually exclusive with the
+     * `trustedCAs` option, which completely overrides the list of CAs.
+     */
+    additionalTrustedCAs?: Array<CADefinition>;
 }
 
 /**
