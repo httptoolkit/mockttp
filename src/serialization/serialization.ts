@@ -346,7 +346,7 @@ export function serializeProxyConfig(
                     ? { cert: caDefinition.cert.toString('utf8') } // Stringify in case of buffers
                     : caDefinition
             )
-        }
+        };
     }
 }
 
