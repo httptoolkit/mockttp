@@ -103,7 +103,7 @@ export async function getTrustedCAs(
     trustedCAs: Array<string | CADefinition> | undefined,
     additionalTrustedCAs: Array<CADefinition> | undefined
 ): Promise<Array<string> | undefined> {
-    if (trustedCAs && additionalTrustedCAs) {
+    if (trustedCAs && additionalTrustedCAs?.length) {
         throw new Error(`trustedCAs and additionalTrustedCAs options are mutually exclusive`);
     }
 

@@ -16,7 +16,8 @@ import { ProxyConfig } from '../proxy-config';
 import {
     PassThroughHandlerConnectionOptions,
     ForwardingOptions,
-    PassThroughLookupOptions
+    PassThroughLookupOptions,
+    CADefinition
 } from '../passthrough-handling-definitions';
 import {
     CloseConnectionHandlerDefinition,
@@ -69,7 +70,7 @@ export class PassThroughWebSocketHandlerDefinition extends Serializable implemen
         [host: string]: { pfx: Buffer, passphrase?: string }
     };
 
-    public readonly extraCACertificates: Array<{ cert: string | Buffer } | { certPath: string }> = [];
+    public readonly extraCACertificates: Array<CADefinition> = [];
 
     constructor(options: PassThroughWebSocketHandlerOptions = {}) {
         super();
@@ -98,7 +99,10 @@ export class PassThroughWebSocketHandlerDefinition extends Serializable implemen
         this.lookupOptions = options.lookupOptions;
         this.proxyConfig = options.proxyConfig;
 
-        this.extraCACertificates = options.trustAdditionalCAs || [];
+        this.extraCACertificates =
+            options.additionalTrustedCAs ||
+            options.trustAdditionalCAs ||
+            [];
         this.clientCertificateHostMap = options.clientCertificateHostMap || {};
     }
 

@@ -66,6 +66,13 @@ export interface PassThroughHandlerConnectionOptions {
      * or buffer value containing the PEM certificate, or a `certPath` key and a
      * string value containing the local path to the PEM certificate.
      */
+    additionalTrustedCAs?: Array<CADefinition>;
+
+    /**
+     * Deprecated alias for `additionalTrustedCAs`
+     *
+     * @deprecated
+     */
     trustAdditionalCAs?: Array<CADefinition>;
 
     /**

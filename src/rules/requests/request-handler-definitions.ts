@@ -34,6 +34,7 @@ import {
 } from '../../serialization/body-serialization';
 import { ProxyConfig } from '../proxy-config';
 import {
+    CADefinition,
     ForwardingOptions,
     PassThroughHandlerConnectionOptions,
     PassThroughLookupOptions
@@ -771,7 +772,7 @@ export class PassThroughHandlerDefinition extends Serializable implements Reques
         [host: string]: { pfx: Buffer, passphrase?: string }
     };
 
-    public readonly extraCACertificates: Array<{ cert: string | Buffer } | { certPath: string }> = [];
+    public readonly extraCACertificates: Array<CADefinition> = [];
 
     public readonly transformRequest?: RequestTransform;
     public readonly transformResponse?: ResponseTransform;
@@ -820,7 +821,11 @@ export class PassThroughHandlerDefinition extends Serializable implements Reques
         this.proxyConfig = options.proxyConfig;
         this.simulateConnectionErrors = !!options.simulateConnectionErrors;
 
-        this.extraCACertificates = options.trustAdditionalCAs || [];
+        this.extraCACertificates =
+            options.additionalTrustedCAs ||
+            options.trustAdditionalCAs ||
+            [];
+
         this.clientCertificateHostMap = options.clientCertificateHostMap || {};
 
         if (options.beforeRequest && options.transformRequest && !_.isEmpty(options.transformRequest)) {

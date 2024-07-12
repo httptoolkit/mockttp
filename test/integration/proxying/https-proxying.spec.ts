@@ -222,7 +222,7 @@ nodeOnly(() => {
                     await badServer.forAnyRequest().thenReply(200);
 
                     await server.forAnyRequest().thenPassThrough({
-                        trustAdditionalCAs: [{ cert }]
+                        additionalTrustedCAs: [{ cert }]
                     });
 
                     let response = await request.get(badServer.url, {
@@ -237,7 +237,7 @@ nodeOnly(() => {
                     await badServer.forAnyRequest().thenReply(200);
 
                     await server.forAnyRequest().thenPassThrough({
-                        trustAdditionalCAs: [{ certPath }]
+                        additionalTrustedCAs: [{ certPath }]
                     });
 
                     let response = await request.get(badServer.url, {

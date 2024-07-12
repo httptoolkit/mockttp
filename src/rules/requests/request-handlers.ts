@@ -1271,7 +1271,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
             lookupOptions: data.lookupOptions,
             simulateConnectionErrors: !!data.simulateConnectionErrors,
             ignoreHostHttpsErrors: data.ignoreHostCertificateErrors,
-            trustAdditionalCAs: data.extraCACertificates,
+            additionalTrustedCAs: data.extraCACertificates,
             clientCertificateHostMap: _.mapValues(data.clientCertificateHostMap,
                 ({ pfx, passphrase }) => ({ pfx: deserializeBuffer(pfx), passphrase })
             ),
