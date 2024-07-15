@@ -38,7 +38,8 @@ import {
     getUpstreamTlsOptions,
     getClientRelativeHostname,
     getDnsLookupFunction,
-    shouldUseStrictHttps
+    shouldUseStrictHttps,
+    getTrustedCAs
 } from '../passthrough-handling';
 
 import {
@@ -212,16 +213,7 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
         if (!this.extraCACertificates.length) return undefined;
 
         if (!this._trustedCACertificates) {
-            this._trustedCACertificates = Promise.all(
-                (tls.rootCertificates as Array<string | Promise<string>>)
-                    .concat(this.extraCACertificates.map(certObject => {
-                        if ('cert' in certObject) {
-                            return certObject.cert.toString('utf8');
-                        } else {
-                            return fs.readFile(certObject.certPath, 'utf8');
-                        }
-                    }))
-            );
+            this._trustedCACertificates = getTrustedCAs(undefined, this.extraCACertificates);
         }
 
         return this._trustedCACertificates;
