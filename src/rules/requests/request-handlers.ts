@@ -1127,13 +1127,24 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
             }
         })().catch(reject)
         ).catch((e: ErrorLike) => {
-            if (!e.code && e.message === 'unsupported' && e.stack?.includes('node:internal/tls/secure-context')) {
-                // When something totally unsupported by OpenSSL is used, we get their weird and useless
-                // error - without codes or anything. We reformat it here mildly to make that at least
-                // a tiny bit clearer.
-                e.code = 'ERR_TLS_CONTEXT_UNSUPPORTED';
-                e.message = "Unsupported TLS configuration";
-                clientRes.tags.push('passthrough-tls-error:context-unsupported');
+            if (!e.code && e.stack?.split('\n')[1]?.includes('node:internal/tls/secure-context')) {
+                // OpenSSL can throw all sorts of weird & wonderful errors here, and rarely exposes a
+                // useful error code from them. To handle that, we try to detect the most common cases,
+                // notable including the useless but common 'unsupported' error that covers all
+                // OpenSSL-unsupported (e.g. legacy) configurations.
+
+                let tlsErrorTag: string;
+                if (e.message === 'unsupported') {
+                    e.code = 'ERR_TLS_CONTEXT_UNSUPPORTED';
+                    tlsErrorTag = 'context-unsupported';
+                    e.message = 'Unsupported TLS configuration';
+                } else {
+                    e.code = 'ERR_TLS_CONTEXT_UNKNOWN';
+                    tlsErrorTag = 'context-unknown';
+                    e.message = `TLS context error: ${e.message}`;
+                }
+
+                clientRes.tags.push(`passthrough-tls-error:${tlsErrorTag}`);
             }
 
             // All errors anywhere above (thrown or from explicit reject()) should end up here.
