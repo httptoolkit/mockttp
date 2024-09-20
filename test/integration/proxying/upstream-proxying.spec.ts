@@ -1,6 +1,7 @@
 import _ = require("lodash");
 import * as fs from 'fs/promises';
 import request = require("request-promise-native");
+import url = require('url');
 
 import { getLocal, Mockttp, MockedEndpoint, getAdminServer, getRemote } from "../../..";
 import {
@@ -451,6 +452,97 @@ nodeOnly(() => {
 
             });
 
+        });
+
+        describe("with a PAC file", () => {
+            const https = {
+                keyPath: './test/fixtures/test-ca.key',
+                certPath: './test/fixtures/test-ca.pem'
+            };
+    
+            const intermediateProxy = getLocal({ https });
+    
+            beforeEach(async () => {
+                server = getLocal({ https });
+                await server.start();
+
+                await intermediateProxy.start();
+    
+                process.env = _.merge({}, process.env, server.proxyEnv);
+            });
+    
+            afterEach(async () => {
+                await intermediateProxy.stop();
+            });
+    
+            it("should forward traffic to intermediateProxy using PAC file", async () => {
+                const pacFile = `function FindProxyForURL(url, host) { return "PROXY ${url.parse(intermediateProxy.url).host}"; }`;
+                await remoteServer.forGet('/proxy-all').thenReply(200, pacFile);
+
+                await server.forAnyRequest().thenPassThrough({
+                    ignoreHostHttpsErrors: true,
+                    proxyConfig: {
+                      proxyUrl: `pac+${remoteServer.url}/proxy-all`
+                    }
+                });
+    
+                await intermediateProxy.forAnyRequest().thenPassThrough({
+                    ignoreHostHttpsErrors: true,
+                    beforeRequest: (req) => {
+                        expect(req.url).to.equal('https://example.com/');
+                    }
+                });
+    
+                // make request
+                await request.get('https://example.com/');
+            });
+    
+            it("should bypass intermediateProxy using PAC file", async () => {
+                const pacFile = `function FindProxyForURL(url, host) { if (host.endsWith(".org")) return "DIRECT"; return "PROXY ${url.parse(intermediateProxy.url).host}";  }`;
+                await remoteServer.forGet('/proxy-bypass').thenReply(200, pacFile);
+
+                await server.forAnyRequest().thenPassThrough({
+                    ignoreHostHttpsErrors: true,
+                    proxyConfig: {
+                      proxyUrl: `pac+${remoteServer.url}/proxy-bypass`
+                    }
+                });
+    
+                await intermediateProxy.forAnyRequest().thenPassThrough({
+                    ignoreHostHttpsErrors: true,
+                    beforeRequest: (req) => {
+                        expect(req.url).to.not.equal('https://example.org/');
+                    }
+                });
+    
+                // make a request that hits the proxy based on PAC file
+                await request.get('https://example.com/');
+
+                // make a request that bypasses proxy based on PAC file
+                await request.get('https://example.org/');
+            });
+    
+            it("should fallback to intermediateProxy using PAC file", async () => {
+                const pacFile = `function FindProxyForURL(url, host) { return "PROXY invalid-proxy:8080; PROXY ${url.parse(intermediateProxy.url).host};";  }`;
+                await remoteServer.forGet('/proxy-fallback').thenReply(200, pacFile);
+
+                await server.forAnyRequest().thenPassThrough({
+                    ignoreHostHttpsErrors: true,
+                    proxyConfig: {
+                      proxyUrl: `pac+${remoteServer.url}/proxy-fallback`
+                    }
+                });
+    
+                await intermediateProxy.forAnyRequest().thenPassThrough({
+                    ignoreHostHttpsErrors: true,
+                    beforeRequest: (req) => {
+                        expect(req.url).to.equal('https://example.com/');
+                    }
+                });
+    
+                // make a request
+                await request.get('https://example.com/');
+            });
         });
 
     });
