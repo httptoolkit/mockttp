@@ -1,6 +1,6 @@
 {
   "name": "mockttp",
-  "version": "3.15.2",
+  "version": "3.15.3",
   "description": "Mock HTTP server for testing HTTP clients and stubbing webservices",
   "exports": {
     ".": {
