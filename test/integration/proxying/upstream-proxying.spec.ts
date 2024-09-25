@@ -459,22 +459,22 @@ nodeOnly(() => {
                 keyPath: './test/fixtures/test-ca.key',
                 certPath: './test/fixtures/test-ca.pem'
             };
-    
+
             const intermediateProxy = getLocal({ https });
-    
+
             beforeEach(async () => {
                 server = getLocal({ https });
                 await server.start();
 
                 await intermediateProxy.start();
-    
+
                 process.env = _.merge({}, process.env, server.proxyEnv);
             });
-    
+
             afterEach(async () => {
                 await intermediateProxy.stop();
             });
-    
+
             it("should forward traffic to intermediateProxy using PAC file", async () => {
                 const pacFile = `function FindProxyForURL(url, host) { return "PROXY ${url.parse(intermediateProxy.url).host}"; }`;
                 await remoteServer.forGet('/proxy-all').thenReply(200, pacFile);
@@ -485,21 +485,28 @@ nodeOnly(() => {
                       proxyUrl: `pac+${remoteServer.url}/proxy-all`
                     }
                 });
-    
+
                 await intermediateProxy.forAnyRequest().thenPassThrough({
                     ignoreHostHttpsErrors: true,
                     beforeRequest: (req) => {
                         expect(req.url).to.equal('https://example.com/');
+                        return {
+                            response: {
+                                statusCode: 200,
+                                body: 'Proxied'
+                            }
+                        };
                     }
                 });
-    
-                // make request
-                await request.get('https://example.com/');
+
+                // make a request that hits the proxy based on PAC file
+                expect(await request.get('https://example.com/')).to.equal('Proxied');
             });
-    
+
             it("should bypass intermediateProxy using PAC file", async () => {
-                const pacFile = `function FindProxyForURL(url, host) { if (host.endsWith(".org")) return "DIRECT"; return "PROXY ${url.parse(intermediateProxy.url).host}";  }`;
+                const pacFile = `function FindProxyForURL(url, host) { if (host.endsWith(".com")) { return "PROXY ${url.parse(intermediateProxy.url).host}"; } else { return "DIRECT"; } }`;
                 await remoteServer.forGet('/proxy-bypass').thenReply(200, pacFile);
+                await remoteServer.forGet('/remote-response').thenReply(200, 'Remote response');
 
                 await server.forAnyRequest().thenPassThrough({
                     ignoreHostHttpsErrors: true,
@@ -507,21 +514,27 @@ nodeOnly(() => {
                       proxyUrl: `pac+${remoteServer.url}/proxy-bypass`
                     }
                 });
-    
+
                 await intermediateProxy.forAnyRequest().thenPassThrough({
                     ignoreHostHttpsErrors: true,
                     beforeRequest: (req) => {
                         expect(req.url).to.not.equal('https://example.org/');
+                        return {
+                            response: {
+                                statusCode: 200,
+                                body: 'Proxied'
+                            }
+                        };
                     }
                 });
-    
+
                 // make a request that hits the proxy based on PAC file
-                await request.get('https://example.com/');
+                expect(await request.get('https://example.com/')).to.equal('Proxied');
 
                 // make a request that bypasses proxy based on PAC file
-                await request.get('https://example.org/');
+                expect(await request.get(remoteServer.urlFor('/remote-response'))).to.equal('Remote response');
             });
-    
+
             it("should fallback to intermediateProxy using PAC file", async () => {
                 const pacFile = `function FindProxyForURL(url, host) { return "PROXY invalid-proxy:8080; PROXY ${url.parse(intermediateProxy.url).host};";  }`;
                 await remoteServer.forGet('/proxy-fallback').thenReply(200, pacFile);
@@ -532,16 +545,22 @@ nodeOnly(() => {
                       proxyUrl: `pac+${remoteServer.url}/proxy-fallback`
                     }
                 });
-    
+
                 await intermediateProxy.forAnyRequest().thenPassThrough({
                     ignoreHostHttpsErrors: true,
                     beforeRequest: (req) => {
                         expect(req.url).to.equal('https://example.com/');
+                        return {
+                            response: {
+                                statusCode: 200,
+                                body: 'Proxied'
+                            }
+                        };
                     }
                 });
-    
-                // make a request
-                await request.get('https://example.com/');
+
+                // make a request that hits the proxy based on PAC file
+                expect(await request.get('https://example.com/')).to.equal('Proxied');
             });
         });
 
