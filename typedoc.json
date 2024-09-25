@@ -1,11 +1,8 @@
 {
-    "validation": {
-        "invalidLink": true
-    },
-    "treatWarningsAsErrors": true,
-    "excludePrivate": true,
+    "treatValidationWarningsAsErrors": true,
     "excludeProtected": true,
     "excludeInternal": true,
+    "excludeExternals": true,
     "readme": "docs/api-docs-landing-page.md",
     "out": "typedoc/"
 }

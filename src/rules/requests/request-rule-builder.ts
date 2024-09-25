@@ -16,6 +16,7 @@ import {
     FileHandlerDefinition,
     JsonRpcResponseHandlerDefinition,
     ResetConnectionHandlerDefinition,
+    CallbackResponseMessageResult
 } from "./request-handler-definitions";
 import { MaybePromise } from "../../util/type-utils";
 import { byteLength } from "../../util/util";
