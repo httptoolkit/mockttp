@@ -6,7 +6,7 @@ import * as https from 'https';
 import * as LRU from 'lru-cache';
 
 import getHttpsProxyAgent = require('https-proxy-agent');
-import getPacProxyAgent = require('pac-proxy-agent');
+import { PacProxyAgent } from 'pac-proxy-agent';
 import { SocksProxyAgent } from 'socks-proxy-agent';
 const getSocksProxyAgent = (opts: any) => new SocksProxyAgent(opts);
 
@@ -28,8 +28,8 @@ const ProxyAgentFactoryMap = {
     'http:': getHttpsProxyAgent, // HTTPS here really means 'CONNECT-tunnelled' - it can do either
     'https:': getHttpsProxyAgent,
 
-    'pac+http:': getPacProxyAgent,
-    'pac+https:': getPacProxyAgent,
+    'pac+http:': (...args: any) => new PacProxyAgent(...args),
+    'pac+https:': (...args: any) => new PacProxyAgent(...args),
 
     'socks:': getSocksProxyAgent,
     'socks4:': getSocksProxyAgent,
@@ -76,7 +76,7 @@ export async function getAgent({
             });
 
             if (!proxyAgentCache.has(cacheKey)) {
-                const { protocol, auth, hostname, port } = url.parse(proxySetting.proxyUrl);
+                const { href, protocol, auth, hostname, port } = url.parse(proxySetting.proxyUrl);
                 const buildProxyAgent = ProxyAgentFactoryMap[protocol as keyof typeof ProxyAgentFactoryMap];
 
                 // If you specify trusted CAs, we override the CAs used for this connection, i.e. the trusted
@@ -88,6 +88,7 @@ export async function getAgent({
                 );
 
                 proxyAgentCache.set(cacheKey, buildProxyAgent({
+                    href,
                     protocol,
                     auth,
                     hostname,
