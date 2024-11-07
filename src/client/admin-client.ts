@@ -12,7 +12,7 @@ import { print } from 'graphql';
 import { DEFAULT_ADMIN_SERVER_PORT } from "../types";
 
 import { MaybePromise, RequireProps } from '../util/type-utils';
-import { isNode } from '../util/util';
+import { delay, isNode } from '../util/util';
 import { isErrorLike } from '../util/error';
 import { getDeferred } from '../util/promise';
 
@@ -219,7 +219,7 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
     private attachStreamWebsocket(adminSessionBaseUrl: string, targetStream: Duplex): Duplex {
         const adminSessionBaseWSUrl = adminSessionBaseUrl.replace(/^http/, 'ws');
         const wsStream = connectWebSocketStream(`${adminSessionBaseWSUrl}/stream`, {
-            headers: this.adminClientOptions?.requestOptions?.headers // Only used in Node.js (via WS)
+            headers: this.adminClientOptions.requestOptions?.headers // Only used in Node.js (via WS)
         });
 
         let streamConnected = false;
@@ -246,26 +246,7 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
                 targetStream.emit('server-shutdown');
             } else if (streamConnected && (await this.running) === true) {
                 console.warn('Admin client stream unexpectedly disconnected', closeEvent);
-
-                this.emit('stream-reconnecting');
-
-                // Unclean shutdown means something has gone wrong somewhere. Try to reconnect.
-                const newStream = this.attachStreamWebsocket(adminSessionBaseUrl, targetStream);
-
-                new Promise((resolve, reject) => {
-                    newStream.once('connect', resolve);
-                    newStream.once('error', reject);
-                }).then(() => {
-                    // On a successful connect, business resumes as normal.
-                    console.warn('Admin client stream reconnected');
-                    this.emit('stream-reconnected');
-                }).catch((err) => {
-                    // On a failed reconnect, we just shut down completely.
-                    console.warn('Admin client stream reconnection failed, shutting down:', err.message);
-                    if (this.debug) console.warn(err);
-                    this.emit('stream-reconnect-failed', err);
-                    targetStream.emit('server-shutdown');
-                });
+                this.tryToReconnectStream(adminSessionBaseUrl, targetStream);
             }
             // If never connected successfully, we do nothing.
         });
@@ -278,6 +259,40 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
         });
 
         return wsStream;
+    }
+
+    /**
+     * Attempt to recreate a stream after disconnection, up to a limited number of retries. This is
+     * different to normal connection setup, as it assumes the target stream is otherwise already
+     * set up and active.
+     */
+    private async tryToReconnectStream(adminSessionBaseUrl: string, targetStream: Duplex, retries = 3) {
+        this.emit('stream-reconnecting');
+
+        // Unclean shutdown means something has gone wrong somewhere. Try to reconnect.
+        const newStream = this.attachStreamWebsocket(adminSessionBaseUrl, targetStream);
+
+        new Promise((resolve, reject) => {
+            newStream.once('connect', resolve);
+            newStream.once('error', reject);
+        }).then(() => {
+            // On a successful connect, business resumes as normal.
+            console.warn('Admin client stream reconnected');
+            this.emit('stream-reconnected');
+        }).catch(async (err) => {
+            if (retries > 0) {
+                // We delay re-retrying briefly - this helps to handle cases like the computer going
+                // to sleep (where the server & client pause in parallel, but race to do so).
+                await delay(50);
+                return this.tryToReconnectStream(adminSessionBaseUrl, targetStream, retries - 1);
+            }
+
+            // Otherwise, once retries have failed, we give up entirely:
+            console.warn('Admin client stream reconnection failed, shutting down:', err.message);
+            if (this.debug) console.warn(err);
+            this.emit('stream-reconnect-failed', err);
+            targetStream.emit('server-shutdown');
+        });
     }
 
     private openStreamToMockServer(adminSessionBaseUrl: string): Promise<Duplex> {
