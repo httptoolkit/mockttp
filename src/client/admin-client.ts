@@ -92,6 +92,14 @@ export interface AdminClientOptions {
     adminServerUrl?: string;
 
     /**
+     * If the admin stream disconnects, how many times should we try to
+     * reconnect? Increasing this can be useful in unstable environments, such
+     * as desktop app use case, while fewer retries will provide faster shutdown
+     * in environments where you may be killing processes intentionally.
+     */
+    adminStreamReconnectAttempts?: number;
+
+    /**
      * Options to include on all client requests.
      */
     requestOptions?: {
@@ -192,7 +200,9 @@ export async function resetAdminServer(options: AdminClientOptions = {}): Promis
  */
 export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> }> extends EventEmitter {
 
-    private adminClientOptions: RequireProps<AdminClientOptions, 'adminServerUrl'>;
+    private adminClientOptions: RequireProps<AdminClientOptions,
+        'adminServerUrl' | 'adminStreamReconnectAttempts'
+    >;
 
     private adminSessionBaseUrl: string | undefined;
     private adminServerStream: Duplex | undefined;
@@ -212,7 +222,8 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
         super();
         this.debug = !!options.debug;
         this.adminClientOptions = _.defaults(options, {
-            adminServerUrl: `http://localhost:${DEFAULT_ADMIN_SERVER_PORT}`
+            adminServerUrl: `http://localhost:${DEFAULT_ADMIN_SERVER_PORT}`,
+            adminStreamReconnectAttempts: 5
         });
     }
 
@@ -246,7 +257,14 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
                 targetStream.emit('server-shutdown');
             } else if (streamConnected && (await this.running) === true) {
                 console.warn('Admin client stream unexpectedly disconnected', closeEvent);
-                this.tryToReconnectStream(adminSessionBaseUrl, targetStream);
+
+                if (this.adminClientOptions.adminStreamReconnectAttempts > 0) {
+                    this.tryToReconnectStream(adminSessionBaseUrl, targetStream);
+                } else {
+                    // If retries are disabled, shut down immediately:
+                    console.log('Admin client stream reconnect disabled, shutting down');
+                    targetStream.emit('server-shutdown');
+                }
             }
             // If never connected successfully, we do nothing.
         });
@@ -266,7 +284,11 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
      * different to normal connection setup, as it assumes the target stream is otherwise already
      * set up and active.
      */
-    private async tryToReconnectStream(adminSessionBaseUrl: string, targetStream: Duplex, retries = 3) {
+    private async tryToReconnectStream(
+        adminSessionBaseUrl: string,
+        targetStream: Duplex,
+        retries = this.adminClientOptions.adminStreamReconnectAttempts
+    ) {
         this.emit('stream-reconnecting');
 
         // Unclean shutdown means something has gone wrong somewhere. Try to reconnect.
@@ -283,7 +305,10 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
             if (retries > 0) {
                 // We delay re-retrying briefly - this helps to handle cases like the computer going
                 // to sleep (where the server & client pause in parallel, but race to do so).
-                await delay(50);
+                // The delay increases exponentially with retry attempts (10ms, 50, 250, 1250, 6250)
+                const retryAttempt = this.adminClientOptions.adminStreamReconnectAttempts - retries;
+                await delay(10 * Math.pow(5, retryAttempt));
+
                 return this.tryToReconnectStream(adminSessionBaseUrl, targetStream, retries - 1);
             }
 
