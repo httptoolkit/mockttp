@@ -37,9 +37,9 @@ export const isLocalIPv6Available = isNode
     )
     : true;
 
-// We need to normalize ips for comparison, because the same ip may be reported as ::ffff:127.0.0.1
-// and 127.0.0.1 on the two sides of the connection, for the same ip.
-const normalizeIp = (ip: string | null | undefined) =>
+// We need to normalize ips some cases (especially comparisons), because the same ip may be reported
+// as ::ffff:127.0.0.1 and 127.0.0.1 on the two sides of the connection, for the same ip.
+export const normalizeIP = (ip: string | null | undefined) =>
     (ip && ip.startsWith('::ffff:'))
         ? ip.slice('::ffff:'.length)
         : ip;
@@ -49,7 +49,7 @@ export const isLocalhostAddress = (host: string | null | undefined) =>
         host === 'localhost' || // Most common
         host.endsWith('.localhost') ||
         host === '::1' || // IPv6
-        normalizeIp(host)!.match(/^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/) // 127.0.0.0/8 range
+        normalizeIP(host)!.match(/^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/) // 127.0.0.0/8 range
     );
 
 
@@ -68,7 +68,7 @@ export const isSocketLoop = (outgoingSockets: net.Socket[] | Set<net.Socket>, in
             // will be undefined. If so, we know they're not relevant to loops, so skip entirely.
             return false;
         } else {
-            return normalizeIp(outgoingSocket.localAddress) === normalizeIp(incomingSocket.remoteAddress) &&
+            return normalizeIP(outgoingSocket.localAddress) === normalizeIP(incomingSocket.remoteAddress) &&
                 outgoingSocket.localPort === incomingSocket.remotePort;
         }
     });

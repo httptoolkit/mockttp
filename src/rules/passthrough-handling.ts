@@ -8,7 +8,7 @@ import CacheableLookup from 'cacheable-lookup';
 import { CompletedBody, Headers } from '../types';
 import { byteLength } from '../util/util';
 import { asBuffer } from '../util/buffer-utils';
-import { isLocalhostAddress } from '../util/socket-util';
+import { isLocalhostAddress, normalizeIP } from '../util/socket-util';
 import { CachedDns, dnsLookup, DnsLookupFunction } from '../util/dns';
 import { isMockttpBody, encodeBodyBuffer } from '../util/request-utils';
 import { areFFDHECurvesSupported } from '../util/openssl-compat';
@@ -366,7 +366,7 @@ export async function getClientRelativeHostname(
         // effectively free. We ignore errors to delegate unresolvable etc to request processing later.
         isLocalhostAddress(await dnsLookup(lookupFn, hostname).catch(() => null))
     ) {
-        return remoteIp;
+        return normalizeIP(remoteIp) as string | null;
 
         // Note that we just redirect - we don't update the host header. From the POV of the target, it's still
         // 'localhost' traffic that should appear identical to normal.
