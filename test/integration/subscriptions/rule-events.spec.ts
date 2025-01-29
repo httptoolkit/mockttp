@@ -1,13 +1,16 @@
 import * as _ from 'lodash';
+import * as WebSocket from 'isomorphic-ws';
 
 import {
     getLocal,
+    RawHeaders,
     RuleEvent
 } from "../../..";
 import {
     delay,
     expect,
-    fetch
+    fetch,
+    isNode
 } from "../../test-utils";
 
 describe("Rule event susbcriptions", () => {
@@ -167,5 +170,66 @@ describe("Rule event susbcriptions", () => {
         expect(responseBodyEvent.overridden).to.equal(true);
         expect(responseBodyEvent.rawBody.toString('utf8')).to.equal('Original response body');
     });
+
+    it("should fire for proxied websockets", async () => {
+        await remoteServer.forAnyWebSocket().thenPassivelyListen();
+        const forwardingRule = await server.forAnyWebSocket().thenForwardTo(remoteServer.url);
+
+        const ruleEvents: RuleEvent<any>[] = [];
+        await server.on('rule-event', (e) => ruleEvents.push(e));
+
+        const ws = new WebSocket(`ws://localhost:${server.port}`);
+        const downstreamWsKey = isNode
+            ? (ws as any)._req.getHeaders()['sec-websocket-key']
+            : undefined;
+
+        await new Promise<void>((resolve, reject) => {
+            ws.addEventListener('open', () => {
+                resolve();
+                ws.close();
+            });
+            ws.addEventListener('error', reject);
+        });
+
+        await delay(100);
+
+        expect(ruleEvents.length).to.equal(1);
+
+        const requestId = (await forwardingRule.getSeenRequests())[0].id;
+        ruleEvents.forEach((event) => {
+            expect(event.ruleId).to.equal(forwardingRule.id);
+            expect(event.requestId).to.equal(requestId);
+        });
+
+        expect(ruleEvents.map(e => e.eventType)).to.deep.equal([
+            'passthrough-websocket-connect'
+        ]);
+
+        const connectEvent = ruleEvents[0].eventData;
+        expect(_.omit(connectEvent, 'rawHeaders')).to.deep.equal({
+            method: 'GET',
+            protocol: 'http',
+            hostname: 'localhost',
+            // This reports the *modified* port, not the original:
+            port: remoteServer.port.toString(),
+            path: '/',
+            subprotocols: []
+        });
+
+        // This reports the *modified* header, not the original:
+        expect(connectEvent.rawHeaders).to.deep.include(['host', `localhost:${remoteServer.port}`]);
+        expect(connectEvent.rawHeaders).to.deep.include(['sec-websocket-version', '13']);
+        expect(connectEvent.rawHeaders).to.deep.include(['sec-websocket-extensions', 'permessage-deflate; client_max_window_bits']);
+        expect(connectEvent.rawHeaders).to.deep.include(['connection', 'Upgrade']);
+        expect(connectEvent.rawHeaders).to.deep.include(['upgrade', 'websocket']);
+
+        // Make sure we want to see the upstream WS key, not the downstream one
+        const upstreamWsKey = (connectEvent.rawHeaders as RawHeaders)
+            .find(([key]) => key.toLowerCase() === 'sec-websocket-key')!;
+        expect(upstreamWsKey[1]).to.not.equal(downstreamWsKey);
+    });
+
+    // For now, we only support transformation of websocket URLs in forwarding, and nothing
+    // else, so initial conn params are the only passthrough data that's useful to expose.
 
 });

@@ -1,9 +1,7 @@
 import * as _ from 'lodash';
 import net = require('net');
 import * as url from 'url';
-import * as tls from 'tls';
 import * as http from 'http';
-import * as fs from 'fs/promises';
 import * as WebSocket from 'ws';
 
 import {
@@ -12,10 +10,11 @@ import {
     deserializeProxyConfig
 } from "../../serialization/serialization";
 
-import { OngoingRequest, RawHeaders } from "../../types";
+import { Headers, OngoingRequest, RawHeaders } from "../../types";
 
 import {
     CloseConnectionHandler,
+    RequestHandlerOptions,
     ResetConnectionHandler,
     TimeoutHandler
 } from '../requests/request-handlers';
@@ -60,7 +59,9 @@ export interface WebSocketHandler extends WebSocketHandlerDefinition {
         // The raw socket on which we'll be communicating
         socket: net.Socket,
         // Initial data received
-        head: Buffer
+        head: Buffer,
+        // Other general handler options
+        options: RequestHandlerOptions
     ): Promise<void>;
 }
 
@@ -219,7 +220,7 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
         return this._trustedCACertificates;
     }
 
-    async handle(req: OngoingRequest, socket: net.Socket, head: Buffer) {
+    async handle(req: OngoingRequest, socket: net.Socket, head: Buffer, options: RequestHandlerOptions) {
         this.initializeWsServer();
 
         let { protocol, hostname, port, path } = url.parse(req.url!);
@@ -266,7 +267,7 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
                 hostHeader[1] = updateHostHeader;
             } // Otherwise: falsey means don't touch it.
 
-            await this.connectUpstream(wsUrl, reqMessage, rawHeaders, socket, head);
+            await this.connectUpstream(wsUrl, reqMessage, rawHeaders, socket, head, options);
         } else if (!hostname) { // No hostname in URL means transparent proxy, so use Host header
             const hostHeader = req.headers[hostHeaderName];
             [ hostname, port ] = hostHeader!.split(':');
@@ -280,14 +281,14 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
             }
 
             const wsUrl = `${protocol}://${hostname}${port ? ':' + port : ''}${path}`;
-            await this.connectUpstream(wsUrl, reqMessage, rawHeaders, socket, head);
+            await this.connectUpstream(wsUrl, reqMessage, rawHeaders, socket, head, options);
         } else {
             // Connect directly according to the specified URL
             const wsUrl = `${
                 protocol!.replace('http', 'ws')
             }//${hostname}${port ? ':' + port : ''}${path}`;
 
-            await this.connectUpstream(wsUrl, reqMessage, rawHeaders, socket, head);
+            await this.connectUpstream(wsUrl, reqMessage, rawHeaders, socket, head, options);
         }
     }
 
@@ -296,7 +297,8 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
         req: http.IncomingMessage,
         rawHeaders: RawHeaders,
         incomingSocket: net.Socket,
-        head: Buffer
+        head: Buffer,
+        options: RequestHandlerOptions
     ) {
         const parsedUrl = url.parse(wsUrl);
 
@@ -369,6 +371,19 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
             ...clientCert,
             ...caConfig
         } as WebSocket.ClientOptions & { lookup: any, maxPayload: number });
+
+        if (options.emitEventCallback) {
+            const upstreamReq = (upstreamWebSocket as any as { _req: http.ClientRequest })._req;
+            options.emitEventCallback('passthrough-websocket-connect', {
+                method: upstreamReq.method,
+                protocol: upstreamReq.protocol.replace(/:$/, ''),
+                hostname: upstreamReq.host,
+                port: effectivePort.toString(),
+                path: upstreamReq.path,
+                rawHeaders: objectHeadersToRaw(upstreamReq.getHeaders() as Headers),
+                subprotocols: filteredSubprotocols
+            });
+        }
 
         upstreamWebSocket.once('open', () => {
             // Used in the subprotocol selection handler during the upgrade:

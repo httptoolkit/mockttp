@@ -756,7 +756,12 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             let nextRule = await nextRulePromise;
             if (nextRule) {
                 if (this.debug) console.log(`Websocket matched rule: ${nextRule.explain()}`);
-                await nextRule.handle(request, socket, head, this.recordTraffic);
+                await nextRule.handle(request, socket, head, {
+                    record: this.recordTraffic,
+                    emitEventCallback: (this.eventEmitter.listenerCount('rule-event') !== 0)
+                        ? (type, event) => this.announceRuleEventAsync(request.id, nextRule!.id, type, event)
+                        : undefined
+                });
             } else {
                 // Unmatched requests get passed through untouched automatically. This exists for
                 // historical/backward-compat reasons, to match the initial WS implementation, and
@@ -764,7 +769,11 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
                 await this.defaultWsHandler.handle(
                     request as OngoingRequest & http.IncomingMessage,
                     socket,
-                    head
+                    head,
+                    { emitEventCallback: (this.eventEmitter.listenerCount('rule-event') !== 0)
+                        ? (type, event) => this.announceRuleEventAsync(request.id, nextRule!.id, type, event)
+                        : undefined
+                    }
                 );
             }
         } catch (e) {
