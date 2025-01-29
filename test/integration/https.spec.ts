@@ -115,7 +115,9 @@ describe("When configured for HTTPS", () => {
                     keyPath: './test/fixtures/test-ca.key',
                     certPath: './test/fixtures/test-ca.pem',
                     tlsPassthrough: [
-                        { hostname: 'example.com' }
+                        { hostname: 'example.com' },
+                        // A convenient server that doesn't require SNI to serve the right cert:
+                        { hostname: 'ip-api.com' }
                     ]
                 }
             });
@@ -196,14 +198,14 @@ describe("When configured for HTTPS", () => {
                 });
 
                 const cert = tlsSocket.getPeerCertificate();
-                expect(cert.subject.CN).to.equal('www.example.org');
+                expect(cert.subject.CN).to.equal('*.example.com');
                 expect(cert.issuer.CN).to.include('DigiCert'); // <-- This is the real issuer, right now at least
             });
 
             it("bypasses Mockttp for TLS connections inside matching HTTP/1 CONNECT tunnel", async () => {
                 const tunnel = await openRawSocket(server);
 
-                tunnel.write('CONNECT example.com:443 HTTP/1.1\r\n\r\n');
+                tunnel.write('CONNECT ip-api.com:443 HTTP/1.1\r\n\r\n');
 
                 await delay(50);
 
@@ -211,13 +213,13 @@ describe("When configured for HTTPS", () => {
                 expect(result.toString()).to.equal('HTTP/1.1 200 OK\r\n\r\n');
 
                 const tlsSocket = await openRawTlsSocket(tunnel, {
-                    host: 'example.com'
-                    // No SNI used here!
+                    host: 'ip-api.com',
+                    servername: '' // No SNI used here!
                 });
 
                 const cert = tlsSocket.getPeerCertificate();
-                expect(cert.subject.CN).to.equal('www.example.org');
-                expect(cert.issuer.CN).to.include('DigiCert'); // <-- This is the real issuer, right now at least
+                expect(cert.subject.CN).to.equal('*.ip-api.com');
+                expect(cert.issuer.CN).to.include('Sectigo RSA Domain Validation Secure');
             });
 
             it("still handles matching CONNECT-tunnelled plain-HTTP requests", async () => {
