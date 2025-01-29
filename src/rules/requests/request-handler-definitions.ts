@@ -413,8 +413,9 @@ export class StreamHandlerDefinition extends Serializable implements RequestHand
                 let serializedEventData: StreamHandlerEventMessage | false =
                     _.isString(chunk) ? { type: 'string', value: chunk } :
                     _.isBuffer(chunk) ? { type: 'buffer', value: chunk.toString('base64') } :
-                    (_.isArrayBuffer(chunk) || _.isTypedArray(chunk)) ? { type: 'arraybuffer', value: encodeBase64(<any> chunk) } :
-                    _.isNil(chunk) && { type: 'nil' };
+                    (_.isArrayBuffer(chunk) || _.isTypedArray(chunk))
+                        ? { type: 'arraybuffer', value: encodeBase64(chunk) }
+                        : _.isNil(chunk) && { type: 'nil' };
 
                 if (!serializedEventData) {
                     callback(new Error(`Can't serialize streamed value: ${chunk.toString()}. Streaming must output strings, buffers or array buffers`));

@@ -638,7 +638,7 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
         this.subscriptionClient!.request(query).subscribe({
             next: async (value) => {
                 if (value.data) {
-                    const response = (<any> value.data)[fieldName];
+                    const response = value.data[fieldName];
                     const result = query.transformResponse
                         ? await query.transformResponse(response, { adminClient: this })
                         : response as Result;

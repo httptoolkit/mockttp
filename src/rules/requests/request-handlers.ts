@@ -160,7 +160,7 @@ export class SimpleHandler extends SimpleHandlerDefinition {
         writeHead(response, this.status, this.statusMessage, this.headers);
 
         if (isSerializedBuffer(this.data)) {
-            this.data = Buffer.from(<any> this.data);
+            this.data = Buffer.from(this.data as any);
         }
 
         if (this.trailers) {
@@ -408,7 +408,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
         let { protocol, hostname, port, path } = url.parse(reqUrl);
 
         // Check if this request is a request loop:
-        if (isSocketLoop(this.outgoingSockets, (<any> clientReq).socket)) {
+        if (isSocketLoop(this.outgoingSockets, (clientReq as any).socket)) {
             throw new Error(oneLine`
                 Passthrough loop detected. This probably means you're sending a request directly
                 to a passthrough endpoint, which is forwarding it to the target URL, which is a
@@ -588,7 +588,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
 
             if (modifiedReq?.response) {
                 if (modifiedReq.response === 'close') {
-                    const socket: net.Socket = (<any> clientReq).socket;
+                    const socket: net.Socket = (clientReq as any).socket;
                     socket.end();
                     throw new AbortError('Connection closed intentionally by rule');
                 } else if (modifiedReq.response === 'reset') {
@@ -1301,7 +1301,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
 
 export class CloseConnectionHandler extends CloseConnectionHandlerDefinition {
     async handle(request: OngoingRequest) {
-        const socket: net.Socket = (<any> request).socket;
+        const socket: net.Socket = (request as any).socket;
         socket.end();
         throw new AbortError('Connection closed intentionally by rule');
     }
