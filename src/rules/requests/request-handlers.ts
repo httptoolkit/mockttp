@@ -924,6 +924,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                     originalBody = await streamToBuffer(serverRes);
                     let serverHeaders = rawHeadersToObject(serverRawHeaders);
 
+                    let reqHeader = rawHeadersToObjectPreservingCase(rawHeaders);
                     modifiedRes = await this.beforeResponse({
                         id: clientReq.id,
                         statusCode: serverStatusCode,
@@ -931,6 +932,19 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                         headers: serverHeaders,
                         rawHeaders: _.cloneDeep(serverRawHeaders),
                         body: buildBodyReader(originalBody, serverHeaders)
+                    }, {
+                        id: clientReq.id,
+                        protocol: protocol?.replace(':', '') ?? '',
+                        method: method,
+                        url: reqUrl,
+                        path: path ?? '',
+                        headers: reqHeader,
+                        rawHeaders: rawHeaders,
+                        timingEvents: clientReq.timingEvents,
+                        tags: clientReq.tags,
+                        body: buildBodyReader(reqBodyOverride ? Buffer.from(reqBodyOverride.buffer) : await clientReq.body.asDecodedBuffer(), reqHeader),
+                        rawTrailers: clientReq.rawTrailers ?? [],
+                        trailers: rawHeadersToObject(clientReq.rawTrailers ?? []),
                     });
 
                     if (modifiedRes === 'close') {
@@ -1214,9 +1228,9 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
             };
         }
 
-        let beforeResponse: ((res: PassThroughResponse) => MaybePromise<CallbackResponseResult | void>) | undefined;
+        let beforeResponse: ((res: PassThroughResponse, req: CompletedRequest) => MaybePromise<CallbackResponseResult | void>) | undefined;
         if (data.hasBeforeResponseCallback) {
-            beforeResponse = async (res: PassThroughResponse) => {
+            beforeResponse = async (res: PassThroughResponse, req: CompletedRequest) => {
                 const callbackResult = await channel.request<
                     BeforePassthroughResponseRequest,
                     | WithSerializedCallbackBuffers<CallbackResponseMessageResult>
@@ -1224,7 +1238,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                     | 'reset'
                     | undefined
                 >('beforeResponse', {
-                    args: [withSerializedBodyReader(res)]
+                    args: [withSerializedBodyReader(res), withSerializedBodyReader(req)]
                 })
 
                 if (callbackResult && typeof callbackResult !== 'string') {
