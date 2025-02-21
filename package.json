@@ -194,7 +194,7 @@
     "parse-multipart-data": "^1.4.0",
     "performance-now": "^2.1.0",
     "portfinder": "^1.0.32",
-    "read-tls-client-hello": "^1.0.0",
+    "read-tls-client-hello": "^1.1.0",
     "semver": "^7.5.3",
     "socks-proxy-agent": "^7.0.0",
     "typed-error": "^3.0.2",

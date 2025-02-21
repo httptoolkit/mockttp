@@ -53,6 +53,7 @@ describe("TLS passthrough subscriptions", () => {
             : ['h2', 'http/1.1']
         );
         expect(tlsMetadata.ja3Fingerprint.length).to.equal(32);
+        expect(tlsMetadata.ja4Fingerprint.length).to.equal(36);
     });
 
     it("should not fire for TLS sockets are received and handled", async () => {

@@ -11,6 +11,7 @@ import { makeDestroyable, DestroyableServer } from 'destroyable-server';
 import httpolyglot = require('@httptoolkit/httpolyglot');
 import {
     calculateJa3FromFingerprintData,
+    calculateJa4FromHelloData,
     NonTlsError,
     readTlsClientHello
 } from 'read-tls-client-hello';
@@ -399,7 +400,8 @@ function analyzeAndMaybePassThroughTls(
                 connectHostname,
                 connectPort,
                 clientAlpn: helloData.alpnProtocols,
-                ja3Fingerprint: calculateJa3FromFingerprintData(helloData.fingerprintData)
+                ja3Fingerprint: calculateJa3FromFingerprintData(helloData.fingerprintData),
+                ja4Fingerprint: calculateJa4FromHelloData(helloData)
             };
 
             if (shouldPassThrough(connectHostname, passThroughPatterns, interceptOnlyPatterns)) {

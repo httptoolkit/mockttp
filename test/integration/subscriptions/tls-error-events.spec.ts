@@ -108,6 +108,7 @@ describe("TLS error subscriptions", () => {
 
         expect(tlsError.tlsMetadata.sniHostname).to.equal('localhost');
         expect(tlsError.tlsMetadata.ja3Fingerprint!.length).to.equal(32);
+        expect(tlsError.tlsMetadata.ja4Fingerprint!.length).to.equal(36);
 
         await expectNoClientErrors();
     });
