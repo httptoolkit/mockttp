@@ -274,8 +274,12 @@ export class StreamHandler extends StreamHandlerDefinition {
             if (this.headers) dropDefaultHeaders(response);
 
             writeHead(response, this.status, undefined, this.headers);
+            response.flushHeaders();
+
             this.stream.pipe(response);
             this.stream.done = true;
+
+            this.stream.on('error', (e) => response.destroy(e));
         } else {
             throw new Error(stripIndent`
                 Stream request handler called more than once - this is not supported.
