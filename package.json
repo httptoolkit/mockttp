@@ -52,7 +52,6 @@
   "bin": {
     "mockttp": "dist/admin/admin-bin.js"
   },
-  "runkitExampleFilename": "./docs/runkitExample.js",
   "files": [
     "dist",
     "src",
