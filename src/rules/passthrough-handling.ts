@@ -4,6 +4,7 @@ import * as tls from 'tls';
 import url = require('url');
 import { oneLine } from 'common-tags';
 import CacheableLookup from 'cacheable-lookup';
+import * as semver from 'semver';
 
 import { CompletedBody, Headers } from '../types';
 import { byteLength } from '../util/util';
@@ -91,6 +92,11 @@ export const getUpstreamTlsOptions = (strictChecks: boolean): tls.SecureContextO
         // Valid, but not included in Node.js TLS module types:
         requestOSCP: true
     } as any),
+
+    // Trust intermediate certificates from the trusted CA list too. Without this, trusted CAs
+    // are only used when they are self-signed root certificates. Seems to cause issues in Node v20
+    // in HTTP/2 tests, so disabled below the supported v22 version.
+    allowPartialTrustChain: semver.satisfies(process.version, '>=22.9.0'),
 
     // Allow TLSv1, if !strict:
     minVersion: strictChecks ? tls.DEFAULT_MIN_VERSION : 'TLSv1',
