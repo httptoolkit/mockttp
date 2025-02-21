@@ -129,6 +129,24 @@ describe("Rule event susbcriptions", () => {
         expect(responseBodyEvent).to.deep.equal({ overridden: false });
     });
 
+    it("should fire no events if beforeRequest closes response", async () => {
+        await remoteServer.forAnyRequest().thenReply(200);
+        const forwardingRule = await server.forAnyRequest().thenForwardTo(remoteServer.url, {
+            beforeRequest: () => ({ response: 'close' })
+        });
+
+        const ruleEvents: RuleEvent<any>[] = [];
+        await server.on('rule-event', (e) => ruleEvents.push(e));
+
+        const response = await fetch(server.url).catch((e) => e);
+        expect(response).to.be.instanceOf(Error);
+        expect(response).to.match(isNode ? /socket hang up/ : /Failed to fetch/);
+
+        await delay(100);
+
+        expect(ruleEvents.length).to.equal(0);
+    });
+
     it("should include upstream-perspective (= unmodified) response bodies", async () => {
         await remoteServer.forAnyRequest().thenReply(200, 'Original response body');
         const forwardingRule = await server.forAnyRequest().thenForwardTo(remoteServer.url, {
@@ -145,6 +163,44 @@ describe("Rule event susbcriptions", () => {
 
         const response = await fetch(server.url);
         expect(response.status).to.equal(404);
+
+        await delay(100);
+
+        expect(ruleEvents.length).to.equal(4);
+
+        const requestId = (await forwardingRule.getSeenRequests())[0].id;
+        ruleEvents.forEach((event) => {
+            expect(event.ruleId).to.equal(forwardingRule.id);
+            expect(event.requestId).to.equal(requestId);
+        });
+
+        expect(ruleEvents.map(e => e.eventType)).to.deep.equal([
+            'passthrough-request-head',
+            'passthrough-request-body',
+            'passthrough-response-head',
+            'passthrough-response-body'
+        ]);
+
+        const responseHeadEvent = ruleEvents[2].eventData;
+        expect(responseHeadEvent.statusCode).to.equal(200); // <-- Original status
+
+        const responseBodyEvent = ruleEvents[3].eventData;
+        expect(responseBodyEvent.overridden).to.equal(true);
+        expect(responseBodyEvent.rawBody.toString('utf8')).to.equal('Original response body');
+    });
+
+    it("should include response bodies after beforeResponse 'close'", async () => {
+        await remoteServer.forAnyRequest().thenReply(200, 'Original response body');
+        const forwardingRule = await server.forAnyRequest().thenForwardTo(remoteServer.url, {
+            beforeResponse: () => 'close'
+        });
+
+        const ruleEvents: RuleEvent<any>[] = [];
+        await server.on('rule-event', (e) => ruleEvents.push(e));
+
+        const response = await fetch(server.url).catch((e) => e);
+        expect(response).to.be.instanceOf(Error);
+        expect(response).to.match(isNode ? /socket hang up/ : /Failed to fetch/);
 
         await delay(100);
 

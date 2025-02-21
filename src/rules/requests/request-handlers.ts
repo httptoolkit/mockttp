@@ -947,13 +947,26 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                         trailers: rawHeadersToObject(clientReq.rawTrailers ?? []),
                     });
 
-                    if (modifiedRes === 'close') {
-                        (clientReq as any).socket.end();
-                        throw new AbortError('Connection closed intentionally by rule');
-                    } else if (modifiedRes === 'reset') {
-                        requireSocketResetSupport();
-                        resetOrDestroy(clientReq);
-                        throw new AbortError('Connection reset intentionally by rule');
+                    if (modifiedRes === 'close' || modifiedRes === 'reset') {
+                        // If you kill the connection, we need to fire an upstream event separately here, since
+                        // this means the body won't be delivered in normal response events.
+                        if (options.emitEventCallback) {
+                            options.emitEventCallback!('passthrough-response-body', {
+                                overridden: true,
+                                rawBody: originalBody
+                            });
+                        }
+
+                        if (modifiedRes === 'close') {
+                            (clientReq as any).socket.end();
+                        } else if (modifiedRes === 'reset') {
+                            requireSocketResetSupport();
+                            resetOrDestroy(clientReq);
+                        }
+
+                        throw new AbortError(
+                            `Connection ${modifiedRes === 'close' ? 'closed' : 'reset'} intentionally by rule`
+                        );
                     }
 
                     validateCustomHeaders(serverHeaders, modifiedRes?.headers);
