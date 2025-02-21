@@ -550,10 +550,12 @@ export interface PassThroughHandlerOptions extends PassThroughHandlerConnectionO
     /**
      * A callback that will be passed the full response before it is passed through,
      * and which returns a value that defines how the the response content should
-     * be transformed before it's returned to the client.
+     * be transformed before it's returned to the client. The callback is also passed
+     * the request that was sent to the server (as a 2nd parameter) for reference.
      *
      * The callback can either return an object to define how the response should be
-     * changed, or the string 'close' to immediately close the underlying connection.
+     * changed, or the strings 'close' or 'reset' to immediately close/reset the
+     * underlying connection.
      *
      * All fields on the object are optional, and returning undefined is equivalent
      * to returning an empty object (transforming nothing).
