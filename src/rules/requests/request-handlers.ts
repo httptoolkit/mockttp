@@ -132,7 +132,7 @@ export class AbortError extends TypedError {
 
     constructor(
         message: string,
-        readonly code?: string
+        readonly code: string
     ) {
         super(message);
     }
@@ -227,11 +227,11 @@ export class CallbackHandler extends CallbackHandlerDefinition {
 
         if (outResponse === 'close') {
             (request as any).socket.end();
-            throw new AbortError('Connection closed intentionally by rule');
+            throw new AbortError('Connection closed intentionally by rule', 'E_RULE_CB_CLOSE');
         } else if (outResponse === 'reset') {
             requireSocketResetSupport();
             resetOrDestroy(request);
-            throw new AbortError('Connection reset intentionally by rule');
+            throw new AbortError('Connection reset intentionally by rule', 'E_RULE_CB_RESET');
         } else {
             await writeResponseFromCallback(outResponse, response);
         }
@@ -595,11 +595,11 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 if (modifiedReq.response === 'close') {
                     const socket: net.Socket = (clientReq as any).socket;
                     socket.end();
-                    throw new AbortError('Connection closed intentionally by rule');
+                    throw new AbortError('Connection closed intentionally by rule', 'E_RULE_BREQ_CLOSE');
                 } else if (modifiedReq.response === 'reset') {
                     requireSocketResetSupport();
                     resetOrDestroy(clientReq);
-                    throw new AbortError('Connection reset intentionally by rule');
+                    throw new AbortError('Connection reset intentionally by rule', 'E_RULE_BREQ_RESET');
                 } else {
                     // The callback has provided a full response: don't passthrough at all, just use it.
                     await writeResponseFromCallback(modifiedReq.response, clientRes);
@@ -970,7 +970,8 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                         }
 
                         throw new AbortError(
-                            `Connection ${modifiedRes === 'close' ? 'closed' : 'reset'} intentionally by rule`
+                            `Connection ${modifiedRes === 'close' ? 'closed' : 'reset'} intentionally by rule`,
+                            `E_RULE_BRES_${modifiedRes.toUpperCase()}`
                         );
                     }
 
@@ -1197,7 +1198,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                         ? e.errors.map(e => e.message).join(', ')
                         : (e.message ?? e.code ?? e);
 
-                    throw new AbortError(`Upstream connection error: ${errorMessage}`, e.code);
+                    throw new AbortError(`Upstream connection error: ${errorMessage}`, e.code || 'E_MIRRORED_FAILURE');
                 } else {
                     e.statusCode = 502;
                     e.statusMessage = 'Error communicating with upstream server';
@@ -1328,7 +1329,7 @@ export class CloseConnectionHandler extends CloseConnectionHandlerDefinition {
     async handle(request: OngoingRequest) {
         const socket: net.Socket = (request as any).socket;
         socket.end();
-        throw new AbortError('Connection closed intentionally by rule');
+        throw new AbortError('Connection closed intentionally by rule', 'E_RULE_CLOSE');
     }
 }
 
@@ -1341,7 +1342,7 @@ export class ResetConnectionHandler extends ResetConnectionHandlerDefinition {
     async handle(request: OngoingRequest) {
         requireSocketResetSupport();
         resetOrDestroy(request);
-        throw new AbortError('Connection reset intentionally by rule');
+        throw new AbortError('Connection reset intentionally by rule', 'E_RULE_RESET');
     }
 
     /**

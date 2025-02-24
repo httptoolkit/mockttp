@@ -18,6 +18,7 @@ import {
     CallbackRequestResult,
     CallbackResponseMessageResult
 } from './requests/request-handler-definitions';
+import { AbortError } from './requests/request-handlers';
 import {
     CADefinition,
     PassThroughLookupOptions
@@ -411,6 +412,10 @@ export function buildUpstreamErrorTags(e: ErrorLike) {
     const tlsAlertMatch = /SSL alert number (\d+)/.exec(e.message ?? '');
     if (tlsAlertMatch) {
         tags.push('passthrough-tls-error:ssl-alert-' + tlsAlertMatch[1]);
+    }
+
+    if (e instanceof AbortError) {
+        tags.push('passthrough-error:mockttp-abort')
     }
 
     return tags;
