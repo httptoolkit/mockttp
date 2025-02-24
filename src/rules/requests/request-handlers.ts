@@ -766,7 +766,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 ...caConfig
             }, (serverRes) => (async () => {
                 serverRes.on('error', (e: any) => {
-                    e.causedByUpstreamError = true;
+                    reportUpstreamAbort(e)
                     reject(e);
                 });
 
@@ -1042,7 +1042,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                                 overridden: true,
                                 rawBody: upstreamBody
                             });
-                        });
+                        }).catch((e) => reportUpstreamAbort(e));
                     } else {
                         options.emitEventCallback('passthrough-response-body', {
                             overridden: false
@@ -1110,6 +1110,27 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 serverReq.abort();
             }
 
+            // If the upstream fails, for any reason, we need to fire an event to any rule
+            // listeners who might be present (although only the first time)
+            let reportedUpstreamError = false;
+            function reportUpstreamAbort(e: ErrorLike & { causedByUpstreamError?: true }) {
+                e.causedByUpstreamError = true;
+
+                if (!options.emitEventCallback) return;
+
+                if (reportedUpstreamError) return;
+                reportedUpstreamError = true;
+
+                options.emitEventCallback('passthrough-abort', {
+                    error: {
+                        name: e.name,
+                        code: e.code,
+                        message: e.message,
+                        stack: e.stack
+                    }
+                });
+            }
+
             // Handle the case where the downstream connection is prematurely closed before
             // fully sending the request or receiving the response.
             clientReq.on('aborted', abortUpstream);
@@ -1122,7 +1143,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
             });
 
             serverReq.on('error', (e: any) => {
-                e.causedByUpstreamError = true;
+                reportUpstreamAbort(e);
                 reject(e);
             });
 

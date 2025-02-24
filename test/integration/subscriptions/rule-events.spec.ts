@@ -1,5 +1,6 @@
 import * as _ from 'lodash';
 import * as WebSocket from 'isomorphic-ws';
+import { PassThrough } from 'stream';
 
 import {
     getLocal,
@@ -10,7 +11,8 @@ import {
     delay,
     expect,
     fetch,
-    isNode
+    isNode,
+    nodeOnly
 } from "../../test-utils";
 
 describe("Rule event susbcriptions", () => {
@@ -225,6 +227,80 @@ describe("Rule event susbcriptions", () => {
         const responseBodyEvent = ruleEvents[3].eventData;
         expect(responseBodyEvent.overridden).to.equal(true);
         expect(responseBodyEvent.rawBody.toString('utf8')).to.equal('Original response body');
+    });
+
+
+    it("should fire abort event if upstream body response fails", async () => {
+        await remoteServer.forAnyRequest().thenCloseConnection();
+        const forwardingRule = await server.forAnyRequest().thenForwardTo(remoteServer.url);
+
+        const ruleEvents: RuleEvent<any>[] = [];
+        await server.on('rule-event', (e) => ruleEvents.push(e));
+
+        await fetch(server.url).catch(() => {});
+
+        await delay(100);
+        expect(ruleEvents.length).to.equal(3);
+
+        const requestId = (await forwardingRule.getSeenRequests())[0].id;
+        ruleEvents.forEach((event) => {
+            expect(event.ruleId).to.equal(forwardingRule.id);
+            expect(event.requestId).to.equal(requestId);
+        });
+
+        expect(ruleEvents.map(e => e.eventType)).to.deep.equal([
+            'passthrough-request-head',
+            'passthrough-request-body',
+            'passthrough-abort'
+        ]);
+
+        const responseAbortEvent = ruleEvents[2].eventData;
+        expect(responseAbortEvent.error.name).to.equal('Error');
+        expect(responseAbortEvent.error.message).to.equal('socket hang up');
+    });
+
+    nodeOnly(() => {
+        it("should fire abort event if upstream body response fails", async () => {
+            const stream = new PassThrough();
+            await remoteServer.forAnyRequest().thenStream(200, stream);
+            const forwardingRule = await server.forAnyRequest().thenForwardTo(remoteServer.url, {
+                transformResponse: {
+                    replaceBody: 'replaced body'
+                }
+            });
+
+            const ruleEvents: RuleEvent<any>[] = [];
+            await server.on('rule-event', (e) => ruleEvents.push(e));
+
+            const response = await fetch(server.url);
+            expect(response.status).to.equal(200);
+
+            stream.emit('error', new Error()); // Hard-fail part way through the body response
+            await delay(10);
+
+            expect(ruleEvents.length).to.equal(4);
+
+            const requestId = (await forwardingRule.getSeenRequests())[0].id;
+            ruleEvents.forEach((event) => {
+                expect(event.ruleId).to.equal(forwardingRule.id);
+                expect(event.requestId).to.equal(requestId);
+            });
+
+            expect(ruleEvents.map(e => e.eventType)).to.deep.equal([
+                'passthrough-request-head',
+                'passthrough-request-body',
+                'passthrough-response-head',
+                'passthrough-abort'
+            ]);
+
+            const responseHeadEvent = ruleEvents[2].eventData;
+            expect(responseHeadEvent.statusCode).to.equal(200); // <-- Original status
+
+            const responseAbortEvent = ruleEvents[3].eventData;
+            expect(responseAbortEvent.error.name).to.equal('Error');
+            expect(responseAbortEvent.error.code).to.equal('ECONNRESET');
+            expect(responseAbortEvent.error.message).to.equal('aborted');
+        });
     });
 
     it("should fire for proxied websockets", async () => {
