@@ -22,6 +22,7 @@ import {
     CADefinition,
     PassThroughLookupOptions
 } from './passthrough-handling-definitions';
+import { ErrorLike } from '../util/error';
 
 // TLS settings for proxied connections, intended to avoid TLS fingerprint blocking
 // issues so far as possible, by closely emulating a Firefox Client Hello:
@@ -379,4 +380,38 @@ export async function getClientRelativeHostname(
     } else {
         return hostname;
     }
+}
+
+export function buildUpstreamErrorTags(e: ErrorLike) {
+    const tags: string[] = [];
+
+    // OpenSSL can throw all sorts of weird & wonderful errors here, and rarely exposes a
+    // useful error code from them. To handle that, we try to detect the most common cases,
+    // notable including the useless but common 'unsupported' error that covers all
+    // OpenSSL-unsupported (e.g. legacy) configurations.
+    if (!e.code && e.stack?.split('\n')[1]?.includes('node:internal/tls/secure-context')) {
+        let tlsErrorTag: string;
+        if (e.message === 'unsupported') {
+            e.code = 'ERR_TLS_CONTEXT_UNSUPPORTED';
+            tlsErrorTag = 'context-unsupported';
+            e.message = 'Unsupported TLS configuration';
+        } else {
+            e.code = 'ERR_TLS_CONTEXT_UNKNOWN';
+            tlsErrorTag = 'context-unknown';
+            e.message = `TLS context error: ${e.message}`;
+        }
+
+        tags.push(`passthrough-tls-error:${tlsErrorTag}`);
+    }
+
+    // All raw error codes are included in the tags:
+    tags.push('passthrough-error:' + e.code);
+
+    // We build tags for by SSL alerts, for each recognition elsewhere:
+    const tlsAlertMatch = /SSL alert number (\d+)/.exec(e.message ?? '');
+    if (tlsAlertMatch) {
+        tags.push('passthrough-tls-error:ssl-alert-' + tlsAlertMatch[1]);
+    }
+
+    return tags;
 }

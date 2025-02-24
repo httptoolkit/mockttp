@@ -79,7 +79,8 @@ import {
     shouldUseStrictHttps,
     getClientRelativeHostname,
     getDnsLookupFunction,
-    getTrustedCAs
+    getTrustedCAs,
+    buildUpstreamErrorTags
 } from '../passthrough-handling';
 
 import {
@@ -1123,6 +1124,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
 
                 options.emitEventCallback('passthrough-abort', {
                     downstreamAborted: !!(serverReq?.aborted),
+                    tags: buildUpstreamErrorTags(e),
                     error: {
                         name: e.name,
                         code: e.code,
@@ -1180,37 +1182,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
             }
         })().catch(reject)
         ).catch((e: ErrorLike) => {
-            if (!e.code && e.stack?.split('\n')[1]?.includes('node:internal/tls/secure-context')) {
-                // OpenSSL can throw all sorts of weird & wonderful errors here, and rarely exposes a
-                // useful error code from them. To handle that, we try to detect the most common cases,
-                // notable including the useless but common 'unsupported' error that covers all
-                // OpenSSL-unsupported (e.g. legacy) configurations.
-
-                let tlsErrorTag: string;
-                if (e.message === 'unsupported') {
-                    e.code = 'ERR_TLS_CONTEXT_UNSUPPORTED';
-                    tlsErrorTag = 'context-unsupported';
-                    e.message = 'Unsupported TLS configuration';
-                } else {
-                    e.code = 'ERR_TLS_CONTEXT_UNKNOWN';
-                    tlsErrorTag = 'context-unknown';
-                    e.message = `TLS context error: ${e.message}`;
-                }
-
-                clientRes.tags.push(`passthrough-tls-error:${tlsErrorTag}`);
-            }
-
-            // All errors anywhere above (thrown or from explicit reject()) should end up here.
-
-            // We tag the response with the error code, for debugging from events:
-            clientRes.tags.push('passthrough-error:' + e.code);
-
-            // Tag responses, so programmatic examination can react to this
-            // event, without having to parse response data or similar.
-            const tlsAlertMatch = /SSL alert number (\d+)/.exec(e.message ?? '');
-            if (tlsAlertMatch) {
-                clientRes.tags.push('passthrough-tls-error:ssl-alert-' + tlsAlertMatch[1]);
-            }
+            clientRes.tags.push(...buildUpstreamErrorTags(e));
 
             if ((e as any).causedByUpstreamError && !serverReq?.aborted) {
                 if (e.code === 'ECONNRESET' || e.code === 'ECONNREFUSED' || this.simulateConnectionErrors) {
