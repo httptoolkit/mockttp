@@ -15,7 +15,7 @@ import {
     nodeOnly
 } from "../../test-utils";
 
-describe("Rule event susbcriptions", () => {
+describe("Rule event subscriptions", () => {
 
     const server = getLocal();
     const remoteServer = getLocal();
@@ -257,6 +257,7 @@ describe("Rule event susbcriptions", () => {
         const responseAbortEvent = ruleEvents[2].eventData;
         expect(responseAbortEvent.error.name).to.equal('Error');
         expect(responseAbortEvent.error.message).to.equal('socket hang up');
+        expect(responseAbortEvent.downstreamAborted).to.equal(false);
     });
 
     nodeOnly(() => {
@@ -300,6 +301,7 @@ describe("Rule event susbcriptions", () => {
             expect(responseAbortEvent.error.name).to.equal('Error');
             expect(responseAbortEvent.error.code).to.equal('ECONNRESET');
             expect(responseAbortEvent.error.message).to.equal('aborted');
+            expect(responseAbortEvent.downstreamAborted).to.equal(false);
         });
     });
 
