@@ -193,7 +193,10 @@ async function writeResponseFromCallback(
         // RawBody takes priority if both are set (useful for backward compat) but if not then
         // the body is automatically encoded to match the content-encoding header.
         result.rawBody = await encodeBodyBuffer(
-            Buffer.from(result.body),
+            // Separate string case mostly required due to TS type issues:
+            typeof result.body === 'string'
+                ? Buffer.from(result.body, "utf8")
+                : Buffer.from(result.body),
             result.headers ?? {}
         );
     }

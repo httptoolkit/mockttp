@@ -296,7 +296,7 @@ export function getHttp2Body(req: http2.ClientHttp2Stream) {
 
         const body: Buffer[] = [];
         req.on('data', (d: Buffer | string) => {
-            body.push(Buffer.from(d));
+            body.push(Buffer.from(d as Buffer));
         });
         req.on('end', () => req.close());
         req.on('close', () => resolve(Buffer.concat(body)));

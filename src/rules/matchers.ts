@@ -403,8 +403,10 @@ export class MultipartFormDataMatcher extends Serializable implements RequestMat
         const parsedBody = multipart.parse(await request.body.asDecodedBuffer(), boundary[1]);
 
         return this.matchConditions.every((condition) => {
-            const expectedContent = condition.content
-                ? Buffer.from(condition.content)
+            const expectedContent = typeof condition.content === 'string'
+                    ? Buffer.from(condition.content, "utf8")
+                : condition.content
+                    ? Buffer.from(condition.content)
                 : undefined;
 
             return parsedBody.some((part) =>
