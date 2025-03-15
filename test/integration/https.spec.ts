@@ -419,4 +419,73 @@ describe("When configured for HTTPS", () => {
             });
         });
     });
+
+    describe.only("with TLS version restrictions", () => {
+        const server = getLocal({
+                https: {
+                  keyPath: './test/fixtures/test-ca.key',
+                  certPath: './test/fixtures/test-ca.pem',
+                  tlsServerOptions: {
+                    minVersion: 'TLSv1.2'
+                  }
+                }
+        });
+
+        beforeEach(async () => {
+            await server.start();
+            await server.forAnyRequest().thenReply(200, "Mock response");
+        });
+
+        afterEach(async () => {
+            await server.stop();
+        });
+
+        it("should accept TLS 1.2 connections", async () => {
+            const tlsSocket = await openRawTlsSocket(server, {
+                rejectUnauthorized: false,
+                minVersion: 'TLSv1.2',
+                maxVersion: 'TLSv1.2'
+            });
+
+            expect(tlsSocket.getProtocol()).to.equal('TLSv1.2');
+            tlsSocket.destroy();
+        });
+
+        it("should reject TLS 1.0 connections", async () => {
+            try {
+                await openRawTlsSocket(server, {
+                    rejectUnauthorized: false,
+                    minVersion: 'TLSv1',
+                    maxVersion: 'TLSv1'
+                });
+                throw new Error('Expected connection to fail');
+            } catch (e: any) {
+                expect(e.code).to.include('ERR_SSL_TLSV1_ALERT_PROTOCOL_VERSION');
+            }
+        });
+
+        it("should reject TLS 1.1 connections", async () => {
+            try {
+                await openRawTlsSocket(server, {
+                    rejectUnauthorized: false,
+                    minVersion: 'TLSv1.1',
+                    maxVersion: 'TLSv1.1'
+                });
+                throw new Error('Expected connection to fail');
+            } catch (e: any) {
+                expect(e.code).to.include('ERR_SSL_TLSV1_ALERT_PROTOCOL_VERSION');
+            }
+        });
+
+        it("should accept TLS 1.3 connections when TLS 1.2 is minimum", async () => {
+            const tlsSocket = await openRawTlsSocket(server, {
+                rejectUnauthorized: false,
+                minVersion: 'TLSv1.3',
+                maxVersion: 'TLSv1.3'
+            });
+
+            expect(tlsSocket.getProtocol()).to.equal('TLSv1.3');
+            tlsSocket.destroy();
+        });
+    });
 });
