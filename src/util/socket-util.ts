@@ -111,12 +111,14 @@ export function resetOrDestroy(requestOrSocket:
     | OngoingRequest & { socket?: net.Socket }
     | http2.Http2ServerRequest
 ) {
-    let socket: net.Socket | http2.Http2Stream =
+    let primarySocket: net.Socket | http2.Http2Stream =
         (isHttp2Stream(requestOrSocket) && requestOrSocket.stream)
             ? requestOrSocket.stream
         : ('socket' in requestOrSocket && requestOrSocket.socket)
             ? requestOrSocket.socket
         : requestOrSocket as net.Socket;
+
+    let socket = primarySocket;
 
     while (socket instanceof tls.TLSSocket) {
         const parent = getParentSocket(socket);
@@ -156,6 +158,11 @@ export function resetOrDestroy(requestOrSocket:
             socket.destroy();
         }
     }
+
+    // Explicitly mark the top-level socket as destroyed too. This isn't always required, but
+    // is good for backwards compat (<v20) as it fixes some issues where the 'destroyed'
+    // states can end up out of sync in older Node versions.
+    primarySocket.destroy();
 };
 
 export function buildSocketEventData(socket: net.Socket & Partial<tls.TLSSocket>): TlsConnectionEvent {
