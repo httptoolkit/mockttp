@@ -420,15 +420,15 @@ describe("When configured for HTTPS", () => {
         });
     });
 
-    describe.only("with TLS version restrictions", () => {
+    describe("with TLS version restrictions", () => {
         const server = getLocal({
-                https: {
-                  keyPath: './test/fixtures/test-ca.key',
-                  certPath: './test/fixtures/test-ca.pem',
-                  tlsServerOptions: {
+            https: {
+                keyPath: './test/fixtures/test-ca.key',
+                certPath: './test/fixtures/test-ca.pem',
+                tlsServerOptions: {
                     minVersion: 'TLSv1.2'
-                  }
                 }
+            }
         });
 
         beforeEach(async () => {
