@@ -272,7 +272,7 @@ export const parseRequestBody = (
     req: http.IncomingMessage | http2.Http2ServerRequest,
     options: { maxSize: number }
 ) => {
-    let transformedRequest = <OngoingRequest> <any> req;
+    let transformedRequest = req as any as OngoingRequest;
     transformedRequest.body = parseBodyStream(req, options.maxSize, () => req.headers);
 };
 

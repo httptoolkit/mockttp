@@ -1,4 +1,4 @@
-# Mockttp [![Build Status](https://github.com/httptoolkit/mockttp/workflows/CI/badge.svg)](https://github.com/httptoolkit/mockttp/actions) [![Available on NPM](https://img.shields.io/npm/v/mockttp.svg)](https://npmjs.com/package/mockttp)  [![Try Mockttp on RunKit](https://badge.runkitcdn.com/mockttp.svg)](https://npm.runkit.com/mockttp)
+# Mockttp [![Build Status](https://github.com/httptoolkit/mockttp/workflows/CI/badge.svg)](https://github.com/httptoolkit/mockttp/actions) [![Available on NPM](https://img.shields.io/npm/v/mockttp.svg)](https://npmjs.com/package/mockttp)
 
 > _Part of [HTTP Toolkit](https://httptoolkit.com): powerful tools for building, testing & debugging HTTP(S)_
 
@@ -65,8 +65,6 @@ describe("Mockttp", () => {
     });
 });
 ```
-
-(Want to play with this yourself? Try running a standalone version live on RunKit: https://npm.runkit.com/mockttp)
 
 That is pretty easy, but we can make this simpler & more powerful. Let's take a look at some more fancy features:
 

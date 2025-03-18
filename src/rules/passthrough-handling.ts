@@ -4,11 +4,12 @@ import * as tls from 'tls';
 import url = require('url');
 import { oneLine } from 'common-tags';
 import CacheableLookup from 'cacheable-lookup';
+import * as semver from 'semver';
 
 import { CompletedBody, Headers } from '../types';
 import { byteLength } from '../util/util';
 import { asBuffer } from '../util/buffer-utils';
-import { isLocalhostAddress } from '../util/socket-util';
+import { isLocalhostAddress, normalizeIP } from '../util/socket-util';
 import { CachedDns, dnsLookup, DnsLookupFunction } from '../util/dns';
 import { isMockttpBody, encodeBodyBuffer } from '../util/request-utils';
 import { areFFDHECurvesSupported } from '../util/openssl-compat';
@@ -17,10 +18,12 @@ import {
     CallbackRequestResult,
     CallbackResponseMessageResult
 } from './requests/request-handler-definitions';
+import { AbortError } from './requests/request-handlers';
 import {
     CADefinition,
     PassThroughLookupOptions
 } from './passthrough-handling-definitions';
+import { ErrorLike } from '../util/error';
 
 // TLS settings for proxied connections, intended to avoid TLS fingerprint blocking
 // issues so far as possible, by closely emulating a Firefox Client Hello:
@@ -91,6 +94,11 @@ export const getUpstreamTlsOptions = (strictChecks: boolean): tls.SecureContextO
         // Valid, but not included in Node.js TLS module types:
         requestOSCP: true
     } as any),
+
+    // Trust intermediate certificates from the trusted CA list too. Without this, trusted CAs
+    // are only used when they are self-signed root certificates. Seems to cause issues in Node v20
+    // in HTTP/2 tests, so disabled below the supported v22 version.
+    allowPartialTrustChain: semver.satisfies(process.version, '>=22.9.0'),
 
     // Allow TLSv1, if !strict:
     minVersion: strictChecks ? tls.DEFAULT_MIN_VERSION : 'TLSv1',
@@ -366,11 +374,49 @@ export async function getClientRelativeHostname(
         // effectively free. We ignore errors to delegate unresolvable etc to request processing later.
         isLocalhostAddress(await dnsLookup(lookupFn, hostname).catch(() => null))
     ) {
-        return remoteIp;
+        return normalizeIP(remoteIp) as string | null;
 
         // Note that we just redirect - we don't update the host header. From the POV of the target, it's still
         // 'localhost' traffic that should appear identical to normal.
     } else {
         return hostname;
     }
+}
+
+export function buildUpstreamErrorTags(e: ErrorLike) {
+    const tags: string[] = [];
+
+    // OpenSSL can throw all sorts of weird & wonderful errors here, and rarely exposes a
+    // useful error code from them. To handle that, we try to detect the most common cases,
+    // notable including the useless but common 'unsupported' error that covers all
+    // OpenSSL-unsupported (e.g. legacy) configurations.
+    if (!e.code && e.stack?.split('\n')[1]?.includes('node:internal/tls/secure-context')) {
+        let tlsErrorTag: string;
+        if (e.message === 'unsupported') {
+            e.code = 'ERR_TLS_CONTEXT_UNSUPPORTED';
+            tlsErrorTag = 'context-unsupported';
+            e.message = 'Unsupported TLS configuration';
+        } else {
+            e.code = 'ERR_TLS_CONTEXT_UNKNOWN';
+            tlsErrorTag = 'context-unknown';
+            e.message = `TLS context error: ${e.message}`;
+        }
+
+        tags.push(`passthrough-tls-error:${tlsErrorTag}`);
+    }
+
+    // All raw error codes are included in the tags:
+    tags.push('passthrough-error:' + e.code);
+
+    // We build tags for by SSL alerts, for each recognition elsewhere:
+    const tlsAlertMatch = /SSL alert number (\d+)/.exec(e.message ?? '');
+    if (tlsAlertMatch) {
+        tags.push('passthrough-tls-error:ssl-alert-' + tlsAlertMatch[1]);
+    }
+
+    if (e instanceof AbortError) {
+        tags.push('passthrough-error:mockttp-abort')
+    }
+
+    return tags;
 }

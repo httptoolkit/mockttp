@@ -108,6 +108,7 @@ describe("TLS error subscriptions", () => {
 
         expect(tlsError.tlsMetadata.sniHostname).to.equal('localhost');
         expect(tlsError.tlsMetadata.ja3Fingerprint!.length).to.equal(32);
+        expect(tlsError.tlsMetadata.ja4Fingerprint!.length).to.equal(36);
 
         await expectNoClientErrors();
     });
@@ -119,14 +120,14 @@ describe("TLS error subscriptions", () => {
             await badServer.forAnyRequest().thenPassThrough();
 
             await expect(
-                fetch(goodServer.urlFor("/"), <any> {
+                fetch(goodServer.urlFor("/"), {
                     // Ignores proxy cert issues by using the proxy via plain HTTP
                     agent: new HttpsProxyAgent({
                         protocol: 'http',
                         host: 'localhost',
                         port: badServer.port
                     })
-                })
+                } as any)
             ).to.be.rejectedWith(/certificate/);
 
             const tlsError = await seenTlsErrorPromise;

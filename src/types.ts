@@ -84,6 +84,7 @@ export interface TlsSocketMetadata {
     connectPort?: string;
     clientAlpn?: string[];
     ja3Fingerprint?: string;
+    ja4Fingerprint?: string;
 }
 
 export interface TlsPassthroughEvent extends TlsConnectionEvent {

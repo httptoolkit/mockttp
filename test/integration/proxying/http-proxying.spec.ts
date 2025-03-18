@@ -778,6 +778,25 @@ nodeOnly(() => {
                 expect(response).to.equal('all good');
             });
 
+            it("should be able to examine the request in beforeResponse", async () => {
+                await remoteServer.forGet('/').thenCallback(() => ({
+                    status: 500,
+                    headers: {
+                        'UPPERCASE-HEADER': 'VALUE'
+                    }
+                }));
+
+                await server.forGet(remoteServer.urlFor("/")).thenPassThrough({
+                    beforeResponse: (_res, req) => {
+                        expect(req.url).to.equal(remoteServer.urlFor('/'));
+                        return { status: 200, body: 'got correct req url' };
+                    }
+                });
+
+                let response = await request.get(remoteServer.urlFor("/"));
+                expect(response).to.equal('got correct req url');
+            });
+
             it("should be able to rewrite a response's status", async () => {
                 await remoteServer.forGet('/').thenReply(404);
                 await server.forGet(remoteServer.urlFor("/")).thenPassThrough({

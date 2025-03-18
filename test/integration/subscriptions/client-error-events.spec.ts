@@ -323,7 +323,7 @@ describe("Client error subscription", () => {
                     await server.on('client-error', (e) => errorPromise.resolve(e));
                     await server.forGet("http://example.com/endpoint").thenReply(200, "Mock data");
 
-                    const response = await fetch("http://example.com/endpoint", <any> {
+                    const response = await fetch("http://example.com/endpoint", {
                         agent: new HttpsProxyAgent({
                             protocol: 'http',
                             host: 'localhost',
@@ -332,7 +332,7 @@ describe("Client error subscription", () => {
                         headers: {
                             "long-value": TOO_LONG_HEADER_VALUE
                         }
-                    });
+                    } as any);
 
                     expect(response.status).to.equal(431);
 
@@ -357,7 +357,7 @@ describe("Client error subscription", () => {
                     await server.on('client-error', (e) => errorPromise.resolve(e));
                     await server.forGet("https://example.com/endpoint").thenReply(200, "Mock data");
 
-                    const response = await fetch("https://example.com/endpoint", <any> {
+                    const response = await fetch("https://example.com/endpoint", {
                         agent: new HttpsProxyAgent({
                             protocol: 'https',
                             host: 'localhost',
@@ -369,7 +369,7 @@ describe("Client error subscription", () => {
                             'host': 'example.com',
                             "long-value": TOO_LONG_HEADER_VALUE
                         }
-                    });
+                    } as any);
 
                     expect(response.status).to.equal(431);
 

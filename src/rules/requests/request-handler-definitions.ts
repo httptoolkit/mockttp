@@ -413,8 +413,9 @@ export class StreamHandlerDefinition extends Serializable implements RequestHand
                 let serializedEventData: StreamHandlerEventMessage | false =
                     _.isString(chunk) ? { type: 'string', value: chunk } :
                     _.isBuffer(chunk) ? { type: 'buffer', value: chunk.toString('base64') } :
-                    (_.isArrayBuffer(chunk) || _.isTypedArray(chunk)) ? { type: 'arraybuffer', value: encodeBase64(<any> chunk) } :
-                    _.isNil(chunk) && { type: 'nil' };
+                    (_.isArrayBuffer(chunk) || _.isTypedArray(chunk))
+                        ? { type: 'arraybuffer', value: encodeBase64(chunk) }
+                        : _.isNil(chunk) && { type: 'nil' };
 
                 if (!serializedEventData) {
                     callback(new Error(`Can't serialize streamed value: ${chunk.toString()}. Streaming must output strings, buffers or array buffers`));
@@ -549,17 +550,19 @@ export interface PassThroughHandlerOptions extends PassThroughHandlerConnectionO
     /**
      * A callback that will be passed the full response before it is passed through,
      * and which returns a value that defines how the the response content should
-     * be transformed before it's returned to the client.
+     * be transformed before it's returned to the client. The callback is also passed
+     * the request that was sent to the server (as a 2nd parameter) for reference.
      *
      * The callback can either return an object to define how the response should be
-     * changed, or the string 'close' to immediately close the underlying connection.
+     * changed, or the strings 'close' or 'reset' to immediately close/reset the
+     * underlying connection.
      *
      * All fields on the object are optional, and returning undefined is equivalent
      * to returning an empty object (transforming nothing).
      *
      * See {@link CallbackResponseMessageResult} for the possible fields that can be set.
      */
-    beforeResponse?: (res: PassThroughResponse) => MaybePromise<CallbackResponseResult | void> | void;
+    beforeResponse?: (res: PassThroughResponse, req: CompletedRequest) => MaybePromise<CallbackResponseResult | void> | void;
 }
 
 export interface RequestTransform {
@@ -753,7 +756,7 @@ export interface BeforePassthroughRequestRequest {
  * @internal
  */
 export interface BeforePassthroughResponseRequest {
-    args: [Replace<PassThroughResponse, { body: string }>];
+    args: [Replace<PassThroughResponse, { body: string }>, Replace<CompletedRequest, { body: string }>];
 }
 
 /**
@@ -779,7 +782,7 @@ export class PassThroughHandlerDefinition extends Serializable implements Reques
 
     public readonly beforeRequest?: (req: CompletedRequest) =>
         MaybePromise<CallbackRequestResult | void> | void;
-    public readonly beforeResponse?: (res: PassThroughResponse) =>
+    public readonly beforeResponse?: (res: PassThroughResponse, req: CompletedRequest) =>
         MaybePromise<CallbackResponseResult | void> | void;
 
     public readonly proxyConfig?: ProxyConfig;
@@ -924,7 +927,8 @@ export class PassThroughHandlerDefinition extends Serializable implements Reques
                 CallbackResponseResult | undefined
             >('beforeResponse', async (req) => {
                 const callbackResult = await this.beforeResponse!(
-                    withDeserializedBodyReader(req.args[0])
+                    withDeserializedBodyReader(req.args[0]),
+                    withDeserializedBodyReader(req.args[1]),
                 );
 
                 if (typeof callbackResult === 'string') {

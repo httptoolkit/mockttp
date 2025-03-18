@@ -106,7 +106,7 @@ describe("Mockttp rule building", function () {
         return expect((async () => { // Funky setup to handle sync & async failure for node & browser
             await server.addRequestRules({
                 matchers: [new matchers.SimplePathMatcher('/')],
-                handler: <any> null
+                handler: null as any
             })
         })()).to.be.rejectedWith('Cannot create a rule with no handler');
     });

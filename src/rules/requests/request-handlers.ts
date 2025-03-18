@@ -78,7 +78,8 @@ import {
     shouldUseStrictHttps,
     getClientRelativeHostname,
     getDnsLookupFunction,
-    getTrustedCAs
+    getTrustedCAs,
+    buildUpstreamErrorTags
 } from '../passthrough-handling';
 
 import {
@@ -130,7 +131,7 @@ export class AbortError extends TypedError {
 
     constructor(
         message: string,
-        readonly code?: string
+        readonly code: string
     ) {
         super(message);
     }
@@ -159,7 +160,7 @@ export class SimpleHandler extends SimpleHandlerDefinition {
         writeHead(response, this.status, this.statusMessage, this.headers);
 
         if (isSerializedBuffer(this.data)) {
-            this.data = Buffer.from(<any> this.data);
+            this.data = Buffer.from(this.data as any);
         }
 
         if (this.trailers) {
@@ -191,7 +192,10 @@ async function writeResponseFromCallback(
         // RawBody takes priority if both are set (useful for backward compat) but if not then
         // the body is automatically encoded to match the content-encoding header.
         result.rawBody = await encodeBodyBuffer(
-            Buffer.from(result.body),
+            // Separate string case mostly required due to TS type issues:
+            typeof result.body === 'string'
+                ? Buffer.from(result.body, "utf8")
+                : Buffer.from(result.body),
             result.headers ?? {}
         );
     }
@@ -225,11 +229,11 @@ export class CallbackHandler extends CallbackHandlerDefinition {
 
         if (outResponse === 'close') {
             (request as any).socket.end();
-            throw new AbortError('Connection closed intentionally by rule');
+            throw new AbortError('Connection closed intentionally by rule', 'E_RULE_CB_CLOSE');
         } else if (outResponse === 'reset') {
             requireSocketResetSupport();
             resetOrDestroy(request);
-            throw new AbortError('Connection reset intentionally by rule');
+            throw new AbortError('Connection reset intentionally by rule', 'E_RULE_CB_RESET');
         } else {
             await writeResponseFromCallback(outResponse, response);
         }
@@ -273,8 +277,12 @@ export class StreamHandler extends StreamHandlerDefinition {
             if (this.headers) dropDefaultHeaders(response);
 
             writeHead(response, this.status, undefined, this.headers);
+            response.flushHeaders();
+
             this.stream.pipe(response);
             this.stream.done = true;
+
+            this.stream.on('error', (e) => response.destroy(e));
         } else {
             throw new Error(stripIndent`
                 Stream request handler called more than once - this is not supported.
@@ -407,7 +415,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
         let { protocol, hostname, port, pathname, search } = new URL(reqUrl);
 
         // Check if this request is a request loop:
-        if (isSocketLoop(this.outgoingSockets, (<any> clientReq).socket)) {
+        if (isSocketLoop(this.outgoingSockets, (clientReq as any).socket)) {
             throw new Error(oneLine`
                 Passthrough loop detected. This probably means you're sending a request directly
                 to a passthrough endpoint, which is forwarding it to the target URL, which is a
@@ -587,13 +595,13 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
 
             if (modifiedReq?.response) {
                 if (modifiedReq.response === 'close') {
-                    const socket: net.Socket = (<any> clientReq).socket;
+                    const socket: net.Socket = (clientReq as any).socket;
                     socket.end();
-                    throw new AbortError('Connection closed intentionally by rule');
+                    throw new AbortError('Connection closed intentionally by rule', 'E_RULE_BREQ_CLOSE');
                 } else if (modifiedReq.response === 'reset') {
                     requireSocketResetSupport();
                     resetOrDestroy(clientReq);
-                    throw new AbortError('Connection reset intentionally by rule');
+                    throw new AbortError('Connection reset intentionally by rule', 'E_RULE_BREQ_RESET');
                 } else {
                     // The callback has provided a full response: don't passthrough at all, just use it.
                     await writeResponseFromCallback(modifiedReq.response, clientRes);
@@ -761,7 +769,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 ...caConfig
             }, (serverRes) => (async () => {
                 serverRes.on('error', (e: any) => {
-                    e.causedByUpstreamError = true;
+                    reportUpstreamAbort(e)
                     reject(e);
                 });
 
@@ -923,6 +931,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                     originalBody = await streamToBuffer(serverRes);
                     let serverHeaders = rawHeadersToObject(serverRawHeaders);
 
+                    let reqHeader = rawHeadersToObjectPreservingCase(rawHeaders);
                     modifiedRes = await this.beforeResponse({
                         id: clientReq.id,
                         statusCode: serverStatusCode,
@@ -930,15 +939,42 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                         headers: serverHeaders,
                         rawHeaders: _.cloneDeep(serverRawHeaders),
                         body: buildBodyReader(originalBody, serverHeaders)
+                    }, {
+                        id: clientReq.id,
+                        protocol: protocol?.replace(':', '') ?? '',
+                        method: method,
+                        url: reqUrl,
+                        path: path ?? '',
+                        headers: reqHeader,
+                        rawHeaders: rawHeaders,
+                        timingEvents: clientReq.timingEvents,
+                        tags: clientReq.tags,
+                        body: buildBodyReader(reqBodyOverride ? Buffer.from(reqBodyOverride.buffer) : await clientReq.body.asDecodedBuffer(), reqHeader),
+                        rawTrailers: clientReq.rawTrailers ?? [],
+                        trailers: rawHeadersToObject(clientReq.rawTrailers ?? []),
                     });
 
-                    if (modifiedRes === 'close') {
-                        (clientReq as any).socket.end();
-                        throw new AbortError('Connection closed intentionally by rule');
-                    } else if (modifiedRes === 'reset') {
-                        requireSocketResetSupport();
-                        resetOrDestroy(clientReq);
-                        throw new AbortError('Connection reset intentionally by rule');
+                    if (modifiedRes === 'close' || modifiedRes === 'reset') {
+                        // If you kill the connection, we need to fire an upstream event separately here, since
+                        // this means the body won't be delivered in normal response events.
+                        if (options.emitEventCallback) {
+                            options.emitEventCallback!('passthrough-response-body', {
+                                overridden: true,
+                                rawBody: originalBody
+                            });
+                        }
+
+                        if (modifiedRes === 'close') {
+                            (clientReq as any).socket.end();
+                        } else if (modifiedRes === 'reset') {
+                            requireSocketResetSupport();
+                            resetOrDestroy(clientReq);
+                        }
+
+                        throw new AbortError(
+                            `Connection ${modifiedRes === 'close' ? 'closed' : 'reset'} intentionally by rule`,
+                            `E_RULE_BRES_${modifiedRes.toUpperCase()}`
+                        );
                     }
 
                     validateCustomHeaders(serverHeaders, modifiedRes?.headers);
@@ -1010,7 +1046,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                                 overridden: true,
                                 rawBody: upstreamBody
                             });
-                        });
+                        }).catch((e) => reportUpstreamAbort(e));
                     } else {
                         options.emitEventCallback('passthrough-response-body', {
                             overridden: false
@@ -1078,6 +1114,29 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 serverReq.abort();
             }
 
+            // If the upstream fails, for any reason, we need to fire an event to any rule
+            // listeners who might be present (although only the first time)
+            let reportedUpstreamError = false;
+            function reportUpstreamAbort(e: ErrorLike & { causedByUpstreamError?: true }) {
+                e.causedByUpstreamError = true;
+
+                if (!options.emitEventCallback) return;
+
+                if (reportedUpstreamError) return;
+                reportedUpstreamError = true;
+
+                options.emitEventCallback('passthrough-abort', {
+                    downstreamAborted: !!(serverReq?.aborted),
+                    tags: buildUpstreamErrorTags(e),
+                    error: {
+                        name: e.name,
+                        code: e.code,
+                        message: e.message,
+                        stack: e.stack
+                    }
+                });
+            }
+
             // Handle the case where the downstream connection is prematurely closed before
             // fully sending the request or receiving the response.
             clientReq.on('aborted', abortUpstream);
@@ -1090,7 +1149,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
             });
 
             serverReq.on('error', (e: any) => {
-                e.causedByUpstreamError = true;
+                reportUpstreamAbort(e);
                 reject(e);
             });
 
@@ -1126,37 +1185,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
             }
         })().catch(reject)
         ).catch((e: ErrorLike) => {
-            if (!e.code && e.stack?.split('\n')[1]?.includes('node:internal/tls/secure-context')) {
-                // OpenSSL can throw all sorts of weird & wonderful errors here, and rarely exposes a
-                // useful error code from them. To handle that, we try to detect the most common cases,
-                // notable including the useless but common 'unsupported' error that covers all
-                // OpenSSL-unsupported (e.g. legacy) configurations.
-
-                let tlsErrorTag: string;
-                if (e.message === 'unsupported') {
-                    e.code = 'ERR_TLS_CONTEXT_UNSUPPORTED';
-                    tlsErrorTag = 'context-unsupported';
-                    e.message = 'Unsupported TLS configuration';
-                } else {
-                    e.code = 'ERR_TLS_CONTEXT_UNKNOWN';
-                    tlsErrorTag = 'context-unknown';
-                    e.message = `TLS context error: ${e.message}`;
-                }
-
-                clientRes.tags.push(`passthrough-tls-error:${tlsErrorTag}`);
-            }
-
-            // All errors anywhere above (thrown or from explicit reject()) should end up here.
-
-            // We tag the response with the error code, for debugging from events:
-            clientRes.tags.push('passthrough-error:' + e.code);
-
-            // Tag responses, so programmatic examination can react to this
-            // event, without having to parse response data or similar.
-            const tlsAlertMatch = /SSL alert number (\d+)/.exec(e.message ?? '');
-            if (tlsAlertMatch) {
-                clientRes.tags.push('passthrough-tls-error:ssl-alert-' + tlsAlertMatch[1]);
-            }
+            clientRes.tags.push(...buildUpstreamErrorTags(e));
 
             if ((e as any).causedByUpstreamError && !serverReq?.aborted) {
                 if (e.code === 'ECONNRESET' || e.code === 'ECONNREFUSED' || this.simulateConnectionErrors) {
@@ -1171,7 +1200,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                         ? e.errors.map(e => e.message).join(', ')
                         : (e.message ?? e.code ?? e);
 
-                    throw new AbortError(`Upstream connection error: ${errorMessage}`, e.code);
+                    throw new AbortError(`Upstream connection error: ${errorMessage}`, e.code || 'E_MIRRORED_FAILURE');
                 } else {
                     e.statusCode = 502;
                     e.statusMessage = 'Error communicating with upstream server';
@@ -1213,9 +1242,9 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
             };
         }
 
-        let beforeResponse: ((res: PassThroughResponse) => MaybePromise<CallbackResponseResult | void>) | undefined;
+        let beforeResponse: ((res: PassThroughResponse, req: CompletedRequest) => MaybePromise<CallbackResponseResult | void>) | undefined;
         if (data.hasBeforeResponseCallback) {
-            beforeResponse = async (res: PassThroughResponse) => {
+            beforeResponse = async (res: PassThroughResponse, req: CompletedRequest) => {
                 const callbackResult = await channel.request<
                     BeforePassthroughResponseRequest,
                     | WithSerializedCallbackBuffers<CallbackResponseMessageResult>
@@ -1223,7 +1252,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                     | 'reset'
                     | undefined
                 >('beforeResponse', {
-                    args: [withSerializedBodyReader(res)]
+                    args: [withSerializedBodyReader(res), withSerializedBodyReader(req)]
                 })
 
                 if (callbackResult && typeof callbackResult !== 'string') {
@@ -1300,9 +1329,9 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
 
 export class CloseConnectionHandler extends CloseConnectionHandlerDefinition {
     async handle(request: OngoingRequest) {
-        const socket: net.Socket = (<any> request).socket;
+        const socket: net.Socket = (request as any).socket;
         socket.end();
-        throw new AbortError('Connection closed intentionally by rule');
+        throw new AbortError('Connection closed intentionally by rule', 'E_RULE_CLOSE');
     }
 }
 
@@ -1315,7 +1344,7 @@ export class ResetConnectionHandler extends ResetConnectionHandlerDefinition {
     async handle(request: OngoingRequest) {
         requireSocketResetSupport();
         resetOrDestroy(request);
-        throw new AbortError('Connection reset intentionally by rule');
+        throw new AbortError('Connection reset intentionally by rule', 'E_RULE_RESET');
     }
 
     /**

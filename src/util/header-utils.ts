@@ -127,9 +127,9 @@ export function objectHeadersToRaw(headers: Headers): RawHeaders {
         if (value === undefined) continue; // Drop undefined header values
 
         if (Array.isArray(value)) {
-            value.forEach((v) => rawHeaders.push([key, v]));
+            value.forEach((v) => rawHeaders.push([key, v.toString()]));
         } else {
-            rawHeaders.push([key, value]);
+            rawHeaders.push([key, value.toString()]);
         }
     }
 
@@ -147,11 +147,11 @@ export function objectHeadersToFlat(headers: Headers): string[] {
         if (Array.isArray(value)) {
             value.forEach((v) => {
                 flatHeaders.push(key);
-                flatHeaders.push(v);
+                flatHeaders.push(v.toString());
             });
         } else {
             flatHeaders.push(key);
-            flatHeaders.push(value);
+            flatHeaders.push(value.toString());
         }
     }
 

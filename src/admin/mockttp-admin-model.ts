@@ -138,7 +138,7 @@ export function buildAdminServerModel(
         })
     });
 
-    return <any> {
+    return {
         Query: {
             mockedEndpoints: async (): Promise<MockedEndpointData[]> => {
                 return Promise.all((await mockServer.getMockedEndpoints()).map(buildMockedEndpointData));

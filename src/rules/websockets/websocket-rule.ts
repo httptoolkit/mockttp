@@ -26,7 +26,15 @@ export interface WebSocketRule extends Explainable {
 
     // We don't extend the main interfaces for these, because MockRules are not Serializable
     matches(request: OngoingRequest): MaybePromise<boolean>;
-    handle(request: OngoingRequest, response: net.Socket, head: Buffer, record: boolean): Promise<void>;
+    handle(
+        request: OngoingRequest,
+        response: net.Socket,
+        head: Buffer,
+        options: {
+            record: boolean,
+            emitEventCallback?: (type: string, event: unknown) => void
+        }
+    ): Promise<void>;
     isComplete(): boolean | null;
 }
 
@@ -71,14 +79,22 @@ export class WebSocketRule implements WebSocketRule {
         return matchers.matchesAll(request, this.matchers);
     }
 
-    handle(req: OngoingRequest, res: net.Socket, head: Buffer, record: boolean): Promise<void> {
+    handle(
+        req: OngoingRequest,
+        res: net.Socket,
+        head: Buffer,
+        options: {
+            record: boolean,
+            emitEventCallback?: (type: string, event: unknown) => void
+        }
+    ): Promise<void> {
         let handlerPromise = (async () => { // Catch (a)sync errors
-            return this.handler.handle(req as OngoingRequest & http.IncomingMessage, res, head);
+            return this.handler.handle(req as OngoingRequest & http.IncomingMessage, res, head, options);
         })();
 
         // Requests are added to rule.requests as soon as they start being handled,
         // as promises, which resolve only when the response & request body is complete.
-        if (record) {
+        if (options.record) {
             this.requests.push(
                 Promise.race([
                     // When the handler resolves, the request is completed:

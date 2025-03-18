@@ -1,6 +1,6 @@
 {
   "name": "mockttp",
-  "version": "3.15.1",
+  "version": "3.16.0",
   "description": "Mock HTTP server for testing HTTP clients and stubbing webservices",
   "exports": {
     ".": {
@@ -52,7 +52,6 @@
   "bin": {
     "mockttp": "dist/admin/admin-bin.js"
   },
-  "runkitExampleFilename": "./docs/runkitExample.js",
   "files": [
     "dist",
     "src",
@@ -147,8 +146,8 @@
     "tmp-promise": "^1.0.3",
     "ts-loader": "^9.2.9",
     "ts-node": "^10.9.2",
-    "typedoc": "^0.22.4",
-    "typescript": "4.7.4",
+    "typedoc": "^0.26.7",
+    "typescript": "5.6.2",
     "url": "^0.11.0",
     "util": "^0.12.4",
     "webpack": "^5.72.0",
@@ -175,7 +174,7 @@
     "cors": "^2.8.4",
     "cors-gate": "^1.1.3",
     "cross-fetch": "^3.1.5",
-    "destroyable-server": "^1.0.2",
+    "destroyable-server": "^1.1.1",
     "express": "^4.14.0",
     "fast-json-patch": "^3.1.1",
     "graphql": "^14.0.2 || ^15.5",
@@ -194,7 +193,7 @@
     "parse-multipart-data": "^1.4.0",
     "performance-now": "^2.1.0",
     "portfinder": "^1.0.32",
-    "read-tls-client-hello": "^1.0.0",
+    "read-tls-client-hello": "^1.1.0",
     "semver": "^7.5.3",
     "socks-proxy-agent": "^7.0.0",
     "typed-error": "^3.0.2",
