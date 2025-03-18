@@ -725,17 +725,16 @@ export type MockttpHttpsOptions = CAOptions & {
     tlsInterceptOnly?: Array<{ hostname: string }>;
 
     /**
-     * Set the minimum TLS version to be used for incoming TLS connections.
-     * If not set, all TLS versions are supported.
+     * Set the TLS server options, used for incoming TLS connections.
      *
-     * If set, and an incoming connection uses a lower version, the connection
-     * will be rejected.
-     *
-     * Currently, only a minVersion of 'TLSv1.2' is supported.
-     * In the future, other versions may be supported.
-     * The full list of versions can be found: https://nodejs.org/api/tls.html#tlssocketgetprotocol
+     * The only officially supported option for now is the minimum TLS version, which can
+     * be used to relax/tighten TLS requirements on clients. If not set, this defaults
+     * to your Node version's default TLS configuration. The full list of versions can be
+     * found at https://nodejs.org/api/tls.html#tlssocketgetprotocol.
      */
-    tlsServerOptions?: { minVersion: 'TLSv1.2' };
+    tlsServerOptions?: {
+        minVersion?: 'TLSv1.3' | 'TLSv1.2' | 'TLSv1.1' | 'TLSv1';
+    };
 };
 
 export interface MockttpOptions {
