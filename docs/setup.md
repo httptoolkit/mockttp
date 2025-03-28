@@ -126,7 +126,7 @@ How to trust this certificate will depend on your HTTP client & test setup. You 
   Something like `NODE_EXTRA_CA_CERTS=./testCA.pem npm test` should work nicely.
 * **Chrome**: you can trust a certificate by passing the `--ignore-certificate-errors-spki-list=<spki fingerprint>` flag when starting Chrome.
   To get the SPKI fingerprint for a certificate with openssl, run `openssl x509 -in testCA.pem -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | openssl enc -base64`.
-* **FireFox**: you'll need to manually create a Firefox profile for your tests, open a browser using that, add the certificate as a CA, and then reuse that profile in later tests.
+* **Firefox**: you'll need to manually create a Firefox profile for your tests, open a browser using that, add the certificate as a CA, and then reuse that profile in later tests.
 * **Other**: most other tools will have their own way of temporarily adding an extra CA. If they don't, they may have an option to disable TLS verification in your tests entirely, or you might be able to trust your CA certificate system-wide (if you do this, ensure the private key never leaves your machine). Both of these come with security risks though, so be very careful, and make sure you know what you're doing first.
 
 (Need to trust your cert in .crt form? Try `openssl x509 -outform der -in your-cert.pem -out your-cert.crt` to convert it from pem)
