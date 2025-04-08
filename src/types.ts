@@ -54,8 +54,8 @@ export interface Request {
     url: string;
     path: string;
 
-    remoteIpAddress?: string; // Not set remotely with older servers
-    remotePort?: number; // Not set remotely with older servers
+    remoteIpAddress?: string; // Not set remotely with older servers or in some error cases
+    remotePort?: number; // Not set remotely with older servers or in some error cases
 
     // Exists only if a host header is sent. A strong candidate for deprecation
     // in future, since it's not clear that this comes from headers not the URL, and
@@ -71,8 +71,8 @@ export interface Request {
 
 export interface TlsConnectionEvent {
     hostname?: string;
-    remoteIpAddress: string;
-    remotePort: number;
+    remoteIpAddress?: string; // Can be unavailable in some error cases
+    remotePort?: number; // Can be unavailable in some error cases
     tags: string[];
     timingEvents: TlsTimingEvents;
     tlsMetadata: TlsSocketMetadata;
@@ -90,6 +90,9 @@ export interface TlsSocketMetadata {
 export interface TlsPassthroughEvent extends TlsConnectionEvent {
     id: string;
     upstreamPort: number;
+
+    remoteIpAddress: string;
+    remotePort: number;
 }
 
 export interface TlsHandshakeFailure extends TlsConnectionEvent {

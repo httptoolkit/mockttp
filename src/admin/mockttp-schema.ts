@@ -74,8 +74,8 @@ export const MockttpSchema = gql`
         failureCause: String!
 
         hostname: String
-        remoteIpAddress: String!
-        remotePort: Int!
+        remoteIpAddress: String
+        remotePort: Int
         tags: [String!]!
         timingEvents: Json!
         tlsMetadata: Json!
@@ -86,8 +86,8 @@ export const MockttpSchema = gql`
         failureCause: String!
 
         hostname: String
-        remoteIpAddress: String!
-        remotePort: Int!
+        remoteIpAddress: String
+        remotePort: Int
         tags: [String!]!
         timingEvents: Json!
     }
@@ -110,8 +110,8 @@ export const MockttpSchema = gql`
         path: String
         headers: Json
         rawHeaders: Json
-        remoteIpAddress: String!
-        remotePort: Int!
+        remoteIpAddress: String
+        remotePort: Int
     }
 
     type RuleEvent {
@@ -132,8 +132,8 @@ export const MockttpSchema = gql`
         method: String!
         url: String!
         path: String!
-        remoteIpAddress: String!
-        remotePort: Int!
+        remoteIpAddress: String
+        remotePort: Int
         hostname: String
 
         headers: Json!
@@ -151,8 +151,8 @@ export const MockttpSchema = gql`
         method: String!
         url: String!
         path: String!
-        remoteIpAddress: String!
-        remotePort: Int!
+        remoteIpAddress: String
+        remotePort: Int
         hostname: String
 
         headers: Json!
@@ -173,8 +173,8 @@ export const MockttpSchema = gql`
         method: String!
         url: String!
         path: String!
-        remoteIpAddress: String!
-        remotePort: Int!
+        remoteIpAddress: String
+        remotePort: Int
         hostname: String
 
         headers: Json!
