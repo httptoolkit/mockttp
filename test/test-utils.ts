@@ -168,8 +168,8 @@ export async function openRawTlsSocket(
     return await new Promise<tls.TLSSocket>((resolve, reject) => {
         const socket: tls.TLSSocket = tls.connect({
             host: 'localhost',
-            ...(target instanceof net.Socket
-                ? { socket: target }
+            ...(target instanceof net.Socket || target.constructor.name === 'ClientHttp2Stream'
+                ? { socket: target as net.Socket }
                 : { port: target.port }
             ),
             ...options
