@@ -827,6 +827,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 }
 
                 if (this.transformResponse) {
+                    let responseHeadersModified = false;
                     let serverHeaders = rawHeadersToObject(serverRawHeaders);
 
                     const {
@@ -850,8 +851,10 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                             ...serverHeaders,
                             ...updateHeaders
                         };
+                        responseHeadersModified = true;
                     } else if (replaceHeaders) {
                         serverHeaders = { ...replaceHeaders };
+                        responseHeadersModified = true;
                     }
 
                     if (replaceBody) {
@@ -923,9 +926,14 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                                 : replaceHeaders,
                             method === 'HEAD' // HEAD responses are allowed mismatched content-length
                         );
+                        responseHeadersModified = true;
                     }
 
-                    serverRawHeaders = objectHeadersToRaw(serverHeaders);
+                    if (responseHeadersModified) {
+                        // If the headers have been updated (implicitly or explicitly) we need to regenerate them. We avoid
+                        // this if possible, because it normalizes headers, which is slightly lossy (e.g. they're lowercased).
+                        serverRawHeaders = objectHeadersToRaw(serverHeaders);
+                    }
                 } else if (this.beforeResponse) {
                     let modifiedRes: CallbackResponseResult | void;
 

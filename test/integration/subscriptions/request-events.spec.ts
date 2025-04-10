@@ -139,12 +139,12 @@ describe("Request initiated subscriptions", () => {
                     ['UPPERCASEHEADER', 'VALUE'],
                     ['Dupe-Header', 'A'],
                     ['Dupe-Header', 'B'],
-                    ['Connection', defaultNodeConnectionHeader()]
+                    ['Connection', defaultNodeConnectionHeader]
                 ]);
 
                 // Parsed format:
                 expect(seenRequest.headers).to.deep.equal({
-                    connection: defaultNodeConnectionHeader(),
+                    connection: defaultNodeConnectionHeader,
                     uppercaseheader: 'VALUE',
                     'dupe-header': ['A', 'B']
                 });
@@ -236,12 +236,12 @@ describe("Request initiated subscriptions", () => {
                     ['UPPERCASEHEADER', 'VALUE'],
                     ['Dupe-Header', 'A'],
                     ['Dupe-Header', 'B'],
-                    ['Connection', defaultNodeConnectionHeader()]
+                    ['Connection', defaultNodeConnectionHeader]
                 ]);
 
                 // Parsed format:
                 expect(seenRequest.headers).to.deep.equal({
-                    connection: defaultNodeConnectionHeader(),
+                    connection: defaultNodeConnectionHeader,
                     uppercaseheader: 'VALUE',
                     'dupe-header': ['A', 'B']
                 });

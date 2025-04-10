@@ -263,12 +263,10 @@ export const SOCKET_RESET_SUPPORTED = "^16.17 || >=18.3";
 export const BROKEN_H1_OVER_H2_TUNNELLING = "^18.8";
 export const DEFAULT_KEEP_ALIVE = ">=19";
 export const FIXED_KEEP_ALIVE_BEHAVIOUR = ">=20";
-export const CHUNKED_ENCODING_BUG = "<16";
 export const BROKEN_H2_OVER_H2_TUNNELLING = "~20.12"; // https://github.com/nodejs/node/issues/52344
 export const BROKEN_WASM_BUFFER_ISSUE = "~22.2"; // https://github.com/nodejs/node/issues/53075
 
-export const defaultNodeConnectionHeader = () =>
-    semver.satisfies(process.version, DEFAULT_KEEP_ALIVE)
+export const defaultNodeConnectionHeader = semver.satisfies(process.version, DEFAULT_KEEP_ALIVE)
     ? 'keep-alive'
     : 'close';
 

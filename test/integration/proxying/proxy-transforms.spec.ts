@@ -1,16 +1,17 @@
 import _ = require("lodash");
 import * as path from 'path';
+import * as http from 'http';
+
 import request = require("request-promise-native");
 import * as zlib from 'zlib';
-import * as semver from 'semver';
 
 import { getLocal, Mockttp } from "../../..";
 import {
     expect,
     nodeOnly,
-    defaultNodeConnectionHeader,
-    CHUNKED_ENCODING_BUG
+    defaultNodeConnectionHeader
 } from "../../test-utils";
+import { streamToBuffer } from "../../../src/util/buffer-utils";
 
 const INITIAL_ENV = _.cloneDeep(process.env);
 
@@ -197,6 +198,7 @@ nodeOnly(() => {
                         url: req.url,
                         method: req.method,
                         headers: req.headers,
+                        rawHeaders: req.rawHeaders,
                         body: await req.body.getText(),
                     }
                 }));
@@ -206,7 +208,7 @@ nodeOnly(() => {
                 'host': `localhost:${remoteServer.port}`,
                 'accept': 'application/json',
                 'content-type': 'application/json',
-                'connection': defaultNodeConnectionHeader()
+                'connection': defaultNodeConnectionHeader
             });
 
             it("does nothing with an empty transform", async () => {
@@ -220,16 +222,14 @@ nodeOnly(() => {
                     json: true
                 });
 
-                expect(response).to.deep.equal({
-                    url: remoteServer.urlFor("/abc"),
-                    method: 'POST',
-                    headers: {
-                        ...baseHeaders(),
-                        'content-length': '7',
-                        'custom-header': 'a-value'
-                    },
-                    body: JSON.stringify({ a: 1 })
+                expect(response.url).to.equal(remoteServer.urlFor("/abc"));
+                expect(response.method).to.equal('POST');
+                expect(response.headers).to.deep.equal({
+                    ...baseHeaders(),
+                    'custom-header': 'a-value',
+                    'content-length': '7'
                 });
+                expect(response.body).to.equal(JSON.stringify({ a: 1 }));
             });
 
             it("can replace the request method", async () => {
@@ -245,16 +245,14 @@ nodeOnly(() => {
                     json: true
                 });
 
-                expect(response).to.deep.equal({
-                    url: remoteServer.urlFor("/abc"),
-                    method: 'PUT',
-                    headers: {
-                        ...baseHeaders(),
-                        'content-length': '7',
-                        'custom-header': 'a-value'
-                    },
-                    body: JSON.stringify({ a: 1 })
+                expect(response.url).to.equal(remoteServer.urlFor("/abc"));
+                expect(response.method).to.equal('PUT');
+                expect(response.headers).to.deep.equal({
+                    ...baseHeaders(),
+                    'content-length': '7',
+                    'custom-header': 'a-value'
                 });
+                expect(response.body).to.equal(JSON.stringify({ a: 1 }));
             });
 
             it("can add extra headers", async () => {
@@ -272,17 +270,15 @@ nodeOnly(() => {
                     json: true
                 });
 
-                expect(response).to.deep.equal({
-                    url: remoteServer.urlFor("/abc"),
-                    method: 'POST',
-                    headers: {
-                        ...baseHeaders(),
-                        'content-length': '7',
-                        'custom-header': 'a-value',
-                        'new-header': 'new-value'
-                    },
-                    body: JSON.stringify({ a: 1 })
+                expect(response.url).to.equal(remoteServer.urlFor("/abc"));
+                expect(response.method).to.equal('POST');
+                expect(response.headers).to.deep.equal({
+                    ...baseHeaders(),
+                    'content-length': '7',
+                    'custom-header': 'a-value',
+                    'new-header': 'new-value'
                 });
+                expect(response.body).to.equal(JSON.stringify({ a: 1 }));
             });
 
             it("can replace specific headers", async () => {
@@ -300,31 +296,21 @@ nodeOnly(() => {
                     json: true
                 });
 
-                expect(response).to.deep.equal({
-                    url: remoteServer.urlFor("/abc"),
-                    method: 'POST',
-                    headers: {
-                        ...baseHeaders(),
-                        'content-length': '7',
-                        'custom-header': 'replaced-value'
-                    },
-                    body: JSON.stringify({ a: 1 })
+                expect(response.url).to.equal(remoteServer.urlFor("/abc"));
+                expect(response.method).to.equal('POST');
+                expect(response.headers).to.deep.equal({
+                    ...baseHeaders(),
+                    'content-length': '7',
+                    'custom-header': 'replaced-value'
                 });
+                expect(response.body).to.equal(JSON.stringify({ a: 1 }));
             });
 
             it("can replace all headers", async () => {
-                // Auto chunked encoding on Node <16 duplicates the body
-                // somehow, so we have to use content-length:
-                const autoChunkingBroken = semver.satisfies(process.version, CHUNKED_ENCODING_BUG);
-
                 await server.forAnyRequest().thenPassThrough({
                     transformRequest: {
                         replaceHeaders: {
-                            'custom-header': 'replaced-value',
-
-                            ...(autoChunkingBroken
-                                ? { 'content-length': '7' }
-                                : {})
+                            'custom-header': 'replaced-value'
                         }
                     }
                 });
@@ -335,22 +321,56 @@ nodeOnly(() => {
                     json: true
                 });
 
-                expect(response).to.deep.equal({
-                    url: `http://undefined/abc`, // Because we removed the host header completely
-                    method: 'POST',
-                    headers: {
-                        // Required unavoidable headers:
-                        'connection': defaultNodeConnectionHeader(),
-                        ...(autoChunkingBroken
-                            ? { 'content-length': '7' }
-                            : { 'transfer-encoding': 'chunked'}),
+                expect(response.url).to.equal(`http://undefined/abc`); // Because we removed the host header completely
+                expect(response.method).to.equal('POST');
+                expect(response.headers).to.deep.equal({
+                    // Default Node headers:
+                    'connection': defaultNodeConnectionHeader,
+                    'transfer-encoding': 'chunked',
 
-                        // No other headers, only injected value:
-                        'custom-header': 'replaced-value'
-
-                    },
-                    body: JSON.stringify({ a: 1 })
+                    // No other headers, only injected value:
+                    'custom-header': 'replaced-value'
                 });
+                expect(response.body).to.equal(JSON.stringify({ a: 1 }));
+            });
+
+            it("preserves raw headers if untouched", async () => {
+                await server.forAnyRequest().thenPassThrough({
+                    transformRequest: {
+                        replaceMethod: 'PUT'
+                    }
+                });
+
+                const req = http.request(server.urlFor("/abc"), {
+                    method: 'POST',
+                    headers: [
+                        'host', `localhost:${remoteServer.port}`,
+                        'Custom-HEADER', 'a-value',
+                        'other-header', 'other-value',
+                        'custom-header', 'b-value'
+                    ] as any
+                }).end();
+
+                const fullResponse = await new Promise<http.IncomingMessage>((resolve, reject) => {
+                    req.on('response', resolve);
+                    req.on('error', reject);
+                });
+
+                const response: any = JSON.parse(
+                    (await streamToBuffer(fullResponse)).toString()
+                );
+
+                expect(response.url).to.equal(remoteServer.urlFor("/abc"));
+                expect(response.method).to.equal('PUT');
+                expect(response.rawHeaders).to.deep.equal([
+                    ['host', `localhost:${remoteServer.port}`,],
+                    ['Custom-HEADER', 'a-value',],
+                    ['other-header', 'other-value',],
+                    ['custom-header', 'b-value'],
+                    ['Connection', defaultNodeConnectionHeader], // Set by http.request above automatically
+                    ['Transfer-Encoding', 'chunked'] // Set by http.request above automatically
+                ]);
+                expect(response.body).to.equal('');
             });
 
             it("can replace the body with a string", async () => {
@@ -366,16 +386,14 @@ nodeOnly(() => {
                     json: true
                 });
 
-                expect(response).to.deep.equal({
-                    url: remoteServer.urlFor("/abc"),
-                    method: 'POST',
-                    headers: {
-                        ...baseHeaders(),
-                        'content-length': '16',
-                        'custom-header': 'a-value'
-                    },
-                    body: 'replacement-body'
+                expect(response.url).to.equal(remoteServer.urlFor("/abc"));
+                expect(response.method).to.equal('POST');
+                expect(response.headers).to.deep.equal({
+                    ...baseHeaders(),
+                    'content-length': '16',
+                    'custom-header': 'a-value'
                 });
+                expect(response.body).to.equal('replacement-body');
             });
 
             it("can replace the body with a buffer", async () => {
@@ -391,16 +409,14 @@ nodeOnly(() => {
                     json: true
                 });
 
-                expect(response).to.deep.equal({
-                    url: remoteServer.urlFor("/abc"),
-                    method: 'POST',
-                    headers: {
-                        ...baseHeaders(),
-                        'content-length': '18',
-                        'custom-header': 'a-value'
-                    },
-                    body: 'replacement buffer'
+                expect(response.url).to.equal(remoteServer.urlFor("/abc"));
+                expect(response.method).to.equal('POST');
+                expect(response.headers).to.deep.equal({
+                    ...baseHeaders(),
+                    'content-length': '18',
+                    'custom-header': 'a-value'
                 });
+                expect(response.body).to.equal('replacement buffer');
             });
 
             it("can replace the body with a file", async () => {
@@ -420,17 +436,15 @@ nodeOnly(() => {
                     json: true
                 });
 
-                expect(response).to.deep.equal({
-                    url: remoteServer.urlFor("/abc"),
-                    method: 'POST',
-                    headers: {
-                        ...baseHeaders(),
-                        'content-type': 'text/plain',
-                        'content-length': '23',
-                        'custom-header': 'a-value'
-                    },
-                    body: 'Response from text file'
+                expect(response.url).to.equal(remoteServer.urlFor("/abc"));
+                expect(response.method).to.equal('POST');
+                expect(response.headers).to.deep.equal({
+                    ...baseHeaders(),
+                    'content-type': 'text/plain',
+                    'content-length': '23',
+                    'custom-header': 'a-value'
                 });
+                expect(response.body).to.equal('Response from text file');
             });
 
             it("should show a clear error when replacing the body with a non-existent file", async () => {
@@ -466,16 +480,14 @@ nodeOnly(() => {
                     json: true
                 });
 
-                expect(response).to.deep.equal({
-                    url: remoteServer.urlFor("/abc"),
-                    method: 'POST',
-                    headers: {
-                        ...baseHeaders(),
-                        'content-length': '15',
-                        'custom-header': 'a-value'
-                    },
-                    body: JSON.stringify({ a: 100, c: 2 })
+                expect(response.url).to.equal(remoteServer.urlFor("/abc"));
+                expect(response.method).to.equal('POST');
+                expect(response.headers).to.deep.equal({
+                    ...baseHeaders(),
+                    'content-length': '15',
+                    'custom-header': 'a-value'
                 });
+                expect(response.body).to.equal(JSON.stringify({ a: 100, c: 2 }));
             });
 
             it("can update a JSON body while handling encoding automatically", async () => {
@@ -503,17 +515,15 @@ nodeOnly(() => {
                 });
 
                 const response = JSON.parse(rawResponse);
-                expect(response).to.deep.equal({
-                    url: remoteServer.urlFor("/abc"),
-                    method: 'POST',
-                    headers: {
-                        ...baseHeaders(),
-                        'content-encoding': 'gzip',
-                        'content-length': '35',
-                        'custom-header': 'a-value'
-                    },
-                    body: JSON.stringify({ a: 100, c: 2 })
+                expect(response.url).to.equal(remoteServer.urlFor("/abc"));
+                expect(response.method).to.equal('POST');
+                expect(response.headers).to.deep.equal({
+                    ...baseHeaders(),
+                    'content-encoding': 'gzip',
+                    'content-length': '35',
+                    'custom-header': 'a-value'
                 });
+                expect(response.body).to.equal(JSON.stringify({ a: 100, c: 2 }));
             });
 
             it("can update a JSON body with a JSON patch", async () => {
@@ -534,16 +544,14 @@ nodeOnly(() => {
                     json: true
                 });
 
-                expect(response).to.deep.equal({
-                    url: remoteServer.urlFor("/abc"),
-                    method: 'POST',
-                    headers: {
-                        ...baseHeaders(),
-                        'content-length': '15',
-                        'custom-header': 'a-value'
-                    },
-                    body: JSON.stringify({ a: 100, c: 2 })
+                expect(response.url).to.equal(remoteServer.urlFor("/abc"));
+                expect(response.method).to.equal('POST');
+                expect(response.headers).to.deep.equal({
+                    ...baseHeaders(),
+                    'content-length': '15',
+                    'custom-header': 'a-value'
                 });
+                expect(response.body).to.equal(JSON.stringify({ a: 100, c: 2 }));
             });
         });
 
@@ -693,6 +701,35 @@ nodeOnly(() => {
                     'body-value': true,
                     'another-body-value': 'a value',
                 });
+            });
+
+            it("preserves raw headers if untouched", async () => {
+                await remoteServer.forAnyRequest().asPriority(999).thenReply(200, "", {
+                    'UPPERCASE-HEADER': 'TEST-VALUE'
+                });
+
+                await server.forAnyRequest().thenPassThrough({
+                    transformResponse: {
+                        replaceStatus: 404
+                    }
+                });
+
+                const req = http.get(server.urlFor("/abc"), {
+                    headers: {
+                        host: `localhost:${remoteServer.port}`
+                    }
+                });
+                const response = await new Promise<http.IncomingMessage>((resolve, reject) => {
+                    req.on('response', resolve);
+                    req.on('error', reject);
+                });
+
+                expect(response.statusCode).to.equal(404);
+                expect(response.statusMessage).to.equal('Not Found');
+                expect(response.rawHeaders).to.deep.equal([
+                    'UPPERCASE-HEADER', 'TEST-VALUE'
+                ]);
+                response.resume();
             });
 
             it("can replace the body with a string", async () => {

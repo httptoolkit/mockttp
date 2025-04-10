@@ -179,7 +179,7 @@ nodeOnly(() => {
                             host: `localhost:${targetServer.port}`,
                             accept: 'application/json',
                             'content-length': '12',
-                            connection: defaultNodeConnectionHeader()
+                            connection: defaultNodeConnectionHeader
                         },
                         body: 'request-body'
                     });
@@ -240,7 +240,7 @@ nodeOnly(() => {
                             accept: 'application/json',
                             'content-type': 'application/json',
                             'content-length': '25',
-                            connection: defaultNodeConnectionHeader(),
+                            connection: defaultNodeConnectionHeader,
                             'injected-header': 'injected-value' // Only injected header remains
                         },
                         body: JSON.stringify({
@@ -324,7 +324,7 @@ nodeOnly(() => {
                             accept: 'application/json',
                             'content-type': 'application/json',
                             'content-length': '21',
-                            connection: defaultNodeConnectionHeader()
+                            connection: defaultNodeConnectionHeader
                         },
                         body: JSON.stringify({
                             // Request body was separately transformed:

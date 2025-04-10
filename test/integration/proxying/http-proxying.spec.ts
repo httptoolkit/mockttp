@@ -105,7 +105,7 @@ nodeOnly(() => {
                         'dupe-header': ['A', 'B'],
                         uppercaseheader: 'VALUE',
                         host: `localhost:${remoteServer.port}`,
-                        connection: defaultNodeConnectionHeader()
+                        connection: defaultNodeConnectionHeader
                     });
 
                     expect(req.rawHeaders).to.deep.equal([
@@ -113,7 +113,7 @@ nodeOnly(() => {
                         ['UPPERCASEHEADER', 'VALUE'],
                         ['Dupe-Header', 'B'],
                         ['Host', `localhost:${remoteServer.port}`],
-                        ['Connection', defaultNodeConnectionHeader()] // Added by node in initial request
+                        ['Connection', defaultNodeConnectionHeader] // Added by node in initial request
                     ]);
                     return {};
                 });
@@ -395,7 +395,7 @@ nodeOnly(() => {
                 let resultingRequest = (await remoteEndpoint.getSeenRequests())[0];
                 expect(resultingRequest.headers).to.deep.equal({
                     'host': `localhost:${remoteServer.port}`,
-                    'connection': defaultNodeConnectionHeader()
+                    'connection': defaultNodeConnectionHeader
                 });
             });
 
@@ -409,7 +409,7 @@ nodeOnly(() => {
                     beforeRequest: (req) => {
                         expect(req.headers).to.deep.equal({
                             'host': `localhost:${remoteServer.port}`,
-                            'connection': defaultNodeConnectionHeader(),
+                            'connection': defaultNodeConnectionHeader,
                             'uppercase-header': 'UPPERCASE-VALUE',
                             'multival': ['value 1', 'value 2']
                         });
@@ -419,7 +419,7 @@ nodeOnly(() => {
                             ['multival', 'value 1'],
                             ['multival', 'value 2'],
                             ['host', `localhost:${remoteServer.port}`],
-                            ['Connection', defaultNodeConnectionHeader()]
+                            ['Connection', defaultNodeConnectionHeader]
                         ]);
 
                         return {
@@ -447,7 +447,7 @@ nodeOnly(() => {
                     beforeRequest: (req) => {
                         expect(req.headers).to.deep.equal({
                             'host': `localhost:${remoteServer.port}`,
-                            'connection': defaultNodeConnectionHeader()
+                            'connection': defaultNodeConnectionHeader
                         });
                         return {
                             headers: Object.assign({}, req.headers, { 'x-test-header': 'test' })
@@ -469,7 +469,7 @@ nodeOnly(() => {
                     beforeRequest: (req) => {
                         expect(req.headers).to.deep.equal({
                             'host': `localhost:${remoteServer.port}`,
-                            'connection': defaultNodeConnectionHeader()
+                            'connection': defaultNodeConnectionHeader
                         });
 
                         req.headers['x-test-header'] = 'test';
@@ -590,7 +590,7 @@ nodeOnly(() => {
                     method: 'POST',
                     headers: {
                         'host': `localhost:${remoteServer.port}`,
-                        'connection': defaultNodeConnectionHeader(),
+                        'connection': defaultNodeConnectionHeader,
                         'content-encoding': 'gzip',
                         'content-length': '37',
                         'custom-header': 'a-value'
