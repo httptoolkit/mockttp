@@ -334,10 +334,12 @@ nodeOnly(() => {
                 expect(response.body).to.equal(JSON.stringify({ a: 1 }));
             });
 
-            it("preserves raw headers if untouched", async () => {
+            it("preserves raw headers where possible", async () => {
                 await server.forAnyRequest().thenPassThrough({
                     transformRequest: {
-                        replaceMethod: 'PUT'
+                        updateHeaders: {
+                            'Extra-Header': 'ABC'
+                        }
                     }
                 });
 
@@ -361,14 +363,15 @@ nodeOnly(() => {
                 );
 
                 expect(response.url).to.equal(remoteServer.urlFor("/abc"));
-                expect(response.method).to.equal('PUT');
+                expect(response.method).to.equal('POST');
                 expect(response.rawHeaders).to.deep.equal([
                     ['host', `localhost:${remoteServer.port}`,],
                     ['Custom-HEADER', 'a-value',],
                     ['other-header', 'other-value',],
                     ['custom-header', 'b-value'],
                     ['Connection', defaultNodeConnectionHeader], // Set by http.request above automatically
-                    ['Transfer-Encoding', 'chunked'] // Set by http.request above automatically
+                    ['Transfer-Encoding', 'chunked'], // Set by http.request above automatically
+                    ['Extra-Header', 'ABC']
                 ]);
                 expect(response.body).to.equal('');
             });
@@ -710,7 +713,9 @@ nodeOnly(() => {
 
                 await server.forAnyRequest().thenPassThrough({
                     transformResponse: {
-                        replaceStatus: 404
+                        updateHeaders: {
+                            'Extra-Header': 'ABC'
+                        }
                     }
                 });
 
@@ -724,10 +729,10 @@ nodeOnly(() => {
                     req.on('error', reject);
                 });
 
-                expect(response.statusCode).to.equal(404);
-                expect(response.statusMessage).to.equal('Not Found');
+                expect(response.statusCode).to.equal(200);
                 expect(response.rawHeaders).to.deep.equal([
-                    'UPPERCASE-HEADER', 'TEST-VALUE'
+                    'UPPERCASE-HEADER', 'TEST-VALUE',
+                    'Extra-Header', 'ABC'
                 ]);
                 response.resume();
             });

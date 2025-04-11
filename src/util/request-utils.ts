@@ -33,6 +33,7 @@ import {
 } from './buffer-utils';
 import {
     flattenPairedRawHeaders,
+    getHeaderValue,
     objectHeadersToFlat,
     objectHeadersToRaw,
     pairFlatRawHeaders,
@@ -89,8 +90,8 @@ export function isHttp2(
         ('stream' in message && 'createPushResponse' in message); // H2 response
 }
 
-export async function encodeBodyBuffer(buffer: Uint8Array, headers: Headers) {
-    const contentEncoding = headers['content-encoding'];
+export async function encodeBodyBuffer(buffer: Uint8Array, headers: Headers | RawHeaders) {
+    const contentEncoding = getHeaderValue(headers, 'content-encoding');
 
     // We skip encodeBuffer entirely if possible - this isn't strictly necessary, but it's useful
     // so you can drop the http-encoding package in bundling downstream without issue in cases

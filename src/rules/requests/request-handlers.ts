@@ -40,7 +40,9 @@ import {
     pairFlatRawHeaders,
     findRawHeaderIndex,
     dropDefaultHeaders,
-    validateHeader
+    validateHeader,
+    updateRawHeaders,
+    getHeaderValue
 } from '../../util/header-utils';
 import { streamToBuffer, asBuffer } from '../../util/buffer-utils';
 import {
@@ -484,8 +486,6 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
         let headersManuallyModified = false;
 
         if (this.transformRequest) {
-            let headers = rawHeadersToObject(rawHeaders);
-
             const {
                 replaceMethod,
                 updateHeaders,
@@ -502,14 +502,9 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
             }
 
             if (updateHeaders) {
-                headers = {
-                    ...headers,
-                    ...updateHeaders
-                };
-                headersManuallyModified = true;
+                rawHeaders = updateRawHeaders(rawHeaders, updateHeaders);
             } else if (replaceHeaders) {
-                headers = { ...replaceHeaders };
-                headersManuallyModified = true;
+                rawHeaders = objectHeadersToRaw(replaceHeaders);
             }
 
             if (replaceBody) {
@@ -564,22 +559,22 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 // We always re-encode the body to match the resulting content-encoding header:
                 reqBodyOverride = await encodeBodyBuffer(
                     reqBodyOverride,
-                    headers
+                    rawHeaders
                 );
 
-                headers['content-length'] = getContentLengthAfterModification(
+                const updatedCLHeader = getContentLengthAfterModification(
                     reqBodyOverride,
                     clientReq.headers,
-                    (updateHeaders && updateHeaders['content-length'] !== undefined)
-                        ? headers // Iff you replaced the content length
-                        : replaceHeaders,
+                    (updateHeaders && getHeaderValue(updateHeaders, 'content-length') !== undefined)
+                        ? rawHeaders // Iff you replaced the content length
+                        : replaceHeaders
                 );
-            }
 
-            if (headersManuallyModified || reqBodyOverride) {
-                // If the headers have been updated (implicitly or explicitly) we need to regenerate them. We avoid
-                // this if possible, because it normalizes headers, which is slightly lossy (e.g. they're lowercased).
-                rawHeaders = objectHeadersToRaw(headers);
+                if (updatedCLHeader !== undefined) {
+                    rawHeaders = updateRawHeaders(rawHeaders, {
+                        'content-length': updatedCLHeader
+                    });
+                }
             }
         } else if (this.beforeRequest) {
             const clientRawHeaders = rawHeaders;
@@ -827,9 +822,6 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 }
 
                 if (this.transformResponse) {
-                    let responseHeadersModified = false;
-                    let serverHeaders = rawHeadersToObject(serverRawHeaders);
-
                     const {
                         replaceStatus,
                         updateHeaders,
@@ -847,14 +839,9 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                     }
 
                     if (updateHeaders) {
-                        serverHeaders = {
-                            ...serverHeaders,
-                            ...updateHeaders
-                        };
-                        responseHeadersModified = true;
+                        serverRawHeaders = updateRawHeaders(serverRawHeaders, updateHeaders);
                     } else if (replaceHeaders) {
-                        serverHeaders = { ...replaceHeaders };
-                        responseHeadersModified = true;
+                        serverRawHeaders = objectHeadersToRaw(replaceHeaders);
                     }
 
                     if (replaceBody) {
@@ -915,24 +902,23 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                         // so we re-encode the body to match the resulting content-encoding header:
                         resBodyOverride = await encodeBodyBuffer(
                             resBodyOverride,
-                            serverHeaders
+                            serverRawHeaders
                         );
 
-                        serverHeaders['content-length'] = getContentLengthAfterModification(
+                        const updatedCLHeader = getContentLengthAfterModification(
                             resBodyOverride,
                             serverRes.headers,
-                            (updateHeaders && updateHeaders['content-length'] !== undefined)
-                                ? serverHeaders // Iff you replaced the content length
+                            (updateHeaders && getHeaderValue(updateHeaders, 'content-length') !== undefined)
+                                ? serverRawHeaders // Iff you replaced the content length
                                 : replaceHeaders,
                             method === 'HEAD' // HEAD responses are allowed mismatched content-length
                         );
-                        responseHeadersModified = true;
-                    }
 
-                    if (responseHeadersModified) {
-                        // If the headers have been updated (implicitly or explicitly) we need to regenerate them. We avoid
-                        // this if possible, because it normalizes headers, which is slightly lossy (e.g. they're lowercased).
-                        serverRawHeaders = objectHeadersToRaw(serverHeaders);
+                        if (updatedCLHeader !== undefined) {
+                            serverRawHeaders = updateRawHeaders(serverRawHeaders, {
+                                'content-length': updatedCLHeader
+                            });
+                        }
                     }
                 } else if (this.beforeResponse) {
                     let modifiedRes: CallbackResponseResult | void;

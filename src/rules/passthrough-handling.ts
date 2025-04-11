@@ -6,13 +6,15 @@ import { oneLine } from 'common-tags';
 import CacheableLookup from 'cacheable-lookup';
 import * as semver from 'semver';
 
-import { CompletedBody, Headers } from '../types';
+import { CompletedBody, Headers, RawHeaders } from '../types';
 import { byteLength } from '../util/util';
 import { asBuffer } from '../util/buffer-utils';
 import { isLocalhostAddress, normalizeIP } from '../util/socket-util';
 import { CachedDns, dnsLookup, DnsLookupFunction } from '../util/dns';
 import { isMockttpBody, encodeBodyBuffer } from '../util/request-utils';
 import { areFFDHECurvesSupported } from '../util/openssl-compat';
+import { ErrorLike } from '../util/error';
+import { getHeaderValue } from '../util/header-utils';
 
 import {
     CallbackRequestResult,
@@ -23,7 +25,6 @@ import {
     CADefinition,
     PassThroughLookupOptions
 } from './passthrough-handling-definitions';
-import { ErrorLike } from '../util/error';
 
 // TLS settings for proxied connections, intended to avoid TLS fingerprint blocking
 // issues so far as possible, by closely emulating a Firefox Client Hello:
@@ -266,8 +267,8 @@ export function getH2HeadersAfterModification(
 // Helper to handle content-length nicely for you when rewriting requests with callbacks
 export function getContentLengthAfterModification(
     body: string | Uint8Array | Buffer,
-    originalHeaders: Headers,
-    replacementHeaders: Headers | undefined,
+    originalHeaders: Headers | RawHeaders,
+    replacementHeaders: Headers | RawHeaders | undefined,
     mismatchAllowed: boolean = false
 ): string | undefined {
     // If there was a content-length header, it might now be wrong, and it's annoying
@@ -275,9 +276,9 @@ export function getContentLengthAfterModification(
     // the body. To help out, if you override the body but don't explicitly override
     // the (now invalid) content-length, then we fix it for you.
 
-    if (!_.has(originalHeaders, 'content-length')) {
+    if (getHeaderValue(originalHeaders, 'content-length') === undefined) {
         // Nothing to override - use the replacement value, or undefined
-        return (replacementHeaders || {})['content-length'];
+        return getHeaderValue(replacementHeaders || {}, 'content-length');
     }
 
     if (!replacementHeaders) {
@@ -288,14 +289,14 @@ export function getContentLengthAfterModification(
     }
 
     // There was a content length before, and you're replacing the headers entirely
-    const lengthOverride = replacementHeaders['content-length']?.toString();
+    const lengthOverride = getHeaderValue(replacementHeaders, 'content-length')?.toString();
 
     // If you're setting the content-length to the same as the origin headers, even
     // though that's the wrong value, it *might* be that you're just extending the
     // existing headers, and you're doing this by accident (we can't tell for sure).
     // We use invalid content-length as instructed, but print a warning just in case.
     if (
-        lengthOverride === originalHeaders['content-length'] &&
+        lengthOverride === getHeaderValue(originalHeaders, 'content-length') &&
         lengthOverride !== byteLength(body).toString() &&
         !mismatchAllowed // Set for HEAD responses
     ) {

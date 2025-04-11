@@ -1,3 +1,4 @@
+import * as _ from 'lodash';
 import * as http from 'http';
 
 import {
@@ -26,6 +27,19 @@ with. Those are:
 
 export const findRawHeader = (rawHeaders: RawHeaders, targetKey: string) =>
     rawHeaders.find(([key]) => key.toLowerCase() === targetKey);
+
+export const getHeaderValue = (headers: Headers | RawHeaders, targetKey: Lowercase<string>) => {
+    if (Array.isArray(headers)) {
+        return findRawHeader(headers, targetKey)?.[1];
+    } else {
+        const value = headers[targetKey];
+        if (Array.isArray(value)) {
+            return value[0];
+        } else {
+            return value;
+        }
+    }
+};
 
 export const findRawHeaderIndex = (rawHeaders: RawHeaders, targetKey: string) =>
     rawHeaders.findIndex(([key]) => key.toLowerCase() === targetKey);
@@ -158,6 +172,50 @@ export function objectHeadersToFlat(headers: Headers): string[] {
     return flatHeaders;
 }
 
+/**
+ * Combine the given headers with the raw headers, preserving the raw header details where
+ * possible. Headers keys that exist in the raw headers (case insensitive) will be overridden,
+ * while undefined header values will remove the header from the raw headers entirely.
+ *
+ * When proxying we often have raw received headers that we want to forward upstream exactly
+ * as they were received, but we also want to add or modify a subset of those headers. This
+ * method carefully does that - preserving everything that isn't actively modified as-is.
+ */
+export function updateRawHeaders(
+    rawHeaders: RawHeaders,
+    headers: Headers
+) {
+    const updatedRawHeaders = [...rawHeaders];
+    const rawHeaderKeys = updatedRawHeaders.map(([key]) => key.toLowerCase());
+
+    for (const key of Object.keys(headers)) {
+        const lowerCaseKey = key.toLowerCase();
+        for (let i = 0; i < rawHeaderKeys.length; i++) {
+            // If you insert a header that already existed, remove all previous values
+            if (rawHeaderKeys[i] === lowerCaseKey) {
+                updatedRawHeaders.splice(i, 1);
+                rawHeaderKeys.splice(i, 1);
+            }
+        }
+    }
+
+    // We do all removals in advance, then do all additions here, to ensure that adding
+    // a new header twice works correctly.
+
+    for (const [key, value] of Object.entries(headers)) {
+        // Skip (effectively delete) undefined/null values from the headers
+        if (value === undefined || value === null) continue;
+
+        if (Array.isArray(value)) {
+            value.forEach((v) => updatedRawHeaders.push([key, v]));
+        } else {
+            updatedRawHeaders.push([key, value]);
+        }
+    }
+
+    return updatedRawHeaders;
+}
+
 // See https://httptoolkit.com/blog/translating-http-2-into-http-1/ for details on the
 // transformations required between H2 & H1 when proxying.
 export function h2HeadersToH1(h2Headers: RawHeaders): RawHeaders {
@@ -216,5 +274,34 @@ export function validateHeader(name: string, value: string | string[]): boolean 
         return true;
     } catch (e) {
         return false;
+    }
+}
+
+/**
+ * Set the value of a given header, overwriting it if present or otherwise adding it as a new header.
+ *
+ * For header objects, this overwrites all values. For raw headers, this overwrites the last value, so
+ * if multiple values are present others may remain. In general you probably don't want to use this
+ * for headers that could legally have multiple values present.
+ */
+export const setHeaderValue = (
+    headers: Headers | RawHeaders,
+    headerKey: string,
+    headerValue: string,
+    options: { prepend?: true } = {}
+) => {
+    const lowercaseHeaderKey = headerKey.toLowerCase();
+
+    if (Array.isArray(headers)) {
+        const headerPair = _.findLast(headers, ([key]) => key.toLowerCase() === lowercaseHeaderKey);
+        if (headerPair) {
+            headerPair[1] = headerValue;
+        } else {
+            if (options.prepend) headers.unshift([headerKey, headerValue]);
+            else headers.push([headerKey, headerValue]);
+        }
+    } else {
+        const existingKey = Object.keys(headers).find(k => k.toLowerCase() === lowercaseHeaderKey);
+        headers[existingKey || headerKey] = headerValue;
     }
 }
