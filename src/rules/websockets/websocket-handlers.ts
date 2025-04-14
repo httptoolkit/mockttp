@@ -51,6 +51,7 @@ import {
     WebSocketHandlerDefinition,
     WsHandlerDefinitionLookup,
 } from './websocket-handler-definitions';
+import { resetOrDestroy } from '../../util/socket-util';
 
 export interface WebSocketHandler extends WebSocketHandlerDefinition {
     handle(
@@ -157,19 +158,38 @@ function pipeWebSocket(inSocket: WebSocket, outSocket: WebSocket) {
     });
 }
 
-async function mirrorRejection(socket: net.Socket, rejectionResponse: http.IncomingMessage) {
-    if (socket.writable) {
-        const { statusCode, statusMessage, rawHeaders } = rejectionResponse;
+function mirrorRejection(
+    downstreamSocket: net.Socket,
+    upstreamRejectionResponse: http.IncomingMessage,
+    simulateConnectionErrors: boolean
+) {
+    return new Promise<void>((resolve) => {
+        if (downstreamSocket.writable) {
+            const { statusCode, statusMessage, rawHeaders } = upstreamRejectionResponse;
 
-        socket.write(
-            rawResponse(statusCode || 500, statusMessage || 'Unknown error', pairFlatRawHeaders(rawHeaders))
-        );
+            downstreamSocket.write(
+                rawResponse(statusCode || 500, statusMessage || 'Unknown error', pairFlatRawHeaders(rawHeaders))
+            );
 
-        const body = await streamToBuffer(rejectionResponse);
-        if (socket.writable) socket.write(body);
-    }
+            upstreamRejectionResponse.pipe(downstreamSocket);
+            upstreamRejectionResponse.on('end', resolve);
+            upstreamRejectionResponse.on('error', (error) => {
+                console.warn('Error receiving WebSocket upstream rejection response:', error);
+                if (simulateConnectionErrors) {
+                    resetOrDestroy(downstreamSocket);
+                } else {
+                    downstreamSocket.destroy();
+                }
+                resolve();
+            });
 
-    socket.destroy();
+            // The socket is being optimistically written to and then killed - we don't care
+            // about any more errors occuring here.
+            downstreamSocket.on('error', () => {
+                resolve();
+            });
+        }
+    }).catch(() => {});
 }
 
 const rawResponse = (
@@ -402,17 +422,17 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
             console.log(`Unexpected websocket response from ${wsUrl}: ${res.statusCode}`);
 
             // Clean up the downstream connection
-            mirrorRejection(incomingSocket, res);
-
-            // Clean up the upstream connection (WS would do this automatically, but doesn't if you listen to this event)
-            // See https://github.com/websockets/ws/blob/45e17acea791d865df6b255a55182e9c42e5877a/lib/websocket.js#L1050
-            // We don't match that perfectly, but this should be effectively equivalent:
-            req.destroy();
-            if (req.socket && !req.socket.destroyed) {
-                res.socket.destroy();
-            }
-            unexpectedResponse = true; // So that we ignore this in the error handler
-            upstreamWebSocket.terminate();
+            mirrorRejection(incomingSocket, res, this.simulateConnectionErrors).then(() => {
+                // Clean up the upstream connection (WS would do this automatically, but doesn't if you listen to this event)
+                // See https://github.com/websockets/ws/blob/45e17acea791d865df6b255a55182e9c42e5877a/lib/websocket.js#L1050
+                // We don't match that perfectly, but this should be effectively equivalent:
+                req.destroy();
+                if (res.socket?.destroyed === false) {
+                    res.socket.destroy();
+                }
+                unexpectedResponse = true; // So that we ignore this in the error handler
+                upstreamWebSocket.terminate();
+            });
         });
 
         // If there's some other error, we just kill the socket:
@@ -420,7 +440,11 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
             if (unexpectedResponse) return; // Handled separately above
 
             console.warn(e);
-            incomingSocket.end();
+            if (this.simulateConnectionErrors) {
+                resetOrDestroy(incomingSocket);
+            } else {
+                incomingSocket.end();
+            }
         });
 
         incomingSocket.on('error', () => upstreamWebSocket.close(1011)); // Internal error
@@ -438,6 +462,7 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
         return _.create(this.prototype, {
             ...data,
             proxyConfig: deserializeProxyConfig(data.proxyConfig, channel, ruleParams),
+            simulateConnectionErrors: data.simulateConnectionErrors ?? false,
             extraCACertificates: data.extraCACertificates || [],
             ignoreHostHttpsErrors: data.ignoreHostCertificateErrors,
             clientCertificateHostMap: _.mapValues(data.clientCertificateHostMap,
