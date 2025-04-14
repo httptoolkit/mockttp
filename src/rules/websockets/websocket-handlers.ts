@@ -396,7 +396,9 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
             const upstreamReq = (upstreamWebSocket as any as { _req: http.ClientRequest })._req;
             options.emitEventCallback('passthrough-websocket-connect', {
                 method: upstreamReq.method,
-                protocol: upstreamReq.protocol.replace(/:$/, ''),
+                protocol: upstreamReq.protocol
+                    .replace(/:$/, '')
+                    .replace(/^http/, 'ws'),
                 hostname: upstreamReq.host,
                 port: effectivePort.toString(),
                 path: upstreamReq.path,

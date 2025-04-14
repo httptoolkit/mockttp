@@ -342,7 +342,7 @@ describe("Rule event subscriptions", () => {
         const connectEvent = ruleEvents[0].eventData;
         expect(_.omit(connectEvent, 'rawHeaders')).to.deep.equal({
             method: 'GET',
-            protocol: 'http',
+            protocol: 'ws',
             hostname: 'localhost',
             // This reports the *modified* port, not the original:
             port: remoteServer.port.toString(),
