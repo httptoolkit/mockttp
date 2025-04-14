@@ -1,5 +1,4 @@
 import _ = require('lodash');
-import url = require('url');
 import type dns = require('dns');
 import net = require('net');
 import tls = require('tls');
@@ -415,7 +414,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
 
         // Capture raw request data:
         let { method, url: reqUrl, rawHeaders } = clientReq as OngoingRequest;
-        let { protocol, hostname, port, path } = url.parse(reqUrl);
+        let { protocol, hostname, port, pathname, search } = new URL(reqUrl);
 
         // Check if this request is a request loop:
         if (isSocketLoop(this.outgoingSockets, (clientReq as any).socket)) {
@@ -440,7 +439,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
             hostname,
             clientReq.remoteIpAddress,
             getDnsLookupFunction(this.lookupOptions)
-        );
+        ) || "";
 
         if (this.forwarding) {
             const { targetHost, updateHostHeader } = this.forwarding;
@@ -449,7 +448,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 [hostname, port] = targetHost.split(':');
             } else {
                 // We're forwarding to a fully specified URL; override the host etc, but never the path.
-                ({ protocol, hostname, port } = url.parse(targetHost));
+                ({ protocol, hostname, port } = new URL(targetHost));
             }
 
             const hostHeaderName = isH2Downstream ? ':authority' : 'host';
@@ -475,7 +474,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 hostHeader[1] = updateHostHeader;
             } // Otherwise: falsey means don't touch it.
 
-            reqUrl = new URL(`${protocol}//${hostname}${(port ? `:${port}` : '')}${path}`).toString();
+            reqUrl = new URL(`${protocol}//${hostname}${(port ? `:${port}` : '')}${pathname}${search}`).toString();
         }
 
         // Override the request details, if a transform or callback is specified:
@@ -648,7 +647,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
             // Reparse the new URL, if necessary
             if (modifiedReq?.url) {
                 if (!isAbsoluteUrl(modifiedReq?.url)) throw new Error("Overridden request URLs must be absolute");
-                ({ protocol, hostname, port, path } = url.parse(reqUrl));
+                ({ protocol, hostname, port, pathname, search } = new URL(reqUrl));
             }
 
             rawHeaders = objectHeadersToRaw(headers);
@@ -751,7 +750,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 hostname,
                 port,
                 family,
-                path,
+                path: pathname + search,
                 headers: shouldTryH2Upstream
                     ? rawHeadersToObjectPreservingCase(rawHeaders)
                     : flattenPairedRawHeaders(rawHeaders) as any,
@@ -1163,7 +1162,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                     protocol: protocol!.replace(/:$/, ''),
                     hostname,
                     port,
-                    path,
+                    path: pathname + search,
                     rawHeaders
                 });
 
