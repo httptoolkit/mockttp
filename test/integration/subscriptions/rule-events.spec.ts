@@ -351,11 +351,11 @@ describe("Rule event subscriptions", () => {
         });
 
         // This reports the *modified* header, not the original:
-        expect(connectEvent.rawHeaders).to.deep.include(['host', `localhost:${remoteServer.port}`]);
-        expect(connectEvent.rawHeaders).to.deep.include(['sec-websocket-version', '13']);
-        expect(connectEvent.rawHeaders).to.deep.include(['sec-websocket-extensions', 'permessage-deflate; client_max_window_bits']);
-        expect(connectEvent.rawHeaders).to.deep.include(['connection', 'Upgrade']);
-        expect(connectEvent.rawHeaders).to.deep.include(['upgrade', 'websocket']);
+        expect(connectEvent.rawHeaders).to.deep.include(['Host', `localhost:${remoteServer.port}`]);
+        expect(connectEvent.rawHeaders).to.deep.include(['Sec-WebSocket-Version', '13']);
+        expect(connectEvent.rawHeaders).to.deep.include(['Sec-WebSocket-Extensions', 'permessage-deflate; client_max_window_bits']);
+        expect(connectEvent.rawHeaders).to.deep.include(['Connection', 'Upgrade']);
+        expect(connectEvent.rawHeaders).to.deep.include(['Upgrade', 'websocket']);
 
         // Make sure we want to see the upstream WS key, not the downstream one
         const upstreamWsKey = (connectEvent.rawHeaders as RawHeaders)

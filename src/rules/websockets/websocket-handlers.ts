@@ -394,6 +394,19 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
 
         if (options.emitEventCallback) {
             const upstreamReq = (upstreamWebSocket as any as { _req: http.ClientRequest })._req;
+            // This is slower than req.getHeaders(), but gives us (roughly) the correct casing
+            // of the headers as sent. Still not perfect (loses dupe ordering) but at least it
+            // generally matches what's actually sent on the wire.
+            const rawHeaders = upstreamReq.getRawHeaderNames().map((headerName) => {
+                const value = upstreamReq.getHeader(headerName);
+                if (!value) return [];
+                if (Array.isArray(value)) {
+                    return value.map(v => [headerName, v]);
+                } else {
+                    return [[headerName, value.toString()]];
+                }
+            }).flat() as RawHeaders;
+
             options.emitEventCallback('passthrough-websocket-connect', {
                 method: upstreamReq.method,
                 protocol: upstreamReq.protocol
@@ -402,7 +415,7 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
                 hostname: upstreamReq.host,
                 port: effectivePort.toString(),
                 path: upstreamReq.path,
-                rawHeaders: objectHeadersToRaw(upstreamReq.getHeaders() as Headers),
+                rawHeaders: rawHeaders,
                 subprotocols: filteredSubprotocols
             });
         }
