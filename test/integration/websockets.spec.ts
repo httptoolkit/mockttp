@@ -65,7 +65,7 @@ nodeOnly(() => {
             }
         });
 
-        let wsServer: WebSocket.Server;
+        let wsServer: WebSocket.Server | http.Server;
         let wsErrors: Error[] = [];
 
         let wsPort: number;
@@ -509,10 +509,9 @@ nodeOnly(() => {
 
                     beforeEach(async () => {
                         if (wsServer) wsServer.close();
-                        wsServer = new WebSocket.Server({
-                            port: 9001,
-                            verifyClient: () => false // Reject all clients
-                        });
+                        wsServer = new http.Server((req, res) => {
+                            res.writeHead(429, 'Not Found').end();
+                        }).listen(9001);
                     });
 
                     it('should mirror the request rejection', async () => {
@@ -530,7 +529,40 @@ nodeOnly(() => {
                         });
                         ws.close(1000);
 
-                        expect(error.message).to.equal('Unexpected server response: 401');
+                        expect(error.message).to.equal('Unexpected server response: 429');
+                    });
+
+                });
+
+                describe("when the websocket server kills the connection", () => {
+
+                    beforeEach(async () => {
+                        if (wsServer) wsServer.close();
+                        wsServer = new http.Server((req, res) => {
+                            res.writeHead(429, 'Not Found');
+                            res.flushHeaders();
+
+                            // If the server kills the connection while streaming the body:
+                            setImmediate(() => res.socket?.destroy());
+                        }).listen(9001);
+                    });
+
+                    it('should mirror the request rejection', async () => {
+                        mockServer.forAnyWebSocket().thenPassThrough();
+
+                        const ws = new WebSocket(`ws://localhost:9001`, {
+                            agent: new HttpProxyAgent(`http://localhost:${mockServer.port}`)
+                        });
+
+                        ws.on('open', () => ws.send('test echo'));
+
+                        const error = await new Promise<Error>((resolve, reject) => {
+                            ws.on('message', reject);
+                            ws.on('error', resolve);
+                        });
+                        ws.close(1000);
+
+                        expect(error.message).to.equal('Unexpected server response: 429');
                     });
 
                 });
