@@ -9,7 +9,7 @@ import * as Ws from 'ws';
 import { v4 as uuid } from "uuid";
 
 import { createHandler as createGraphQLHandler } from 'graphql-http/lib/use/express';
-import { execute, formatError, GraphQLScalarType, subscribe } from 'graphql';
+import { execute, GraphQLScalarType, subscribe } from 'graphql';
 import gql from 'graphql-tag';
 import { makeExecutableSchema } from '@graphql-tools/schema';
 import { SubscriptionServer } from '@httptoolkit/subscriptions-transport-ws';
@@ -17,7 +17,7 @@ import { EventEmitter } from 'stream';
 import DuplexPair = require('native-duplexpair');
 
 import { makeDestroyable, DestroyableServer } from "destroyable-server";
-import { isErrorLike } from '../util/error';
+import { isErrorLike } from '@httptoolkit/util';
 import { objectAllPromise } from '../util/promise';
 
 import { DEFAULT_ADMIN_SERVER_PORT } from '../types';

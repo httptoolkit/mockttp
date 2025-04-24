@@ -20,7 +20,7 @@ import {
     OngoingResponse
 } from "../../types";
 
-import { MaybePromise } from '../../util/type-utils';
+import { MaybePromise, ErrorLike, isErrorLike } from '@httptoolkit/util';
 import { isAbsoluteUrl, getEffectivePort } from '../../util/url';
 import {
     waitForCompletedRequest,
@@ -61,7 +61,6 @@ import {
     withDeserializedCallbackBuffers,
     WithSerializedCallbackBuffers
 } from '../../serialization/body-serialization';
-import { ErrorLike, isErrorLike } from '../../util/error';
 
 import { assertParamDereferenced, RuleParameters } from '../rule-parameters';
 

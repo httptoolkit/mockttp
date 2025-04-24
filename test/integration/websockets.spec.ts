@@ -14,10 +14,10 @@ import {
     browserOnly,
     startDnsServer,
     DestroyableServer,
-    makeDestroyable
+    makeDestroyable,
+    delay
 } from '../test-utils';
 import { getCA } from '../../src/util/tls';
-import { delay } from '../../src/util/util';
 import { pairFlatRawHeaders } from '../../src/util/header-utils';
 
 browserOnly(() => {

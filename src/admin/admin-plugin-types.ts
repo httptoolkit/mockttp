@@ -1,8 +1,7 @@
 import { Duplex } from "stream";
 import { DocumentNode } from "graphql";
 import { IResolvers } from "@graphql-tools/utils";
-
-import { MaybePromise } from "../util/type-utils";
+import { MaybePromise } from "@httptoolkit/util";
 
 export interface AdminPlugin<StartParams, ClientResponse> {
     // Called when a /start request is received that references this plugin

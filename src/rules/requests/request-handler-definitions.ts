@@ -8,6 +8,7 @@ import {
     Operation as JsonPatchOperation,
     validate as validateJsonPatch
 } from 'fast-json-patch';
+import { MaybePromise } from '@httptoolkit/util';
 
 import {
     Headers,
@@ -18,7 +19,7 @@ import {
     RawHeaders
 } from "../../types";
 
-import { MaybePromise, Replace } from '../../util/type-utils';
+import { Replace } from '../../util/type-utils';
 import { buildBodyReader } from '../../util/request-utils';
 import { asBuffer } from '../../util/buffer-utils';
 import {

@@ -2,6 +2,7 @@ import * as _ from 'lodash';
 import * as url from 'url';
 import { oneLine } from 'common-tags';
 import * as multipart from 'parse-multipart-data';
+import { MaybePromise } from '@httptoolkit/util';
 
 import { CompletedRequest, Method, Explainable, OngoingRequest } from "../types";
 import {
@@ -14,7 +15,7 @@ import {
 import { waitForCompletedRequest } from '../util/request-utils';
 import { Serializable, ClientServerChannel } from "../serialization/serialization";
 import { withDeserializedBodyReader, withSerializedBodyReader } from '../serialization/body-serialization';
-import { MaybePromise, Replace } from '../util/type-utils';
+import { Replace } from '../util/type-utils';
 
 export interface RequestMatcher extends Explainable, Serializable {
     type: keyof typeof MatcherLookup;

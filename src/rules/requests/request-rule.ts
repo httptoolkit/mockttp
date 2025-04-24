@@ -3,7 +3,7 @@ import { v4 as uuid } from "uuid";
 
 import { OngoingRequest, CompletedRequest, OngoingResponse, Explainable, RulePriority } from "../../types";
 import { buildBodyReader, buildInitiatedRequest, waitForCompletedRequest } from '../../util/request-utils';
-import { MaybePromise } from '../../util/type-utils';
+import { MaybePromise } from '@httptoolkit/util';
 
 import * as matchers from "../matchers";
 import type { RequestHandlerDefinition } from "./request-handler-definitions";

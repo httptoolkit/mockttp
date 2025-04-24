@@ -1,3 +1,5 @@
+export type { MaybePromise } from '@httptoolkit/util';
+
 import { Mockttp, MockttpOptions, MockttpHttpsOptions, SubscribableEvent, PortRange } from "./mockttp";
 import { MockttpServer } from "./server/mockttp-server";
 import {
@@ -88,7 +90,6 @@ export type {
 } from './util/tls';
 export type { CachedDns, DnsLookupFunction } from './util/dns';
 export type { Serialized, SerializedValue } from './serialization/serialization';
-export type { MaybePromise } from './util/type-utils';
 
 // Export the core API:
 

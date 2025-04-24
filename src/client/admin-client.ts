@@ -7,14 +7,14 @@ import * as CrossFetch from 'cross-fetch';
 import * as WebSocket from 'isomorphic-ws';
 import connectWebSocketStream = require('@httptoolkit/websocket-stream');
 import { SubscriptionClient } from '@httptoolkit/subscriptions-transport-ws';
+import { MaybePromise, getDeferred } from '@httptoolkit/util';
 import { print } from 'graphql';
 
 import { DEFAULT_ADMIN_SERVER_PORT } from "../types";
 
-import { MaybePromise, RequireProps } from '../util/type-utils';
-import { delay, isNode } from '../util/util';
-import { isErrorLike } from '../util/error';
-import { getDeferred } from '../util/promise';
+import { RequireProps } from '../util/type-utils';
+import { isNode } from '../util/util';
+import { delay, isErrorLike } from '@httptoolkit/util';
 
 import { introspectionQuery } from './schema-introspection';
 import { MockttpPluginOptions } from '../admin/mockttp-admin-plugin';

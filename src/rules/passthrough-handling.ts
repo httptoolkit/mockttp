@@ -13,7 +13,7 @@ import { isLocalhostAddress, normalizeIP } from '../util/socket-util';
 import { CachedDns, dnsLookup, DnsLookupFunction } from '../util/dns';
 import { isMockttpBody, encodeBodyBuffer } from '../util/request-utils';
 import { areFFDHECurvesSupported } from '../util/openssl-compat';
-import { ErrorLike } from '../util/error';
+import { ErrorLike } from '@httptoolkit/util';
 import { getHeaderValue } from '../util/header-utils';
 
 import {

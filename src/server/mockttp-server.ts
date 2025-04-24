@@ -12,6 +12,7 @@ import cors = require("cors");
 import now = require("performance-now");
 import WebSocket = require("ws");
 import { Mutex } from 'async-mutex';
+import { ErrorLike, isErrorLike } from '@httptoolkit/util';
 
 import {
     InitiatedRequest,
@@ -42,7 +43,6 @@ import { ServerMockedEndpoint } from "./mocked-endpoint";
 import { createComboServer } from "./http-combo-server";
 import { filter } from "../util/promise";
 import { Mutable } from "../util/type-utils";
-import { ErrorLike, isErrorLike } from "../util/error";
 import { makePropertyWritable } from "../util/util";
 
 import { isAbsoluteUrl, getPathFromAbsoluteUrl } from "../util/url";

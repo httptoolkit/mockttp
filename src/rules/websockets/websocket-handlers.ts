@@ -28,7 +28,7 @@ import {
     rawHeadersToObjectPreservingCase
 } from '../../util/header-utils';
 import { streamToBuffer } from '../../util/buffer-utils';
-import { MaybePromise } from '../../util/type-utils';
+import { MaybePromise } from '@httptoolkit/util';
 
 import { getAgent } from '../http-agents';
 import { ProxySettingSource } from '../proxy-config';

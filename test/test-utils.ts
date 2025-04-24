@@ -21,16 +21,29 @@ import * as semver from 'semver';
 import chai = require("chai");
 import chaiAsPromised = require("chai-as-promised");
 import chaiFetch = require("chai-fetch");
+import { makeDestroyable, DestroyableServer } from "destroyable-server";
+import {
+    delay,
+    getDeferred,
+    Deferred
+} from '@httptoolkit/util';
 
 import * as dns2 from 'dns2'; // Imported here just for types
 
 import { Mockttp } from "..";
 
-export { getDeferred, Deferred } from '../src/util/promise';
-import { makeDestroyable, DestroyableServer } from "destroyable-server";
-import { isNode, isWeb, delay } from '../src/util/util';
+import { isNode, isWeb } from '../src/util/util';
 import { getEffectivePort } from '../src/util/url';
-export { isNode, isWeb, delay, makeDestroyable, DestroyableServer };
+
+export {
+    isNode,
+    isWeb,
+    makeDestroyable,
+    DestroyableServer,
+    delay,
+    getDeferred,
+    Deferred
+};
 
 if (isNode) {
     // Run a target websocket server in the background. In browsers, this is

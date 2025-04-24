@@ -1,6 +1,6 @@
 import * as _ from 'lodash';
 
-import { MaybePromise } from '../util/type-utils';
+import { MaybePromise } from '@httptoolkit/util';
 import { RuleParameterReference } from './rule-parameters';
 import { CADefinition } from './passthrough-handling-definitions';
 

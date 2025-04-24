@@ -2,7 +2,7 @@ import * as _ from 'lodash';
 import { Duplex } from 'stream';
 import { v4 as uuid } from "uuid";
 
-import { MaybePromise } from '../util/type-utils';
+import { MaybePromise } from '@httptoolkit/util';
 import {
     dereferenceParam,
     isParamReference,

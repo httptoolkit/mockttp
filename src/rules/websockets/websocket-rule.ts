@@ -10,7 +10,7 @@ import {
     RulePriority
 } from "../../types";
 import { waitForCompletedRequest } from '../../util/request-utils';
-import { MaybePromise } from '../../util/type-utils';
+import { MaybePromise } from '@httptoolkit/util';
 
 import { validateMockRuleData } from '../rule-serialization';
 

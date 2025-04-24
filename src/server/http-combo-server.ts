@@ -8,7 +8,8 @@ import * as streams from 'stream';
 
 import * as semver from 'semver';
 import { makeDestroyable, DestroyableServer } from 'destroyable-server';
-import httpolyglot = require('@httptoolkit/httpolyglot');
+import * as httpolyglot from '@httptoolkit/httpolyglot';
+import { delay } from '@httptoolkit/util';
 import {
     calculateJa3FromFingerprintData,
     calculateJa4FromHelloData,
@@ -19,7 +20,6 @@ import { URLPattern } from "urlpattern-polyfill";
 
 import { TlsHandshakeFailure } from '../types';
 import { getCA } from '../util/tls';
-import { delay } from '../util/util';
 import { shouldPassThrough } from '../util/server-utils';
 import {
     getParentSocket,

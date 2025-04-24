@@ -1,5 +1,6 @@
 import { merge, isString, isBuffer } from "lodash";
 import { Readable } from "stream";
+import { MaybePromise } from '@httptoolkit/util';
 
 import { Headers, CompletedRequest, Method, MockedEndpoint, Trailers } from "../../types";
 import type { RequestRuleData } from "./request-rule";
@@ -18,7 +19,6 @@ import {
     ResetConnectionHandlerDefinition,
     CallbackResponseMessageResult
 } from "./request-handler-definitions";
-import { MaybePromise } from "../../util/type-utils";
 import { byteLength } from "../../util/util";
 import { BaseRuleBuilder } from "../base-rule-builder";
 import { MethodMatcher, RegexPathMatcher, SimplePathMatcher, WildcardMatcher } from "../matchers";

@@ -4,8 +4,7 @@ import {
     SelectionNode,
     SelectionSetNode
 } from "graphql";
-
-import { MaybePromise } from "../util/type-utils";
+import { MaybePromise } from "@httptoolkit/util";
 
 import type { AdminClient } from "./admin-client";
 
