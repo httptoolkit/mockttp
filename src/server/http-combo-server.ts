@@ -9,7 +9,7 @@ import * as streams from 'stream';
 import * as semver from 'semver';
 import { makeDestroyable, DestroyableServer } from 'destroyable-server';
 import * as httpolyglot from '@httptoolkit/httpolyglot';
-import { delay } from '@httptoolkit/util';
+import { delay, unreachableCheck } from '@httptoolkit/util';
 import {
     calculateJa3FromFingerprintData,
     calculateJa4FromHelloData,
@@ -27,6 +27,7 @@ import {
     buildSocketEventData
 } from '../util/socket-util';
 import { MockttpHttpsOptions } from '../mockttp';
+import { buildSocksServer, SocksTcpAddress } from './socks-server';
 
 // Hardcore monkey-patching: force TLSSocket to link servername & remoteAddress to
 // sockets as soon as they're available, without waiting for the handshake to fully
@@ -53,10 +54,11 @@ const originalSocketInit = (<any>tls.TLSSocket.prototype)._init;
     };
 };
 
-export type ComboServerOptions = {
-    debug: boolean,
-    https: MockttpHttpsOptions | undefined,
-    http2: true | false | 'fallback'
+export interface ComboServerOptions {
+    debug: boolean;
+    https: MockttpHttpsOptions | undefined;
+    http2: boolean | 'fallback';
+    socks: boolean;
 };
 
 // Takes an established TLS socket, calls the error listener if it's silently closed
@@ -147,9 +149,10 @@ export async function createComboServer(
     tlsPassthroughListener: (socket: net.Socket, address: string, port?: number) => void
 ): Promise<DestroyableServer<net.Server>> {
     let server: net.Server;
-    if (!options.https) {
-        server = httpolyglot.createServer(requestListener);
-    } else {
+    let tlsServer: tls.Server | undefined = undefined;
+    let socksServer: net.Server | undefined = undefined;
+
+    if (options.https) {
         const ca = await getCA(options.https);
         const defaultCert = ca.generateCertificate(options.https.defaultDomain ?? 'localhost');
 
@@ -179,7 +182,7 @@ export async function createComboServer(
                 ALPNProtocols: serverProtocolPreferences
             }
 
-        const tlsServer = tls.createServer({
+        tlsServer = tls.createServer({
             key: defaultCert.key,
             cert: defaultCert.cert,
             ca: [defaultCert.ca],
@@ -208,9 +211,34 @@ export async function createComboServer(
             options.https.tlsInterceptOnly,
             tlsPassthroughListener
         );
-
-        server = httpolyglot.createServer(tlsServer, requestListener);
     }
+
+    if (options.socks) {
+        socksServer = buildSocksServer();
+        socksServer.on('socks-tcp-connect', (socket: net.Socket, address: SocksTcpAddress) => {
+            const addressString =
+                address.type === 'ipv4'
+                    ? `${address.ip}:${address.port}`
+                : address.type === 'ipv6'
+                    ? `[${address.ip}]:${address.port}`
+                : address.type === 'hostname'
+                    ? `${address.hostname}:${address.port}`
+                : unreachableCheck(address)
+
+            if (options.debug) console.log(`Proxying SOCKS TCP connection to ${addressString}`);
+
+            socket.__timingInfo!.tunnelSetupTimestamp = now();
+            socket.__lastHopConnectAddress = addressString;
+
+            // Put the socket back into the server, so we can handle the data within:
+            server.emit('connection', socket);
+        });
+    }
+
+    server = httpolyglot.createServer({
+        tls: tlsServer,
+        socks: socksServer,
+    }, requestListener);
 
     // In Node v20, this option was added, rejecting all requests with no host header. While that's good, in
     // our case, we want to handle the garbage requests too, so we disable it:
@@ -393,8 +421,21 @@ function analyzeAndMaybePassThroughTls(
         try {
             const helloData = await readTlsClientHello(socket);
 
-            const [connectHostname, connectPort] = socket.__lastHopConnectAddress?.split(':') ?? [];
             const sniHostname = helloData.serverName;
+
+            // SNI is a good clue for where the request is headed, but an explicit proxy address (via
+            // CONNECT or SOCKS) is even better. Note that this may be a hostname or IPv4/6 address:
+            let connectHostname: string | undefined;
+            let connectPort: string | undefined;
+            if (socket.__lastHopConnectAddress) {
+                const lastColonIndex = socket.__lastHopConnectAddress.lastIndexOf(':');
+                if (lastColonIndex !== -1) {
+                    connectHostname = socket.__lastHopConnectAddress.slice(0, lastColonIndex);
+                    connectPort = socket.__lastHopConnectAddress.slice(lastColonIndex + 1);
+                } else {
+                    connectHostname = socket.__lastHopConnectAddress;
+                }
+            }
 
             socket.__tlsMetadata = {
                 sniHostname,

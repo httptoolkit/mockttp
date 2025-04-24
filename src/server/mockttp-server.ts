@@ -86,7 +86,8 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     private webSocketRuleSets: { [priority: number]: WebSocketRule[] } = {};
 
     private httpsOptions: MockttpHttpsOptions | undefined;
-    private isHttp2Enabled: true | false | 'fallback';
+    private isHttp2Enabled: boolean | 'fallback';
+    private socksEnabled: boolean;
     private maxBodySize: number;
 
     private app: connect.Server;
@@ -105,6 +106,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
 
         this.httpsOptions = options.https;
         this.isHttp2Enabled = options.http2 ?? 'fallback';
+        this.socksEnabled = options.socks ?? false;
         this.maxBodySize = options.maxBodySize ?? Infinity;
         this.eventEmitter = new EventEmitter();
 
@@ -130,6 +132,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             debug: this.debug,
             https: this.httpsOptions,
             http2: this.isHttp2Enabled,
+            socks: this.socksEnabled
         }, this.app, this.announceTlsErrorAsync.bind(this), this.passthroughSocket.bind(this));
 
         // We use a mutex here to avoid contention on ports with parallel setup

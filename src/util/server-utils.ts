@@ -3,7 +3,7 @@ export function shouldPassThrough(
   // Only one of these two should have values (validated above):
   passThroughPatterns: URLPattern[],
   interceptOnlyPatterns: URLPattern[] | undefined
-): boolean {
+): hostname is string {
   if (!hostname) return false;
 
   if (interceptOnlyPatterns) {

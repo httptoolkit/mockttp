@@ -695,10 +695,10 @@ export type MockttpHttpsOptions = CAOptions & {
      * options will throw an error.
      *
      * Each element in this list must be an object with a 'hostname' field for the
-     * hostname that should be matched. Wildcards are supported (following the 
+     * hostname that should be matched. Wildcards are supported (following the
      * [URLPattern specification](https://developer.mozilla.org/en-US/docs/Web/API/URL_Pattern_API)),
      * eg. `{hostname: '*.example.com'}`.
-     * 
+     *
      * In future more options may be supported
      * here for additional configuration of this behaviour.
      */
@@ -715,10 +715,10 @@ export type MockttpHttpsOptions = CAOptions & {
      * options will throw an error.
      *
      * Each element in this list must be an object with a 'hostname' field for the
-     * hostname that should be matched. Wildcards are supported (following the 
+     * hostname that should be matched. Wildcards are supported (following the
      * [URLPattern specification](https://developer.mozilla.org/en-US/docs/Web/API/URL_Pattern_API)),
      * eg. `{hostname: '*.example.com'}`.
-     * 
+     *
      * In future more options may be supported
      * here for additional configuration of this behaviour.
      */
@@ -773,6 +773,15 @@ export interface MockttpOptions {
      * false.
      */
     http2?: true | 'fallback' | false;
+
+    /**
+     * Should the server accept incoming SOCKS connections? Defaults to false.
+     * If set to true, the server will listen for incoming SOCKS connections
+     * on the same port as the HTTP server, unwrap received connections, and
+     * handle them like any other incoming TCP connection (intercepting HTTP(S)
+     * from within the SOCKS connection as normal).
+     */
+    socks?: boolean;
 
     /**
      * By default, requests that match no rules will receive an explanation of the

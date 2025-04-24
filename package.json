@@ -141,6 +141,7 @@
     "request": "^2.75.0",
     "request-promise-native": "^1.0.3",
     "rimraf": "^2.5.4",
+    "socks": "^2.8.4",
     "source-map-support": "^0.5.3",
     "stream-browserify": "^3.0.0",
     "tmp-promise": "^1.0.3",
@@ -160,7 +161,7 @@
   "dependencies": {
     "@graphql-tools/schema": "^8.5.0",
     "@graphql-tools/utils": "^8.8.0",
-    "@httptoolkit/httpolyglot": "^2.2.1",
+    "@httptoolkit/httpolyglot": "^3.0.0",
     "@httptoolkit/subscriptions-transport-ws": "^0.11.2",
     "@httptoolkit/util": "^0.1.6",
     "@httptoolkit/websocket-stream": "^6.0.1",
