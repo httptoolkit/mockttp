@@ -134,5 +134,32 @@ nodeOnly(() => {
             expect(body.toString()).to.equal("Hello world!");
         });
 
+        it("should use the SOCKS destination over the Host header", async () => {
+            await remoteServer.forGet("/").thenReply(200, "Hello world!");
+            await server.forAnyRequest().thenPassThrough();
+
+            const socksConn = await SocksClient.createConnection({
+                proxy: {
+                    host: '127.0.0.1',
+                    port: server.port,
+                    type: 5
+                },
+                command: 'connect',
+                destination: {
+                    host: 'localhost',
+                    port: remoteServer.port
+                }
+            });
+
+            const response = await h1RequestOverSocket(socksConn.socket, remoteServer.url, {
+                headers: {
+                    Host: "invalid.example" // This should be ignored - tunnel sets destination
+                }
+            });
+            expect(response.statusCode).to.equal(200);
+            const body = await streamToBuffer(response);
+            expect(body.toString()).to.equal("Hello world!");
+        });
+
     });
 });

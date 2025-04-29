@@ -50,6 +50,7 @@ import {
     buildSocketEventData,
     ClientErrorInProgress,
     LastHopEncrypted,
+    LastTunnelAddress,
     TlsSetupCompleted,
     isSocketLoop,
     resetOrDestroy
@@ -66,6 +67,7 @@ import {
 } from "../util/request-utils";
 import { asBuffer } from "../util/buffer-utils";
 import {
+    getHeaderValue,
     pairFlatRawHeaders,
     rawHeadersToObject
 } from "../util/header-utils";
@@ -566,6 +568,10 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         });
     }
 
+    /**
+     * For both normal requests & websockets, we do some standard preprocessing to ensure we have the absolute
+     * URL destination in place, and timing, tags & id metadata all ready for an OngoingRequest.
+     */
     private preprocessRequest(req: ExtendedRawRequest, type: 'request' | 'websocket'): OngoingRequest {
         parseRequestBody(req, { maxSize: this.maxBodySize });
 
@@ -576,7 +582,10 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
                 (req.socket[LastHopEncrypted] ? 'https' : 'http');
             req.path = req.url;
 
-            const host = req.headers[':authority'] || req.headers['host'];
+            const host = req.socket[LastTunnelAddress] // If you explicitly tunnel to a host, that's the host
+                ?? getHeaderValue(req.headers, ':authority') // Otherwise, we infer based on headers: HTTP/2
+                ?? getHeaderValue(req.headers, 'host');      // or HTTP/1.1
+
             const absoluteUrl = `${req.protocol}://${host}${req.path}`;
 
             if (!req.headers[':path']) {
