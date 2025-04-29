@@ -39,6 +39,7 @@ import {
     pairFlatRawHeaders,
     rawHeadersToObject
 } from './header-utils';
+import { LastHopEncrypted } from './socket-util';
 
 export const shouldKeepAlive = (req: OngoingRequest): boolean =>
     req.httpVersion !== '1.0' &&
@@ -495,7 +496,7 @@ export async function waitForCompletedResponse(
 export function tryToParseHttpRequest(input: Buffer, socket: net.Socket): PartiallyParsedHttpRequest {
     const req: PartiallyParsedHttpRequest = {};
     try {
-        req.protocol = socket.__lastHopEncrypted ? "https" : "http"; // Wild guess really
+        req.protocol = socket[LastHopEncrypted] ? "https" : "http"; // Wild guess really
 
         // For TLS sockets, we default the hostname to the name given by SNI. Might be overridden
         // by the URL or Host header later, if available.

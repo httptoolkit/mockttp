@@ -46,7 +46,14 @@ import { Mutable } from "../util/type-utils";
 import { makePropertyWritable } from "../util/util";
 
 import { isAbsoluteUrl, getPathFromAbsoluteUrl } from "../util/url";
-import { buildSocketEventData, isSocketLoop, resetOrDestroy } from "../util/socket-util";
+import {
+    buildSocketEventData,
+    ClientErrorInProgress,
+    LastHopEncrypted,
+    TlsSetupCompleted,
+    isSocketLoop,
+    resetOrDestroy
+} from "../util/socket-util";
 import {
     parseRequestBody,
     waitForCompletedRequest,
@@ -524,7 +531,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
 
     private async announceTlsErrorAsync(socket: net.Socket, request: TlsHandshakeFailure) {
         // Ignore errors after TLS is setup, those are client errors
-        if (socket instanceof tls.TLSSocket && socket.tlsSetupCompleted) return;
+        if (socket instanceof tls.TLSSocket && socket[TlsSetupCompleted]) return;
 
         setImmediate(() => {
             // We can get falsey but set hostname values - drop them
@@ -538,7 +545,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         // Ignore errors before TLS is setup, those are TLS errors
         if (
             socket instanceof tls.TLSSocket &&
-            !socket.tlsSetupCompleted &&
+            !socket[TlsSetupCompleted] &&
             error.errorCode !== 'ERR_HTTP2_ERROR' // Initial HTTP/2 errors are considered post-TLS
         ) return;
 
@@ -566,7 +573,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         // It might not be if this is a direct request, or if it's being transparently proxied.
         if (!isAbsoluteUrl(req.url!)) {
             req.protocol = req.headers[':scheme'] as string ||
-                (req.socket.__lastHopEncrypted ? 'https' : 'http');
+                (req.socket[LastHopEncrypted] ? 'https' : 'http');
             req.path = req.url;
 
             const host = req.headers[':authority'] || req.headers['host'];
@@ -913,27 +920,27 @@ ${await this.suggestRule(request)}`
         error: Error & { code?: string, rawPacket?: Buffer },
         socket: net.Socket
     ) {
-        if (socket.clientErrorInProgress) {
+        if (socket[ClientErrorInProgress]) {
             // For subsequent errors on the same socket, accumulate packet data (linked to the socket)
             // so that the error (probably delayed until next tick) has it all to work with
-            const previousPacket = socket.clientErrorInProgress.rawPacket;
+            const previousPacket = socket[ClientErrorInProgress].rawPacket;
             const newPacket = error.rawPacket;
             if (!newPacket || newPacket === previousPacket) return;
 
             if (previousPacket && previousPacket.length > 0) {
                 if (previousPacket.equals(newPacket.slice(0, previousPacket.length))) {
                     // This is the same data, but more - update the client error data
-                    socket.clientErrorInProgress.rawPacket = newPacket;
+                    socket[ClientErrorInProgress].rawPacket = newPacket;
                 } else {
                     // This is different data for the same socket, probably an overflow, append it
-                    socket.clientErrorInProgress.rawPacket = Buffer.concat([
+                    socket[ClientErrorInProgress].rawPacket = Buffer.concat([
                         previousPacket,
                         newPacket
                     ]);
                 }
             } else {
                 // The first error had no data, we have data - use our data
-                socket.clientErrorInProgress!.rawPacket = newPacket;
+                socket[ClientErrorInProgress]!.rawPacket = newPacket;
             }
             return;
         }
@@ -941,7 +948,7 @@ ${await this.suggestRule(request)}`
         // We can get multiple errors for the same socket in rapid succession as the parser works,
         // so we store the initial buffer, wait a tick, and then reply/report the accumulated
         // buffer from all errors together.
-        socket.clientErrorInProgress = {
+        socket[ClientErrorInProgress] = {
             // We use HTTP peeked data to catch extra data the parser sees due to httpolyglot peeking,
             // but which gets lost from the raw packet. If that data alone causes an error though
             // (e.g. Q as first char) then this packet data does get thrown! Eugh. In that case,
@@ -960,7 +967,7 @@ ${await this.suggestRule(request)}`
                 timingEvents: { startTime: Date.now(), startTimestamp: now() } as TimingEvents
             };
 
-            const rawPacket = socket.clientErrorInProgress?.rawPacket
+            const rawPacket = socket[ClientErrorInProgress]?.rawPacket
                 ?? Buffer.from([]);
 
             // For packets where we get more than just httpolyglot-peeked data, guess-parse them:

@@ -24,7 +24,15 @@ import { shouldPassThrough } from '../util/server-utils';
 import {
     getParentSocket,
     buildSocketTimingInfo,
-    buildSocketEventData
+    buildSocketEventData,
+    SocketIsh,
+    InitialRemoteAddress,
+    InitialRemotePort,
+    SocketTimingInfo,
+    LastTunnelAddress,
+    LastHopEncrypted,
+    TlsMetadata,
+    TlsSetupCompleted
 } from '../util/socket-util';
 import { MockttpHttpsOptions } from '../mockttp';
 import { buildSocksServer, SocksTcpAddress } from './socks-server';
@@ -43,10 +51,10 @@ const originalSocketInit = (<any>tls.TLSSocket.prototype)._init;
     const loadSNI = _handle.oncertcb;
     _handle.oncertcb = function (info: any) {
         tlsSocket.servername = info.servername;
-        tlsSocket.initialRemoteAddress = tlsSocket.remoteAddress || // Normal case
+        tlsSocket[InitialRemoteAddress] = tlsSocket.remoteAddress || // Normal case
             tlsSocket._parent?.remoteAddress || // For early failing sockets
             tlsSocket._handle?._parentWrap?.stream?.remoteAddress; // For HTTP/2 CONNECT
-        tlsSocket.initialRemotePort = tlsSocket.remotePort ||
+        tlsSocket[InitialRemotePort] = tlsSocket.remotePort ||
             tlsSocket._parent?.remotePort ||
             tlsSocket._handle?._parentWrap?.stream?.remotePort;
 
@@ -76,7 +84,7 @@ function ifTlsDropped(socket: tls.TLSSocket, errorCallback: () => void) {
         // Even if these are shut later on, that doesn't mean they're are rejected connections.
         // To differentiate the two cases, we consider connections OK after waiting 10x longer
         // than the initial TLS handshake for an unhappy disconnection.
-        const timing = socket.__timingInfo;
+        const timing = socket[SocketTimingInfo];
         const tlsSetupDuration = timing
             ? timing.tlsConnectedTimestamp! - (timing.tunnelSetupTimestamp! || timing.initialSocketTimestamp)
             : 0;
@@ -89,11 +97,11 @@ function ifTlsDropped(socket: tls.TLSSocket, errorCallback: () => void) {
     .then(() => {
         // Mark the socket as having completed TLS setup - this ensures that future
         // errors fire as client errors, not TLS setup errors.
-        socket.tlsSetupCompleted = true;
+        socket[TlsSetupCompleted] = true;
     })
     .catch(() => {
         // If TLS setup was confirmed in any way, we know we don't have a TLS error.
-        if (socket.tlsSetupCompleted) return;
+        if (socket[TlsSetupCompleted]) return;
 
         // To get here, the socket must have connected & done the TLS handshake, but then
         // closed/ended without ever sending any data. We can fairly confidently assume
@@ -227,8 +235,8 @@ export async function createComboServer(
 
             if (options.debug) console.log(`Proxying SOCKS TCP connection to ${addressString}`);
 
-            socket.__timingInfo!.tunnelSetupTimestamp = now();
-            socket.__lastHopConnectAddress = addressString;
+            socket[SocketTimingInfo]!.tunnelSetupTimestamp = now();
+            socket[LastTunnelAddress] = addressString;
 
             // Put the socket back into the server, so we can handle the data within:
             server.emit('connection', socket);
@@ -245,11 +253,11 @@ export async function createComboServer(
     (server as any)._httpServer.requireHostHeader = false;
 
     server.on('connection', (socket: net.Socket | http2.ServerHttp2Stream) => {
-        socket.__timingInfo = socket.__timingInfo || buildSocketTimingInfo();
+        socket[SocketTimingInfo] ||= buildSocketTimingInfo();
 
         // All sockets are initially marked as using unencrypted upstream connections.
         // If TLS is used, this is upgraded to 'true' by secureConnection below.
-        socket.__lastHopEncrypted = false;
+        socket[LastHopEncrypted] = false;
 
         // For actual sockets, set NODELAY to avoid any buffering whilst streaming. This is
         // off by default in Node HTTP, but likely to be enabled soon & is default in curl.
@@ -265,14 +273,14 @@ export async function createComboServer(
             copyTimingDetails(parentSocket, socket);
             // With TLS metadata, we only propagate directly from parent sockets, not through
             // CONNECT etc - we only want it if the final hop is TLS, previous values don't matter.
-            socket.__tlsMetadata ??= parentSocket.__tlsMetadata;
-        } else if (!socket.__timingInfo) {
-            socket.__timingInfo = buildSocketTimingInfo();
+            socket[TlsMetadata] ??= parentSocket[TlsMetadata];
+        } else if (!socket[SocketTimingInfo]) {
+            socket[SocketTimingInfo] = buildSocketTimingInfo();
         }
 
-        socket.__timingInfo!.tlsConnectedTimestamp = now();
+        socket[SocketTimingInfo]!.tlsConnectedTimestamp = now();
 
-        socket.__lastHopEncrypted = true;
+        socket[LastHopEncrypted] = true;
         ifTlsDropped(socket, () => {
             tlsClientErrorListener(socket, buildTlsError(socket, 'closed'));
         });
@@ -282,7 +290,7 @@ export async function createComboServer(
     // happens immediately after the connection preface, as long as the connection is OK.
     server!.on('session', (session) => {
         session.once('remoteSettings', () => {
-            session.socket.tlsSetupCompleted = true;
+            (session.socket as tls.TLSSocket)[TlsSetupCompleted] = true;
         });
     });
 
@@ -321,8 +329,8 @@ export async function createComboServer(
         if (options.debug) console.log(`Proxying HTTP/1 CONNECT to ${connectUrl}`);
 
         socket.write('HTTP/' + req.httpVersion + ' 200 OK\r\n\r\n', 'utf-8', () => {
-            socket.__timingInfo!.tunnelSetupTimestamp = now();
-            socket.__lastHopConnectAddress = connectUrl;
+            socket[SocketTimingInfo]!.tunnelSetupTimestamp = now();
+            socket[LastTunnelAddress] = connectUrl;
             server.emit('connection', socket);
         });
     }
@@ -343,7 +351,7 @@ export async function createComboServer(
         res.writeHead(200, {});
         copyAddressDetails(res.socket, res.stream);
         copyTimingDetails(res.socket, res.stream);
-        res.stream.__lastHopConnectAddress = connectUrl;
+        res.stream[LastTunnelAddress] = connectUrl;
 
         // When layering HTTP/2 on JS streams, we have to make sure the JS stream won't autoclose
         // when the other side does, because the upper HTTP/2 layers want to handle shutdown, so
@@ -359,15 +367,13 @@ export async function createComboServer(
     return makeDestroyable(server);
 }
 
-type SocketIsh<MinProps extends keyof net.Socket> =
-    streams.Duplex & Partial<Pick<net.Socket, MinProps>>;
 
 const SOCKET_ADDRESS_METADATA_FIELDS = [
     'localAddress',
     'localPort',
     'remoteAddress',
     'remotePort',
-    '__lastHopConnectAddress'
+    LastTunnelAddress
 ] as const;
 
 // Update the target socket(-ish) with the address details from the source socket,
@@ -388,13 +394,13 @@ function copyAddressDetails(
     });
 }
 
-function copyTimingDetails<T extends SocketIsh<'__timingInfo'>>(
-    source: SocketIsh<'__timingInfo'>,
+function copyTimingDetails<T extends SocketIsh<typeof SocketTimingInfo>>(
+    source: SocketIsh<typeof SocketTimingInfo>,
     target: T
-): asserts target is T & { __timingInfo: Required<net.Socket>['__timingInfo'] } {
-    if (!target.__timingInfo) {
+): asserts target is T & { [SocketTimingInfo]: Required<net.Socket>[typeof SocketTimingInfo] } {
+    if (!target[SocketTimingInfo]) {
         // Clone timing info, don't copy it - child sockets get their own independent timing stats
-        target.__timingInfo = Object.assign({}, source.__timingInfo);
+        target[SocketTimingInfo] = Object.assign({}, source[SocketTimingInfo]);
     }
 }
 
@@ -427,17 +433,17 @@ function analyzeAndMaybePassThroughTls(
             // CONNECT or SOCKS) is even better. Note that this may be a hostname or IPv4/6 address:
             let connectHostname: string | undefined;
             let connectPort: string | undefined;
-            if (socket.__lastHopConnectAddress) {
-                const lastColonIndex = socket.__lastHopConnectAddress.lastIndexOf(':');
+            if (socket[LastTunnelAddress]) {
+                const lastColonIndex = socket[LastTunnelAddress].lastIndexOf(':');
                 if (lastColonIndex !== -1) {
-                    connectHostname = socket.__lastHopConnectAddress.slice(0, lastColonIndex);
-                    connectPort = socket.__lastHopConnectAddress.slice(lastColonIndex + 1);
+                    connectHostname = socket[LastTunnelAddress].slice(0, lastColonIndex);
+                    connectPort = socket[LastTunnelAddress].slice(lastColonIndex + 1);
                 } else {
-                    connectHostname = socket.__lastHopConnectAddress;
+                    connectHostname = socket[LastTunnelAddress];
                 }
             }
 
-            socket.__tlsMetadata = {
+            socket[TlsMetadata] = {
                 sniHostname,
                 connectHostname,
                 connectPort,

@@ -51,7 +51,7 @@ import {
     WebSocketHandlerDefinition,
     WsHandlerDefinitionLookup,
 } from './websocket-handler-definitions';
-import { resetOrDestroy } from '../../util/socket-util';
+import { LastHopEncrypted, resetOrDestroy } from '../../util/socket-util';
 
 export interface WebSocketHandler extends WebSocketHandlerDefinition {
     handle(
@@ -292,10 +292,10 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
             const hostHeader = req.headers[hostHeaderName];
             [ hostname, port ] = hostHeader!.split(':');
 
-            // __lastHopEncrypted is set in http-combo-server, for requests that have explicitly
-            // CONNECTed upstream (which may then up/downgrade from the current encryption).
-            if (socket.__lastHopEncrypted !== undefined) {
-                protocol = socket.__lastHopEncrypted ? 'wss' : 'ws';
+            // LastHopEncrypted is set in http-combo-server, for requests that use TLS in the
+            // inner-most tunnel (or direct connection) to us.
+            if (socket[LastHopEncrypted] !== undefined) {
+                protocol = socket[LastHopEncrypted] ? 'wss' : 'ws';
             } else {
                 protocol = reqMessage.connection.encrypted ? 'wss' : 'ws';
             }

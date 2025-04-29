@@ -1,12 +1,114 @@
 import * as _ from 'lodash';
 import now = require("performance-now");
 import * as os from 'os';
+import * as streams from 'stream';
 import * as net from 'net';
 import * as tls from 'tls';
 import * as http2 from 'http2';
 
 import { isNode } from './util';
-import { OngoingRequest, TlsConnectionEvent } from '../types';
+import {
+    OngoingRequest,
+    TlsConnectionEvent,
+    TlsSocketMetadata,
+    TlsTimingEvents
+} from '../types';
+
+// We store a bunch of metadata that we directly attach to sockets, TLS
+// sockets, and HTTP/2 streams to track our state over time & through tunneling:
+export const InitialRemoteAddress = Symbol('initial-remote-address');
+export const InitialRemotePort = Symbol('initial-port-address');
+export const TlsSetupCompleted = Symbol('tls-setup-comleted');
+export const LastHopEncrypted = Symbol('last-hop-encrypted');
+export const LastTunnelAddress = Symbol('last-hop-address');
+export const TlsMetadata = Symbol('tls-metadata');
+export const ClientErrorInProgress = Symbol('client-error-in-progress');
+export const SocketTimingInfo = Symbol('socket-timing-info');
+
+declare module 'net' {
+    interface Socket {
+        /**
+         * Is this socket trying to send encrypted data upstream? For direct connections
+         * this always matches socket.encrypted. For CONNECT-proxied connections (where
+         * the initial connection could be HTTPS and the upstream connection HTTP, or
+         * vice versa) all on one socket, this is the value for the final hop.
+         */
+        [LastHopEncrypted]?: boolean;
+        /**
+         * The hostname + maybe port from the inner-most tunnel request powering this
+         * socket. This is the best signal for the client's real target address,
+         * if provided. It's not set at all for direct (non-tunnelled) connections.
+         */
+        [LastTunnelAddress]?: string;
+
+        /**
+         * If there's a client error being sent, we track the corresponding packet
+         * data on the socket, so that when it fires repeatedly we can combine them
+         * into a single response & error event.
+         */
+        [ClientErrorInProgress]?: { rawPacket?: Buffer };
+
+        /**
+         * Our recordings of various timestamps, used for monitoring &
+         * performance analysis later on
+         */
+        [SocketTimingInfo]?: {
+            initialSocket: number; // Initial raw socket time, since unix epoch
+
+            // High-precision timestamps:
+            initialSocketTimestamp: number;
+            tunnelSetupTimestamp?: number; // Latest CONNECT completion, if any
+            tlsConnectedTimestamp?: number; // Latest TLS handshake completion, if any
+        }
+
+        // Set on TLSSocket, defined here for convenient checks
+        [TlsMetadata]?: TlsSocketMetadata;
+    }
+}
+
+declare module 'tls' {
+    interface TLSSocket {
+        /**
+         * Have we seen evidence that the client has completed & trusts the connection?
+         * If set, we know that errors are client errors, not TLS setup/trust issues.
+         */
+        [TlsSetupCompleted]?: boolean;
+
+        /**
+         * Extra metadata attached to a TLS socket, taken from the client hello and
+         * preceeding tunneling steps.
+         */
+        [TlsMetadata]?: TlsSocketMetadata;
+
+        /**
+         * We cache this extra metadata during the initial TLS setup on these separate
+         * properties, because it can be cleared & lost from the socket in some
+         * TLS error scenarios.
+         */
+        [InitialRemoteAddress]?: string;
+        [InitialRemotePort]?: number;
+    }
+}
+
+declare module 'http2' {
+    class Http2Session {
+        // session.socket is cleared before error handling kicks in. That's annoying,
+        // so we manually preserve the socket elsewhere to work around it.
+        initialSocket?: net.Socket;
+    }
+
+    class ServerHttp2Stream {
+        // Treated the same as net.Socket, when we unwrap them in our combo server:
+        [LastHopEncrypted]?: net.Socket[typeof LastHopEncrypted];
+        [LastTunnelAddress]?: net.Socket[typeof LastTunnelAddress];
+        [SocketTimingInfo]?: net.Socket[typeof SocketTimingInfo];
+    }
+}
+
+export type SocketIsh<MinProps extends keyof net.Socket & keyof tls.TLSSocket> =
+    streams.Duplex &
+    Partial<Pick<net.Socket, MinProps>> &
+    Partial<Pick<tls.TLSSocket, MinProps>>;
 
 // Test if a local port for a given interface (IPv4/6) is currently in use
 export async function isLocalPortActive(interfaceIp: '::1' | '127.0.0.1', port: number) {
@@ -166,13 +268,13 @@ export function resetOrDestroy(requestOrSocket:
 };
 
 export function buildSocketEventData(socket: net.Socket & Partial<tls.TLSSocket>): TlsConnectionEvent {
-    const timingInfo = socket.__timingInfo ||
-        socket._parent?.__timingInfo ||
+    const timingInfo = socket[SocketTimingInfo] ||
+        socket._parent?.[SocketTimingInfo] ||
         buildSocketTimingInfo();
 
     // Attached in passThroughMatchingTls TLS sniffing logic in http-combo-server:
-    const tlsMetadata = socket.__tlsMetadata ||
-        socket._parent?.__tlsMetadata ||
+    const tlsMetadata = socket[TlsMetadata] ||
+        socket._parent?.[TlsMetadata] ||
         {};
 
     return {
@@ -180,10 +282,10 @@ export function buildSocketEventData(socket: net.Socket & Partial<tls.TLSSocket>
         // These only work because of oncertcb monkeypatch in http-combo-server:
         remoteIpAddress: socket.remoteAddress || // Normal case
             socket._parent?.remoteAddress || // Pre-certCB error, e.g. timeout
-            socket.initialRemoteAddress!, // Recorded by certCB monkeypatch
+            socket[InitialRemoteAddress], // Recorded by certCB monkeypatch
         remotePort: socket.remotePort ||
             socket._parent?.remotePort ||
-            socket.initialRemotePort!,
+            socket[InitialRemotePort],
         tags: [],
         timingEvents: {
             startTime: timingInfo.initialSocket,
@@ -195,6 +297,6 @@ export function buildSocketEventData(socket: net.Socket & Partial<tls.TLSSocket>
     };
 }
 
-export function buildSocketTimingInfo(): Required<net.Socket>['__timingInfo'] {
+export function buildSocketTimingInfo(): Required<net.Socket>[typeof SocketTimingInfo] {
     return { initialSocket: Date.now(), initialSocketTimestamp: now() };
 }
