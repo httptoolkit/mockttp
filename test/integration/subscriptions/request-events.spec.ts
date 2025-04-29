@@ -6,7 +6,8 @@ import {
     getAdminServer,
     getRemote,
     InitiatedRequest,
-    CompletedRequest
+    CompletedRequest,
+    TimingEvents
 } from "../../..";
 import {
     expect,
@@ -14,10 +15,8 @@ import {
     nodeOnly,
     getDeferred,
     sendRawRequest,
-    isNode,
     defaultNodeConnectionHeader
 } from "../../test-utils";
-import { TimingEvents } from "../../../dist/types";
 
 // Headers we ignore when checking the received values, because they can vary depending
 // on details of the local environment (to pass in Wallaby & fail in GHA, for example)

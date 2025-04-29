@@ -1,6 +1,5 @@
 import * as net from 'net';
 import * as http from 'http';
-import { SocksClient } from 'socks';
 
 import {
     Mockttp,
@@ -8,7 +7,8 @@ import {
 } from "../../..";
 import {
     expect,
-    nodeOnly
+    nodeOnly,
+    openSocksSocket
 } from "../../test-utils";
 import { streamToBuffer } from '../../../src/util/buffer-utils';
 
@@ -46,20 +46,8 @@ nodeOnly(() => {
             await remoteServer.forGet("/").thenReply(200, "Hello world!");
             await server.forAnyRequest().thenPassThrough();
 
-            const socksConn = await SocksClient.createConnection({
-                proxy: {
-                    host: '127.0.0.1',
-                    port: server.port,
-                    type: 4
-                },
-                command: 'connect',
-                destination: {
-                    host: '127.0.0.1',
-                    port: remoteServer.port
-                }
-            });
-
-            const response = await h1RequestOverSocket(socksConn.socket, remoteServer.url);
+            const socksSocket = await openSocksSocket(server, '127.0.0.1', remoteServer.port, 4);
+            const response = await h1RequestOverSocket(socksSocket, remoteServer.url);
             expect(response.statusCode).to.equal(200);
             const body = await streamToBuffer(response);
             expect(body.toString()).to.equal("Hello world!");
@@ -69,20 +57,8 @@ nodeOnly(() => {
             await remoteServer.forGet("/").thenReply(200, "Hello world!");
             await server.forAnyRequest().thenPassThrough();
 
-            const socksConn = await SocksClient.createConnection({
-                proxy: {
-                    host: '127.0.0.1',
-                    port: server.port,
-                    type: 4
-                },
-                command: 'connect',
-                destination: {
-                    host: 'localhost',
-                    port: remoteServer.port
-                }
-            });
-
-            const response = await h1RequestOverSocket(socksConn.socket, remoteServer.url);
+            const socksSocket = await openSocksSocket(server, 'localhost', remoteServer.port, 4);
+            const response = await h1RequestOverSocket(socksSocket, remoteServer.url);
             expect(response.statusCode).to.equal(200);
             const body = await streamToBuffer(response);
             expect(body.toString()).to.equal("Hello world!");
@@ -92,20 +68,8 @@ nodeOnly(() => {
             await remoteServer.forGet("/").thenReply(200, "Hello world!");
             await server.forAnyRequest().thenPassThrough();
 
-            const socksConn = await SocksClient.createConnection({
-                proxy: {
-                    host: '127.0.0.1',
-                    port: server.port,
-                    type: 5
-                },
-                command: 'connect',
-                destination: {
-                    host: '127.0.0.1',
-                    port: remoteServer.port
-                }
-            });
-
-            const response = await h1RequestOverSocket(socksConn.socket, remoteServer.url);
+            const socksSocket = await openSocksSocket(server, '127.0.0.1', remoteServer.port, 5);
+            const response = await h1RequestOverSocket(socksSocket, remoteServer.url);
             expect(response.statusCode).to.equal(200);
             const body = await streamToBuffer(response);
             expect(body.toString()).to.equal("Hello world!");
@@ -115,20 +79,8 @@ nodeOnly(() => {
             await remoteServer.forGet("/").thenReply(200, "Hello world!");
             await server.forAnyRequest().thenPassThrough();
 
-            const socksConn = await SocksClient.createConnection({
-                proxy: {
-                    host: '127.0.0.1',
-                    port: server.port,
-                    type: 5
-                },
-                command: 'connect',
-                destination: {
-                    host: 'localhost',
-                    port: remoteServer.port
-                }
-            });
-
-            const response = await h1RequestOverSocket(socksConn.socket, remoteServer.url);
+            const socksSocket = await openSocksSocket(server, 'localhost', remoteServer.port, 5);
+            const response = await h1RequestOverSocket(socksSocket, remoteServer.url);
             expect(response.statusCode).to.equal(200);
             const body = await streamToBuffer(response);
             expect(body.toString()).to.equal("Hello world!");
@@ -138,20 +90,8 @@ nodeOnly(() => {
             await remoteServer.forGet("/").thenReply(200, "Hello world!");
             await server.forAnyRequest().thenPassThrough();
 
-            const socksConn = await SocksClient.createConnection({
-                proxy: {
-                    host: '127.0.0.1',
-                    port: server.port,
-                    type: 5
-                },
-                command: 'connect',
-                destination: {
-                    host: 'localhost',
-                    port: remoteServer.port
-                }
-            });
-
-            const response = await h1RequestOverSocket(socksConn.socket, remoteServer.url, {
+            const socksSocket = await openSocksSocket(server, 'localhost', remoteServer.port, 5);
+            const response = await h1RequestOverSocket(socksSocket, remoteServer.url, {
                 headers: {
                     Host: "invalid.example" // This should be ignored - tunnel sets destination
                 }

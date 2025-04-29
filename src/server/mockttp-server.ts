@@ -28,7 +28,8 @@ import {
     WebSocketClose,
     TlsPassthroughEvent,
     RuleEvent,
-    RawTrailers
+    RawTrailers,
+    RawPassthroughEvent
 } from "../types";
 import { DestroyableServer } from "destroyable-server";
 import {
@@ -47,7 +48,8 @@ import { makePropertyWritable } from "../util/util";
 
 import { isAbsoluteUrl, getPathFromAbsoluteUrl } from "../util/url";
 import {
-    buildSocketEventData,
+    buildRawSocketEventData,
+    buildTlsSocketEventData,
     ClientErrorInProgress,
     LastHopEncrypted,
     LastTunnelAddress,
@@ -97,6 +99,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     private httpsOptions: MockttpHttpsOptions | undefined;
     private isHttp2Enabled: boolean | 'fallback';
     private socksEnabled: boolean;
+    private passthroughUnknownProtocols: boolean;
     private maxBodySize: number;
 
     private app: connect.Server;
@@ -116,6 +119,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         this.httpsOptions = options.https;
         this.isHttp2Enabled = options.http2 ?? 'fallback';
         this.socksEnabled = options.socks ?? false;
+        this.passthroughUnknownProtocols = options.passthrough?.includes('unknown-protocol') ?? false;
         this.maxBodySize = options.maxBodySize ?? Infinity;
         this.eventEmitter = new EventEmitter();
 
@@ -141,8 +145,14 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             debug: this.debug,
             https: this.httpsOptions,
             http2: this.isHttp2Enabled,
-            socks: this.socksEnabled
-        }, this.app, this.announceTlsErrorAsync.bind(this), this.passthroughSocket.bind(this));
+            socks: this.socksEnabled,
+            passthroughUnknownProtocols: this.passthroughUnknownProtocols,
+
+            requestListener: this.app,
+            tlsClientErrorListener: this.announceTlsErrorAsync.bind(this),
+            tlsPassthroughListener: this.passthroughSocket.bind(this, 'tls'),
+            rawPassthroughListener: this.passthroughSocket.bind(this, 'raw')
+        });
 
         // We use a mutex here to avoid contention on ports with parallel setup
         await serverPortCheckMutex.runExclusive(async () => {
@@ -313,6 +323,8 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     public on(event: 'tls-passthrough-closed', callback: (req: TlsPassthroughEvent) => void): Promise<void>;
     public on(event: 'tls-client-error', callback: (req: TlsHandshakeFailure) => void): Promise<void>;
     public on(event: 'client-error', callback: (error: ClientError) => void): Promise<void>;
+    public on(event: 'raw-passthrough-opened', callback: (req: RawPassthroughEvent) => void): Promise<void>;
+    public on(event: 'raw-passthrough-closed', callback: (req: RawPassthroughEvent) => void): Promise<void>;
     public on<T = unknown>(event: 'rule-event', callback: (event: RuleEvent<T>) => void): Promise<void>;
     public on(event: string, callback: (...args: any[]) => void): Promise<void> {
         this.eventEmitter.on(event, callback);
@@ -1037,6 +1049,7 @@ ${await this.suggestRule(request)}`
 
             this.announceClientErrorAsync(socket, { errorCode, request, response });
 
+            socket.on('error', () => {}); // Just announce the error to listeners, don't actually die from it
             socket.destroy(error);
         });
     }
@@ -1084,11 +1097,12 @@ ${await this.suggestRule(request)}`
     private outgoingPassthroughSockets: Set<net.Socket> = new Set();
 
     private passthroughSocket(
+        type: 'raw' | 'tls',
         socket: net.Socket,
         host: string,
         port?: number
     ) {
-        const targetPort = port || 443;
+        const targetPort = port ?? 443; // Should only be undefined on SNI-only TLS passthrough
 
         if (isSocketLoop(this.outgoingPassthroughSockets, socket)) {
             // Hard to reproduce: loops can only happen if a) SNI triggers this (because tunnels
@@ -1101,13 +1115,22 @@ ${await this.suggestRule(request)}`
 
         if (socket.closed) return; // Nothing to do
 
-        const eventData = buildSocketEventData(socket as any) as TlsPassthroughEvent;
-        eventData.id = uuid();
-        eventData.hostname = host;
-        eventData.upstreamPort = targetPort;
-        setImmediate(() => this.eventEmitter.emit('tls-passthrough-opened', eventData));
+        let eventData: TlsPassthroughEvent | RawPassthroughEvent = Object.assign(
+            type === 'raw'
+                ? buildRawSocketEventData(socket)
+                : buildTlsSocketEventData(socket as tls.TLSSocket),
+            {
+                id: uuid(),
+                hostname: host, // Deprecated, but kept here for backward compat
+                upstreamHost: host,
+                upstreamPort: targetPort
+            }
+        );
+
+        setImmediate(() => this.eventEmitter.emit(`${type}-passthrough-opened`, eventData));
 
         const upstreamSocket = net.connect({ host, port: targetPort });
+        upstreamSocket.setNoDelay(true);
 
         socket.pipe(upstreamSocket);
         upstreamSocket.pipe(socket);
@@ -1118,7 +1141,7 @@ ${await this.suggestRule(request)}`
         socket.on('close', () => {
             upstreamSocket.destroy();
             setImmediate(() => {
-                this.eventEmitter.emit('tls-passthrough-closed', {
+                this.eventEmitter.emit(`${type}-passthrough-closed`, {
                     ...eventData,
                     timingEvents: {
                         ...eventData.timingEvents,
@@ -1131,7 +1154,7 @@ ${await this.suggestRule(request)}`
         upstreamSocket.once('connect', () => this.outgoingPassthroughSockets.add(upstreamSocket));
         upstreamSocket.once('close', () => this.outgoingPassthroughSockets.delete(upstreamSocket));
 
-        if (this.debug) console.log(`Passing through raw bypassed connection to ${host}:${targetPort}${
+        if (this.debug) console.log(`Passing through bypassed ${type} connection to ${host}:${targetPort}${
             !port ? ' (assumed port)' : ''
         }`);
     }

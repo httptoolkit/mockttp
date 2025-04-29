@@ -2,7 +2,7 @@ import * as _ from 'lodash';
 import HttpsProxyAgent = require('https-proxy-agent');
 import * as semver from 'semver';
 
-import { getLocal, CompletedResponse } from "../../..";
+import { getLocal, CompletedResponse, ClientError } from "../../..";
 import {
     expect,
     fetch,
@@ -15,7 +15,6 @@ import {
     isNode,
     openRawTlsSocket
 } from "../../test-utils";
-import { ClientError } from "../../../dist/types";
 
 describe("Client error subscription", () => {
     describe("with a local HTTP server", () => {
@@ -117,7 +116,7 @@ describe("Client error subscription", () => {
                 let errorPromise = getDeferred<ClientError>();
                 await server.on('client-error', (e) => errorPromise.resolve(e));
 
-                sendRawRequest(server, 'GET /');
+                sendRawRequest(server, 'GET /', { end: true });
 
                 let clientError = await errorPromise;
 

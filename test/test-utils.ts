@@ -17,6 +17,7 @@ import {
 } from "formdata-node";
 import { RequestPromise } from 'request-promise-native';
 import * as semver from 'semver';
+import { SocksClient } from 'socks';
 
 import chai = require("chai");
 import chaiAsPromised = require("chai-as-promised");
@@ -158,19 +159,27 @@ export async function openRawSocket(server: Mockttp) {
     });
 }
 
-export async function sendRawRequest(server: Mockttp, requestContent: string): Promise<string> {
-    const client = new net.Socket();
-    await new Promise<void>((resolve) => client.connect(server.port, '127.0.0.1', resolve));
+export async function sendRawRequest(target: Mockttp | net.Socket, requestContent: string, options: {
+    end?: boolean
+} = {}): Promise<string> {
+    let client: net.Socket;
+    if (target instanceof net.Socket) {
+        client = target;
+    } else {
+        client = new net.Socket();
+        await new Promise<void>((resolve) => client.connect(target.port, '127.0.0.1', resolve));
+    }
 
-    const dataPromise = new Promise<string>((resolve) => {
-        client.on('data', function(data) {
+    const dataPromise = new Promise<string>((resolve, reject) => {
+        client.once('data', function(data) {
             resolve(data.toString());
             client.destroy();
         });
+        client.on('error', reject);
     });
 
     client.write(requestContent);
-    client.end();
+    if (options.end) client.end();
     return dataPromise;
 }
 
@@ -190,6 +199,22 @@ export async function openRawTlsSocket(
         socket.once('secureConnect', () => resolve(socket));
         socket.once('error', reject);
     });
+}
+
+export async function openSocksSocket(server: Mockttp, targetHost: string, targetPort: number, socksType: 4 | 5 = 5) {
+    const socksConn = await SocksClient.createConnection({
+        proxy: {
+            host: '127.0.0.1',
+            port: server.port,
+            type: socksType
+        },
+        command: 'connect',
+        destination: {
+            host: targetHost,
+            port: targetPort
+        }
+    });
+    return socksConn.socket;
 }
 
 // Write a message to a socket that will trigger a respnse, but kill the socket

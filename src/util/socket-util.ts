@@ -9,6 +9,7 @@ import * as http2 from 'http2';
 import { isNode } from './util';
 import {
     OngoingRequest,
+    RawPassthroughEvent,
     TlsConnectionEvent,
     TlsSocketMetadata,
     TlsTimingEvents
@@ -61,8 +62,10 @@ declare module 'net' {
             tlsConnectedTimestamp?: number; // Latest TLS handshake completion, if any
         }
 
-        // Set on TLSSocket, defined here for convenient checks
+        // Set on TLSSocket, defined here for convenient access on _all_ sockets
         [TlsMetadata]?: TlsSocketMetadata;
+        [InitialRemoteAddress]?: string;
+        [InitialRemotePort]?: number;
     }
 }
 
@@ -154,6 +157,28 @@ export const isLocalhostAddress = (host: string | null | undefined) =>
         normalizeIP(host)!.match(/^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/) // 127.0.0.0/8 range
     );
 
+export const getAddressAndPort = (address: string): [host: string, port?: number] => {
+    let host: string;
+    let portString: string | undefined;
+
+    const lastColonIndex = address.lastIndexOf(':');
+    if (lastColonIndex !== -1) {
+        host = address.slice(0, lastColonIndex);
+        portString = address.slice(lastColonIndex + 1);
+    } else {
+        host = address;
+        portString = undefined;
+    }
+
+    if (host[0] === '[' && host[host.length - 1] === ']') {
+        // Bracketed IPv6 address, drop the brackets:
+        host = host.slice(1, -1);
+    }
+
+    const port = portString ? parseInt(portString, 10) : undefined;
+
+    return [host, port];
+};
 
 // Check whether an incoming socket is the other end of one of our outgoing sockets:
 export const isSocketLoop = (outgoingSockets: net.Socket[] | Set<net.Socket>, incomingSocket: net.Socket) =>
@@ -267,34 +292,48 @@ export function resetOrDestroy(requestOrSocket:
     primarySocket.destroy();
 };
 
-export function buildSocketEventData(socket: net.Socket & Partial<tls.TLSSocket>): TlsConnectionEvent {
+export function buildRawSocketEventData(
+    socket: net.Socket
+): Omit<RawPassthroughEvent, 'id' | 'upstreamHost' | 'upstreamPort'> {
     const timingInfo = socket[SocketTimingInfo] ||
         socket._parent?.[SocketTimingInfo] ||
         buildSocketTimingInfo();
 
-    // Attached in passThroughMatchingTls TLS sniffing logic in http-combo-server:
-    const tlsMetadata = socket[TlsMetadata] ||
-        socket._parent?.[TlsMetadata] ||
-        {};
-
     return {
-        hostname: socket.servername,
-        // These only work because of oncertcb monkeypatch in http-combo-server:
         remoteIpAddress: socket.remoteAddress || // Normal case
-            socket._parent?.remoteAddress || // Pre-certCB error, e.g. timeout
-            socket[InitialRemoteAddress], // Recorded by certCB monkeypatch
+            socket._parent?.remoteAddress || // Pre-certCB TLS error, e.g. timeout
+            socket[InitialRemoteAddress]!, // Post-certcb, recorded by monkeypatch
         remotePort: socket.remotePort ||
             socket._parent?.remotePort ||
-            socket[InitialRemotePort],
+            socket[InitialRemotePort]!,
+
         tags: [],
         timingEvents: {
             startTime: timingInfo.initialSocket,
             connectTimestamp: timingInfo.initialSocketTimestamp,
-            tunnelTimestamp: timingInfo.tunnelSetupTimestamp,
-            handshakeTimestamp: timingInfo.tlsConnectedTimestamp
-        },
-        tlsMetadata
+            tunnelTimestamp: timingInfo.tunnelSetupTimestamp
+        }
     };
+}
+
+export function buildTlsSocketEventData(
+    socket: net.Socket & Partial<tls.TLSSocket>
+): Omit<RawPassthroughEvent, 'id' | 'upstreamHost' | 'upstreamPort'> & TlsConnectionEvent {
+    const rawSocketData = buildRawSocketEventData(socket) as Partial<TlsConnectionEvent>;
+
+    const timingInfo = socket[SocketTimingInfo] ||
+        socket._parent?.[SocketTimingInfo] ||
+        buildSocketTimingInfo();
+    rawSocketData.timingEvents!.handshakeTimestamp = timingInfo.tlsConnectedTimestamp;
+
+    // Attached in passThroughMatchingTls TLS sniffing logic in http-combo-server:
+    rawSocketData.tlsMetadata = socket[TlsMetadata] ||
+        socket._parent?.[TlsMetadata] ||
+        {};
+
+    rawSocketData.hostname = socket.servername;
+
+    return rawSocketData as any;
 }
 
 export function buildSocketTimingInfo(): Required<net.Socket>[typeof SocketTimingInfo] {

@@ -379,6 +379,8 @@ export class MockttpAdminRequestBuilder {
             'tls-passthrough-opened': gql`subscription OnTlsPassthroughOpened {
                 tlsPassthroughOpened {
                     id
+
+                    ${this.schema.asOptionalField('TlsPassthroughEvent', 'upstreamHost')}
                     upstreamPort
 
                     hostname
@@ -392,6 +394,8 @@ export class MockttpAdminRequestBuilder {
             'tls-passthrough-closed': gql`subscription OnTlsPassthroughClosed {
                 tlsPassthroughClosed {
                     id
+
+                    ${this.schema.asOptionalField('TlsPassthroughEvent', 'upstreamHost')}
                     upstreamPort
 
                     hostname
@@ -449,6 +453,32 @@ export class MockttpAdminRequestBuilder {
                         body
                         ${this.schema.asOptionalField('Response', 'rawTrailers')}
                     }
+                }
+            }`,
+            'raw-passthrough-opened': gql`subscription OnRawPassthroughOpened {
+                rawPassthroughOpened {
+                    id
+
+                    upstreamHost
+                    upstreamPort
+
+                    remoteIpAddress
+                    remotePort
+                    tags
+                    timingEvents
+                }
+            }`,
+            'raw-passthrough-closed': gql`subscription OnRawPassthroughClosed {
+                rawPassthroughClosed {
+                    id
+
+                    upstreamHost
+                    upstreamPort
+
+                    remoteIpAddress
+                    remotePort
+                    tags
+                    timingEvents
                 }
             }`,
             'rule-event': gql`subscription OnRuleEvent {

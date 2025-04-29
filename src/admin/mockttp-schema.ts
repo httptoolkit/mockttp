@@ -31,6 +31,8 @@ export const MockttpSchema = gql`
         tlsPassthroughOpened: TlsPassthroughEvent!
         tlsPassthroughClosed: TlsPassthroughEvent!
         failedTlsRequest: TlsHandshakeFailure!
+        rawPassthroughOpened: RawPassthroughEvent!
+        rawPassthroughClosed: RawPassthroughEvent!
         failedClientRequest: ClientError!
         ruleEvent: RuleEvent!
     }
@@ -60,6 +62,8 @@ export const MockttpSchema = gql`
 
     type TlsPassthroughEvent {
         id: String!
+
+        upstreamHost: String
         upstreamPort: Int!
 
         hostname: String
@@ -112,6 +116,18 @@ export const MockttpSchema = gql`
         rawHeaders: Json
         remoteIpAddress: String
         remotePort: Int
+    }
+
+    type RawPassthroughEvent {
+        id: String!
+
+        upstreamHost: String!
+        upstreamPort: Int!
+
+        remoteIpAddress: String!
+        remotePort: Int!
+        tags: [String!]!
+        timingEvents: Json!
     }
 
     type RuleEvent {

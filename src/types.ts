@@ -70,7 +70,13 @@ export interface Request {
 }
 
 export interface TlsConnectionEvent {
+    /**
+     * @deprecated - Use `tlsMetadata.sniHostname` or `tlsMetadata.connectHostname` for
+     * handshake/tunnel details, or `upstreamHost` in passthrough events for the
+     * upstream host of the passthrough tunnel.
+     */
     hostname?: string;
+
     remoteIpAddress?: string; // Can be unavailable in some error cases
     remotePort?: number; // Can be unavailable in some error cases
     tags: string[];
@@ -87,12 +93,11 @@ export interface TlsSocketMetadata {
     ja4Fingerprint?: string;
 }
 
-export interface TlsPassthroughEvent extends TlsConnectionEvent {
-    id: string;
-    upstreamPort: number;
-
+export interface TlsPassthroughEvent extends RawPassthroughEvent, TlsConnectionEvent {
+    // Removes ambiguity of the two parent interface fields
     remoteIpAddress: string;
     remotePort: number;
+    timingEvents: TlsTimingEvents;
 }
 
 export interface TlsHandshakeFailure extends TlsConnectionEvent {
@@ -106,7 +111,26 @@ export interface TlsHandshakeFailure extends TlsConnectionEvent {
     timingEvents: TlsFailureTimingEvents;
 }
 
-export interface TlsTimingEvents {
+export interface RawPassthroughEvent {
+    id: string;
+
+    upstreamHost: string;
+    upstreamPort: number;
+
+    /**
+     * The IP address of the remote client that initiated the connection.
+     */
+    remoteIpAddress: string;
+    /**
+     * The port of the remote client that initiated the connection.
+     */
+    remotePort: number;
+
+    tags: string[];
+    timingEvents: ConnectionTimingEvents;
+}
+
+export interface ConnectionTimingEvents {
     /**
      * When the socket initially connected, in MS since the unix
      * epoch.
@@ -122,14 +146,8 @@ export interface TlsTimingEvents {
     connectTimestamp: number;
 
     /**
-     * When Mockttp's handshake for this connection was completed (if there
-     * was one). This is not set for passed through connections.
-     */
-    handshakeTimestamp?: number;
-
-    /**
-     * When the outer tunnel (e.g. a preceeding CONNECT request) was created,
-     * if there was one.
+     * When the outer tunnel (e.g. a preceeding CONNECT request/SOCKS
+     * connection) was created, if there was one.
      */
     tunnelTimestamp?: number;
 
@@ -137,6 +155,15 @@ export interface TlsTimingEvents {
      * When the connection was closed, if it has been closed.
      */
     disconnectTimestamp?: number;
+}
+
+export interface TlsTimingEvents extends ConnectionTimingEvents {
+
+    /**
+     * When Mockttp's handshake for this connection was completed (if there
+     * was one). This is not set for passed through connections.
+     */
+    handshakeTimestamp?: number;
 }
 
 export interface TlsFailureTimingEvents extends TlsTimingEvents {

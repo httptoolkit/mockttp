@@ -4,7 +4,6 @@ import net = require('net');
 import tls = require('tls');
 import http = require('http');
 import http2 = require('http2');
-import * as streams from 'stream';
 
 import * as semver from 'semver';
 import { makeDestroyable, DestroyableServer } from 'destroyable-server';
@@ -24,7 +23,7 @@ import { shouldPassThrough } from '../util/server-utils';
 import {
     getParentSocket,
     buildSocketTimingInfo,
-    buildSocketEventData,
+    buildTlsSocketEventData,
     SocketIsh,
     InitialRemoteAddress,
     InitialRemotePort,
@@ -32,7 +31,9 @@ import {
     LastTunnelAddress,
     LastHopEncrypted,
     TlsMetadata,
-    TlsSetupCompleted
+    TlsSetupCompleted,
+    getAddressAndPort,
+    resetOrDestroy
 } from '../util/socket-util';
 import { MockttpHttpsOptions } from '../mockttp';
 import { buildSocksServer, SocksTcpAddress } from './socks-server';
@@ -60,13 +61,6 @@ const originalSocketInit = (<any>tls.TLSSocket.prototype)._init;
 
         return loadSNI?.apply(this, arguments as any);
     };
-};
-
-export interface ComboServerOptions {
-    debug: boolean;
-    https: MockttpHttpsOptions | undefined;
-    http2: boolean | 'fallback';
-    socks: boolean;
 };
 
 // Takes an established TLS socket, calls the error listener if it's silently closed
@@ -139,7 +133,7 @@ function buildTlsError(
     socket: tls.TLSSocket,
     cause: TlsHandshakeFailure['failureCause']
 ): TlsHandshakeFailure {
-    const eventData = buildSocketEventData(socket) as TlsHandshakeFailure;
+    const eventData = buildTlsSocketEventData(socket) as TlsHandshakeFailure;
 
     eventData.failureCause = cause;
     eventData.timingEvents.failureTimestamp = now();
@@ -147,18 +141,27 @@ function buildTlsError(
     return eventData;
 }
 
+export interface ComboServerOptions {
+    debug: boolean;
+    https: MockttpHttpsOptions | undefined;
+    http2: boolean | 'fallback';
+    socks: boolean;
+    passthroughUnknownProtocols: boolean;
+
+    requestListener: (req: http.IncomingMessage, res: http.ServerResponse) => void;
+    tlsClientErrorListener: (socket: tls.TLSSocket, req: TlsHandshakeFailure) => void;
+    tlsPassthroughListener: (socket: net.Socket, address: string, port?: number) => void;
+    rawPassthroughListener: (socket: net.Socket, address: string, port?: number) => void;
+};
+
 // The low-level server that handles all the sockets & TLS. The server will correctly call the
 // given handler for both HTTP & HTTPS direct connections, or connections when used as an
 // either HTTP or HTTPS proxy, all on the same port.
-export async function createComboServer(
-    options: ComboServerOptions,
-    requestListener: (req: http.IncomingMessage, res: http.ServerResponse) => void,
-    tlsClientErrorListener: (socket: tls.TLSSocket, req: TlsHandshakeFailure) => void,
-    tlsPassthroughListener: (socket: net.Socket, address: string, port?: number) => void
-): Promise<DestroyableServer<net.Server>> {
+export async function createComboServer(options: ComboServerOptions): Promise<DestroyableServer<net.Server>> {
     let server: net.Server;
     let tlsServer: tls.Server | undefined = undefined;
     let socksServer: net.Server | undefined = undefined;
+    let unknownProtocolServer: net.Server | undefined = undefined;
 
     if (options.https) {
         const ca = await getCA(options.https);
@@ -217,7 +220,7 @@ export async function createComboServer(
             tlsServer,
             options.https.tlsPassthrough,
             options.https.tlsInterceptOnly,
-            tlsPassthroughListener
+            options.tlsPassthroughListener
         );
     }
 
@@ -243,10 +246,29 @@ export async function createComboServer(
         });
     }
 
+    if (options.passthroughUnknownProtocols) {
+        unknownProtocolServer = net.createServer((socket) => {
+            const destination = socket[LastTunnelAddress];
+            if (!destination) {
+                server.emit('clientError', new Error('Unknown protocol without destination'), socket);
+                return;
+            }
+
+            const [host, port] = getAddressAndPort(destination);
+            if (!port) { // Both CONNECT & SOCKS require a port, so this shouldn't happen
+                server.emit('clientError', new Error('Unknown protocol without destination port'), socket);
+                return;
+            }
+
+            options.rawPassthroughListener(socket, host, port);
+        });
+    }
+
     server = httpolyglot.createServer({
         tls: tlsServer,
         socks: socksServer,
-    }, requestListener);
+        unknownProtocol: unknownProtocolServer
+    }, options.requestListener);
 
     // In Node v20, this option was added, rejecting all requests with no host header. While that's good, in
     // our case, we want to handle the garbage requests too, so we disable it:
@@ -282,7 +304,7 @@ export async function createComboServer(
 
         socket[LastHopEncrypted] = true;
         ifTlsDropped(socket, () => {
-            tlsClientErrorListener(socket, buildTlsError(socket, 'closed'));
+            options.tlsClientErrorListener(socket, buildTlsError(socket, 'closed'));
         });
     });
 
@@ -295,7 +317,7 @@ export async function createComboServer(
     });
 
     server.on('tlsClientError', (error: Error, socket: tls.TLSSocket) => {
-        tlsClientErrorListener(socket, buildTlsError(socket, getCauseFromError(error)));
+        options.tlsClientErrorListener(socket, buildTlsError(socket, getCauseFromError(error)));
     });
 
     // If the server receives a HTTP/HTTPS CONNECT request, Pretend to tunnel, then just re-handle:
@@ -431,30 +453,23 @@ function analyzeAndMaybePassThroughTls(
 
             // SNI is a good clue for where the request is headed, but an explicit proxy address (via
             // CONNECT or SOCKS) is even better. Note that this may be a hostname or IPv4/6 address:
-            let connectHostname: string | undefined;
-            let connectPort: string | undefined;
+            let upstreamHostname: string | undefined;
+            let upstreamPort: number | undefined;
             if (socket[LastTunnelAddress]) {
-                const lastColonIndex = socket[LastTunnelAddress].lastIndexOf(':');
-                if (lastColonIndex !== -1) {
-                    connectHostname = socket[LastTunnelAddress].slice(0, lastColonIndex);
-                    connectPort = socket[LastTunnelAddress].slice(lastColonIndex + 1);
-                } else {
-                    connectHostname = socket[LastTunnelAddress];
-                }
+                ([upstreamHostname, upstreamPort] = getAddressAndPort(socket[LastTunnelAddress]));
             }
 
             socket[TlsMetadata] = {
                 sniHostname,
-                connectHostname,
-                connectPort,
+                connectHostname: upstreamHostname,
+                connectPort: upstreamPort?.toString(),
                 clientAlpn: helloData.alpnProtocols,
                 ja3Fingerprint: calculateJa3FromFingerprintData(helloData.fingerprintData),
                 ja4Fingerprint: calculateJa4FromHelloData(helloData)
             };
 
-            if (shouldPassThrough(connectHostname, passThroughPatterns, interceptOnlyPatterns)) {
-                const upstreamPort = connectPort ? parseInt(connectPort, 10) : undefined;
-                passthroughListener(socket, connectHostname, upstreamPort);
+            if (shouldPassThrough(upstreamHostname, passThroughPatterns, interceptOnlyPatterns)) {
+                passthroughListener(socket, upstreamHostname, upstreamPort);
                 return; // Do not continue with TLS
             } else if (shouldPassThrough(sniHostname, passThroughPatterns, interceptOnlyPatterns)) {
                 passthroughListener(socket, sniHostname!); // Can't guess the port - not included in SNI

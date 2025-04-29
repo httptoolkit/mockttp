@@ -20,7 +20,8 @@ import {
     WebSocketMessage,
     WebSocketClose,
     AbortedRequest,
-    RuleEvent
+    RuleEvent,
+    RawPassthroughEvent
 } from "./types";
 import type { RequestRuleData } from "./rules/requests/request-rule";
 import type { WebSocketRuleData } from "./rules/websockets/websocket-rule";
@@ -546,6 +547,30 @@ export interface Mockttp {
     on(event: 'client-error', callback: (error: ClientError) => void): Promise<void>;
 
     /**
+     * Subscribe to hear about connections that are passed through the proxy without
+     * interception, due to the `passthrough` option.
+     *
+     * This is separate to TLS passthrough: raw passthrough happens automatically
+     * before any TLS handshake is received (so includes no TLS data, and may use any
+     * protocol) generally because the protocol on the connection is not HTTP. TLS
+     * passthrough happens after the TLS client hello has been received, only if it
+     * has matched a rule defined in the tlsPassthrough options (e.g. a specific
+     * hostname).
+     *
+     * @category Events
+     */
+    on(event: 'raw-passthrough-opened', callback: (req: RawPassthroughEvent) => void): Promise<void>;
+
+    /**
+     * Subscribe to hear about close of connections that are passed through the proxy
+     * without interception, due to the `passthrough` option. See `raw-passthrough-opened`
+     * for more details.
+     *
+     * @category Events
+     */
+    on(event: 'raw-passthrough-closed', callback: (req: RawPassthroughEvent) => void): Promise<void>;
+
+    /**
      * Some rules may emit events with metadata about request processing. For example,
      * passthrough rules may emit events about upstream server interactions.
      *
@@ -784,6 +809,29 @@ export interface MockttpOptions {
     socks?: boolean;
 
     /**
+     * An array of rules for traffic that should be passed through the proxy
+     * immediately, without interception or modification.
+     *
+     * This is subtly different to TLS passthrough/interceptOnly, which only
+     * apply to TLS connections, and only after the TLS client hello has been
+     * received and found to match a rule.
+     *
+     * For now, the only rule here is 'unknown-protocol', which enables
+     * passthrough of all unknown protocols (i.e. traffic that is definitely
+     * not HTTP, HTTP/2, WebSocket, or SOCKS traffic) which are received on
+     * a proxy connection (a connection carrying end-destination information,
+     * such as SOCKS - direct connections of unknown data without any final
+     * destination information from a preceeding tunnel cannot be passed
+     * through).
+     *
+     * Unknown protocol connections that cannot be passed through (because
+     * this rule is not enabled, or because they are not proxied with a
+     * destination specified) will be closed with a 400 Bad Request HTTP
+     * response like any other client HTTP error.
+     */
+    passthrough?: Array<'unknown-protocol'>;
+
+    /**
      * By default, requests that match no rules will receive an explanation of the
      * request & existing rules, followed by some suggested example Mockttp code
      * which could be used to match the rule.
@@ -834,6 +882,8 @@ export type SubscribableEvent =
     | 'tls-passthrough-closed'
     | 'tls-client-error'
     | 'client-error'
+    | 'raw-passthrough-opened'
+    | 'raw-passthrough-closed'
     | 'rule-event';
 
 /**
