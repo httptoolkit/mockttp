@@ -130,6 +130,32 @@ export interface RawPassthroughEvent {
     timingEvents: ConnectionTimingEvents;
 }
 
+export interface RawPassthroughDataEvent {
+    /**
+     * The id of the passthrough tunnel.
+     */
+    id: string;
+
+    /**
+     * The direction of the message, from the downstream perspective (received from the client,
+     * or sent back to the client).
+     */
+    direction: 'sent' | 'received';
+
+    /**
+     * The contents of the message as a raw buffer.
+     */
+    content: Uint8Array;
+
+    /**
+     * A high-precision floating-point monotonically increasing timestamp.
+     * Comparable and precise, but not related to specific current time.
+     *
+     * To link this to the current time, compare it to `timingEvents.startTime`.
+     */
+    eventTimestamp: number;
+}
+
 export interface ConnectionTimingEvents {
     /**
      * When the socket initially connected, in MS since the unix

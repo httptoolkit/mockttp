@@ -29,7 +29,8 @@ import {
     TlsPassthroughEvent,
     RuleEvent,
     RawTrailers,
-    RawPassthroughEvent
+    RawPassthroughEvent,
+    RawPassthroughDataEvent
 } from "../types";
 import { DestroyableServer } from "destroyable-server";
 import {
@@ -325,6 +326,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     public on(event: 'client-error', callback: (error: ClientError) => void): Promise<void>;
     public on(event: 'raw-passthrough-opened', callback: (req: RawPassthroughEvent) => void): Promise<void>;
     public on(event: 'raw-passthrough-closed', callback: (req: RawPassthroughEvent) => void): Promise<void>;
+    public on(event: 'raw-passthrough-data', callback: (req: RawPassthroughDataEvent) => void): Promise<void>;
     public on<T = unknown>(event: 'rule-event', callback: (event: RuleEvent<T>) => void): Promise<void>;
     public on(event: string, callback: (...args: any[]) => void): Promise<void> {
         this.eventEmitter.on(event, callback);
@@ -1134,6 +1136,29 @@ ${await this.suggestRule(request)}`
 
         socket.pipe(upstreamSocket);
         upstreamSocket.pipe(socket);
+
+        if (type === 'raw') {
+            socket.on('data', (data) => {
+                setImmediate(() => {
+                    this.eventEmitter.emit('raw-passthrough-data', {
+                        id: eventData.id,
+                        direction: 'received',
+                        content: data,
+                        eventTimestamp: now()
+                    } satisfies RawPassthroughDataEvent);
+                });
+            });
+            upstreamSocket.on('data', (data) => {
+                setImmediate(() => {
+                    this.eventEmitter.emit('raw-passthrough-data', {
+                        id: eventData.id,
+                        direction: 'sent',
+                        content: data,
+                        eventTimestamp: now()
+                    } satisfies RawPassthroughDataEvent);
+                });
+            });
+        }
 
         socket.on('error', () => upstreamSocket.destroy());
         upstreamSocket.on('error', () => socket.destroy());

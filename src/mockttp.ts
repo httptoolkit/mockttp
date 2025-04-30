@@ -21,7 +21,8 @@ import {
     WebSocketClose,
     AbortedRequest,
     RuleEvent,
-    RawPassthroughEvent
+    RawPassthroughEvent,
+    RawPassthroughDataEvent
 } from "./types";
 import type { RequestRuleData } from "./rules/requests/request-rule";
 import type { WebSocketRuleData } from "./rules/websockets/websocket-rule";
@@ -571,6 +572,15 @@ export interface Mockttp {
     on(event: 'raw-passthrough-closed', callback: (req: RawPassthroughEvent) => void): Promise<void>;
 
     /**
+     * Subscribe to hear about each chunk of data that is passed through the raw passthrough
+     * non-intercepted tunnels, due to the `passthrough` option. See `raw-passthrough-opened`
+     * for more details.
+     *
+     * @category Events
+     */
+    on(event: 'raw-passthrough-data', callback: (req: RawPassthroughDataEvent) => void): Promise<void>;
+
+    /**
      * Some rules may emit events with metadata about request processing. For example,
      * passthrough rules may emit events about upstream server interactions.
      *
@@ -884,6 +894,7 @@ export type SubscribableEvent =
     | 'client-error'
     | 'raw-passthrough-opened'
     | 'raw-passthrough-closed'
+    | 'raw-passthrough-data'
     | 'rule-event';
 
 /**

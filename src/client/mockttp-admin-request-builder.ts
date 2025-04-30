@@ -481,6 +481,14 @@ export class MockttpAdminRequestBuilder {
                     timingEvents
                 }
             }`,
+            'raw-passthrough-data': gql`subscription OnRawPassthroughData {
+                rawPassthroughData {
+                    id
+                    direction
+                    content
+                    eventTimestamp
+                }
+            }`,
             'rule-event': gql`subscription OnRuleEvent {
                 ruleEvent {
                     requestId
@@ -510,6 +518,8 @@ export class MockttpAdminRequestBuilder {
                     }
                 } else if (event === 'websocket-message-received' || event === 'websocket-message-sent') {
                     normalizeWebSocketMessage(data);
+                } else if (event === 'raw-passthrough-data') {
+                    data.content = Buffer.from(data.content, 'base64');
                 } else if (event === 'abort') {
                     normalizeHttpMessage(data, event);
                     data.error = data.error ? JSON.parse(data.error) : undefined;

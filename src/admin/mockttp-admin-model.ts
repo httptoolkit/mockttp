@@ -34,6 +34,7 @@ const TLS_CLIENT_ERROR_TOPIC = 'tls-client-error';
 const CLIENT_ERROR_TOPIC = 'client-error';
 const RAW_PASSTHROUGH_OPENED_TOPIC = 'raw-passthrough-opened';
 const RAW_PASSTHROUGH_CLOSED_TOPIC = 'raw-passthrough-closed';
+const RAW_PASSTHROUGH_DATA_TOPIC = 'raw-passthrough-data';
 const RULE_EVENT_TOPIC = 'rule-event';
 
 async function buildMockedEndpointData(endpoint: ServerMockedEndpoint): Promise<MockedEndpointData> {
@@ -143,6 +144,12 @@ export function buildAdminServerModel(
     mockServer.on('raw-passthrough-closed', (evt) => {
         pubsub.publish(RAW_PASSTHROUGH_CLOSED_TOPIC, {
             rawPassthroughClosed: evt
+        })
+    });
+
+    mockServer.on('raw-passthrough-data', (evt) => {
+        pubsub.publish(RAW_PASSTHROUGH_DATA_TOPIC, {
+            rawPassthroughData: evt
         })
     });
 
@@ -256,6 +263,9 @@ export function buildAdminServerModel(
             },
             rawPassthroughClosed: {
                 subscribe: () => pubsub.asyncIterator(RAW_PASSTHROUGH_CLOSED_TOPIC)
+            },
+            rawPassthroughData: {
+                subscribe: () => pubsub.asyncIterator(RAW_PASSTHROUGH_DATA_TOPIC)
             },
             ruleEvent: {
                 subscribe: () => pubsub.asyncIterator(RULE_EVENT_TOPIC)

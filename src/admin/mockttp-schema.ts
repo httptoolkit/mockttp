@@ -33,6 +33,7 @@ export const MockttpSchema = gql`
         failedTlsRequest: TlsHandshakeFailure!
         rawPassthroughOpened: RawPassthroughEvent!
         rawPassthroughClosed: RawPassthroughEvent!
+        rawPassthroughData: RawPassthroughDataEvent!
         failedClientRequest: ClientError!
         ruleEvent: RuleEvent!
     }
@@ -128,6 +129,13 @@ export const MockttpSchema = gql`
         remotePort: Int!
         tags: [String!]!
         timingEvents: Json!
+    }
+
+    type RawPassthroughDataEvent {
+        id: String!
+        direction: String!
+        content: Buffer!
+        eventTimestamp: Float!
     }
 
     type RuleEvent {
