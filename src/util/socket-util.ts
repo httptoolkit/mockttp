@@ -25,6 +25,7 @@ export const LastTunnelAddress = Symbol('last-hop-address');
 export const TlsMetadata = Symbol('tls-metadata');
 export const ClientErrorInProgress = Symbol('client-error-in-progress');
 export const SocketTimingInfo = Symbol('socket-timing-info');
+export const SocketMetadata = Symbol('socket-metadata');
 
 declare module 'net' {
     interface Socket {
@@ -66,6 +67,21 @@ declare module 'net' {
         [TlsMetadata]?: TlsSocketMetadata;
         [InitialRemoteAddress]?: string;
         [InitialRemotePort]?: number;
+
+        /**
+         * Arbitrary custom metadata that may be added during socket processing,
+         * e.g. with the SOCKS custom-metadata auth extension.
+         *
+         * Currently the only metadata that is exposed is `tags`, which are
+         * attached to each request on this connection with a `socket-metadata:`
+         * prefix. This can be used to provide tags during SOCKS connection
+         * setup that will then be visible on all 'response' event data (for
+         * example) later on.
+         */
+        [SocketMetadata]?: {
+            tags?: string[];
+            [key: string]: any;
+        }
     }
 }
 
@@ -307,7 +323,7 @@ export function buildRawSocketEventData(
             socket._parent?.remotePort ||
             socket[InitialRemotePort]!,
 
-        tags: [],
+        tags: getSocketMetadataTags(socket),
         timingEvents: {
             startTime: timingInfo.initialSocket,
             connectTimestamp: timingInfo.initialSocketTimestamp,
@@ -338,4 +354,8 @@ export function buildTlsSocketEventData(
 
 export function buildSocketTimingInfo(): Required<net.Socket>[typeof SocketTimingInfo] {
     return { initialSocket: Date.now(), initialSocketTimestamp: now() };
+}
+
+export function getSocketMetadataTags(socket: net.Socket | undefined) {
+    return (socket?.[SocketMetadata]?.tags || []).map((tag: string) => `socket-metadata:${tag}`);
 }

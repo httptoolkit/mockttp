@@ -33,10 +33,11 @@ import {
     TlsMetadata,
     TlsSetupCompleted,
     getAddressAndPort,
-    resetOrDestroy
+    resetOrDestroy,
+    SocketMetadata
 } from '../util/socket-util';
 import { MockttpHttpsOptions } from '../mockttp';
-import { buildSocksServer, SocksTcpAddress } from './socks-server';
+import { buildSocksServer, SocksServerOptions, SocksTcpAddress } from './socks-server';
 
 // Hardcore monkey-patching: force TLSSocket to link servername & remoteAddress to
 // sockets as soon as they're available, without waiting for the handshake to fully
@@ -145,7 +146,7 @@ export interface ComboServerOptions {
     debug: boolean;
     https: MockttpHttpsOptions | undefined;
     http2: boolean | 'fallback';
-    socks: boolean;
+    socks: boolean | SocksServerOptions;
     passthroughUnknownProtocols: boolean;
 
     requestListener: (req: http.IncomingMessage, res: http.ServerResponse) => void;
@@ -225,7 +226,7 @@ export async function createComboServer(options: ComboServerOptions): Promise<De
     }
 
     if (options.socks) {
-        socksServer = buildSocksServer();
+        socksServer = buildSocksServer(options.socks === true ? {} : options.socks);
         socksServer.on('socks-tcp-connect', (socket: net.Socket, address: SocksTcpAddress) => {
             const addressString =
                 address.type === 'ipv4'
@@ -291,8 +292,7 @@ export async function createComboServer(options: ComboServerOptions): Promise<De
         if (parentSocket) {
             // Sometimes wrapper TLS sockets created by the HTTP/2 server don't include the
             // underlying socket details, so it's better to make sure we copy them up.
-            copyAddressDetails(parentSocket, socket);
-            copyTimingDetails(parentSocket, socket);
+            inheritSocketDetails(parentSocket, socket);
             // With TLS metadata, we only propagate directly from parent sockets, not through
             // CONNECT etc - we only want it if the final hop is TLS, previous values don't matter.
             socket[TlsMetadata] ??= parentSocket[TlsMetadata];
@@ -371,8 +371,7 @@ export async function createComboServer(options: ComboServerOptions): Promise<De
 
         // Send a 200 OK response, and start the tunnel:
         res.writeHead(200, {});
-        copyAddressDetails(res.socket, res.stream);
-        copyTimingDetails(res.socket, res.stream);
+        inheritSocketDetails(res.socket, res.stream);
         res.stream[LastTunnelAddress] = connectUrl;
 
         // When layering HTTP/2 on JS streams, we have to make sure the JS stream won't autoclose
@@ -390,39 +389,37 @@ export async function createComboServer(options: ComboServerOptions): Promise<De
 }
 
 
-const SOCKET_ADDRESS_METADATA_FIELDS = [
+const SOCKET_METADATA = [
     'localAddress',
     'localPort',
     'remoteAddress',
     'remotePort',
+    SocketTimingInfo,
+    SocketMetadata,
     LastTunnelAddress
 ] as const;
 
-// Update the target socket(-ish) with the address details from the source socket,
-// iff the target has no details of its own.
-function copyAddressDetails(
-    source: SocketIsh<typeof SOCKET_ADDRESS_METADATA_FIELDS[number]>,
-    target: SocketIsh<typeof SOCKET_ADDRESS_METADATA_FIELDS[number]>
+function inheritSocketDetails(
+    source: SocketIsh<typeof SOCKET_METADATA[number]>,
+    target: SocketIsh<typeof SOCKET_METADATA[number]>
 ) {
+    // Update the target socket(-ish) with the assorted metadata from the source socket,
+    // iff the target has no details of its own.
+
+    // Make sure all properties are writable - HTTP/2 streams notably try to block this.
     Object.defineProperties(target, _.zipObject(
-        SOCKET_ADDRESS_METADATA_FIELDS,
-        _.range(SOCKET_ADDRESS_METADATA_FIELDS.length).map(() => ({ writable: true }))
+        SOCKET_METADATA,
+        _.range(SOCKET_METADATA.length).map(() => ({ writable: true }))
     ) as PropertyDescriptorMap);
 
-    SOCKET_ADDRESS_METADATA_FIELDS.forEach((fieldName) => {
+    for (let fieldName of SOCKET_METADATA) {
         if (target[fieldName] === undefined) {
-            (target as any)[fieldName] = source[fieldName];
+            if (typeof source[fieldName] === 'object') {
+                (target as any)[fieldName] = _.cloneDeep(source[fieldName]);
+            } else {
+                (target as any)[fieldName] = source[fieldName];
+            }
         }
-    });
-}
-
-function copyTimingDetails<T extends SocketIsh<typeof SocketTimingInfo>>(
-    source: SocketIsh<typeof SocketTimingInfo>,
-    target: T
-): asserts target is T & { [SocketTimingInfo]: Required<net.Socket>[typeof SocketTimingInfo] } {
-    if (!target[SocketTimingInfo]) {
-        // Clone timing info, don't copy it - child sockets get their own independent timing stats
-        target[SocketTimingInfo] = Object.assign({}, source[SocketTimingInfo]);
     }
 }
 

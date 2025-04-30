@@ -1121,7 +1121,10 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
 
                 options.emitEventCallback('passthrough-abort', {
                     downstreamAborted: !!(serverReq?.aborted),
-                    tags: buildUpstreamErrorTags(e),
+                    tags: [
+                        ...clientReq.tags,
+                        buildUpstreamErrorTags(e)
+                    ],
                     error: {
                         name: e.name,
                         code: e.code,

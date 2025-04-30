@@ -26,6 +26,7 @@ import {
 } from "./types";
 import type { RequestRuleData } from "./rules/requests/request-rule";
 import type { WebSocketRuleData } from "./rules/websockets/websocket-rule";
+import type { SocksServerOptions } from "./server/socks-server";
 
 export type PortRange = { startPort: number, endPort: number };
 
@@ -811,12 +812,15 @@ export interface MockttpOptions {
 
     /**
      * Should the server accept incoming SOCKS connections? Defaults to false.
-     * If set to true, the server will listen for incoming SOCKS connections
-     * on the same port as the HTTP server, unwrap received connections, and
-     * handle them like any other incoming TCP connection (intercepting HTTP(S)
-     * from within the SOCKS connection as normal).
+     *
+     * If set to true or if detailed options are provided, the server will listen
+     * for incoming SOCKS connections on the same port as the HTTP server, unwrap
+     * received connections, and handle them like any other incoming TCP connection
+     * (intercepting HTTP(S) from within the SOCKS connection as normal).
+     *
+     * The only supported option for now is `authMethods`.
      */
-    socks?: boolean;
+    socks?: boolean | SocksServerOptions;
 
     /**
      * An array of rules for traffic that should be passed through the proxy

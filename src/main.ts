@@ -2,6 +2,7 @@ export type { MaybePromise } from '@httptoolkit/util';
 
 import { Mockttp, MockttpOptions, MockttpHttpsOptions, SubscribableEvent, PortRange } from "./mockttp";
 import { MockttpServer } from "./server/mockttp-server";
+import { SocksServerOptions } from "./server/socks-server";
 import {
     MockttpClient,
     MockttpClientOptions
@@ -19,7 +20,8 @@ export type {
     MockttpClientOptions,
     MockttpAdminServerOptions,
     SubscribableEvent,
-    PortRange
+    PortRange,
+    SocksServerOptions
 };
 
 // Export now-renamed types with the old aliases to provide backward compat and

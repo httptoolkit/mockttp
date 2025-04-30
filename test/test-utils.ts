@@ -17,7 +17,7 @@ import {
 } from "formdata-node";
 import { RequestPromise } from 'request-promise-native';
 import * as semver from 'semver';
-import { SocksClient } from 'socks';
+import { SocksClient, SocksProxy } from 'socks';
 
 import chai = require("chai");
 import chaiAsPromised = require("chai-as-promised");
@@ -201,12 +201,17 @@ export async function openRawTlsSocket(
     });
 }
 
-export async function openSocksSocket(server: Mockttp, targetHost: string, targetPort: number, socksType: 4 | 5 = 5) {
+export async function openSocksSocket(
+    server: Mockttp,
+    targetHost: string,
+    targetPort: number,
+    options: Omit<SocksProxy, 'port'> = { type: 5 }
+) {
     const socksConn = await SocksClient.createConnection({
         proxy: {
             host: '127.0.0.1',
             port: server.port,
-            type: socksType
+            ...options
         },
         command: 'connect',
         destination: {

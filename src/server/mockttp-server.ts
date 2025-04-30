@@ -56,7 +56,9 @@ import {
     LastTunnelAddress,
     TlsSetupCompleted,
     isSocketLoop,
-    resetOrDestroy
+    resetOrDestroy,
+    SocketMetadata,
+    getSocketMetadataTags
 } from "../util/socket-util";
 import {
     parseRequestBody,
@@ -77,6 +79,7 @@ import {
 import { AbortError } from "../rules/requests/request-handlers";
 import { WebSocketRuleData, WebSocketRule } from "../rules/websockets/websocket-rule";
 import { RejectWebSocketHandler, WebSocketHandler } from "../rules/websockets/websocket-handlers";
+import { SocksServerOptions } from "./socks-server";
 
 type ExtendedRawRequest = (http.IncomingMessage | http2.Http2ServerRequest) & {
     protocol?: string;
@@ -99,7 +102,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
 
     private httpsOptions: MockttpHttpsOptions | undefined;
     private isHttp2Enabled: boolean | 'fallback';
-    private socksEnabled: boolean;
+    private socksOptions: boolean | SocksServerOptions;
     private passthroughUnknownProtocols: boolean;
     private maxBodySize: number;
 
@@ -119,7 +122,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
 
         this.httpsOptions = options.https;
         this.isHttp2Enabled = options.http2 ?? 'fallback';
-        this.socksEnabled = options.socks ?? false;
+        this.socksOptions = options.socks ?? false;
         this.passthroughUnknownProtocols = options.passthrough?.includes('unknown-protocol') ?? false;
         this.maxBodySize = options.maxBodySize ?? Infinity;
         this.eventEmitter = new EventEmitter();
@@ -146,7 +149,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             debug: this.debug,
             https: this.httpsOptions,
             http2: this.isHttp2Enabled,
-            socks: this.socksEnabled,
+            socks: this.socksOptions,
             passthroughUnknownProtocols: this.passthroughUnknownProtocols,
 
             requestListener: this.app,
@@ -629,7 +632,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         }
 
         const id = uuid();
-        const tags: string[] = [];
+        const tags: string[] = getSocketMetadataTags(req.socket);
 
         const timingEvents: TimingEvents = {
             startTime: Date.now(),
@@ -986,7 +989,10 @@ ${await this.suggestRule(request)}`
 
             const commonParams = {
                 id: uuid(),
-                tags: [`client-error:${error.code || 'UNKNOWN'}`],
+                tags: [
+                    `client-error:${error.code || 'UNKNOWN'}`,
+                    ...getSocketMetadataTags(socket)
+                ],
                 timingEvents: { startTime: Date.now(), startTimestamp: now() } as TimingEvents
             };
 
@@ -1076,7 +1082,8 @@ ${await this.suggestRule(request)}`
                 id: uuid(),
                 tags: [
                     `client-error:${error.code || 'UNKNOWN'}`,
-                    ...(isBadPreface ? ['client-error:bad-preface'] : [])
+                    ...(isBadPreface ? ['client-error:bad-preface'] : []),
+                    ...getSocketMetadataTags(socket)
                 ],
                 httpVersion: '2',
 
