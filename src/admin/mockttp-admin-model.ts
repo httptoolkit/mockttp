@@ -18,24 +18,27 @@ import type { RequestRuleData } from "../rules/requests/request-rule";
 import type { WebSocketRuleData } from "../rules/websockets/websocket-rule";
 
 import { deserializeRuleData, deserializeWebSocketRuleData } from "../rules/rule-deserialization";
+import { SubscribableEvent } from "../main";
 
-const REQUEST_INITIATED_TOPIC = 'request-initiated';
-const REQUEST_RECEIVED_TOPIC = 'request-received';
-const RESPONSE_COMPLETED_TOPIC = 'response-completed';
-const WEBSOCKET_REQUEST_TOPIC = 'websocket-request';
-const WEBSOCKET_ACCEPTED_TOPIC = 'websocket-accepted';
-const WEBSOCKET_MESSAGE_RECEIVED_TOPIC = 'websocket-message-received';
-const WEBSOCKET_MESSAGE_SENT_TOPIC = 'websocket-message-sent';
-const WEBSOCKET_CLOSE_TOPIC = 'websocket-close';
-const REQUEST_ABORTED_TOPIC = 'request-aborted';
-const TLS_PASSTHROUGH_OPENED_TOPIC = 'tls-passthrough-opened';
-const TLS_PASSTHROUGH_CLOSED_TOPIC = 'tls-passthrough-closed';
-const TLS_CLIENT_ERROR_TOPIC = 'tls-client-error';
-const CLIENT_ERROR_TOPIC = 'client-error';
-const RAW_PASSTHROUGH_OPENED_TOPIC = 'raw-passthrough-opened';
-const RAW_PASSTHROUGH_CLOSED_TOPIC = 'raw-passthrough-closed';
-const RAW_PASSTHROUGH_DATA_TOPIC = 'raw-passthrough-data';
-const RULE_EVENT_TOPIC = 'rule-event';
+const graphqlSubscriptionPairs = Object.entries({
+    'requestInitiated': 'request-initiated',
+    'requestReceived': 'request',
+    'responseCompleted': 'response',
+    'webSocketRequest': 'websocket-request',
+    'webSocketAccepted': 'websocket-accepted',
+    'webSocketMessageReceived': 'websocket-message-received',
+    'webSocketMessageSent': 'websocket-message-sent',
+    'webSocketClose': 'websocket-close',
+    'requestAborted': 'abort',
+    'tlsPassthroughOpened': 'tls-passthrough-opened',
+    'tlsPassthroughClosed': 'tls-passthrough-closed',
+    'failedTlsRequest': 'tls-client-error',
+    'failedClientRequest': 'client-error',
+    'rawPassthroughOpened': 'raw-passthrough-opened',
+    'rawPassthroughClosed': 'raw-passthrough-closed',
+    'rawPassthroughData': 'raw-passthrough-data',
+    'ruleEvent': 'rule-event'
+} satisfies { [key: string]: SubscribableEvent });
 
 async function buildMockedEndpointData(endpoint: ServerMockedEndpoint): Promise<MockedEndpointData> {
     return {
@@ -53,111 +56,17 @@ export function buildAdminServerModel(
 ): IResolvers {
     const pubsub = new PubSub();
 
-    mockServer.on('request-initiated', (evt) => {
-        pubsub.publish(REQUEST_INITIATED_TOPIC, {
-            requestInitiated: evt
-        })
-    });
+    for (let [gqlName, eventName] of graphqlSubscriptionPairs) {
+        mockServer.on(eventName as any, (evt) => {
+            pubsub.publish(eventName, { [gqlName]: evt });
+        });
+    }
 
-    mockServer.on('request', (evt) => {
-        pubsub.publish(REQUEST_RECEIVED_TOPIC, {
-            requestReceived: evt
-        })
-    });
-
-    mockServer.on('response', (evt) => {
-        pubsub.publish(RESPONSE_COMPLETED_TOPIC, {
-            responseCompleted: evt
-        })
-    });
-
-    mockServer.on('websocket-request', (evt) => {
-        pubsub.publish(WEBSOCKET_REQUEST_TOPIC, {
-            webSocketRequest: evt
-        })
-    });
-
-    mockServer.on('websocket-accepted', (evt) => {
-        pubsub.publish(WEBSOCKET_ACCEPTED_TOPIC, {
-            webSocketAccepted: evt
-        })
-    });
-
-    mockServer.on('websocket-message-received', (evt) => {
-        pubsub.publish(WEBSOCKET_MESSAGE_RECEIVED_TOPIC, {
-            webSocketMessageReceived: evt
-        })
-    });
-
-    mockServer.on('websocket-message-sent', (evt) => {
-        pubsub.publish(WEBSOCKET_MESSAGE_SENT_TOPIC, {
-            webSocketMessageSent: evt
-        })
-    });
-
-    mockServer.on('websocket-close', (evt) => {
-        pubsub.publish(WEBSOCKET_CLOSE_TOPIC, {
-            webSocketClose: evt
-        })
-    });
-
-    mockServer.on('abort', (evt) => {
-        pubsub.publish(REQUEST_ABORTED_TOPIC, {
-            requestAborted: Object.assign(evt, {
-                // Backward compat: old clients expect this to be present. In future this can be
-                // removed and abort events can lose the 'body' in the schema.
-                body: Buffer.alloc(0)
-            })
-        })
-    });
-
-    mockServer.on('tls-passthrough-opened', (evt) => {
-        pubsub.publish(TLS_PASSTHROUGH_OPENED_TOPIC, {
-            tlsPassthroughOpened: evt
-        })
-    });
-
-    mockServer.on('tls-passthrough-closed', (evt) => {
-        pubsub.publish(TLS_PASSTHROUGH_CLOSED_TOPIC, {
-            tlsPassthroughClosed: evt
-        })
-    });
-
-    mockServer.on('tls-client-error', (evt) => {
-        pubsub.publish(TLS_CLIENT_ERROR_TOPIC, {
-            failedTlsRequest: evt
-        })
-    });
-
-    mockServer.on('client-error', (evt) => {
-        pubsub.publish(CLIENT_ERROR_TOPIC, {
-            failedClientRequest: evt
-        })
-    });
-
-    mockServer.on('raw-passthrough-opened', (evt) => {
-        pubsub.publish(RAW_PASSTHROUGH_OPENED_TOPIC, {
-            rawPassthroughOpened: evt
-        })
-    });
-
-    mockServer.on('raw-passthrough-closed', (evt) => {
-        pubsub.publish(RAW_PASSTHROUGH_CLOSED_TOPIC, {
-            rawPassthroughClosed: evt
-        })
-    });
-
-    mockServer.on('raw-passthrough-data', (evt) => {
-        pubsub.publish(RAW_PASSTHROUGH_DATA_TOPIC, {
-            rawPassthroughData: evt
-        })
-    });
-
-    mockServer.on('rule-event', (evt) => {
-        pubsub.publish(RULE_EVENT_TOPIC, {
-            ruleEvent: evt
-        })
-    });
+    const subscriptionResolvers = Object.fromEntries(graphqlSubscriptionPairs.map(([gqlName, eventName]) => ([
+        gqlName, {
+            subscribe: () => pubsub.asyncIterator(eventName)
+        }
+    ])));
 
     return {
         Query: {
@@ -218,59 +127,7 @@ export function buildAdminServerModel(
             }
         },
 
-        Subscription: {
-            requestInitiated: {
-                subscribe: () => pubsub.asyncIterator(REQUEST_INITIATED_TOPIC)
-            },
-            requestReceived: {
-                subscribe: () => pubsub.asyncIterator(REQUEST_RECEIVED_TOPIC)
-            },
-            responseCompleted: {
-                subscribe: () => pubsub.asyncIterator(RESPONSE_COMPLETED_TOPIC)
-            },
-            webSocketRequest: {
-                subscribe: () => pubsub.asyncIterator(WEBSOCKET_REQUEST_TOPIC)
-            },
-            webSocketAccepted: {
-                subscribe: () => pubsub.asyncIterator(WEBSOCKET_ACCEPTED_TOPIC)
-            },
-            webSocketMessageReceived: {
-                subscribe: () => pubsub.asyncIterator(WEBSOCKET_MESSAGE_RECEIVED_TOPIC)
-            },
-            webSocketMessageSent: {
-                subscribe: () => pubsub.asyncIterator(WEBSOCKET_MESSAGE_SENT_TOPIC)
-            },
-            webSocketClose: {
-                subscribe: () => pubsub.asyncIterator(WEBSOCKET_CLOSE_TOPIC)
-            },
-            requestAborted: {
-                subscribe: () => pubsub.asyncIterator(REQUEST_ABORTED_TOPIC)
-            },
-            tlsPassthroughOpened: {
-                subscribe: () => pubsub.asyncIterator(TLS_PASSTHROUGH_OPENED_TOPIC)
-            },
-            tlsPassthroughClosed: {
-                subscribe: () => pubsub.asyncIterator(TLS_PASSTHROUGH_CLOSED_TOPIC)
-            },
-            failedTlsRequest: {
-                subscribe: () => pubsub.asyncIterator(TLS_CLIENT_ERROR_TOPIC)
-            },
-            failedClientRequest: {
-                subscribe: () => pubsub.asyncIterator(CLIENT_ERROR_TOPIC)
-            },
-            rawPassthroughOpened: {
-                subscribe: () => pubsub.asyncIterator(RAW_PASSTHROUGH_OPENED_TOPIC)
-            },
-            rawPassthroughClosed: {
-                subscribe: () => pubsub.asyncIterator(RAW_PASSTHROUGH_CLOSED_TOPIC)
-            },
-            rawPassthroughData: {
-                subscribe: () => pubsub.asyncIterator(RAW_PASSTHROUGH_DATA_TOPIC)
-            },
-            ruleEvent: {
-                subscribe: () => pubsub.asyncIterator(RULE_EVENT_TOPIC)
-            }
-        },
+        Subscription: subscriptionResolvers,
 
         Request: {
             body: (request: CompletedRequest) => {

@@ -31,10 +31,10 @@ export const MockttpSchema = gql`
         tlsPassthroughOpened: TlsPassthroughEvent!
         tlsPassthroughClosed: TlsPassthroughEvent!
         failedTlsRequest: TlsHandshakeFailure!
+        failedClientRequest: ClientError!
         rawPassthroughOpened: RawPassthroughEvent!
         rawPassthroughClosed: RawPassthroughEvent!
         rawPassthroughData: RawPassthroughDataEvent!
-        failedClientRequest: ClientError!
         ruleEvent: RuleEvent!
     }
 
@@ -203,8 +203,6 @@ export const MockttpSchema = gql`
 
         headers: Json!
         rawHeaders: Json!
-
-        body: Buffer!
 
         error: Json
     }
