@@ -296,10 +296,15 @@ async function handleUsernamePasswordMetadata(socket: net.Socket) {
         return false;
     }
 
-    const passwordString = password.toString('utf8');
     let metadataJson: any = {};
     try {
-        metadataJson = JSON.parse(passwordString);
+        // Base64'd json always starts with 'e' (typically eyI), so we can use this fairly
+        // reliably to detect base64 (and definitely exclude valid object JSON encoding).
+        const decoded = password[0] === 'e'.charCodeAt(0)
+            ? Buffer.from(password.toString('utf8'), 'base64url').toString('utf8')
+            : password.toString('utf8');
+
+        metadataJson = JSON.parse(decoded);
     } catch (e) {
         socket.end(Buffer.from([
             0x05,

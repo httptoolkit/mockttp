@@ -269,6 +269,25 @@ nodeOnly(() => {
                 expect(responseData.tags).to.deep.equal(['socket-metadata:response-test-tag']);
             });
 
+            it("should accept and use username/password base64 metadata SOCKSv5 connections", async () => {
+                const responseEventDeferred = getDeferred<CompletedResponse>();
+                await server.on('response', (res) => responseEventDeferred.resolve(res));
+
+                const socksSocket = await openSocksSocket(server, '127.0.0.1', remoteServer.port, {
+                    type: 5,
+                    userId: "mockttp-metadata",
+                    password: Buffer.from(
+                        JSON.stringify({ tags: ['base64d-test-tag'] })
+                    ).toString('base64url')
+                });
+
+                const response = await h1RequestOverSocket(socksSocket, remoteServer.url);
+                expect(response.statusCode).to.equal(200);
+
+                const responseData = await responseEventDeferred;
+                expect(responseData.tags).to.deep.equal(['socket-metadata:base64d-test-tag']);
+            });
+
             it("to reject username/password auth with unparseable JSON metadata", async () => {
                 try {
                     await openSocksSocket(server, '127.0.0.1', remoteServer.port, {
