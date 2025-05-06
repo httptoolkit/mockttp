@@ -146,7 +146,7 @@ nodeOnly(() => {
                 try {
                     await openSocksSocket(server, '127.0.0.1', remoteServer.port, {
                         type: 5,
-                        userId: "mockttp-metadata",
+                        userId: "metadata",
                         password: "{}"
                     });
                     expect.fail("Should have failed");
@@ -258,7 +258,7 @@ nodeOnly(() => {
 
                 const socksSocket = await openSocksSocket(server, '127.0.0.1', remoteServer.port, {
                     type: 5,
-                    userId: "mockttp-metadata",
+                    userId: "metadata",
                     password: JSON.stringify({ tags: ['response-test-tag'] })
                 });
 
@@ -275,7 +275,7 @@ nodeOnly(() => {
 
                 const socksSocket = await openSocksSocket(server, '127.0.0.1', remoteServer.port, {
                     type: 5,
-                    userId: "mockttp-metadata",
+                    userId: "metadata",
                     password: Buffer.from(
                         JSON.stringify({ tags: ['base64d-test-tag'] })
                     ).toString('base64url')
@@ -292,7 +292,7 @@ nodeOnly(() => {
                 try {
                     await openSocksSocket(server, '127.0.0.1', remoteServer.port, {
                         type: 5,
-                        userId: "mockttp-metadata",
+                        userId: "metadata",
                         password: "}}}{{{{{{{{{{{{{{{{{" // Very invalid JSON
                     });
                     expect.fail("Should have failed");

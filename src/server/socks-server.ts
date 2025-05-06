@@ -23,7 +23,7 @@ export interface SocksServerOptions {
      *   field in this metadata is reserved for future use.
      * - `user-password-metadata`: Use standard username/password authentication
      *   method (0x02) to smuggle metadata - this does not really authenticate the
-     *   user. The username must be `mockttp-metadata` and the password
+     *   user. The username must be `metadata` and the password
      *   must be a JSON object of up to 255 chars in total. All other usernames
      *   & passwords will be rejected. This metadata is used just like
      *   `custom-metadata` but this is compatible with existing SOCKS clients.
@@ -288,7 +288,7 @@ async function handleUsernamePasswordMetadata(socket: net.Socket) {
     const passwordLength = await readBytes(socket, 1);
     const password = await readBytes(socket, passwordLength[0]);
 
-    if (username.toString('utf8') !== 'mockttp-metadata') {
+    if (username.toString('utf8') !== 'metadata') {
         socket.end(Buffer.from([
             0x05,
             0x01 // Generic rejection
