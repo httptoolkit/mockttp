@@ -20,7 +20,6 @@ import {
 } from '../requests/request-handlers';
 import { getEffectivePort } from '../../util/url';
 import { resetOrDestroy } from '../../util/socket-util';
-import { LastHopEncrypted } from '../../util/socket-extensions';
 import { isHttp2 } from '../../util/request-utils';
 import {
     findRawHeader,
@@ -39,7 +38,8 @@ import {
     getClientRelativeHostname,
     getDnsLookupFunction,
     shouldUseStrictHttps,
-    getTrustedCAs
+    getTrustedCAs,
+    getUrlHostname
 } from '../passthrough-handling';
 
 import {
@@ -243,7 +243,9 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
     async handle(req: OngoingRequest, socket: net.Socket, head: Buffer, options: RequestHandlerOptions) {
         this.initializeWsServer();
 
-        let { protocol, hostname, port, path } = url.parse(req.url!);
+        let { protocol, path } = url.parse(req.url!);
+        let hostname: string | null = req.destination.hostname;
+        let port: string | null = req.destination.port.toString();
         const rawHeaders = req.rawHeaders;
 
         const reqMessage = req as unknown as http.IncomingMessage;
@@ -288,26 +290,9 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
             } // Otherwise: falsey means don't touch it.
 
             await this.connectUpstream(wsUrl, reqMessage, rawHeaders, socket, head, options);
-        } else if (!hostname) { // No hostname in URL means transparent proxy, so use Host header
-            const hostHeader = req.headers[hostHeaderName];
-            [ hostname, port ] = hostHeader!.split(':');
-
-            // LastHopEncrypted is set in http-combo-server, for requests that use TLS in the
-            // inner-most tunnel (or direct connection) to us.
-            if (socket[LastHopEncrypted] !== undefined) {
-                protocol = socket[LastHopEncrypted] ? 'wss' : 'ws';
-            } else {
-                protocol = reqMessage.connection.encrypted ? 'wss' : 'ws';
-            }
-
-            const wsUrl = `${protocol}://${hostname}${port ? ':' + port : ''}${path}`;
-            await this.connectUpstream(wsUrl, reqMessage, rawHeaders, socket, head, options);
         } else {
             // Connect directly according to the specified URL
-            const wsUrl = `${
-                protocol!.replace('http', 'ws')
-            }//${hostname}${port ? ':' + port : ''}${path}`;
-
+            const wsUrl = `${protocol}//${hostname}${port ? ':' + port : ''}${path}`;
             await this.connectUpstream(wsUrl, reqMessage, rawHeaders, socket, head, options);
         }
     }
@@ -407,12 +392,16 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
                 }
             }).flat() as RawHeaders;
 
+            // This effectively matches the URL preprocessing logic in MockttpServer.preprocessRequest,
+            // so that the resulting event matches the req.url property elsewhere.
+            const urlHost = getUrlHostname(upstreamReq.host, rawHeaders);
+
             options.emitEventCallback('passthrough-websocket-connect', {
                 method: upstreamReq.method,
                 protocol: upstreamReq.protocol
                     .replace(/:$/, '')
                     .replace(/^http/, 'ws'),
-                hostname: upstreamReq.host,
+                hostname: urlHost,
                 port: effectivePort.toString(),
                 path: upstreamReq.path,
                 rawHeaders: rawHeaders,
