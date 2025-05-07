@@ -230,7 +230,10 @@ export function getHostAfterModification(
     );
 }
 
-export const OVERRIDABLE_REQUEST_PSEUDOHEADERS = [
+// These pseudoheaders are modifable, in that they are independent from the other HTTP
+// request params: you can send plain HTTP but set :scheme:https, and you can send
+// to one hostname but set another hostname as the authority.
+export const MODIFIABLE_PSEUDOHEADERS = [
     ':authority',
     ':scheme'
 ] as const;
@@ -245,7 +248,7 @@ export function getH2HeadersAfterModification(
     reqUrl: string,
     originalHeaders: Headers,
     replacementHeaders: Headers | undefined
-): { [K in typeof OVERRIDABLE_REQUEST_PSEUDOHEADERS[number]]: string } {
+): { [K in typeof MODIFIABLE_PSEUDOHEADERS[number]]: string } {
     const parsedUrl = url.parse(reqUrl);
 
     return {

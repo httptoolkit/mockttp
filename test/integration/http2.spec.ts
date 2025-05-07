@@ -461,7 +461,7 @@ nodeOnly(() => {
                 await cleanup(proxiedClient, client);
             });
 
-            it("should include should metadata in events for proxied HTTP/2 responses", async function() {
+            it("should include response metadata in events for proxied HTTP/2 responses", async function() {
                 if (!semver.satisfies(process.version, H2_TLS_ON_TLS_SUPPORTED)) this.skip();
 
                 let seenResponsePromise = getDeferred<CompletedResponse>();

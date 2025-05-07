@@ -74,7 +74,7 @@ import {
     getContentLengthAfterModification,
     getHostAfterModification,
     getH2HeadersAfterModification,
-    OVERRIDABLE_REQUEST_PSEUDOHEADERS,
+    MODIFIABLE_PSEUDOHEADERS,
     buildOverriddenBody,
     getUpstreamTlsOptions,
     shouldUseStrictHttps,
@@ -632,7 +632,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
             validateCustomHeaders(
                 clientHeaders,
                 modifiedReq?.headers,
-                OVERRIDABLE_REQUEST_PSEUDOHEADERS // These are handled by getCorrectPseudoheaders above
+                MODIFIABLE_PSEUDOHEADERS // These are handled by getH2HeadersAfterModification above
             );
 
             reqBodyOverride = await buildOverriddenBody(modifiedReq, headers);
@@ -729,9 +729,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
             // We drop all incoming pseudoheaders, and regenerate them (except legally modified ones)
             rawHeaders = rawHeaders.filter(([key]) =>
                 !key.toString().startsWith(':') ||
-                (headersManuallyModified &&
-                    OVERRIDABLE_REQUEST_PSEUDOHEADERS.includes(key.toLowerCase() as any)
-                )
+                MODIFIABLE_PSEUDOHEADERS.includes(key.toLowerCase() as any)
             );
         } else if (isH2Downstream && !shouldTryH2Upstream) {
             rawHeaders = h2HeadersToH1(rawHeaders);
