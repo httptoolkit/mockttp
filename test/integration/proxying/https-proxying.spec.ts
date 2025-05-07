@@ -106,6 +106,70 @@ nodeOnly(() => {
                 ]);
             });
 
+            it("should be able to pass socket metadata by proxy-auth username + password", async () => {
+                process.env.HTTP_PROXY =
+                    `https://metadata:{"tags":["http-proxy-tag"]}@localhost:${server.port}/`;
+
+                const rule = await server.forAnyRequest().thenReply(200, "mocked data");
+
+                let response = await request.get("http://example.com/endpoint");
+                expect(response).to.equal("mocked data");
+
+                const seenRequests = await rule.getSeenRequests();
+                expect(seenRequests.length).to.equal(1);
+                const seenRequest = seenRequests[0];
+                expect(seenRequest.tags).to.deep.equal(["socket-metadata:http-proxy-tag"]);
+            });
+
+            it("should be able to pass socket metadata by proxy-auth username + base64url password", async () => {
+                process.env.HTTP_PROXY =
+                    `https://metadata:${
+                        Buffer.from(JSON.stringify({"tags":["base64-http-proxy-tag"]})).toString('base64url')
+                    }@localhost:${server.port}/`;
+
+                const rule = await server.forAnyRequest().thenReply(200, "mocked data");
+
+                let response = await request.get("http://example.com/endpoint");
+                expect(response).to.equal("mocked data");
+
+                const seenRequests = await rule.getSeenRequests();
+                expect(seenRequests.length).to.equal(1);
+                const seenRequest = seenRequests[0];
+                expect(seenRequest.tags).to.deep.equal(["socket-metadata:base64-http-proxy-tag"]);
+            });
+
+            it("should be able to pass socket metadata by CONNECT username + password", async () => {
+                process.env.HTTPS_PROXY =
+                    `https://metadata:{"tags":["http-proxy-tag"]}@localhost:${server.port}/`;
+
+                const rule = await server.forAnyRequest().thenReply(200, "mocked data");
+
+                let response = await request.get("https://example.com/endpoint");
+                expect(response).to.equal("mocked data");
+
+                const seenRequests = await rule.getSeenRequests();
+                expect(seenRequests.length).to.equal(1);
+                const seenRequest = seenRequests[0];
+                expect(seenRequest.tags).to.deep.equal(["socket-metadata:http-proxy-tag"]);
+            });
+
+            it("should be able to pass socket metadata by CONNECT username + base64url password", async () => {
+                process.env.HTTPS_PROXY =
+                    `https://metadata:${
+                        Buffer.from(JSON.stringify({"tags":["base64-http-proxy-tag"]})).toString('base64url')
+                    }@localhost:${server.port}/`;
+
+                const rule = await server.forAnyRequest().thenReply(200, "mocked data");
+
+                let response = await request.get("https://example.com/endpoint");
+                expect(response).to.equal("mocked data");
+
+                const seenRequests = await rule.getSeenRequests();
+                expect(seenRequests.length).to.equal(1);
+                const seenRequest = seenRequests[0];
+                expect(seenRequest.tags).to.deep.equal(["socket-metadata:base64-http-proxy-tag"]);
+            });
+
             describe("given an untrusted upstream certificate", () => {
 
                 let badServer: Mockttp;
@@ -979,6 +1043,48 @@ nodeOnly(() => {
 
                 const serverReceivedHeaders = JSON.parse(response.headers['received-headers'] as string);
                 expect(serverReceivedHeaders[':authority']).to.equal(`localhost:${targetPort}`);
+            });
+
+            it("should be able to pass socket metadata by CONNECT username + password", async () => {
+                const rule = await server.forAnyRequest().thenReply(200, "mocked data");
+
+                const authHeader = `Basic ${
+                    Buffer.from(
+                        `metadata:${JSON.stringify({"tags":["base64-http-proxy-tag"]})}`
+                    ).toString('base64')
+                }`
+
+                const response = await http2ProxyRequest(server, "https://example.com", {
+                    proxyHeaders: { 'proxy-authorization': authHeader }
+                });
+                expect(response.headers[':status']).to.equal(200);
+                expect(response.body.toString('utf8')).to.equal("mocked data");
+
+                const seenRequests = await rule.getSeenRequests();
+                expect(seenRequests.length).to.equal(1);
+                const seenRequest = seenRequests[0];
+                expect(seenRequest.tags).to.deep.equal(["socket-metadata:base64-http-proxy-tag"]);
+            });
+
+            it("should be able to pass socket metadata by CONNECT username + base64url password", async () => {
+                const rule = await server.forAnyRequest().thenReply(200, "mocked data");
+
+                const authHeader = `Basic ${
+                    Buffer.from(`metadata:${
+                        Buffer.from(JSON.stringify({"tags":["base64-http-proxy-tag"]})).toString('base64url')
+                    }`).toString('base64')
+                }`
+
+                const response = await http2ProxyRequest(server, "https://example.com", {
+                    proxyHeaders: { 'proxy-authorization': authHeader }
+                });
+                expect(response.headers[':status']).to.equal(200);
+                expect(response.body.toString('utf8')).to.equal("mocked data");
+
+                const seenRequests = await rule.getSeenRequests();
+                expect(seenRequests.length).to.equal(1);
+                const seenRequest = seenRequests[0];
+                expect(seenRequest.tags).to.deep.equal(["socket-metadata:base64-http-proxy-tag"]);
             });
 
             describe("to an HTTP/1 server", () => {

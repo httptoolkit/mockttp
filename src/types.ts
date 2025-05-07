@@ -1,6 +1,6 @@
-import stream = require('stream');
-import http = require('http');
-import { EventEmitter } from 'events';
+import type * as stream from 'stream';
+import type * as http from 'http';
+import type { EventEmitter } from 'events';
 
 export const DEFAULT_ADMIN_SERVER_PORT = 45454;
 

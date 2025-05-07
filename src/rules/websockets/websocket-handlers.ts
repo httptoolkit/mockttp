@@ -10,7 +10,7 @@ import {
     deserializeProxyConfig
 } from "../../serialization/serialization";
 
-import { Headers, OngoingRequest, RawHeaders } from "../../types";
+import { OngoingRequest, RawHeaders } from "../../types";
 
 import {
     CloseConnectionHandler,
@@ -19,6 +19,8 @@ import {
     TimeoutHandler
 } from '../requests/request-handlers';
 import { getEffectivePort } from '../../util/url';
+import { resetOrDestroy } from '../../util/socket-util';
+import { LastHopEncrypted } from '../../util/socket-extensions';
 import { isHttp2 } from '../../util/request-utils';
 import {
     findRawHeader,
@@ -27,7 +29,6 @@ import {
     pairFlatRawHeaders,
     rawHeadersToObjectPreservingCase
 } from '../../util/header-utils';
-import { streamToBuffer } from '../../util/buffer-utils';
 import { MaybePromise } from '@httptoolkit/util';
 
 import { getAgent } from '../http-agents';
@@ -51,7 +52,6 @@ import {
     WebSocketHandlerDefinition,
     WsHandlerDefinitionLookup,
 } from './websocket-handler-definitions';
-import { LastHopEncrypted, resetOrDestroy } from '../../util/socket-util';
 
 export interface WebSocketHandler extends WebSocketHandlerDefinition {
     handle(

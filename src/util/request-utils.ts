@@ -40,13 +40,12 @@ import {
     pairFlatRawHeaders,
     rawHeadersToObject
 } from './header-utils';
-import { LastHopEncrypted, LastTunnelAddress } from './socket-util';
+import { LastHopEncrypted, LastTunnelAddress } from './socket-extensions';
 import { getDestination, normalizeHost } from './url';
 
 export const shouldKeepAlive = (req: OngoingRequest): boolean =>
     req.httpVersion !== '1.0' &&
-    req.headers['connection'] !== 'close' &&
-    req.headers['proxy-connection'] !== 'close';
+    req.headers['connection'] !== 'close';
 
 export const writeHead = (
     response: http.ServerResponse | http2.Http2ServerResponse,

@@ -410,11 +410,12 @@ export async function http2ProxyRequest(
     url: string,
     options: {
         headers?: {},
+        proxyHeaders?: {},
         requestBody?: string,
         http1Within?: boolean
     } = {}
 ) {
-    const { headers, requestBody, http1Within } = options;
+    const { headers, proxyHeaders, requestBody, http1Within } = options;
 
     const parsedUrl = URL.parse(url);
     const isTLS = parsedUrl.protocol === 'https:';
@@ -427,7 +428,8 @@ export async function http2ProxyRequest(
         try {
             const proxyReq = proxyClient.request({
                 ':method': 'CONNECT',
-                ':authority': `${targetHost}:${targetPort}`
+                ':authority': `${targetHost}:${targetPort}`,
+                ...proxyHeaders
             });
             proxyReq.on('error', reject);
 

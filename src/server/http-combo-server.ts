@@ -25,6 +25,9 @@ import {
     getParentSocket,
     buildSocketTimingInfo,
     buildTlsSocketEventData,
+    resetOrDestroy
+} from '../util/socket-util';
+import {
     SocketIsh,
     InitialRemoteAddress,
     InitialRemotePort,
@@ -34,10 +37,10 @@ import {
     TlsMetadata,
     TlsSetupCompleted,
     SocketMetadata,
-    resetOrDestroy
-} from '../util/socket-util';
+} from '../util/socket-extensions';
 import { MockttpHttpsOptions } from '../mockttp';
 import { buildSocksServer, SocksServerOptions, SocksTcpAddress } from './socks-server';
+import { getSocketMetadataFromProxyAuth } from '../util/socket-metadata';
 
 // Hardcore monkey-patching: force TLSSocket to link servername & remoteAddress to
 // sockets as soon as they're available, without waiting for the handshake to fully
@@ -360,6 +363,9 @@ export async function createComboServer(options: ComboServerOptions): Promise<De
         socket.write('HTTP/' + req.httpVersion + ' 200 OK\r\n\r\n', 'utf-8', () => {
             socket[SocketTimingInfo]!.tunnelSetupTimestamp = now();
             socket[LastTunnelAddress] = connectUrl;
+            if (req.headers['proxy-authorization']) {
+                socket[SocketMetadata] = getSocketMetadataFromProxyAuth(socket, req.headers['proxy-authorization']);
+            }
             server.emit('connection', socket);
         });
     }
@@ -378,8 +384,12 @@ export async function createComboServer(options: ComboServerOptions): Promise<De
 
         // Send a 200 OK response, and start the tunnel:
         res.writeHead(200, {});
+
         inheritSocketDetails(res.socket, res.stream);
         res.stream[LastTunnelAddress] = connectUrl;
+        if (req.headers['proxy-authorization']) {
+            res.stream[SocketMetadata] = getSocketMetadataFromProxyAuth(res.stream, req.headers['proxy-authorization']);
+        }
 
         // When layering HTTP/2 on JS streams, we have to make sure the JS stream won't autoclose
         // when the other side does, because the upper HTTP/2 layers want to handle shutdown, so

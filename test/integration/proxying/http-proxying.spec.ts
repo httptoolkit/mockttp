@@ -1103,6 +1103,39 @@ nodeOnly(() => {
                 });
 
             });
+
+            it("should be able to pass socket metadata by proxy-auth username + password", async () => {
+                process.env.HTTP_PROXY = process.env.HTTPS_PROXY =
+                    `http://metadata:{"tags":["http-proxy-tag"]}@localhost:${server.port}/`;
+
+                const rule = await server.forAnyRequest().thenReply(200, "mocked data");
+
+                let response = await request.get("http://example.com/endpoint");
+                expect(response).to.equal("mocked data");
+
+                const seenRequests = await rule.getSeenRequests();
+                expect(seenRequests.length).to.equal(1);
+                const seenRequest = seenRequests[0];
+                expect(seenRequest.tags).to.deep.equal(["socket-metadata:http-proxy-tag"]);
+            });
+
+            it("should be able to pass socket metadata by proxy-auth username + base64url password", async () => {
+                process.env.HTTP_PROXY = process.env.HTTPS_PROXY =
+                    `http://metadata:${
+                        Buffer.from(JSON.stringify({"tags":["base64-http-proxy-tag"]})).toString('base64url')
+                    }@localhost:${server.port}/`;
+
+                const rule = await server.forAnyRequest().thenReply(200, "mocked data");
+
+                let response = await request.get("http://example.com/endpoint");
+                expect(response).to.equal("mocked data");
+
+                const seenRequests = await rule.getSeenRequests();
+                expect(seenRequests.length).to.equal(1);
+                const seenRequest = seenRequests[0];
+                expect(seenRequest.tags).to.deep.equal(["socket-metadata:base64-http-proxy-tag"]);
+            });
+
         });
 
         describe("when only tiny bodies are allowed", () => {

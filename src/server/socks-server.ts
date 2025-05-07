@@ -1,6 +1,9 @@
 import * as _ from 'lodash';
 import * as net from 'net';
-import { resetOrDestroy, SocketMetadata } from '../util/socket-util';
+
+import { resetOrDestroy } from '../util/socket-util';
+import { SocketMetadata } from '../util/socket-extensions';
+import { getSocketMetadata } from '../util/socket-metadata';
 
 export interface SocksServerOptions {
     /**
@@ -259,9 +262,8 @@ async function handleCustomMetadata(socket: net.Socket) {
     const metadata = await readBytes(socket, length);
     const metadataString = metadata.toString('utf8');
 
-    let metadataJson: any = {};
     try {
-        metadataJson = JSON.parse(metadataString);
+        socket[SocketMetadata] = getSocketMetadata(socket[SocketMetadata], metadataString);
     } catch (e) {
         const errorData = Buffer.from(JSON.stringify({ message: 'Invalid JSON' }));
         const errorResponse = Buffer.alloc(4 + errorData.byteLength);
@@ -272,7 +274,7 @@ async function handleCustomMetadata(socket: net.Socket) {
         socket.end(errorResponse);
         return false;
     }
-    socket[SocketMetadata] = _.merge(socket[SocketMetadata] || {}, metadataJson);
+
     socket.write(Buffer.from([
         0x05, // Version
         0x00 // Success
@@ -296,15 +298,8 @@ async function handleUsernamePasswordMetadata(socket: net.Socket) {
         return false;
     }
 
-    let metadataJson: any = {};
     try {
-        // Base64'd json always starts with 'e' (typically eyI), so we can use this fairly
-        // reliably to detect base64 (and definitely exclude valid object JSON encoding).
-        const decoded = password[0] === 'e'.charCodeAt(0)
-            ? Buffer.from(password.toString('utf8'), 'base64url').toString('utf8')
-            : password.toString('utf8');
-
-        metadataJson = JSON.parse(decoded);
+        socket[SocketMetadata] = getSocketMetadata(socket[SocketMetadata], password);
     } catch (e) {
         socket.end(Buffer.from([
             0x05,
@@ -313,7 +308,6 @@ async function handleUsernamePasswordMetadata(socket: net.Socket) {
         return false;
     }
 
-    socket[SocketMetadata] = _.merge(socket[SocketMetadata] || {}, metadataJson);
     socket.write(Buffer.from([
         0x05, // Version
         0x00 // Success

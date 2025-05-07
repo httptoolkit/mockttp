@@ -59,14 +59,17 @@ import {
 import {
     buildRawSocketEventData,
     buildTlsSocketEventData,
+    isSocketLoop,
+    resetOrDestroy
+} from "../util/socket-util";
+import {
     ClientErrorInProgress,
     LastHopEncrypted,
     LastTunnelAddress,
     TlsSetupCompleted,
-    isSocketLoop,
-    resetOrDestroy,
-    getSocketMetadataTags
-} from "../util/socket-util";
+    SocketMetadata
+} from '../util/socket-extensions';
+import { getSocketMetadataTags, getSocketMetadataFromProxyAuth } from '../util/socket-metadata'
 import {
     parseRequestBody,
     waitForCompletedRequest,
@@ -93,6 +96,7 @@ type ExtendedRawRequest = (http.IncomingMessage | http2.Http2ServerRequest) & {
     body?: OngoingBody;
     path?: string;
     destination?: Destination;
+    [SocketMetadata]?: SocketMetadata;
 };
 
 const serverPortCheckMutex = new Mutex();
@@ -600,10 +604,13 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     private preprocessRequest(req: ExtendedRawRequest, type: 'request' | 'websocket'): OngoingRequest {
         parseRequestBody(req, { maxSize: this.maxBodySize });
 
+        let rawHeaders = pairFlatRawHeaders(req.rawHeaders);
+        let socketMetadata: SocketMetadata | undefined = req.socket[SocketMetadata];
+
         // Make req.url always absolute, if it isn't already, using the host header.
         // It might not be if this is a direct request, or if it's being transparently proxied.
         if (!isAbsoluteUrl(req.url!)) {
-            req.protocol = req.headers[':scheme'] as string ||
+            req.protocol = getHeaderValue(rawHeaders, ':scheme') ||
                 (req.socket[LastHopEncrypted] ? 'https' : 'http');
             req.path = req.url;
 
@@ -617,8 +624,8 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             // If you explicitly tunnel to a hostname, that's the URL's hostname:
             const hostname = tunnelUrlHost
                 // Otherwise, we infer based on headers: HTTP/2 or HTTP/1
-                ?? getHeaderValue(req.headers, ':authority')
-                ?? getHeaderValue(req.headers, 'host')
+                ?? getHeaderValue(rawHeaders, ':authority')
+                ?? getHeaderValue(rawHeaders, 'host')
                 ?? req.socket[LastTunnelAddress] // Iff we have no hostname available at all
                 ?? `localhost:${this.port}`; // If you specify literally nothing, it's a direct request
 
@@ -637,7 +644,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
 
             const absoluteUrl = `${req.protocol}://${host}${req.path}`;
 
-            if (!req.headers[':path']) {
+            if (!getHeaderValue(rawHeaders, ':path')) {
                 (req as Mutable<ExtendedRawRequest>).url = new url.URL(absoluteUrl).toString();
             } else {
                 // Node's HTTP/2 compat logic maps .url to headers[':path']. We want them to
@@ -648,12 +655,27 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
                 });
             }
         } else {
+            // We have an absolute request. This is effectively a combined tunnel + end-server request,
+            // so we need to handle both of those, and hide the proxy-specific bits from later logic.
             req.protocol = req.url!.split('://', 1)[0];
             req.path = getPathFromAbsoluteUrl(req.url!);
             req.destination = getDestination(
                 req.protocol,
                 req.socket[LastTunnelAddress] ?? getHostFromAbsoluteUrl(req.url!)
             );
+
+            const proxyAuthHeader = getHeaderValue(rawHeaders, 'proxy-authorization');
+            if (proxyAuthHeader) {
+                // Use this metadata for this request, but _only_ this request - it's not relevant
+                // to other requests on the same socket so we don't add it to req.socket.
+                socketMetadata = getSocketMetadataFromProxyAuth(req.socket, proxyAuthHeader);
+            }
+
+            rawHeaders = rawHeaders.filter(([key]) => {
+                const lcKey = key.toLowerCase();
+                return lcKey !== 'proxy-connection' &&
+                    lcKey !== 'proxy-authorization';
+            })
         }
 
         if (type === 'websocket') {
@@ -668,7 +690,8 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         }
 
         const id = uuid();
-        const tags: string[] = getSocketMetadataTags(req.socket);
+
+        const tags: string[] = getSocketMetadataTags(socketMetadata);
 
         const timingEvents: TimingEvents = {
             startTime: Date.now(),
@@ -679,7 +702,6 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             timingEvents.bodyReceivedTimestamp ||= now();
         });
 
-        const rawHeaders = pairFlatRawHeaders(req.rawHeaders);
         const headers = rawHeadersToObject(rawHeaders);
 
         // Not writable for HTTP/2:
@@ -1027,7 +1049,7 @@ ${await this.suggestRule(request)}`
                 id: uuid(),
                 tags: [
                     `client-error:${error.code || 'UNKNOWN'}`,
-                    ...getSocketMetadataTags(socket)
+                    ...getSocketMetadataTags(socket[SocketMetadata])
                 ],
                 timingEvents: { startTime: Date.now(), startTimestamp: now() } as TimingEvents
             };
@@ -1120,7 +1142,7 @@ ${await this.suggestRule(request)}`
                 tags: [
                     `client-error:${error.code || 'UNKNOWN'}`,
                     ...(isBadPreface ? ['client-error:bad-preface'] : []),
-                    ...getSocketMetadataTags(socket)
+                    ...getSocketMetadataTags(socket?.[SocketMetadata])
                 ],
                 httpVersion: '2',
 
