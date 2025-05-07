@@ -2,6 +2,7 @@ import * as url from 'url';
 import * as _ from 'lodash';
 
 import { nthIndexOf } from './util';
+import { Destination } from '../types';
 
 // Is this URL fully qualified?
 // Note that this supports only HTTP - no websockets or anything else.
@@ -19,22 +20,83 @@ export const getUrlWithoutProtocol = (url: string): string => {
     return url.split('://', 2).slice(-1).join('');
 }
 
+export const getHostFromAbsoluteUrl = (url: string) => {
+    const hostIndex = nthIndexOf(url, '/', 2);
+    const pathIndex = nthIndexOf(url, '/', 3);
+    if (pathIndex !== -1) {
+        return url.slice(hostIndex + 1, pathIndex);
+    } else {
+        return url.slice(hostIndex + 1);
+    }
+}
+
 export const getPathFromAbsoluteUrl = (url: string) => {
     const pathIndex = nthIndexOf(url, '/', 3);
     if (pathIndex !== -1) {
         return url.slice(pathIndex);
     } else {
-        return '';
+        return '/';
+    }
+}
+
+export const getDefaultPort = (protocol: string) => {
+    if (protocol[protocol.length - 1] === ':') {
+        protocol = protocol.slice(0, -1);
+    }
+
+    if (protocol === 'https' || protocol === 'wss') {
+        return 443;
+    } else if (protocol === 'http' || protocol === 'ws') {
+        return 80;
+    } else {
+        throw new Error(`Unknown protocol: ${protocol}`);
     }
 }
 
 export const getEffectivePort = (url: { protocol: string | null, port: string | null }) => {
     if (url.port) {
         return parseInt(url.port, 10);
-    } else if (url.protocol === 'https:' || url.protocol === 'wss:') {
-        return 443;
     } else {
-        return 80;
+        return getDefaultPort(url.protocol || 'http');
+    }
+}
+
+export const getDestination = (protocol: string, host: string): Destination => {
+    let hostname: string;
+    let portString: string | undefined;
+
+    const lastColonIndex = host.lastIndexOf(':');
+    if (lastColonIndex !== -1) {
+        hostname = host.slice(0, lastColonIndex);
+        portString = host.slice(lastColonIndex + 1);
+    } else {
+        hostname = host;
+        portString = undefined;
+    }
+
+    if (hostname[0] === '[' && hostname[hostname.length - 1] === ']') {
+        // Bracketed IPv6 address, drop the brackets:
+        hostname = hostname.slice(1, -1);
+    }
+
+    const port = portString
+        ? parseInt(portString, 10)
+        : getDefaultPort(protocol);
+
+    if (isNaN(port)) {
+        throw new Error(`Invalid port: ${portString}`);
+    }
+
+    return { hostname, port };
+};
+
+export const normalizeHost = (protocol: string, host: string) => {
+    const { hostname, port } = getDestination(protocol, host);
+
+    if (port === getDefaultPort(protocol)) {
+        return hostname;
+    } else {
+        return `${hostname}:${port}`;
     }
 }
 

@@ -20,14 +20,14 @@ export class SchemaIntrospector {
         return !!_.find(type.fields, { name: fieldName });
     }
 
-    public asOptionalField(typeName: string | string[], fieldName: string): string {
+    public asOptionalField(typeName: string | string[], fieldName: string, specifier: string = fieldName): string {
         const possibleNames = !Array.isArray(typeName) ? [typeName] : typeName;
 
         const firstAvailableName = possibleNames.find((name) => this.isTypeDefined(name));
         if (!firstAvailableName) return '';
 
         return (this.typeHasField(firstAvailableName, fieldName))
-            ? fieldName
+            ? specifier
             : '';
     }
 

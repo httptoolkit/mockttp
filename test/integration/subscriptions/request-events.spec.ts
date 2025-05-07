@@ -62,6 +62,10 @@ describe("Request initiated subscriptions", () => {
             expect(seenRequest.protocol).to.equal('http');
             expect(seenRequest.httpVersion).to.equal('1.1');
             expect(seenRequest.url).to.equal(server.urlFor("/mocked-endpoint"));
+            expect(seenRequest.destination).to.deep.equal({
+                hostname: 'localhost',
+                port: server.port
+            });
             expect(seenRequest.remoteIpAddress).to.be.oneOf([
                 '::ffff:127.0.0.1', // IPv4 localhost
                 '::1' // IPv6 localhost
@@ -271,6 +275,10 @@ describe("Request subscriptions", () => {
             expect(seenRequest.protocol).to.equal('http');
             expect(seenRequest.httpVersion).to.equal('1.1');
             expect(seenRequest.url).to.equal(server.urlFor("/mocked-endpoint"));
+            expect(seenRequest.destination).to.deep.equal({
+                hostname: 'localhost',
+                port: server.port
+            });
             expect(seenRequest.remoteIpAddress).to.be.oneOf([
                 '::ffff:127.0.0.1', // IPv4 localhost
                 '::1' // IPv6 localhost

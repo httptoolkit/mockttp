@@ -310,6 +310,10 @@ describe("Abort subscriptions", () => {
         expect(seenRequest.id).to.equal(seenAbort.id);
         expect(seenRequest.tags).to.deep.equal([]);
         expect(seenRequest.headers['host']).to.deep.equal(`localhost:${server.port}`);
+        expect(seenRequest.destination).to.deep.equal({
+            hostname: 'localhost',
+            port: server.port
+        });
         expect(
             seenRequest.rawHeaders.find(([key]) => key === 'Host')
         ).to.deep.equal(['Host', `localhost:${server.port}`]); // Uppercase header name!

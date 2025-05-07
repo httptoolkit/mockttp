@@ -173,29 +173,6 @@ export const isLocalhostAddress = (host: string | null | undefined) =>
         normalizeIP(host)!.match(/^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/) // 127.0.0.0/8 range
     );
 
-export const getAddressAndPort = (address: string): [host: string, port?: number] => {
-    let host: string;
-    let portString: string | undefined;
-
-    const lastColonIndex = address.lastIndexOf(':');
-    if (lastColonIndex !== -1) {
-        host = address.slice(0, lastColonIndex);
-        portString = address.slice(lastColonIndex + 1);
-    } else {
-        host = address;
-        portString = undefined;
-    }
-
-    if (host[0] === '[' && host[host.length - 1] === ']') {
-        // Bracketed IPv6 address, drop the brackets:
-        host = host.slice(1, -1);
-    }
-
-    const port = portString ? parseInt(portString, 10) : undefined;
-
-    return [host, port];
-};
-
 // Check whether an incoming socket is the other end of one of our outgoing sockets:
 export const isSocketLoop = (outgoingSockets: net.Socket[] | Set<net.Socket>, incomingSocket: net.Socket) =>
     // We effectively just compare the address & port: if they match, we've almost certainly got a loop.

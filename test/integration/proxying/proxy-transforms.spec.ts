@@ -321,7 +321,7 @@ nodeOnly(() => {
                     json: true
                 });
 
-                expect(response.url).to.equal(`http://undefined/abc`); // Because we removed the host header completely
+                expect(response.url).to.equal(`http://localhost:${remoteServer.port}/abc`); // From tunnel, even without the host header
                 expect(response.method).to.equal('POST');
                 expect(response.headers).to.deep.equal({
                     // Default Node headers:

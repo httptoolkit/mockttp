@@ -12,7 +12,6 @@ import {
     sendRawRequest,
     watchForEvent,
     TOO_LONG_HEADER_VALUE,
-    isNode,
     openRawTlsSocket
 } from "../../test-utils";
 
@@ -46,6 +45,10 @@ describe("Client error subscription", () => {
             expect(clientError.request.url).to.equal(server.urlFor("/mocked-endpoint"));
 
             expect(clientError.request.headers['host']).to.equal(`localhost:${server.port}`);
+            expect(clientError.request.destination).to.deep.equal({
+                hostname: 'localhost',
+                port: server.port
+            });
 
             const rawHeaders = clientError.request.rawHeaders;
             expect(rawHeaders.find(([key]) => key === 'Host')).to.deep.equal(

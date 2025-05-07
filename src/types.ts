@@ -44,6 +44,16 @@ export interface Trailers {
 export type RawHeaders = Array<[key: string, value: string]>;
 export type RawTrailers = RawHeaders; // Just a convenient alias
 
+// --- Terminology: ---
+// Hostname = String of IP or domain name
+// Host = String of hostname + optional port (if not default for protocol)
+// Destination = hostname + mandatory port as a structured object
+// N.b. IPv6 is only [bracketed] in place in URLs/headers, not elsewhere.
+export interface Destination {
+    hostname: string;
+    port: number;
+}
+
 export interface Request {
     id: string;
     matchedRuleId?: string;
@@ -57,10 +67,23 @@ export interface Request {
     remoteIpAddress?: string; // Not set remotely with older servers or in some error cases
     remotePort?: number; // Not set remotely with older servers or in some error cases
 
-    // Exists only if a host header is sent. A strong candidate for deprecation
-    // in future, since it's not clear that this comes from headers not the URL, and
-    // either way it duplicates existing data.
-    hostname?: string;
+    /**
+     * This field was ambiguous and is no longer used - included only for backwards
+     * compatibility.
+     *
+     * You probably want to either look at the `url` field (the full URL content including
+     * the hostname of the target server) or `destination` (best guess of actual target host
+     * including bare IPs, independent of the hostname used).
+     *
+     * @deprecated
+     */
+    hostname?: '' | undefined;
+
+    /**
+     * The best guess at the target host + port of the request. This uses tunnelling metadata
+     * wherever possible, or the headers if not.
+     */
+    destination: Destination;
 
     headers: Headers;
     rawHeaders: RawHeaders;
@@ -415,6 +438,7 @@ export interface ClientError {
         method?: string;
         url?: string;
         path?: string;
+        destination?: Destination;
 
         headers: Headers;
         rawHeaders: RawHeaders;

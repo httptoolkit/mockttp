@@ -15,6 +15,7 @@ import { Mutex } from 'async-mutex';
 import { ErrorLike, isErrorLike } from '@httptoolkit/util';
 
 import {
+    Destination,
     InitiatedRequest,
     OngoingRequest,
     CompletedRequest,
@@ -47,7 +48,14 @@ import { filter } from "../util/promise";
 import { Mutable } from "../util/type-utils";
 import { makePropertyWritable } from "../util/util";
 
-import { isAbsoluteUrl, getPathFromAbsoluteUrl } from "../util/url";
+import {
+    isAbsoluteUrl,
+    getPathFromAbsoluteUrl,
+    getHostFromAbsoluteUrl,
+    getDestination,
+    normalizeHost,
+    getDefaultPort
+} from "../util/url";
 import {
     buildRawSocketEventData,
     buildTlsSocketEventData,
@@ -57,7 +65,6 @@ import {
     TlsSetupCompleted,
     isSocketLoop,
     resetOrDestroy,
-    SocketMetadata,
     getSocketMetadataTags
 } from "../util/socket-util";
 import {
@@ -85,6 +92,7 @@ type ExtendedRawRequest = (http.IncomingMessage | http2.Http2ServerRequest) & {
     protocol?: string;
     body?: OngoingBody;
     path?: string;
+    destination?: Destination;
 };
 
 const serverPortCheckMutex = new Mutex();
@@ -599,9 +607,33 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
                 (req.socket[LastHopEncrypted] ? 'https' : 'http');
             req.path = req.url;
 
-            const host = req.socket[LastTunnelAddress] // If you explicitly tunnel to a host, that's the host
-                ?? getHeaderValue(req.headers, ':authority') // Otherwise, we infer based on headers: HTTP/2
-                ?? getHeaderValue(req.headers, 'host');      // or HTTP/1.1
+            const tunnelUrlHost = (
+                req.socket[LastTunnelAddress] &&
+                !net.isIP(getDestination(req.protocol, req.socket[LastTunnelAddress]).hostname)
+            )
+                ? normalizeHost(req.protocol, req.socket[LastTunnelAddress])
+                : undefined;
+
+            // If you explicitly tunnel to a hostname, that's the URL's hostname:
+            const hostname = tunnelUrlHost
+                // Otherwise, we infer based on headers: HTTP/2 or HTTP/1
+                ?? getHeaderValue(req.headers, ':authority')
+                ?? getHeaderValue(req.headers, 'host')
+                ?? req.socket[LastTunnelAddress] // Iff we have no hostname available at all
+                ?? `localhost:${this.port}`; // If you specify literally nothing, it's a direct request
+
+            // Destination may be either a hostname or an IP (unlike tunnel host)
+            req.destination = getDestination(
+                req.protocol,
+                req.socket[LastTunnelAddress] ?? hostname
+            );
+
+            // If we don't have a port in the hostname, but we know the final destination port needs
+            // specifying, then we do include it in the URL. Happens if you have an IP tunnel address
+            // with a port, and then a port-less 'Host' header - not common.
+            const host = !hostname.includes(':') && req.destination.port !== getDefaultPort(req.protocol)
+                ? `${hostname}:${req.destination.port}`
+                : hostname;
 
             const absoluteUrl = `${req.protocol}://${host}${req.path}`;
 
@@ -618,6 +650,10 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         } else {
             req.protocol = req.url!.split('://', 1)[0];
             req.path = getPathFromAbsoluteUrl(req.url!);
+            req.destination = getDestination(
+                req.protocol,
+                req.socket[LastTunnelAddress] ?? getHostFromAbsoluteUrl(req.url!)
+            );
         }
 
         if (type === 'websocket') {
@@ -1016,7 +1052,8 @@ ${await this.suggestRule(request)}`
                 headers: parsedRequest.headers || {},
                 rawHeaders: parsedRequest.rawHeaders || [],
                 remoteIpAddress: socket.remoteAddress,
-                remotePort: socket.remotePort
+                remotePort: socket.remotePort,
+                destination: parsedRequest.destination
             };
 
             let response: ClientError['response'];
@@ -1108,7 +1145,7 @@ ${await this.suggestRule(request)}`
     private passthroughSocket(
         type: 'raw' | 'tls',
         socket: net.Socket,
-        host: string,
+        hostname: string,
         port?: number
     ) {
         const targetPort = port ?? 443; // Should only be undefined on SNI-only TLS passthrough
@@ -1117,7 +1154,7 @@ ${await this.suggestRule(request)}`
             // Hard to reproduce: loops can only happen if a) SNI triggers this (because tunnels
             // require a repeated client request at each step) and b) the hostname points back to
             // us, and c) we're running on the default port. Still good to guard against though.
-            console.warn(`Socket bypass loop for ${host}:${targetPort}`);
+            console.warn(`Socket bypass loop for ${hostname}:${targetPort}`);
             resetOrDestroy(socket);
             return;
         }
@@ -1130,15 +1167,15 @@ ${await this.suggestRule(request)}`
                 : buildTlsSocketEventData(socket as tls.TLSSocket),
             {
                 id: uuid(),
-                hostname: host, // Deprecated, but kept here for backward compat
-                upstreamHost: host,
+                hostname: hostname, // Deprecated, but kept here for backward compat
+                upstreamHost: hostname,
                 upstreamPort: targetPort
             }
         );
 
         setImmediate(() => this.eventEmitter.emit(`${type}-passthrough-opened`, eventData));
 
-        const upstreamSocket = net.connect({ host, port: targetPort });
+        const upstreamSocket = net.connect({ host: hostname, port: targetPort });
         upstreamSocket.setNoDelay(true);
 
         socket.pipe(upstreamSocket);
@@ -1186,7 +1223,7 @@ ${await this.suggestRule(request)}`
         upstreamSocket.once('connect', () => this.outgoingPassthroughSockets.add(upstreamSocket));
         upstreamSocket.once('close', () => this.outgoingPassthroughSockets.delete(upstreamSocket));
 
-        if (this.debug) console.log(`Passing through bypassed ${type} connection to ${host}:${targetPort}${
+        if (this.debug) console.log(`Passing through bypassed ${type} connection to ${hostname}:${targetPort}${
             !port ? ' (assumed port)' : ''
         }`);
     }

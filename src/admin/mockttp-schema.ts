@@ -117,6 +117,7 @@ export const MockttpSchema = gql`
         rawHeaders: Json
         remoteIpAddress: String
         remotePort: Int
+        destination: Destination
     }
 
     type RawPassthroughEvent {
@@ -158,7 +159,9 @@ export const MockttpSchema = gql`
         path: String!
         remoteIpAddress: String
         remotePort: Int
-        hostname: String
+
+        destination: Destination!
+        hostname: String # Deprecated
 
         headers: Json!
         rawHeaders: Json!
@@ -177,7 +180,9 @@ export const MockttpSchema = gql`
         path: String!
         remoteIpAddress: String
         remotePort: Int
-        hostname: String
+
+        destination: Destination!
+        hostname: String # Deprecated
 
         headers: Json!
         rawHeaders: Json!
@@ -199,7 +204,9 @@ export const MockttpSchema = gql`
         path: String!
         remoteIpAddress: String
         remotePort: Int
-        hostname: String
+
+        destination: Destination!
+        hostname: String # Deprecated
 
         headers: Json!
         rawHeaders: Json!
@@ -240,5 +247,10 @@ export const MockttpSchema = gql`
 
         timingEvents: Json!
         tags: [String!]!
+    }
+
+    type Destination {
+        hostname: String!
+        port: Int!
     }
 `;

@@ -17,9 +17,10 @@ import {
 } from 'read-tls-client-hello';
 import { URLPattern } from "urlpattern-polyfill";
 
-import { TlsHandshakeFailure } from '../types';
+import { Destination, TlsHandshakeFailure } from '../types';
 import { getCA } from '../util/tls';
 import { shouldPassThrough } from '../util/server-utils';
+import { getDestination } from '../util/url';
 import {
     getParentSocket,
     buildSocketTimingInfo,
@@ -32,9 +33,8 @@ import {
     LastHopEncrypted,
     TlsMetadata,
     TlsSetupCompleted,
-    getAddressAndPort,
-    resetOrDestroy,
-    SocketMetadata
+    SocketMetadata,
+    resetOrDestroy
 } from '../util/socket-util';
 import { MockttpHttpsOptions } from '../mockttp';
 import { buildSocksServer, SocksServerOptions, SocksTcpAddress } from './socks-server';
@@ -151,8 +151,8 @@ export interface ComboServerOptions {
 
     requestListener: (req: http.IncomingMessage, res: http.ServerResponse) => void;
     tlsClientErrorListener: (socket: tls.TLSSocket, req: TlsHandshakeFailure) => void;
-    tlsPassthroughListener: (socket: net.Socket, address: string, port?: number) => void;
-    rawPassthroughListener: (socket: net.Socket, address: string, port?: number) => void;
+    tlsPassthroughListener: (socket: net.Socket, hostname: string, port?: number) => void;
+    rawPassthroughListener: (socket: net.Socket, hostname: string, port?: number) => void;
 };
 
 // The low-level server that handles all the sockets & TLS. The server will correctly call the
@@ -249,19 +249,26 @@ export async function createComboServer(options: ComboServerOptions): Promise<De
 
     if (options.passthroughUnknownProtocols) {
         unknownProtocolServer = net.createServer((socket) => {
-            const destination = socket[LastTunnelAddress];
-            if (!destination) {
-                server.emit('clientError', new Error('Unknown protocol without destination'), socket);
-                return;
-            }
+            const tunnelAddress = socket[LastTunnelAddress];
 
-            const [host, port] = getAddressAndPort(destination);
-            if (!port) { // Both CONNECT & SOCKS require a port, so this shouldn't happen
-                server.emit('clientError', new Error('Unknown protocol without destination port'), socket);
-                return;
-            }
+            try {
+                if (!tunnelAddress) {
+                    server.emit('clientError', new Error('Unknown protocol without destination'), socket);
+                    return;
+                }
 
-            options.rawPassthroughListener(socket, host, port);
+                if (!tunnelAddress.includes(':')) {
+                    // Both CONNECT & SOCKS require a port, so this shouldn't happen
+                    server.emit('clientError', new Error('Unknown protocol without destination port'), socket);
+                    return;
+                }
+
+                const { hostname, port } = getDestination('unknown', tunnelAddress); // Has port, so no protocol required
+                options.rawPassthroughListener(socket, hostname, port);
+            } catch (e) {
+                console.error('Unknown protocol server error', e);
+                resetOrDestroy(socket);
+            }
         });
     }
 
@@ -432,7 +439,7 @@ function analyzeAndMaybePassThroughTls(
     server: tls.Server,
     passthroughList: Required<MockttpHttpsOptions>['tlsPassthrough'] | undefined,
     interceptOnlyList: Required<MockttpHttpsOptions>['tlsInterceptOnly'] | undefined,
-    passthroughListener: (socket: net.Socket, address: string, port?: number) => void
+    passthroughListener: (socket: net.Socket, hostname: string, port?: number) => void
 ) {
     if (passthroughList && interceptOnlyList){
         throw new Error('Cannot use both tlsPassthrough and tlsInterceptOnly options at the same time.');
@@ -450,23 +457,22 @@ function analyzeAndMaybePassThroughTls(
 
             // SNI is a good clue for where the request is headed, but an explicit proxy address (via
             // CONNECT or SOCKS) is even better. Note that this may be a hostname or IPv4/6 address:
-            let upstreamHostname: string | undefined;
-            let upstreamPort: number | undefined;
+            let upstreamDestination: Destination | undefined;
             if (socket[LastTunnelAddress]) {
-                ([upstreamHostname, upstreamPort] = getAddressAndPort(socket[LastTunnelAddress]));
+                upstreamDestination = getDestination('https', socket[LastTunnelAddress]);
             }
 
             socket[TlsMetadata] = {
                 sniHostname,
-                connectHostname: upstreamHostname,
-                connectPort: upstreamPort?.toString(),
+                connectHostname: upstreamDestination?.hostname,
+                connectPort: upstreamDestination?.port.toString(),
                 clientAlpn: helloData.alpnProtocols,
                 ja3Fingerprint: calculateJa3FromFingerprintData(helloData.fingerprintData),
                 ja4Fingerprint: calculateJa4FromHelloData(helloData)
             };
 
-            if (shouldPassThrough(upstreamHostname, passThroughPatterns, interceptOnlyPatterns)) {
-                passthroughListener(socket, upstreamHostname, upstreamPort);
+            if (shouldPassThrough(upstreamDestination?.hostname, passThroughPatterns, interceptOnlyPatterns)) {
+                passthroughListener(socket, upstreamDestination.hostname, upstreamDestination.port);
                 return; // Do not continue with TLS
             } else if (shouldPassThrough(sniHostname, passThroughPatterns, interceptOnlyPatterns)) {
                 passthroughListener(socket, sniHostname!); // Can't guess the port - not included in SNI

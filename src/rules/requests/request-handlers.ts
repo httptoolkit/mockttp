@@ -21,7 +21,7 @@ import {
 } from "../../types";
 
 import { MaybePromise, ErrorLike, isErrorLike } from '@httptoolkit/util';
-import { isAbsoluteUrl, getEffectivePort } from '../../util/url';
+import { isAbsoluteUrl, getEffectivePort, getDestination } from '../../util/url';
 import {
     waitForCompletedRequest,
     buildBodyReader,
@@ -413,8 +413,10 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
         dropDefaultHeaders(clientRes);
 
         // Capture raw request data:
-        let { method, url: reqUrl, rawHeaders } = clientReq as OngoingRequest;
-        let { protocol, hostname, port, path } = url.parse(reqUrl);
+        let { method, url: reqUrl, rawHeaders, destination } = clientReq as OngoingRequest;
+        let { protocol, path } = url.parse(reqUrl);
+        let hostname: string | null = destination.hostname;
+        let port: string | null = destination.port.toString();
 
         // Check if this request is a request loop:
         if (isSocketLoop(this.outgoingSockets, (clientReq as any).socket)) {
@@ -938,6 +940,10 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                         protocol: protocol?.replace(':', '') ?? '',
                         method: method,
                         url: reqUrl,
+                        destination: {
+                            hostname: hostname || 'localhost',
+                            port: effectivePort
+                        },
                         path: path ?? '',
                         headers: reqHeader,
                         rawHeaders: rawHeaders,

@@ -20,7 +20,8 @@ import {
     CompletedBody,
     TimingEvents,
     InitiatedRequest,
-    RawHeaders
+    RawHeaders,
+    Destination
 } from "../types";
 
 import {
@@ -39,7 +40,8 @@ import {
     pairFlatRawHeaders,
     rawHeadersToObject
 } from './header-utils';
-import { LastHopEncrypted } from './socket-util';
+import { LastHopEncrypted, LastTunnelAddress } from './socket-util';
+import { getDestination, normalizeHost } from './url';
 
 export const shouldKeepAlive = (req: OngoingRequest): boolean =>
     req.httpVersion !== '1.0' &&
@@ -294,7 +296,7 @@ export function buildInitiatedRequest(request: OngoingRequest): InitiatedRequest
             'path',
             'remoteIpAddress',
             'remotePort',
-            'hostname',
+            'destination',
             'headers',
             'rawHeaders',
             'tags'
@@ -498,9 +500,10 @@ export function tryToParseHttpRequest(input: Buffer, socket: net.Socket): Partia
     try {
         req.protocol = socket[LastHopEncrypted] ? "https" : "http"; // Wild guess really
 
-        // For TLS sockets, we default the hostname to the name given by SNI. Might be overridden
-        // by the URL or Host header later, if available.
-        if (socket instanceof TLSSocket) req.hostname = socket.servername;
+        const targetHost = socket[LastTunnelAddress] ?? (socket as TLSSocket).servername;
+        req.destination = targetHost
+            ? getDestination(req.protocol, targetHost)
+            : undefined;
 
         const lines = splitBuffer(input, '\r\n');
         const requestLine = lines[0].slice(0, lines[0].length).toString('ascii');
@@ -528,20 +531,26 @@ export function tryToParseHttpRequest(input: Buffer, socket: net.Socket): Partia
             const parsedUrl = url.parse(rawUri);
             req.path = parsedUrl.path ?? undefined;
 
-            const hostHeader = _.find(req.headers, (_value, key) => key.toLowerCase() === 'host');
+            const hostHeader = _.find(req.headers, (_value, key) =>
+                key.toLowerCase() === 'host'
+            ) as string | undefined;
 
-            if (hostHeader) {
-                req.hostname = Array.isArray(hostHeader) ? hostHeader[0] : hostHeader;
-            } else if (parsedUrl.hostname) {
-                req.hostname = parsedUrl.hostname;
+            if (!req.destination) {
+                if (hostHeader) {
+                    req.destination = getDestination(req.protocol, hostHeader);
+                } else if (parsedUrl.hostname) {
+                    req.destination = getDestination(req.protocol, parsedUrl.hostname);
+                }
             }
 
-            if (rawUri.includes('://') || !req.hostname) {
+            if (rawUri.includes('://') || !req.destination) {
                 // URI is absolute, or we have no way to guess the host at all
                 req.url = rawUri;
             } else {
+                const host = normalizeHost(req.protocol, `${req.destination.hostname}:${req.destination.port}`);
+
                 // URI is relative (or invalid) and we have a host: use it
-                req.url = `${req.protocol}://${req.hostname}${
+                req.url = `${req.protocol}://${host}${
                     rawUri.startsWith('/') ? '' : '/' // Add a slash if the URI is garbage
                 }${rawUri}`;
             }
@@ -563,7 +572,7 @@ type PartiallyParsedHttpRequest = {
     url?: string;
     headers?: Headers;
     rawHeaders?: RawHeaders;
-    hostname?: string;
+    destination?: Destination;
     path?: string;
 }
 

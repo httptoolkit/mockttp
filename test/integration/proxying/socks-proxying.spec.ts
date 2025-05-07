@@ -89,7 +89,10 @@ nodeOnly(() => {
                 expect(body.toString()).to.equal("Hello world!");
             });
 
-            it("should use the SOCKS destination over the Host header", async () => {
+            it("should use the SOCKS destination hostname over the Host header, including the URL", async () => {
+                const seenRequest = getDeferred<Request>();
+                await server.on('request', (req) => seenRequest.resolve(req));
+
                 const socksSocket = await openSocksSocket(server, 'localhost', remoteServer.port, { type: 5 });
                 const response = await h1RequestOverSocket(socksSocket, remoteServer.url, {
                     headers: {
@@ -99,6 +102,35 @@ nodeOnly(() => {
                 expect(response.statusCode).to.equal(200);
                 const body = await streamToBuffer(response);
                 expect(body.toString()).to.equal("Hello world!");
+
+                expect((await seenRequest).url).to.equal(`http://localhost:${remoteServer.port}/`);
+                expect((await seenRequest).destination).to.deep.equal({
+                    hostname: 'localhost',
+                    port: remoteServer.port
+                });
+            });
+
+            it("should use the SOCKS destination IP over the Host header, but not in the URL", async () => {
+                const seenRequest = getDeferred<Request>();
+                await server.on('request', (req) => seenRequest.resolve(req));
+
+                const socksSocket = await openSocksSocket(server, '127.0.0.1', remoteServer.port, { type: 5 });
+                const response = await h1RequestOverSocket(socksSocket, remoteServer.url, {
+                    headers: {
+                        Host: "invalid.example" // This should be ignored - tunnel sets destination
+                    }
+                });
+                expect(response.statusCode).to.equal(200);
+                const body = await streamToBuffer(response);
+                expect(body.toString()).to.equal("Hello world!");
+
+                // The URL should show the conceptual target hostname - not the hostname's IP. If you
+                // specify only an IP when tunneling, we assume that the Host header is the real hostname.
+                expect((await seenRequest).url).to.equal(`http://invalid.example:${remoteServer.port}/`);
+                expect((await seenRequest).destination).to.deep.equal({
+                    hostname: '127.0.0.1',
+                    port: remoteServer.port
+                });
             });
 
         });

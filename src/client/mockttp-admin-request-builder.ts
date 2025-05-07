@@ -233,7 +233,8 @@ export class MockttpAdminRequestBuilder {
                     path
                     ${this.schema.asOptionalField('InitiatedRequest', 'remoteIpAddress')}
                     ${this.schema.asOptionalField('InitiatedRequest', 'remotePort')}
-                    hostname
+
+                    ${this.schema.asOptionalField('InitiatedRequest', 'destination', 'destination { hostname, port }')}
 
                     ${this.schema.typeHasField('InitiatedRequest', 'rawHeaders')
                         ? 'rawHeaders'
@@ -254,7 +255,8 @@ export class MockttpAdminRequestBuilder {
                     path
                     ${this.schema.asOptionalField('Request', 'remoteIpAddress')}
                     ${this.schema.asOptionalField('Request', 'remotePort')}
-                    hostname
+
+                    ${this.schema.asOptionalField('Request', 'destination', 'destination { hostname, port }')}
 
                     ${this.schema.typeHasField('Request', 'rawHeaders')
                         ? 'rawHeaders'
@@ -297,7 +299,8 @@ export class MockttpAdminRequestBuilder {
                     path
                     remoteIpAddress
                     remotePort
-                    hostname
+
+                    ${this.schema.asOptionalField('Request', 'destination', 'destination { hostname, port }')}
 
                     rawHeaders
                     body
@@ -359,12 +362,13 @@ export class MockttpAdminRequestBuilder {
             }`,
             abort: gql`subscription OnAbort {
                 requestAborted {
-                    id,
-                    protocol,
-                    method,
-                    url,
-                    path,
-                    hostname,
+                    id
+                    protocol
+                    method
+                    url
+                    path
+
+                    ${this.schema.asOptionalField('AbortedRequest', 'destination', 'destination { hostname, port }')}
 
                     ${this.schema.typeHasField('Request', 'rawHeaders')
                         ? 'rawHeaders'
@@ -437,6 +441,7 @@ export class MockttpAdminRequestBuilder {
 
                         ${this.schema.asOptionalField('ClientErrorRequest', 'remoteIpAddress')}
                         ${this.schema.asOptionalField('ClientErrorRequest', 'remotePort')}
+                        ${this.schema.asOptionalField('ClientErrorRequest', 'destination', 'destination { hostname, port }')}
                     }
                     response {
                         id
