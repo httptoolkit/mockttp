@@ -11,8 +11,7 @@ import {
     OngoingRequest,
     RawPassthroughEvent,
     TlsConnectionEvent,
-    TlsSocketMetadata,
-    TlsTimingEvents
+    TlsSocketMetadata
 } from '../types';
 
 // We store a bunch of metadata that we directly attach to sockets, TLS
@@ -26,6 +25,11 @@ export const TlsMetadata = Symbol('tls-metadata');
 export const ClientErrorInProgress = Symbol('client-error-in-progress');
 export const SocketTimingInfo = Symbol('socket-timing-info');
 export const SocketMetadata = Symbol('socket-metadata');
+
+export type SocketMetadata = {
+    tags?: string[];
+    [key: string]: any;
+}
 
 declare module 'net' {
     interface Socket {
@@ -78,10 +82,7 @@ declare module 'net' {
          * setup that will then be visible on all 'response' event data (for
          * example) later on.
          */
-        [SocketMetadata]?: {
-            tags?: string[];
-            [key: string]: any;
-        }
+        [SocketMetadata]?: SocketMetadata;
     }
 }
 
@@ -121,6 +122,7 @@ declare module 'http2' {
         [LastHopEncrypted]?: net.Socket[typeof LastHopEncrypted];
         [LastTunnelAddress]?: net.Socket[typeof LastTunnelAddress];
         [SocketTimingInfo]?: net.Socket[typeof SocketTimingInfo];
+        [SocketMetadata]?: SocketMetadata;
     }
 }
 
@@ -333,6 +335,6 @@ export function buildSocketTimingInfo(): Required<net.Socket>[typeof SocketTimin
     return { initialSocket: Date.now(), initialSocketTimestamp: now() };
 }
 
-export function getSocketMetadataTags(socket: net.Socket | undefined) {
+export function getSocketMetadataTags(socket: { [SocketMetadata]?: SocketMetadata } | undefined) {
     return (socket?.[SocketMetadata]?.tags || []).map((tag: string) => `socket-metadata:${tag}`);
 }
