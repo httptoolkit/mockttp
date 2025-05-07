@@ -21,7 +21,8 @@ import {
 } from "../../types";
 
 import { MaybePromise, ErrorLike, isErrorLike } from '@httptoolkit/util';
-import { isAbsoluteUrl, getEffectivePort, getDestination } from '../../util/url';
+import { isAbsoluteUrl, getEffectivePort } from '../../util/url';
+import { isIP } from '../../util/ip-utils';
 import {
     waitForCompletedRequest,
     buildBodyReader,
@@ -81,7 +82,8 @@ import {
     getClientRelativeHostname,
     getDnsLookupFunction,
     getTrustedCAs,
-    buildUpstreamErrorTags
+    buildUpstreamErrorTags,
+    getUrlHostname
 } from '../passthrough-handling';
 
 import {
@@ -1157,10 +1159,12 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
             // Fire rule events, to allow in-depth debugging of upstream traffic & modifications,
             // so anybody interested can see _exactly_ what we're sending upstream here:
             if (options.emitEventCallback) {
+                const urlHost = getUrlHostname(hostname, rawHeaders);
+
                 options.emitEventCallback('passthrough-request-head', {
                     method,
                     protocol: protocol!.replace(/:$/, ''),
-                    hostname,
+                    hostname: urlHost,
                     port,
                     path,
                     rawHeaders

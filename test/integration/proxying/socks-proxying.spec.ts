@@ -110,14 +110,19 @@ nodeOnly(() => {
                 });
             });
 
-            it("should use the SOCKS destination IP over the Host header, but not in the URL", async () => {
+            it("should use the SOCKS destination IP over the Host header, but not in the URL or passthrough events", async () => {
                 const seenRequest = getDeferred<Request>();
                 await server.on('request', (req) => seenRequest.resolve(req));
+
+                const passthroughEvent = getDeferred<any>();
+                await server.on('rule-event', (event) => {
+                    if (event.eventType === 'passthrough-request-head') passthroughEvent.resolve(event.eventData);
+                });
 
                 const socksSocket = await openSocksSocket(server, '127.0.0.1', remoteServer.port, { type: 5 });
                 const response = await h1RequestOverSocket(socksSocket, remoteServer.url, {
                     headers: {
-                        Host: "invalid.example" // This should be ignored - tunnel sets destination
+                        Host: "invalid.example:1234" // This should be ignored - tunnel sets destination
                     }
                 });
                 expect(response.statusCode).to.equal(200);
@@ -131,6 +136,8 @@ nodeOnly(() => {
                     hostname: '127.0.0.1',
                     port: remoteServer.port
                 });
+                expect((await passthroughEvent).hostname).to.equal('invalid.example');
+                expect((await passthroughEvent).port).to.equal(remoteServer.port.toString());
             });
 
         });

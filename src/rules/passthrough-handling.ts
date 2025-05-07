@@ -9,7 +9,7 @@ import * as semver from 'semver';
 import { CompletedBody, Headers, RawHeaders } from '../types';
 import { byteLength } from '../util/util';
 import { asBuffer } from '../util/buffer-utils';
-import { isLocalhostAddress, normalizeIP } from '../util/socket-util';
+import { isIP, isLocalhostAddress, normalizeIP } from '../util/ip-utils';
 import { CachedDns, dnsLookup, DnsLookupFunction } from '../util/dns';
 import { isMockttpBody, encodeBodyBuffer } from '../util/request-utils';
 import { areFFDHECurvesSupported } from '../util/openssl-compat';
@@ -175,6 +175,26 @@ export async function buildOverriddenBody(
     }
 
     return await encodeBodyBuffer(rawBuffer, headers);
+}
+
+/**
+ * Effectively match the slightly-different-context logic in MockttpServer for showing a
+ * request's destination within the URL. We prioritise domain names over IPs, and
+ * derive the most appropriate name available. In this case, we drop the port, since that's
+ * always specified elsewhere.
+ */
+export function getUrlHostname(
+    destinationHostname: string | null,
+    rawHeaders: RawHeaders
+) {
+    return destinationHostname && !isIP(destinationHostname)
+        ? destinationHostname
+        : ( // Use header info rather than raw IPs, if we can:
+            getHeaderValue(rawHeaders, ':authority') ??
+            getHeaderValue(rawHeaders, 'host') ??
+            destinationHostname ?? // Use destination if it's a bare IP, if we have nothing else
+            'localhost'
+        ).replace(/:\d+$/, '');
 }
 
 /**

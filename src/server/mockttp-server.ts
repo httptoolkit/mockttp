@@ -54,8 +54,8 @@ import {
     getHostFromAbsoluteUrl,
     getDestination,
     normalizeHost,
-    getDefaultPort
 } from "../util/url";
+import { isIP } from "../util/ip-utils";
 import {
     buildRawSocketEventData,
     buildTlsSocketEventData,
@@ -614,35 +614,38 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
                 (req.socket[LastHopEncrypted] ? 'https' : 'http');
             req.path = req.url;
 
-            const tunnelUrlHost = (
-                req.socket[LastTunnelAddress] &&
-                !net.isIP(getDestination(req.protocol, req.socket[LastTunnelAddress]).hostname)
-            )
-                ? normalizeHost(req.protocol, req.socket[LastTunnelAddress])
+            const tunnelDestination = req.socket[LastTunnelAddress]
+                ? getDestination(req.protocol, req.socket[LastTunnelAddress])
                 : undefined;
 
-            // If you explicitly tunnel to a hostname, that's the URL's hostname:
-            const hostname = tunnelUrlHost
-                // Otherwise, we infer based on headers: HTTP/2 or HTTP/1
-                ?? getHeaderValue(rawHeaders, ':authority')
-                ?? getHeaderValue(rawHeaders, 'host')
-                ?? req.socket[LastTunnelAddress] // Iff we have no hostname available at all
-                ?? `localhost:${this.port}`; // If you specify literally nothing, it's a direct request
+            const isTunnelToIp = tunnelDestination && isIP(tunnelDestination.hostname);
 
-            // Destination may be either a hostname or an IP (unlike tunnel host)
-            req.destination = getDestination(
-                req.protocol,
-                req.socket[LastTunnelAddress] ?? hostname
+            const urlDestination = getDestination(req.protocol,
+                (!isTunnelToIp
+                ? (
+                    req.socket[LastTunnelAddress] ?? // Tunnel domain name is preferred if available
+                    getHeaderValue(rawHeaders, ':authority') ??
+                    getHeaderValue(rawHeaders, 'host')
+                )
+                : (
+                    getHeaderValue(rawHeaders, ':authority') ??
+                    getHeaderValue(rawHeaders, 'host') ??
+                    req.socket[LastTunnelAddress] // We use the IP iff we have no hostname available at all
+                ))
+                ?? `localhost:${this.port}` // If you specify literally nothing, it's a direct request
             );
 
-            // If we don't have a port in the hostname, but we know the final destination port needs
-            // specifying, then we do include it in the URL. Happens if you have an IP tunnel address
-            // with a port, and then a port-less 'Host' header - not common.
-            const host = !hostname.includes(':') && req.destination.port !== getDefaultPort(req.protocol)
-                ? `${hostname}:${req.destination.port}`
-                : hostname;
 
-            const absoluteUrl = `${req.protocol}://${host}${req.path}`;
+            // Actual destination always follows the tunnel - even if it's an IP
+            req.destination = tunnelDestination
+                ?? urlDestination;
+
+            // URL port should always match the real port - even if (e.g) the Host header is lying.
+            urlDestination.port = req.destination.port;
+
+            const absoluteUrl = `${req.protocol}://${
+                normalizeHost(req.protocol, `${urlDestination.hostname}:${urlDestination.port}`)
+            }${req.path}`;
 
             if (!getHeaderValue(rawHeaders, ':path')) {
                 (req as Mutable<ExtendedRawRequest>).url = new url.URL(absoluteUrl).toString();
