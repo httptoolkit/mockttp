@@ -69,13 +69,6 @@ export interface PassThroughHandlerConnectionOptions {
     additionalTrustedCAs?: Array<CADefinition>;
 
     /**
-     * Deprecated alias for `additionalTrustedCAs`
-     *
-     * @deprecated
-     */
-    trustAdditionalCAs?: Array<CADefinition>;
-
-    /**
      * A mapping of hosts to client certificates to use, in the form of
      * `{ key, cert }` objects (none, by default)
      */
@@ -112,15 +105,10 @@ export interface PassThroughHandlerConnectionOptions {
     /**
      * Whether to simulate connection errors back to the client.
      *
-     * By default (in most cases - see below) when an upstream request fails
-     * outright a 502 "Bad Gateway" response is sent to the downstream client,
-     * explicitly indicating the failure and containing the error that caused
-     * the issue in the response body.
-     *
-     * Only in the case of upstream HTTP connection reset errors is a connection
-     * reset normally sent back downstream to existing clients (this behaviour
-     * exists for backward compatibility, and will change to match other error
-     * behaviour in a future version).
+     * By default when an upstream request fails outright a 502 "Bad Gateway"
+     * response is sent to the downstream client, explicitly indicating the
+     * failure and containing the error that caused the issue in the
+     * response body.
      *
      * When this option is set to `true`, low-level connection failures will
      * always trigger a downstream connection close/reset, rather than a 502

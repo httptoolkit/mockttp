@@ -103,14 +103,6 @@ export function buildAdminServerModel(
                     deserializeRuleData(rule, stream, ruleParameters)
                 ));
             },
-            setFallbackRule: async (__: any, { input }: { input: Serialized<RequestRuleData> }) => {
-                // Deprecated endpoint, but preserved for API backward compat
-                const ruleData = deserializeRuleData(input, stream, ruleParameters);
-                return mockServer.addRequestRules({
-                    ...ruleData,
-                    priority: 0
-                }).then((rules) => rules[0]);
-            },
 
             addWebSocketRule: async (__: any, { input }: { input: Serialized<WebSocketRuleData> }) => {
                 return mockServer.addWebSocketRule(deserializeWebSocketRuleData(input, stream, ruleParameters));

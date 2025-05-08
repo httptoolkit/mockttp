@@ -187,7 +187,6 @@ export interface ConnectionTimingEvents {
 }
 
 export interface TlsTimingEvents extends ConnectionTimingEvents {
-
     /**
      * When Mockttp's handshake for this connection was completed (if there
      * was one). This is not set for passed through connections.

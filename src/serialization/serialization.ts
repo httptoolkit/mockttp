@@ -337,7 +337,7 @@ export function serializeProxyConfig(
         return {
             ...proxyConfig,
             trustedCAs: proxyConfig.trustedCAs?.map((caDefinition) =>
-                typeof caDefinition !== 'string' && 'cert' in caDefinition
+                'cert' in caDefinition
                     ? { cert: caDefinition.cert.toString('utf8') } // Stringify in case of buffers
                     : caDefinition
             ),

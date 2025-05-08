@@ -149,7 +149,7 @@ async function requestFromAdminServer<T>(serverUrl: string, path: string, option
             jsonBody = JSON.parse(body);
         } catch (e) { }
 
-        if (jsonBody && jsonBody.error) {
+        if (jsonBody?.error) {
             throw new RequestError(
                 jsonBody.error,
                 response
@@ -442,8 +442,7 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
 
             const path = portConfig ? `/start?port=${JSON.stringify(portConfig)}` : '/start';
             const adminServerResponse = await requestFromAdminServer<
-                | { port: number, mockRoot: string } // Backward compat for old servers
-                | { id: string, pluginData: PluginClientResponsesMap<Plugins> } // New plugin-aware servers
+                { id: string, pluginData: PluginClientResponsesMap<Plugins> } // New plugin-aware servers
             >(
                 this.adminClientOptions.adminServerUrl,
                 path,
@@ -453,23 +452,13 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
                         'Content-Type': 'application/json'
                     }),
                     body: JSON.stringify({
-                        plugins: pluginStartParams,
-                        // Include all the Mockttp params at the root too, for backward compat with old admin servers:
-                        ...(pluginStartParams.http?.options as MockttpOptions | undefined)
+                        plugins: pluginStartParams
                     })
                 }, this.adminClientOptions.requestOptions)
             );
 
-            // Backward compat for old servers
-            const isPluginAwareServer = 'id' in adminServerResponse;
-
-            const sessionId = isPluginAwareServer
-                ? adminServerResponse.id
-                : adminServerResponse.port.toString();
-
-            const adminSessionBaseUrl = `${this.adminClientOptions.adminServerUrl}/${
-                isPluginAwareServer ? 'session' : 'server'
-            }/${sessionId}`
+            const sessionId = adminServerResponse.id;
+            const adminSessionBaseUrl = `${this.adminClientOptions.adminServerUrl}/session/${sessionId}`
 
             // Also open a stream connection, for 2-way communication we might need later.
             const adminServerStream = await this.openStreamToMockServer(adminSessionBaseUrl);
@@ -496,14 +485,8 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
 
             if (this.debug) console.log('Started remote mock server');
 
-            const serverMetadata =
-                this.adminServerMetadata = // Set field before we resolve the promise
-                    'pluginData' in adminServerResponse
-                        ? adminServerResponse.pluginData
-                        : {
-                            // Backward compat - convert old always-HTTP data into per-plugin format:
-                            http: adminServerResponse
-                        } as unknown as PluginClientResponsesMap<Plugins>;
+            // Set field before we resolve the promise:
+            const serverMetadata = this.adminServerMetadata = adminServerResponse.pluginData;
 
             startPromise.resolve(true);
             return serverMetadata;

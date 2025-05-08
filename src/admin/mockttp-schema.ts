@@ -11,7 +11,6 @@ export const MockttpSchema = gql`
         addRule(input: MockRule!): MockedEndpoint!
         addRules(input: [MockRule!]!): [MockedEndpoint!]!
         setRules(input: [MockRule!]!): [MockedEndpoint!]!
-        setFallbackRule(input: MockRule!): MockedEndpoint!
 
         addWebSocketRule(input: WebSocketMockRule!): MockedEndpoint!
         addWebSocketRules(input: [WebSocketMockRule!]!): [MockedEndpoint!]!
@@ -83,17 +82,6 @@ export const MockttpSchema = gql`
         tags: [String!]!
         timingEvents: Json!
         tlsMetadata: Json!
-    }
-
-    # Old name for TlsHandshakeFailure, kept for backward compat
-    type TlsRequest {
-        failureCause: String!
-
-        hostname: String
-        remoteIpAddress: String
-        remotePort: Int
-        tags: [String!]!
-        timingEvents: Json!
     }
 
     type ClientError {

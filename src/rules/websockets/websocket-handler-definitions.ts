@@ -79,7 +79,7 @@ export class PassThroughWebSocketHandlerDefinition extends Serializable implemen
 
         // If a location is provided, and it's not a bare hostname, it must be parseable
         const { forwarding } = options;
-        if (forwarding && forwarding.targetHost.includes('/')) {
+        if (forwarding?.targetHost.includes('/')) {
             const { protocol, hostname, port, path } = url.parse(forwarding.targetHost);
             if (path && path.trim() !== "/") {
                 const suggestion = url.format({ protocol, hostname, port }) ||
@@ -102,10 +102,7 @@ export class PassThroughWebSocketHandlerDefinition extends Serializable implemen
         this.proxyConfig = options.proxyConfig;
         this.simulateConnectionErrors = !!options.simulateConnectionErrors;
 
-        this.extraCACertificates =
-            options.additionalTrustedCAs ||
-            options.trustAdditionalCAs ||
-            [];
+        this.extraCACertificates = options.additionalTrustedCAs || [];
         this.clientCertificateHostMap = options.clientCertificateHostMap || {};
     }
 

@@ -154,7 +154,7 @@ describe("Rule event subscriptions", () => {
         const forwardingRule = await server.forAnyRequest().thenForwardTo(remoteServer.url, {
             beforeResponse: () => {
                 return {
-                    status: 404,
+                    statusCode: 404,
                     body: 'MODIFIED RESPONSE BODY'
                 };
             }

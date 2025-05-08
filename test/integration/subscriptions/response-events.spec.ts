@@ -453,14 +453,16 @@ describe("Abort subscriptions", () => {
                 badServer.close();
             });
 
-            it("should be sent when the remote server aborts the response", async () => {
+            it("should be sent when simulating errors if the remote server aborts the response", async () => {
                 let seenAbortPromise = getDeferred<AbortedRequest>();
                 await server.on('abort', (r) => seenAbortPromise.resolve(r));
 
                 let seenResponsePromise = getDeferred<CompletedResponse>();
                 await server.on('response', (r) => seenResponsePromise.resolve(r));
 
-                await server.forAnyRequest().thenForwardTo(`http://localhost:8901`);
+                await server.forAnyRequest().thenForwardTo(`http://localhost:8901`, {
+                    simulateConnectionErrors: true
+                });
 
                 fetch(server.urlFor("/mocked-endpoint")).catch(() => {});
 
@@ -475,7 +477,7 @@ describe("Abort subscriptions", () => {
                 expect(seenAbort.error!.code).to.equal('ECONNRESET');
             });
 
-            it("should be sent when a remote proxy aborts the response", async () => {
+            it("should be sent when simulating errors if the remote proxy aborts the response", async () => {
                 let seenAbortPromise = getDeferred<AbortedRequest>();
                 await server.on('abort', (r) => seenAbortPromise.resolve(r));
 
@@ -484,7 +486,8 @@ describe("Abort subscriptions", () => {
 
                 await server.forAnyRequest().thenPassThrough({
                     // Wrong port: this connection will fail
-                    proxyConfig: { proxyUrl: `http://localhost:8999` }
+                    proxyConfig: { proxyUrl: `http://localhost:8999` },
+                    simulateConnectionErrors: true
                 });
 
                 fetch(server.urlFor("/mocked-endpoint")).catch(() => {});

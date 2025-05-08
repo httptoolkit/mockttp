@@ -143,7 +143,7 @@ export class AbortError extends TypedError {
 }
 
 function isSerializedBuffer(obj: any): obj is SerializedBuffer {
-    return obj && obj.type === 'Buffer' && !!obj.data;
+    return obj?.type === 'Buffer' && !!obj.data;
 }
 
 export interface RequestHandler extends RequestHandlerDefinition {
@@ -206,7 +206,7 @@ async function writeResponseFromCallback(
 
     writeHead(
         response,
-        result.statusCode || result.status || 200,
+        result.statusCode || 200,
         result.statusMessage,
         result.headers
     );
@@ -970,7 +970,6 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                     validateCustomHeaders(serverHeaders, modifiedRes?.headers);
 
                     serverStatusCode = modifiedRes?.statusCode ||
-                        modifiedRes?.status ||
                         serverStatusCode;
                     serverStatusMessage = modifiedRes?.statusMessage ||
                         serverStatusMessage;
@@ -1183,7 +1182,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
             clientRes.tags.push(...buildUpstreamErrorTags(e));
 
             if ((e as any).causedByUpstreamError && !serverReq?.aborted) {
-                if (e.code === 'ECONNRESET' || e.code === 'ECONNREFUSED' || this.simulateConnectionErrors) {
+                if (this.simulateConnectionErrors) {
                     // The upstream socket failed: forcibly break the downstream stream to match. This could
                     // happen due to a reset, TLS or DNS failures, or anything - but critically it's a
                     // connection-level issue, so we try to create connection issues downstream.
@@ -1306,10 +1305,6 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                     )
                 } : {})
             } as ResponseTransform : undefined,
-            // Backward compat for old clients:
-            ...data.forwardToLocation ? {
-                forwarding: { targetHost: data.forwardToLocation }
-            } : {},
             forwarding: data.forwarding,
             lookupOptions: data.lookupOptions,
             simulateConnectionErrors: !!data.simulateConnectionErrors,

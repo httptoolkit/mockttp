@@ -143,7 +143,7 @@ export const normalizeUrl: (url: string) => string =
                     );
                 }
 
-                if (parsedUrl.hostname && parsedUrl.hostname.endsWith('.')) {
+                if (parsedUrl.hostname?.endsWith('.')) {
                     parsedUrl.hostname = parsedUrl.hostname.slice(0, -1);
                 }
 

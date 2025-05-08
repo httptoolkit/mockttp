@@ -164,13 +164,6 @@ export interface CallbackResponseMessageResult {
     statusCode?: number;
 
     /**
-     * Supported only for backward compatibility.
-     *
-     * @deprecated Use statusCode instead.
-     */
-    status?: number;
-
-    /**
      * The response status message, as a string. This is ignored for
      * HTTP/2 responses.
      *
@@ -769,7 +762,7 @@ export class PassThroughHandlerDefinition extends Serializable implements Reques
 
         // If a location is provided, and it's not a bare hostname, it must be parseable
         const { forwarding } = options;
-        if (forwarding && forwarding.targetHost.includes('/')) {
+        if (forwarding?.targetHost.includes('/')) {
             const { protocol, hostname, port, path } = url.parse(forwarding.targetHost);
             if (path && path.trim() !== "/") {
                 const suggestion = url.format({ protocol, hostname, port }) ||
@@ -792,10 +785,7 @@ export class PassThroughHandlerDefinition extends Serializable implements Reques
         this.proxyConfig = options.proxyConfig;
         this.simulateConnectionErrors = !!options.simulateConnectionErrors;
 
-        this.extraCACertificates =
-            options.additionalTrustedCAs ||
-            options.trustAdditionalCAs ||
-            [];
+        this.extraCACertificates = options.additionalTrustedCAs || [];
 
         this.clientCertificateHostMap = options.clientCertificateHostMap || {};
 

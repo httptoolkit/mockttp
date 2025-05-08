@@ -13,7 +13,7 @@ import { isIP, isLocalhostAddress, normalizeIP } from '../util/ip-utils';
 import { CachedDns, dnsLookup, DnsLookupFunction } from '../util/dns';
 import { isMockttpBody, encodeBodyBuffer } from '../util/request-utils';
 import { areFFDHECurvesSupported } from '../util/openssl-compat';
-import { ErrorLike } from '@httptoolkit/util';
+import { ErrorLike, unreachableCheck } from '@httptoolkit/util';
 import { getHeaderValue } from '../util/header-utils';
 
 import {
@@ -109,7 +109,7 @@ export const getUpstreamTlsOptions = (strictChecks: boolean): tls.SecureContextO
 });
 
 export async function getTrustedCAs(
-    trustedCAs: Array<string | CADefinition> | undefined,
+    trustedCAs: Array<CADefinition> | undefined,
     additionalTrustedCAs: Array<CADefinition> | undefined
 ): Promise<Array<string> | undefined> {
     if (trustedCAs && additionalTrustedCAs?.length) {
@@ -117,22 +117,21 @@ export async function getTrustedCAs(
     }
 
     if (trustedCAs) {
-        return Promise.all(trustedCAs.map((caDefinition) =>  getCA(caDefinition)));
+        return Promise.all(trustedCAs.map((caDefinition) => getCA(caDefinition)));
     }
 
     if (additionalTrustedCAs) {
-        const CAs = await Promise.all(additionalTrustedCAs.map((caDefinition) =>  getCA(caDefinition)));
+        const CAs = await Promise.all(additionalTrustedCAs.map((caDefinition) => getCA(caDefinition)));
         return tls.rootCertificates.concat(CAs);
     }
 }
 
-const getCA = async (caDefinition: string | CADefinition) => {
-    return typeof caDefinition === 'string'
-        ? caDefinition
-    : 'certPath' in caDefinition
+const getCA = async (caDefinition: CADefinition) => {
+    return 'certPath' in caDefinition
         ? await fs.readFile(caDefinition.certPath, 'utf8')
-    // 'cert' in caDefinition
-        : caDefinition.cert.toString('utf8')
+    : 'cert' in caDefinition
+        ? caDefinition.cert.toString('utf8')
+    : unreachableCheck(caDefinition);
 }
 
 

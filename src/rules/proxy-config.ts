@@ -47,13 +47,9 @@ export interface ProxySetting {
      * Node default CAs too).
      *
      * This should be specified as either a { cert: string | Buffer } object or a
-     * { certPath: string } object (to read the cert from disk). The previous
-     * simple string format is supported but deprecated.
+     * { certPath: string } object (to read the cert from disk).
      */
-    trustedCAs?: Array<
-        | string // Deprecated
-        | CADefinition
-    >;
+    trustedCAs?: Array<CADefinition>;
 
     /**
      * Extra CAs to trust for HTTPS connections to the proxy. Ignored if the connection

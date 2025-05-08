@@ -32,10 +32,6 @@ function normalizeHttpMessage(message: any, event?: SubscribableEvent) {
         // We use raw headers where possible to derive headers, instead of using any pre-derived
         // header data, for maximum accuracy (and to avoid any need to query for both).
         message.headers = rawHeadersToObject(message.rawHeaders);
-    } else if (message.headers) {
-        // Backward compat for older servers:
-        message.headers = JSON.parse(message.headers);
-        message.rawHeaders = objectHeadersToRaw(message.headers);
     }
 
     if (message.rawTrailers) {
@@ -236,19 +232,16 @@ export class MockttpAdminRequestBuilder {
 
                     ${this.schema.asOptionalField('InitiatedRequest', 'destination', 'destination { hostname, port }')}
 
-                    ${this.schema.typeHasField('InitiatedRequest', 'rawHeaders')
-                        ? 'rawHeaders'
-                        : 'headers'
-                    }
+                    rawHeaders
                     timingEvents
                     httpVersion
-                    ${this.schema.asOptionalField('InitiatedRequest', 'tags')}
+                    tags
                 }
             }`,
             request: gql`subscription OnRequest {
                 requestReceived {
                     id
-                    ${this.schema.asOptionalField('Request', 'matchedRuleId')}
+                    matchedRuleId
                     protocol
                     method
                     url
@@ -258,17 +251,13 @@ export class MockttpAdminRequestBuilder {
 
                     ${this.schema.asOptionalField('Request', 'destination', 'destination { hostname, port }')}
 
-                    ${this.schema.typeHasField('Request', 'rawHeaders')
-                        ? 'rawHeaders'
-                        : 'headers'
-                    }
-
+                    rawHeaders
                     body
                     ${this.schema.asOptionalField('Request', 'rawTrailers')}
 
-                    ${this.schema.asOptionalField('Request', 'timingEvents')}
-                    ${this.schema.asOptionalField('Request', 'httpVersion')}
-                    ${this.schema.asOptionalField('Request', 'tags')}
+                    timingEvents
+                    httpVersion
+                    tags
                 }
             }`,
             response: gql`subscription OnResponse {
@@ -277,16 +266,12 @@ export class MockttpAdminRequestBuilder {
                     statusCode
                     statusMessage
 
-                    ${this.schema.typeHasField('Response', 'rawHeaders')
-                        ? 'rawHeaders'
-                        : 'headers'
-                    }
-
+                    rawHeaders
                     body
                     ${this.schema.asOptionalField('Response', 'rawTrailers')}
 
-                    ${this.schema.asOptionalField('Response', 'timingEvents')}
-                    ${this.schema.asOptionalField('Response', 'tags')}
+                    timingEvents
+                    tags
                 }
             }`,
             'websocket-request': gql`subscription OnWebSocketRequest {
@@ -370,14 +355,12 @@ export class MockttpAdminRequestBuilder {
 
                     ${this.schema.asOptionalField('AbortedRequest', 'destination', 'destination { hostname, port }')}
 
-                    ${this.schema.typeHasField('Request', 'rawHeaders')
-                        ? 'rawHeaders'
-                        : 'headers'
-                    }
+                    rawHeaders
 
-                    ${this.schema.asOptionalField('Request', 'timingEvents')}
-                    ${this.schema.asOptionalField('Request', 'tags')}
-                    ${this.schema.asOptionalField('AbortedRequest', 'error')}
+                    timingEvents
+                    tags
+
+                    error
                 }
             }`,
             'tls-passthrough-opened': gql`subscription OnTlsPassthroughOpened {
@@ -397,7 +380,7 @@ export class MockttpAdminRequestBuilder {
                     remotePort
                     tags
                     timingEvents
-                    ${this.schema.asOptionalField('TlsPassthroughEvent', 'tlsMetadata')}
+                    tlsMetadata
                 }
             }`,
             'tls-passthrough-closed': gql`subscription OnTlsPassthroughClosed {
@@ -417,7 +400,7 @@ export class MockttpAdminRequestBuilder {
                     remotePort
                     tags
                     timingEvents
-                    ${this.schema.asOptionalField('TlsPassthroughEvent', 'tlsMetadata')}
+                    tlsMetadata
                 }
             }`,
             'tls-client-error': gql`subscription OnTlsClientError {
@@ -425,10 +408,10 @@ export class MockttpAdminRequestBuilder {
                     failureCause
                     hostname
                     remoteIpAddress
-                    ${this.schema.asOptionalField(['TlsHandshakeFailure', 'TlsRequest'], 'remotePort')}
-                    ${this.schema.asOptionalField(['TlsHandshakeFailure', 'TlsRequest'], 'tags')}
-                    ${this.schema.asOptionalField(['TlsHandshakeFailure', 'TlsRequest'], 'timingEvents')}
-                    ${this.schema.asOptionalField(['TlsHandshakeFailure', 'TlsRequest'], 'tlsMetadata')}
+                    remotePort
+                    tags
+                    timingEvents
+                    tlsMetadata
                 }
             }`,
             'client-error': gql`subscription OnClientError {
@@ -444,10 +427,7 @@ export class MockttpAdminRequestBuilder {
                         url
                         path
 
-                        ${this.schema.typeHasField('ClientErrorRequest', 'rawHeaders')
-                            ? 'rawHeaders'
-                            : 'headers'
-                        }
+                        rawHeaders
 
                         ${this.schema.asOptionalField('ClientErrorRequest', 'remoteIpAddress')}
                         ${this.schema.asOptionalField('ClientErrorRequest', 'remotePort')}
@@ -460,10 +440,7 @@ export class MockttpAdminRequestBuilder {
                         statusCode
                         statusMessage
 
-                        ${this.schema.typeHasField('Response', 'rawHeaders')
-                            ? 'rawHeaders'
-                            : 'headers'
-                        }
+                        rawHeaders
 
                         body
                         ${this.schema.asOptionalField('Response', 'rawTrailers')}
@@ -567,16 +544,13 @@ export class MockttpAdminRequestBuilder {
                                 path,
                                 hostname
 
-                                ${this.schema.typeHasField('Request', 'rawHeaders')
-                                    ? 'rawHeaders'
-                                    : 'headers'
-                                }
+                                rawHeaders
 
                                 body,
-                                ${this.schema.asOptionalField('Request', 'timingEvents')}
-                                ${this.schema.asOptionalField('Request', 'httpVersion')}
+                                timingEvents
+                                httpVersion
                             }
-                            ${this.schema.asOptionalField('MockedEndpoint', 'isPending')}
+                            isPending
                         }
                     }
                 `,

@@ -181,22 +181,7 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
         this.app.post('/start', async (req, res) => {
             try {
                 const rawConfig = req.body;
-
-                // New clients send: "{ plugins: { http: {...}, webrtc: {...} } }" etc. Old clients just send
-                // the HTTP options bare with no wrapper, so we wrap them for backward compat.
-                const isPluginAwareClient = ('plugins' in rawConfig);
-
-                const providedPluginStartParams = (!isPluginAwareClient
-                    ? { // Backward compat: this means the client is not plugin-aware, and so all options are Mockttp options
-                        http: {
-                            options: _.cloneDeep(rawConfig),
-                            port: (typeof req.query.port === 'string')
-                                ? JSON.parse(req.query.port)
-                                : undefined
-                        }
-                    }
-                    : rawConfig.plugins
-                ) as PluginStartParamsMap<Plugins>;
+                const providedPluginStartParams = rawConfig.plugins as PluginStartParamsMap<Plugins>;
 
                 // For each plugin that was specified, we pull default params into their start params.
                 const pluginStartParams = _.mapValues((providedPluginStartParams), (params, pluginId) => {
@@ -204,15 +189,6 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
                 });
 
                 if (this.debug) console.log('Admin server starting mock session with config', pluginStartParams);
-
-                // Backward compat: do an explicit check for HTTP port conflicts
-                const httpPort = (pluginStartParams as { http?: { port: number } }).http?.port;
-                if (_.isNumber(httpPort) && this.sessions[httpPort] != null) {
-                    res.status(409).json({
-                        error: `Cannot start: mock server is already running on port ${httpPort}`
-                    });
-                    return;
-                }
 
                 const missingPluginId = Object.keys(pluginStartParams).find(pluginId => !(pluginId in this.adminPlugins));
                 if (missingPluginId) {
@@ -233,28 +209,15 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
                     )
                 );
 
-                // More backward compat: old clients assume that the port is also the management id.
-                const sessionId = isPluginAwareClient
-                    ? uuid()
-                    : (sessionPlugins as any as {
-                        'http': MockttpAdminPlugin
-                    }).http.getMockServer().port.toString();
-
+                const sessionId = uuid();
                 await this.startSessionManagementAPI(sessionId, sessionPlugins);
 
-                if (isPluginAwareClient) {
-                    res.json({
-                        id: sessionId,
-                        pluginData: _.mapValues(pluginStartResults, (r: unknown) =>
-                            r ?? {} // Always return _something_, even if the plugin returns null/undefined.
-                        )
-                    });
-                } else {
-                    res.json({
-                        id: sessionId,
-                        ...(pluginStartResults['http']!)
-                    });
-                }
+                res.json({
+                    id: sessionId,
+                    pluginData: _.mapValues(pluginStartResults, (r: unknown) =>
+                        r ?? {} // Always return _something_, even if the plugin returns null/undefined.
+                    )
+                });
             } catch (e) {
                 res.status(500).json({ error: `Failed to start mock session: ${
                     (isErrorLike(e) && e.message) || e
@@ -290,7 +253,6 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
         }
 
         this.app.use('/session/:id/', sessionRequest);
-        this.app.use('/server/:id/', sessionRequest); // Old URL for backward compat
     }
 
     async resetAdminServer() {
