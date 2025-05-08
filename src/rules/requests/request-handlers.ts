@@ -253,11 +253,7 @@ export class CallbackHandler extends CallbackHandlerDefinition {
                 | WithSerializedCallbackBuffers<CallbackResponseMessageResult>
                 | 'close'
                 | 'reset'
-            >({ args: [
-                (version || -1) >= 2
-                    ? withSerializedBodyReader(request)
-                    : request // Backward compat: old handlers
-            ] });
+            >({ args: [withSerializedBodyReader(request)] });
 
             if (typeof callbackResult === 'string') {
                 return callbackResult;

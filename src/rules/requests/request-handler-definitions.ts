@@ -20,7 +20,6 @@ import {
 } from "../../types";
 
 import { Replace } from '../../util/type-utils';
-import { buildBodyReader } from '../../util/request-utils';
 import { asBuffer } from '../../util/buffer-utils';
 import {
     Serializable,
@@ -316,10 +315,7 @@ export interface SerializedCallbackHandlerData {
  * @internal
  */
 export interface CallbackRequestMessage {
-    args: [
-        | Replace<CompletedRequest, { body: string }> // New format
-        | CompletedRequest // Old format with directly serialized body
-    ];
+    args: [Replace<CompletedRequest, { body: string }>];
 }
 
 export class CallbackHandlerDefinition extends Serializable implements RequestHandlerDefinition {
@@ -343,14 +339,10 @@ export class CallbackHandlerDefinition extends Serializable implements RequestHa
             CallbackRequestMessage,
             CallbackResponseResult
         >(async (streamMsg) => {
-            const request = _.isString(streamMsg.args[0].body)
-                ? withDeserializedBodyReader( // New format: body serialized as base64
-                    streamMsg.args[0] as Replace<CompletedRequest, { body: string }>
-                )
-                : { // Backward compat: old fully-serialized format
-                    ...streamMsg.args[0],
-                    body: buildBodyReader(streamMsg.args[0].body.buffer, streamMsg.args[0].headers)
-                };
+            const request = withDeserializedBodyReader(
+                // Body serialized as base64
+                streamMsg.args[0]
+            )
 
             const callbackResult = await this.callback.call(null, request);
 
