@@ -230,7 +230,10 @@ export class MockttpAdminRequestBuilder {
                     ${this.schema.asOptionalField('InitiatedRequest', 'remoteIpAddress')}
                     ${this.schema.asOptionalField('InitiatedRequest', 'remotePort')}
 
-                    ${this.schema.asOptionalField('InitiatedRequest', 'destination', 'destination { hostname, port }')}
+                    ${this.schema.typeHasField('InitiatedRequest', 'destination')
+                        ? 'destination { hostname, port }'
+                        : 'hostname' // Backward compat for old servers
+                    }
 
                     rawHeaders
                     timingEvents
@@ -249,7 +252,10 @@ export class MockttpAdminRequestBuilder {
                     ${this.schema.asOptionalField('Request', 'remoteIpAddress')}
                     ${this.schema.asOptionalField('Request', 'remotePort')}
 
-                    ${this.schema.asOptionalField('Request', 'destination', 'destination { hostname, port }')}
+                    ${this.schema.typeHasField('Request', 'destination')
+                        ? 'destination { hostname, port }'
+                        : 'hostname' // Backward compat for old servers
+                    }
 
                     rawHeaders
                     body
@@ -285,7 +291,10 @@ export class MockttpAdminRequestBuilder {
                     remoteIpAddress
                     remotePort
 
-                    ${this.schema.asOptionalField('Request', 'destination', 'destination { hostname, port }')}
+                    ${this.schema.typeHasField('Request', 'destination')
+                        ? 'destination { hostname, port }'
+                        : 'hostname' // Backward compat for old servers
+                    }
 
                     rawHeaders
                     body
@@ -353,7 +362,10 @@ export class MockttpAdminRequestBuilder {
                     url
                     path
 
-                    ${this.schema.asOptionalField('AbortedRequest', 'destination', 'destination { hostname, port }')}
+                    ${this.schema.typeHasField('AbortedRequest', 'destination')
+                        ? 'destination { hostname, port }'
+                        : 'hostname' // Backward compat for old servers
+                    }
 
                     rawHeaders
 
@@ -406,7 +418,12 @@ export class MockttpAdminRequestBuilder {
             'tls-client-error': gql`subscription OnTlsClientError {
                 failedTlsRequest {
                     failureCause
-                    hostname
+
+                    ${this.schema.typeHasField('TlsHandshakeFailure', 'destination')
+                        ? 'destination { hostname, port }'
+                        : 'hostname'
+                    }
+
                     remoteIpAddress
                     remotePort
                     tags

@@ -64,8 +64,8 @@ export const MockttpSchema = gql`
         id: String!
 
         destination: Destination!
+        hostname: String # Deprecated
 
-        hostname: String
         remoteIpAddress: String!
         remotePort: Int!
         tags: [String!]!
@@ -76,7 +76,9 @@ export const MockttpSchema = gql`
     type TlsHandshakeFailure {
         failureCause: String!
 
-        hostname: String
+        destination: Destination
+        hostname: String # Deprecated
+
         remoteIpAddress: String
         remotePort: Int
         tags: [String!]!
