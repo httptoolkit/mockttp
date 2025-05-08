@@ -68,18 +68,6 @@ export interface Request {
     remotePort?: number; // Not set remotely with older servers or in some error cases
 
     /**
-     * This field was ambiguous and is no longer used - included only for backwards
-     * compatibility.
-     *
-     * You probably want to either look at the `url` field (the full URL content including
-     * the hostname of the target server) or `destination` (best guess of actual target host
-     * including bare IPs, independent of the hostname used).
-     *
-     * @deprecated
-     */
-    hostname?: '' | undefined;
-
-    /**
      * The best guess at the target host + port of the request. This uses tunnelling metadata
      * wherever possible, or the headers if not.
      */
