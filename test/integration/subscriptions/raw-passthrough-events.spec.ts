@@ -48,7 +48,7 @@ nodeOnly(() => {
         });
 
         it("should fire for raw sockets that are passed through SOCKS", async () => {
-            const events: any[] = [];
+            const events: Array<RawPassthroughEvent> = [];
             await server.on('raw-passthrough-opened', (e) => events.push(e));
             await server.on('raw-passthrough-closed', (e) => events.push(e));
 
@@ -62,8 +62,8 @@ nodeOnly(() => {
             const [openEvent, closeEvent] = events;
             expect(openEvent.id).to.equal(closeEvent.id);
 
-            expect(openEvent.upstreamHost).to.equal('localhost');
-            expect(openEvent.upstreamPort).to.equal(remotePort);
+            expect(openEvent.destination.hostname).to.equal('localhost');
+            expect(openEvent.destination.port).to.equal(remotePort);
         });
 
         it("should expose sent & received data", async () => {
@@ -144,8 +144,8 @@ nodeOnly(() => {
                 expect(sentEvent.id).to.equal(openEvent.id);
                 expect(openEvent.id).to.equal(closeEvent.id);
 
-                expect(openEvent.upstreamHost).to.equal('localhost');
-                expect(openEvent.upstreamPort).to.equal(remotePort);
+                expect(openEvent.destination.hostname).to.equal('localhost');
+                expect(openEvent.destination.port).to.equal(remotePort);
 
                 expect(receivedEvent.content.toString()).to.equal('123456789');
                 expect(receivedEvent.direction).to.equal('received');

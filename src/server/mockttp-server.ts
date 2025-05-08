@@ -565,8 +565,6 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         if (socket instanceof tls.TLSSocket && socket[TlsSetupCompleted]) return;
 
         setImmediate(() => {
-            // We can get falsey but set hostname values - drop them
-            if (!request.hostname) delete request.hostname;
             if (this.debug) console.warn(`TLS client error: ${JSON.stringify(request)}`);
             this.eventEmitter.emit('tls-client-error', request);
         });
@@ -1193,8 +1191,7 @@ ${await this.suggestRule(request)}`
             {
                 id: uuid(),
                 hostname: hostname, // Deprecated, but kept here for backward compat
-                upstreamHost: hostname,
-                upstreamPort: targetPort
+                destination: { hostname, port: targetPort }
             }
         );
 

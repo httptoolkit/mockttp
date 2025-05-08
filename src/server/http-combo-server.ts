@@ -474,8 +474,6 @@ function analyzeAndMaybePassThroughTls(
 
             socket[TlsMetadata] = {
                 sniHostname,
-                connectHostname: upstreamDestination?.hostname,
-                connectPort: upstreamDestination?.port.toString(),
                 clientAlpn: helloData.alpnProtocols,
                 ja3Fingerprint: calculateJa3FromFingerprintData(helloData.fingerprintData),
                 ja4Fingerprint: calculateJa4FromHelloData(helloData)

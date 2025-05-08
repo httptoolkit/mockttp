@@ -64,8 +64,7 @@ export const MockttpSchema = gql`
     type TlsPassthroughEvent {
         id: String!
 
-        upstreamHost: String
-        upstreamPort: Int!
+        destination: Destination!
 
         hostname: String
         remoteIpAddress: String!
@@ -123,8 +122,7 @@ export const MockttpSchema = gql`
     type RawPassthroughEvent {
         id: String!
 
-        upstreamHost: String!
-        upstreamPort: Int!
+        destination: Destination!
 
         remoteIpAddress: String!
         remotePort: Int!

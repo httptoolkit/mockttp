@@ -93,24 +93,16 @@ export interface Request {
 }
 
 export interface TlsConnectionEvent {
-    /**
-     * @deprecated - Use `tlsMetadata.sniHostname` or `tlsMetadata.connectHostname` for
-     * handshake/tunnel details, or `upstreamHost` in passthrough events for the
-     * upstream host of the passthrough tunnel.
-     */
-    hostname?: string;
-
     remoteIpAddress?: string; // Can be unavailable in some error cases
     remotePort?: number; // Can be unavailable in some error cases
     tags: string[];
     timingEvents: TlsTimingEvents;
+    destination?: Destination; // Set for tunnelled requests only
     tlsMetadata: TlsSocketMetadata;
 }
 
 export interface TlsSocketMetadata {
     sniHostname?: string;
-    connectHostname?: string;
-    connectPort?: string;
     clientAlpn?: string[];
     ja3Fingerprint?: string;
     ja4Fingerprint?: string;
@@ -118,6 +110,7 @@ export interface TlsSocketMetadata {
 
 export interface TlsPassthroughEvent extends RawPassthroughEvent, TlsConnectionEvent {
     // Removes ambiguity of the two parent interface fields
+    destination: Destination;
     remoteIpAddress: string;
     remotePort: number;
     timingEvents: TlsTimingEvents;
@@ -137,8 +130,7 @@ export interface TlsHandshakeFailure extends TlsConnectionEvent {
 export interface RawPassthroughEvent {
     id: string;
 
-    upstreamHost: string;
-    upstreamPort: number;
+    destination: Destination;
 
     /**
      * The IP address of the remote client that initiated the connection.

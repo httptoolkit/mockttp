@@ -384,8 +384,13 @@ export class MockttpAdminRequestBuilder {
                 tlsPassthroughOpened {
                     id
 
-                    ${this.schema.asOptionalField('TlsPassthroughEvent', 'upstreamHost')}
-                    upstreamPort
+                    ${this.schema.typeHasField('TlsPassthroughEvent', 'destination')
+                        ? 'destination { hostname, port }'
+                        : `
+                            upstreamHost
+                            upstreamPort
+                        `
+                    }
 
                     hostname
                     remoteIpAddress
@@ -399,8 +404,13 @@ export class MockttpAdminRequestBuilder {
                 tlsPassthroughClosed {
                     id
 
-                    ${this.schema.asOptionalField('TlsPassthroughEvent', 'upstreamHost')}
-                    upstreamPort
+                    ${this.schema.typeHasField('TlsPassthroughEvent', 'destination')
+                        ? 'destination { hostname, port }'
+                        : `
+                            upstreamHost
+                            upstreamPort
+                        `
+                    }
 
                     hostname
                     remoteIpAddress
@@ -464,8 +474,7 @@ export class MockttpAdminRequestBuilder {
                 rawPassthroughOpened {
                     id
 
-                    upstreamHost
-                    upstreamPort
+                    destination { hostname, port }
 
                     remoteIpAddress
                     remotePort
@@ -477,8 +486,7 @@ export class MockttpAdminRequestBuilder {
                 rawPassthroughClosed {
                     id
 
-                    upstreamHost
-                    upstreamPort
+                    destination { hostname, port }
 
                     remoteIpAddress
                     remotePort

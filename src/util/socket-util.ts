@@ -166,7 +166,7 @@ export function resetOrDestroy(requestOrSocket:
 
 export function buildRawSocketEventData(
     socket: net.Socket
-): Omit<RawPassthroughEvent, 'id' | 'upstreamHost' | 'upstreamPort'> {
+): Omit<RawPassthroughEvent, 'id' | 'destination'> {
     const timingInfo = socket[SocketTimingInfo] ||
         socket._parent?.[SocketTimingInfo] ||
         buildSocketTimingInfo();
@@ -190,7 +190,7 @@ export function buildRawSocketEventData(
 
 export function buildTlsSocketEventData(
     socket: net.Socket & Partial<tls.TLSSocket>
-): Omit<RawPassthroughEvent, 'id' | 'upstreamHost' | 'upstreamPort'> & TlsConnectionEvent {
+): Omit<RawPassthroughEvent, 'id' | 'destination'> & TlsConnectionEvent {
     const rawSocketData = buildRawSocketEventData(socket) as Partial<TlsConnectionEvent>;
 
     const timingInfo = socket[SocketTimingInfo] ||
@@ -202,8 +202,6 @@ export function buildTlsSocketEventData(
     rawSocketData.tlsMetadata = socket[TlsMetadata] ||
         socket._parent?.[TlsMetadata] ||
         {};
-
-    rawSocketData.hostname = socket.servername;
 
     return rawSocketData as any;
 }
