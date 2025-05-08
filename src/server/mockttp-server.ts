@@ -1069,7 +1069,7 @@ ${await this.suggestRule(request)}`
 
             const request: ClientError['request'] = {
                 ...commonParams,
-                httpVersion: parsedRequest.httpVersion,
+                httpVersion: parsedRequest.httpVersion || '1.1',
                 method: parsedRequest.method,
                 protocol: parsedRequest.protocol,
                 url: parsedRequest.url,

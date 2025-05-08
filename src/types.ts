@@ -59,7 +59,7 @@ export interface Request {
     matchedRuleId?: string;
 
     protocol: string;
-    httpVersion?: string; // Like timingEvents - not set remotely with older servers
+    httpVersion: string;
     method: string;
     url: string;
     path: string;
@@ -434,7 +434,7 @@ export interface ClientError {
 
         // All of these are best guess, depending on what's parseable:
         protocol?: string;
-        httpVersion?: string;
+        httpVersion: string;
         method?: string;
         url?: string;
         path?: string;

@@ -932,6 +932,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                         id: clientReq.id,
                         protocol: protocol?.replace(':', '') ?? '',
                         method: method,
+                        httpVersion: serverRes.httpVersion,
                         url: reqUrl,
                         destination: {
                             hostname: hostname || 'localhost',
