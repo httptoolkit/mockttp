@@ -4,8 +4,7 @@ import gql from 'graphql-tag';
 
 import { MockedEndpoint, MockedEndpointData } from "../types";
 
-import { buildBodyReader } from '../util/request-utils';
-import { objectHeadersToRaw, rawHeadersToObject } from '../util/header-utils';
+import { rawHeadersToObject } from '../util/header-utils';
 
 import { AdminQuery } from './admin-query';
 import { SchemaIntrospector } from './schema-introspection';
@@ -17,6 +16,7 @@ import { SubscribableEvent } from '../mockttp';
 import { MockedEndpointClient } from "./mocked-endpoint-client";
 import { AdminClient } from './admin-client';
 import { serializeRuleData } from '../rules/rule-serialization';
+import { deserializeBodyReader } from '../serialization/body-serialization';
 
 function normalizeHttpMessage(message: any, event?: SubscribableEvent) {
     if (message.timingEvents) {
@@ -43,9 +43,18 @@ function normalizeHttpMessage(message: any, event?: SubscribableEvent) {
     }
 
     if (message.body !== undefined) {
-        // Body is serialized as the raw encoded buffer in base64
-        message.body = buildBodyReader(Buffer.from(message.body, 'base64'), message.headers);
+        // This will be unset if a) no decoding is required (so message.body is already decoded implicitly),
+        // b) if messageBodyDecoding is set to 'none', or c) if the server is <v4 and doesn't do decoding.
+        let { decoded, decodingError } = message.decodedBody || {};
+
+        message.body = deserializeBodyReader(
+            message.body,
+            decoded,
+            decodingError,
+            message.headers
+        );
     }
+    delete message.decodedBody;
 
     // For backwards compat, all except errors should have tags if they're missing
     if (!message.tags) message.tags = [];
@@ -77,9 +86,14 @@ function normalizeWebSocketMessage(message: any) {
  */
 export class MockttpAdminRequestBuilder {
 
+    private messageBodyDecoding: 'server-side' | 'none';
+
     constructor(
-        private schema: SchemaIntrospector
-    ) {}
+        private schema: SchemaIntrospector,
+        options: { messageBodyDecoding: 'server-side' | 'none' } = { messageBodyDecoding: 'server-side' }
+    ) {
+        this.messageBodyDecoding = options.messageBodyDecoding;
+    }
 
     buildAddRequestRulesQuery(
         rules: Array<RequestRuleData>,
@@ -259,6 +273,10 @@ export class MockttpAdminRequestBuilder {
 
                     rawHeaders
                     body
+                    ${this.schema.typeHasField('Request', 'decodedBody') && this.messageBodyDecoding === 'server-side'
+                        ? 'decodedBody { decoded, decodingError }'
+                        : ''
+                    }
                     ${this.schema.asOptionalField('Request', 'rawTrailers')}
 
                     timingEvents
@@ -274,6 +292,10 @@ export class MockttpAdminRequestBuilder {
 
                     rawHeaders
                     body
+                    ${this.schema.typeHasField('Response', 'decodedBody') && this.messageBodyDecoding === 'server-side'
+                        ? 'decodedBody { decoded, decodingError }'
+                        : ''
+                    }
                     ${this.schema.asOptionalField('Response', 'rawTrailers')}
 
                     timingEvents
@@ -298,6 +320,10 @@ export class MockttpAdminRequestBuilder {
 
                     rawHeaders
                     body
+                    ${this.schema.typeHasField('Request', 'decodedBody') && this.messageBodyDecoding === 'server-side'
+                        ? 'decodedBody { decoded, decodingError }'
+                        : ''
+                    }
                     ${this.schema.asOptionalField('Request', 'rawTrailers')}
 
                     timingEvents
@@ -313,6 +339,10 @@ export class MockttpAdminRequestBuilder {
 
                     rawHeaders
                     body
+                    ${this.schema.typeHasField('Response', 'decodedBody') && this.messageBodyDecoding === 'server-side'
+                        ? 'decodedBody { decoded, decodingError }'
+                        : ''
+                    }
                     ${this.schema.asOptionalField('Response', 'rawTrailers')}
 
                     timingEvents
@@ -460,6 +490,11 @@ export class MockttpAdminRequestBuilder {
                         rawHeaders
 
                         body
+                        ${this.schema.typeHasField('Response', 'decodedBody') && this.messageBodyDecoding === 'server-side'
+                            ? 'decodedBody { decoded, decodingError }'
+                            : ''
+                        }
+
                         ${this.schema.asOptionalField('Response', 'rawTrailers')}
                     }
                 }
@@ -563,7 +598,11 @@ export class MockttpAdminRequestBuilder {
 
                                 rawHeaders
 
-                                body,
+                                body
+                                ${this.schema.typeHasField('Request', 'decodedBody') && this.messageBodyDecoding === 'server-side'
+                                    ? 'decodedBody { decoded, decodingError }'
+                                    : ''
+                                }
                                 timingEvents
                                 httpVersion
                             }

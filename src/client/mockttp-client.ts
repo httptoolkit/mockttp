@@ -26,6 +26,27 @@ export interface MockttpClientOptions extends MockttpOptions {
     client?: {
         headers?: { [key: string]: string };
     }
+
+    /**
+     * Where should message body decoding happen? If set to 'server-side',
+     * (the default) then the request body will be pre-decoded on the server,
+     * and delivered to the client in decoded form (in addition to its
+     * encoded form), meaning that the client doesn't need to do any
+     * decoding itself (which can be awkward e.g. given encodings like
+     * zstd/Brotli with poor browser JS support).
+     *
+     * If set to 'none', the request body will be delivered to
+     * the client in original encoded form. If so, any access to data
+     * that requires decoding (e.g. `response.body.getText()` on a
+     * gzipped response) will fail. Instead, you will need to read and
+     * decode `body.buffer` manually yourself.
+     *
+     * This is only relevant for advanced use cases. In general, you
+     * should leave this as 'server-side' for convenient reliable
+     * behaviour, and set it only to 'none' if you are handling
+     * decoding yourself and want to actively optimize for that.
+     */
+    messageBodyDecoding?: 'server-side' | 'none';
 }
 
 export type MockttpClientEvent = `admin-client:${AdminClientEvent}`;
@@ -42,6 +63,7 @@ export type MockttpClientEvent = `admin-client:${AdminClientEvent}`;
 export class MockttpClient extends AbstractMockttp implements Mockttp {
 
     private mockServerOptions: MockttpOptions;
+    private messageBodyDecoding: 'server-side' | 'none';
 
     private adminClient: AdminClient<{ http: MockttpAdminPlugin }>;
     private requestBuilder: MockttpAdminRequestBuilder | undefined; // Set once server has started.
@@ -54,6 +76,7 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
         }));
 
         this.mockServerOptions = options;
+        this.messageBodyDecoding = options.messageBodyDecoding || 'server-side';
 
         this.adminClient = new AdminClient({
             adminServerUrl: options.adminServerUrl,
@@ -81,11 +104,15 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
         await this.adminClient.start({
             http: {
                 port,
-                options: this.mockServerOptions
+                messageBodyDecoding: this.messageBodyDecoding,
+                options: this.mockServerOptions,
             }
         });
 
-        this.requestBuilder = new MockttpAdminRequestBuilder(this.adminClient.schema);
+        this.requestBuilder = new MockttpAdminRequestBuilder(
+            this.adminClient.schema,
+            { messageBodyDecoding: this.messageBodyDecoding }
+        );
     }
 
     stop() {

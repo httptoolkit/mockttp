@@ -3,7 +3,9 @@ import { Duplex } from "stream";
 
 import { PubSub } from "graphql-subscriptions";
 import type { IResolvers } from "@graphql-tools/utils";
+import { ErrorLike, UnreachableCheck } from "@httptoolkit/util";
 
+import type { Headers } from '../types';
 import type { MockttpServer } from "../server/mockttp-server";
 import type { ServerMockedEndpoint } from "../server/mocked-endpoint";
 import type {
@@ -11,13 +13,19 @@ import type {
     MockedEndpointData,
     CompletedRequest,
     CompletedResponse,
-    ClientError
+    ClientError,
+    CompletedBody
 } from "../types";
 import type { Serialized } from "../serialization/serialization";
 import type { RequestRuleData } from "../rules/requests/request-rule";
 import type { WebSocketRuleData } from "../rules/websockets/websocket-rule";
 
-import { deserializeRuleData, deserializeWebSocketRuleData } from "../rules/rule-deserialization";
+import {
+    deserializeRuleData,
+    deserializeWebSocketRuleData,
+    MockttpDeserializationOptions
+} from "../rules/rule-deserialization";
+import { decodeBodyBuffer } from "../util/request-utils";
 import { SubscribableEvent } from "../main";
 
 const graphqlSubscriptionPairs = Object.entries({
@@ -49,12 +57,51 @@ async function buildMockedEndpointData(endpoint: ServerMockedEndpoint): Promise<
     };
 }
 
+const decodeAndSerializeBody = async (body: CompletedBody, headers: Headers): Promise<
+    | false // Not required
+    | { decoded: Buffer, decodingError?: undefined } // Success
+    | { decodingError: string, decoded?: undefined } // Failure
+> => {
+    try {
+        const decoded = await decodeBodyBuffer(body.buffer, headers);
+        if (decoded === body.buffer) return false; // No decoding required - no-op.
+        else return { decoded }; // Successful decoding result
+    } catch (e) {
+        return { // Failed decoding - we just return the error message.
+            decodingError: (e as ErrorLike)?.message ?? 'Failed to decode message body'
+        };
+    }
+};
+
 export function buildAdminServerModel(
     mockServer: MockttpServer,
     stream: Duplex,
-    ruleParameters: { [key: string]: any }
+    ruleParams: { [key: string]: any },
+    options: {
+        messageBodyDecoding?: 'server-side' | 'none';
+    } = {}
 ): IResolvers {
     const pubsub = new PubSub();
+    const messageBodyDecoding = options.messageBodyDecoding || 'server-side';
+
+    const ruleDeserializationOptions: MockttpDeserializationOptions = {
+        bodySerializer: messageBodyDecoding === 'server-side'
+            ? async (body, headers) => {
+                const encoded = body.buffer.toString('base64');
+                const result = await decodeAndSerializeBody(body, headers);
+                if (result === false) { // No decoding required - no-op.
+                    return { encoded };
+                } else if (result.decodingError !== undefined) { // Failed decoding - we just return the error message.
+                    return { encoded, decodingError: result.decodingError };
+                } else if (result.decoded) { // Success - we return both formats to the client
+                    return { encoded, decoded: result.decoded.toString('base64') };
+                } else {
+                    throw new UnreachableCheck(result);
+                }
+            }
+            : (body) => body.buffer.toString('base64'), // 'None' = just send encoded body (as base64).
+        ruleParams
+    };
 
     for (let [gqlName, eventName] of graphqlSubscriptionPairs) {
         mockServer.on(eventName as any, (evt) => {
@@ -91,30 +138,30 @@ export function buildAdminServerModel(
 
         Mutation: {
             addRule: async (__: any, { input }: { input: Serialized<RequestRuleData> }) => {
-                return mockServer.addRequestRule(deserializeRuleData(input, stream, ruleParameters));
+                return mockServer.addRequestRule(deserializeRuleData(input, stream, ruleDeserializationOptions));
             },
             addRules: async (__: any, { input }: { input: Array<Serialized<RequestRuleData>> }) => {
                 return mockServer.addRequestRules(...input.map((rule) =>
-                    deserializeRuleData(rule, stream, ruleParameters)
+                    deserializeRuleData(rule, stream, ruleDeserializationOptions)
                 ));
             },
             setRules: async (__: any, { input }: { input: Array<Serialized<RequestRuleData>> }) => {
                 return mockServer.setRequestRules(...input.map((rule) =>
-                    deserializeRuleData(rule, stream, ruleParameters)
+                    deserializeRuleData(rule, stream, ruleDeserializationOptions)
                 ));
             },
 
             addWebSocketRule: async (__: any, { input }: { input: Serialized<WebSocketRuleData> }) => {
-                return mockServer.addWebSocketRule(deserializeWebSocketRuleData(input, stream, ruleParameters));
+                return mockServer.addWebSocketRule(deserializeWebSocketRuleData(input, stream, ruleDeserializationOptions));
             },
             addWebSocketRules: async (__: any, { input }: { input: Array<Serialized<WebSocketRuleData>> }) => {
                 return mockServer.addWebSocketRules(...input.map((rule) =>
-                    deserializeWebSocketRuleData(rule, stream, ruleParameters)
+                    deserializeWebSocketRuleData(rule, stream, ruleDeserializationOptions)
                 ));
             },
             setWebSocketRules: async (__: any, { input }: { input: Array<Serialized<WebSocketRuleData>> }) => {
                 return mockServer.setWebSocketRules(...input.map((rule) =>
-                    deserializeWebSocketRuleData(rule, stream, ruleParameters)
+                    deserializeWebSocketRuleData(rule, stream, ruleDeserializationOptions)
                 ));
             }
         },
@@ -124,12 +171,20 @@ export function buildAdminServerModel(
         Request: {
             body: (request: CompletedRequest) => {
                 return request.body.buffer;
+            },
+            decodedBody: async (request: CompletedRequest) => {
+                return (await decodeAndSerializeBody(request.body, request.headers))
+                    || {}; // No decoding required
             }
         },
 
         Response: {
             body: (response: CompletedResponse) => {
                 return response.body.buffer;
+            },
+            decodedBody: async (response: CompletedResponse) => {
+                return (await decodeAndSerializeBody(response.body, response.headers))
+                    || {}; // No decoding required
             }
         },
 

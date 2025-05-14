@@ -14,7 +14,8 @@ import {
 } from '../util/url';
 import { waitForCompletedRequest } from '../util/request-utils';
 import { Serializable, ClientServerChannel } from "../serialization/serialization";
-import { withDeserializedBodyReader, withSerializedBodyReader } from '../serialization/body-serialization';
+import { MockttpDeserializationOptions } from "../rules/rule-deserialization";
+import { SerializedBody, withDeserializedBodyReader, withSerializedBodyReader } from '../serialization/body-serialization';
 import { Replace } from '../util/type-utils';
 
 export interface RequestMatcher extends Explainable, Serializable {
@@ -575,7 +576,7 @@ export class CallbackMatcher extends Serializable implements RequestMatcher {
      * @internal
      */
     serialize(channel: ClientServerChannel): SerializedCallbackMatcherData {
-      channel.onRequest<Replace<CompletedRequest, { body: string }>, boolean>(async (streamMsg) => {
+      channel.onRequest<Replace<CompletedRequest, { body: SerializedBody }>, boolean>(async (streamMsg) => {
         const request = withDeserializedBodyReader(streamMsg);
 
         const callbackResult = await this.callback.call(null, request);
@@ -591,13 +592,14 @@ export class CallbackMatcher extends Serializable implements RequestMatcher {
      */
     static deserialize(
       { name }: SerializedCallbackMatcherData,
-      channel: ClientServerChannel
+      channel: ClientServerChannel,
+      { bodySerializer }: MockttpDeserializationOptions
     ): CallbackMatcher {
       const rpcCallback = async (request: CompletedRequest) => {
         const callbackResult = channel.request<
-            Replace<CompletedRequest, { body: string }>,
+            Replace<CompletedRequest, { body: SerializedBody }>,
             boolean
-        >(withSerializedBodyReader(request) as any);
+        >(await withSerializedBodyReader(request, bodySerializer));
 
         return callbackResult;
       };

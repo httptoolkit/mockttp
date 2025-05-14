@@ -9,6 +9,7 @@ import * as multipart from 'parse-multipart-data';
 import now = require("performance-now");
 import * as url from 'url';
 import type { SUPPORTED_ENCODING } from 'http-encoding';
+import { MaybePromise } from '@httptoolkit/util';
 
 import {
     Headers,
@@ -113,7 +114,7 @@ export async function decodeBodyBuffer(buffer: Buffer, headers: Headers) {
     // We skip decodeBuffer entirely if possible - this isn't strictly necessary, but it's useful
     // so you can drop the http-encoding package in bundling downstream without issue in cases
     // where you don't actually use any encodings.
-    if (!contentEncoding) return buffer;
+    if (!contentEncoding || contentEncoding === 'identity') return buffer;
 
     return await (await import('http-encoding')).decodeBuffer(
         buffer,
@@ -187,14 +188,20 @@ export const isMockttpBody = (body: any): body is CompletedBody => {
     return body.hasOwnProperty('getDecodedBuffer');
 }
 
-export const buildBodyReader = (body: Buffer, headers: Headers): CompletedBody => {
+type BodyDecoder = (buffer: Buffer, headers: Headers) => MaybePromise<Buffer>;
+
+export const buildBodyReader = (
+    body: Buffer,
+    headers: Headers,
+    bufferDecoder: BodyDecoder = decodeBodyBuffer
+): CompletedBody => {
     const completedBody = {
         buffer: body,
 
         async getDecodedBuffer() {
             return runAsyncOrUndefined(async () =>
                 asBuffer(
-                    await decodeBodyBuffer(this.buffer, headers)
+                    await bufferDecoder(this.buffer, headers)
                 )
             );
         },
@@ -228,8 +235,10 @@ export const buildBodyReader = (body: Buffer, headers: Headers): CompletedBody =
                 // `boundary` is required for multipart entities.
                 if (!boundary) return;
 
-                const multipartBodyBuffer = asBuffer(await decodeBodyBuffer(this.buffer, headers));
-                return multipart.parse(multipartBodyBuffer, boundary[1]);
+                const decoded = await this.getDecodedBuffer();
+                if (!decoded) return;
+
+                return multipart.parse(decoded, boundary[1]);
             });
         },
         async getFormData(): Promise<querystring.ParsedUrlQuery | undefined> {

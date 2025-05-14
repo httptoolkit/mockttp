@@ -10,6 +10,7 @@ import { MockttpSchema } from './mockttp-schema';
 
 export interface MockttpPluginOptions {
     options?: Partial<MockttpOptions>;
+    messageBodyDecoding: 'server-side' | 'none';
     port?: number | PortRange;
 }
 
@@ -24,9 +25,13 @@ export class MockttpAdminPlugin implements AdminPlugin<
 > {
 
     private mockServer!: MockttpServer;
+    private messageBodyDecoding!: 'server-side' | 'none';
 
-    async start({ port, options }: MockttpPluginOptions) {
+    async start({ port, options, messageBodyDecoding }: MockttpPluginOptions) {
         this.mockServer = new MockttpServer(options);
+        this.messageBodyDecoding = messageBodyDecoding ||
+            'none'; // Backward compat - clients that don't set this option expect 'none'.
+
         await this.mockServer.start(port);
 
         return {
@@ -54,6 +59,8 @@ export class MockttpAdminPlugin implements AdminPlugin<
     schema = MockttpSchema;
 
     buildResolvers(stream: Duplex, ruleParameters: { [key: string]: any }) {
-        return buildAdminServerModel(this.mockServer, stream, ruleParameters)
+        return buildAdminServerModel(this.mockServer, stream, ruleParameters, {
+            messageBodyDecoding: this.messageBodyDecoding
+        })
     };
 }

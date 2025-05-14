@@ -28,21 +28,22 @@ export function serialize<T extends Serializable>(
 }
 
 export function deserialize<
+    Options,
     T extends SerializedValue<Serializable>,
     C extends {
         new(...args: any): any;
-        deserialize(data: SerializedValue<any>, channel: ClientServerChannel, ruleParams: RuleParameters): any;
+        deserialize(data: SerializedValue<any>, channel: ClientServerChannel, options: Options): any;
     }
 >(
     data: T,
     stream: Duplex,
-    ruleParams: RuleParameters,
+    options: Options,
     lookup: { [key: string]: C }
 ): InstanceType<C> {
     const type = <keyof typeof lookup> data.type;
     const channel = new ClientServerChannel(stream, data.topicId);
 
-    const deserialized = lookup[type].deserialize(data, channel, ruleParams);
+    const deserialized = lookup[type].deserialize(data, channel, options);
 
     // Wrap .dispose and ensure the channel is always disposed too.
     const builtinDispose = deserialized.dispose;
@@ -83,7 +84,7 @@ export abstract class Serializable {
     static deserialize(
         data: SerializedValue<any>,
         _channel: ClientServerChannel,
-        _ruleParams: RuleParameters
+        _options: unknown // Varies, e.g. in plugins.
     ): any {
         // By default, we assume we just need to assign the right prototype
         return _.create(this.prototype, data);

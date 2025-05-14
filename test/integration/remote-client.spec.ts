@@ -1,5 +1,6 @@
 import { PassThrough } from "stream";
 import * as net from 'net';
+import * as zlib from 'zlib';
 import * as portfinder from 'portfinder';
 import request = require("request-promise-native");
 
@@ -13,7 +14,8 @@ import {
     resetAdminServer,
     Mockttp,
     CompletedRequest,
-    MOCKTTP_PARAM_REF
+    MOCKTTP_PARAM_REF,
+    CompletedResponse
 } from "../..";
 import {
     expect,
@@ -424,6 +426,56 @@ nodeOnly(() => {
                 expect(seenRequests[0].url).to.equal(
                     remoteServer.urlFor("/mocked-endpoint")
                 );
+            });
+
+            it("should be able to read seen request bodies", async () => {
+                const rule = await remoteServer.forAnyRequest().thenReply(200);
+                await fetch(remoteServer.url, {
+                    method: 'POST',
+                    body: zlib.gzipSync('Hello world'),
+                    headers: {
+                        'Content-Encoding': 'gzip'
+                    }
+                });
+
+                const request = (await rule.getSeenRequests())[0];
+                expect(request.method).to.equal('POST');
+                const bodyText = await request.body.getText();
+                expect(bodyText).to.equal('Hello world');
+            });
+
+            it("should be able to read encoded request event bodies", async () => {
+                const requestDeferred = getDeferred<CompletedRequest>();
+                await remoteServer.on('request', (req) => requestDeferred.resolve(req));
+
+                await fetch(remoteServer.url, {
+                    method: 'POST',
+                    body: zlib.gzipSync('Hello world'),
+                    headers: {
+                        'Content-Encoding': 'gzip'
+                    }
+                });
+
+                const request = await requestDeferred;
+                expect(request.method).to.equal('POST');
+                const bodyText = await request.body.getText();
+                expect(bodyText).to.equal('Hello world');
+            });
+
+            it("should be able to read encoded response event bodies", async () => {
+                const responseDeferred = getDeferred<CompletedResponse>();
+                await remoteServer.on('response', (res) => responseDeferred.resolve(res));
+
+                await remoteServer.forAnyRequest().thenReply(200, zlib.gzipSync('Hello world'), {
+                    'Content-Encoding': 'gzip'
+                });
+
+                await fetch(remoteServer.url);
+
+                const response = await responseDeferred;
+                expect(response.statusCode).to.equal(200);
+                const bodyText = await response.body.getText();
+                expect(bodyText).to.equal('Hello world');
             });
 
             it("should allow resetting the mock server configured responses", async () => {
@@ -906,6 +958,56 @@ nodeOnly(() => {
                 await expect(client.start())
                     .to.eventually.be.rejectedWith('Failed to connect to admin server at http://localhost:45454');
             });
+        });
+
+        describe("with message body decoding disabled", () => {
+
+            const server = getAdminServer();
+            const client = getRemote({
+                messageBodyDecoding: 'none'
+            });
+
+            before(() => server.start());
+            after(() => server.stop());
+
+            beforeEach(() => client.start());
+            afterEach(() => client.stop());
+
+            it("should still be able to read non-encoded bodies", async () => {
+                const requestDeferred = getDeferred<CompletedRequest>();
+                await client.on('request', (req) => requestDeferred.resolve(req));
+
+                await fetch(client.url, {
+                    method: 'POST',
+                    body: 'Hello world',
+                    headers: {}
+                });
+
+                const request = await requestDeferred;
+                expect(request.method).to.equal('POST');
+
+                const bodyText = await request.body.getText();
+                expect(bodyText).to.equal('Hello world'); // Readable, as it's not encoded
+            });
+
+            it("should fail to read encoded bodies", async () => {
+                const requestDeferred = getDeferred<CompletedRequest>();
+                await client.on('request', (req) => requestDeferred.resolve(req));
+
+                await fetch(client.url, {
+                    method: 'POST',
+                    body: zlib.gzipSync('Hello world'),
+                    headers: {
+                        'Content-Encoding': 'gzip'
+                    }
+                });
+
+                const request = await requestDeferred;
+                expect(request.method).to.equal('POST');
+                const bodyText = await request.body.getText();
+                expect(bodyText).to.equal(undefined); // Can't read body - decoding is disabled
+            });
+
         });
 
     });

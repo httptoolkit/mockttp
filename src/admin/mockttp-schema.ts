@@ -176,6 +176,8 @@ export const MockttpSchema = gql`
         rawHeaders: Json!
 
         body: Buffer!
+        decodedBody: DecodingResult!
+
         rawTrailers: Json!
     }
 
@@ -212,7 +214,10 @@ export const MockttpSchema = gql`
 
         headers: Json!
         rawHeaders: Json!
+
         body: Buffer!
+        decodedBody: DecodingResult!
+
         rawTrailers: Json!
     }
 
@@ -240,5 +245,10 @@ export const MockttpSchema = gql`
     type Destination {
         hostname: String!
         port: Int!
+    }
+
+    type DecodingResult {
+        decoded: Buffer
+        decodingError: String
     }
 `;

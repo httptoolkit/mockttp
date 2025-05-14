@@ -22,7 +22,6 @@ import {
 
 import { MaybePromise, ErrorLike, isErrorLike } from '@httptoolkit/util';
 import { isAbsoluteUrl, getEffectivePort } from '../../util/url';
-import { isIP } from '../../util/ip-utils';
 import {
     waitForCompletedRequest,
     buildBodyReader,
@@ -62,8 +61,11 @@ import {
     withDeserializedCallbackBuffers,
     WithSerializedCallbackBuffers
 } from '../../serialization/body-serialization';
+import {
+    MockttpDeserializationOptions
+} from '../../rules/rule-deserialization'
 
-import { assertParamDereferenced, RuleParameters } from '../rule-parameters';
+import { assertParamDereferenced } from '../rule-parameters';
 
 import { getAgent } from '../http-agents';
 import { ProxySettingSource } from '../proxy-config';
@@ -246,14 +248,14 @@ export class CallbackHandler extends CallbackHandlerDefinition {
     /**
      * @internal
      */
-    static deserialize({ name, version }: SerializedCallbackHandlerData, channel: ClientServerChannel): CallbackHandler {
+    static deserialize({ name }: SerializedCallbackHandlerData, channel: ClientServerChannel, options: MockttpDeserializationOptions): CallbackHandler {
         const rpcCallback = async (request: CompletedRequest) => {
             const callbackResult = await channel.request<
                 CallbackRequestMessage,
                 | WithSerializedCallbackBuffers<CallbackResponseMessageResult>
                 | 'close'
                 | 'reset'
-            >({ args: [withSerializedBodyReader(request)] });
+            >({ args: [await withSerializedBodyReader(request, options.bodySerializer)] });
 
             if (typeof callbackResult === 'string') {
                 return callbackResult;
@@ -1212,7 +1214,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
     static deserialize(
         data: SerializedPassThroughData,
         channel: ClientServerChannel,
-        ruleParams: RuleParameters
+        { ruleParams, bodySerializer }: MockttpDeserializationOptions
     ): PassThroughHandler {
         let beforeRequest: ((req: CompletedRequest) => MaybePromise<CallbackRequestResult | void>) | undefined;
         if (data.hasBeforeRequestCallback) {
@@ -1222,7 +1224,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                         BeforePassthroughRequestRequest,
                         WithSerializedCallbackBuffers<CallbackRequestResult>
                     >('beforeRequest', {
-                        args: [withSerializedBodyReader(req)]
+                        args: [await withSerializedBodyReader(req, bodySerializer)]
                     })
                 );
 
@@ -1246,7 +1248,10 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                     | 'reset'
                     | undefined
                 >('beforeResponse', {
-                    args: [withSerializedBodyReader(res), withSerializedBodyReader(req)]
+                    args: [
+                        await withSerializedBodyReader(res, bodySerializer),
+                        await withSerializedBodyReader(req, bodySerializer)
+                    ]
                 })
 
                 if (callbackResult && typeof callbackResult !== 'string') {

@@ -1,5 +1,6 @@
 import * as _ from 'lodash';
 import { encode as encodeBase64 } from 'base64-arraybuffer';
+import { MaybePromise, UnreachableCheck } from '@httptoolkit/util';
 
 import { CompletedBody, Headers } from "../types";
 import { asBuffer } from "../util/buffer-utils";
@@ -8,22 +9,89 @@ import { Replace } from "../util/type-utils";
 
 import { deserializeBuffer, serializeBuffer } from "./serialization";
 
-export function withSerializedBodyReader<T extends {
+export type SerializedBody =
+    // Base64 string of encoded body, from 'none' body decoding option, or old servers:
+    | string
+    // Was encoded, now decoded successfully:
+    | { encoded: string, decoded: string, decodingError: undefined }
+    // Trivially known that no decoding was used:
+    | { encoded: string, decoded: undefined, decodingError: undefined }
+    // Was encoded, but decoding failed:
+    | { encoded: string, decodingError: string, decoded: undefined };
+
+// Server-side: serialize a body, so it can become a CompletedBody on the client side
+export async function withSerializedBodyReader<T extends {
+    headers: Headers,
     body: CompletedBody
-}>(input: T): Replace<T, { body: string }> {
+}>(
+    input: T,
+    bodySerializer: BodySerializer
+): Promise<Replace<T, { body: SerializedBody }>> {
     return {
         ...input,
-        body: asBuffer(input.body.buffer).toString('base64')
+        body: await bodySerializer(input.body, input.headers)
     };
 }
 
+export type BodySerializer = (body: CompletedBody, headers: Headers) => MaybePromise<SerializedBody>;
+
+// Client-side: turn a serialized body back into a CompletedBody (body to be exposed for convenient access)
 export function withDeserializedBodyReader<T extends { headers: Headers, body: CompletedBody }>(
-    input: Replace<T, { body: string }>
+    input: Replace<T, { body: SerializedBody }>
 ): T {
+    let encodedBodyString: string;
+    let decodedBodyString: string | undefined;
+    let decodedBodyError: string | undefined;
+
+    // We don't need to know the expected serialization format: we can detect it, and just
+    // use what we get sensibly regardless:
+    if (typeof input.body === 'string') {
+        // If the body is a string, it is a base64-encoded string
+        encodedBodyString = input.body;
+    } else if (typeof input.body === 'object') {
+        encodedBodyString = input.body.encoded;
+        decodedBodyString = input.body.decoded;
+        decodedBodyError = input.body.decodingError;
+    } else {
+        throw new UnreachableCheck(input.body);
+    }
+
+
     return {
         ...input,
-        body: buildBodyReader(deserializeBuffer(input.body), input.headers)
+        body: deserializeBodyReader(encodedBodyString, decodedBodyString, decodedBodyError, input.headers),
     } as T;
+}
+
+export function deserializeBodyReader(
+    encodedBodyString: string,
+    decodedBodyString: string | undefined,
+    decodingError: string | undefined,
+    headers: Headers
+): CompletedBody {
+    const encodedBody = deserializeBuffer(encodedBodyString);
+    const decodedBody = decodedBodyString ? deserializeBuffer(decodedBodyString) : undefined;
+
+    const decoder = !!decodedBody
+        // If the server provides a pre-decoded body, we use it.
+        ? async () => decodedBody
+        // If not, all encoded bodies are non-decodeable on the client side. This should
+        // only happen with messageBodyDecoding = 'none' (or with v4+ clients + <v4 servers).
+        : failIfDecodingRequired.bind(null, decodingError);
+
+    return buildBodyReader(encodedBody, headers, decoder);
+}
+
+function failIfDecodingRequired(error: string | undefined, buffer: Buffer, headers: Headers) {
+    if (!headers['content-encoding'] || headers['content-encoding'] === 'identity') {
+        return buffer;
+    }
+
+    if (error) {
+        throw new Error(`Decoding error: ${error}`);
+    } else {
+        throw new Error("Can't read encoded message body as client-side decoding has been disabled");
+    }
 }
 
 /**

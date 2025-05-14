@@ -1,5 +1,5 @@
 import * as _ from 'lodash';
-import net = require('net');
+import * as net from 'net';
 import * as url from 'url';
 import * as http from 'http';
 import * as WebSocket from 'ws';
@@ -8,7 +8,10 @@ import {
     ClientServerChannel,
     deserializeBuffer,
     deserializeProxyConfig
-} from "../../serialization/serialization";
+} from '../../serialization/serialization';
+import {
+    MockttpDeserializationOptions
+} from '../../rules/rule-deserialization'
 
 import { OngoingRequest, RawHeaders } from "../../types";
 
@@ -460,7 +463,7 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
     static deserialize(
         data: SerializedPassThroughWebSocketData,
         channel: ClientServerChannel,
-        ruleParams: RuleParameters
+        { ruleParams }: MockttpDeserializationOptions
     ): any {
         // By default, we assume we just need to assign the right prototype
         return _.create(this.prototype, {

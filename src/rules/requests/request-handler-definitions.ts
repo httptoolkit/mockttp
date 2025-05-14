@@ -29,6 +29,7 @@ import {
     serializeProxyConfig
 } from "../../serialization/serialization";
 import {
+    SerializedBody,
     withDeserializedBodyReader,
     withSerializedCallbackBuffers
 } from '../../serialization/body-serialization';
@@ -301,14 +302,13 @@ export class SimpleHandlerDefinition extends Serializable implements RequestHand
 export interface SerializedCallbackHandlerData {
     type: string;
     name?: string;
-    version?: number;
 }
 
 /**
  * @internal
  */
 export interface CallbackRequestMessage {
-    args: [Replace<CompletedRequest, { body: string }>];
+    args: [Replace<CompletedRequest, { body: SerializedBody }>];
 }
 
 export class CallbackHandlerDefinition extends Serializable implements RequestHandlerDefinition {
@@ -332,10 +332,7 @@ export class CallbackHandlerDefinition extends Serializable implements RequestHa
             CallbackRequestMessage,
             CallbackResponseResult
         >(async (streamMsg) => {
-            const request = withDeserializedBodyReader(
-                // Body serialized as base64
-                streamMsg.args[0]
-            )
+            const request = withDeserializedBodyReader(streamMsg.args[0]);
 
             const callbackResult = await this.callback.call(null, request);
 
@@ -346,7 +343,7 @@ export class CallbackHandlerDefinition extends Serializable implements RequestHa
             }
         });
 
-        return { type: this.type, name: this.callback.name, version: 2 };
+        return { type: this.type, name: this.callback.name };
     }
 }
 
@@ -710,14 +707,17 @@ export interface SerializedPassThroughData {
  * @internal
  */
 export interface BeforePassthroughRequestRequest {
-    args: [Replace<CompletedRequest, { body: string }>];
+    args: [Replace<CompletedRequest, { body: SerializedBody }>];
 }
 
 /**
  * @internal
  */
 export interface BeforePassthroughResponseRequest {
-    args: [Replace<PassThroughResponse, { body: string }>, Replace<CompletedRequest, { body: string }>];
+    args: [
+        Replace<PassThroughResponse, { body: SerializedBody }>,
+        Replace<CompletedRequest, { body: SerializedBody }>
+    ];
 }
 
 /**

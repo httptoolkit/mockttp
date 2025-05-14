@@ -14,6 +14,7 @@ export type {
     AdminPlugin,
     PluginStartParams,
     PluginStartParamsMap,
+    PluginStartDefaults,
     PluginClientResponse,
     PluginClientResponsesMap
 } from "../admin/admin-plugin-types";

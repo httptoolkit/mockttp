@@ -19,6 +19,10 @@ export type PluginStartParams<Plugin> = Plugin extends AdminPlugin<infer StartPa
     ? StartParams
     : never;
 
+export type PluginStartDefaults<Plugins extends { [key: string]: AdminPlugin<any, any> }> = {
+    [key in keyof Plugins]?: Partial<PluginStartParams<Plugins[key]>>
+};
+
 export type PluginClientResponse<Plugin> = Plugin extends AdminPlugin<any, infer ClientResponse>
     ? ClientResponse
     : never;

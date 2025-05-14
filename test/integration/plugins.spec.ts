@@ -127,7 +127,8 @@ nodeOnly(() => {
             });
 
             const mockttpAdminRequestBuilder = new MockttpPluggableAdmin.MockttpAdminRequestBuilder(
-                client.schema
+                client.schema,
+                { messageBodyDecoding: "server-side" }
             );
 
             const [myPluginResult, mockttpEndpointsResult] = await adminClient.sendQueries(

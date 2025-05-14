@@ -23,9 +23,8 @@ import { objectAllPromise } from '../util/promise';
 import { DEFAULT_ADMIN_SERVER_PORT } from '../types';
 
 import { RuleParameters } from '../rules/rule-parameters';
-import { AdminPlugin, PluginConstructorMap, PluginStartParamsMap } from './admin-plugin-types';
+import { AdminPlugin, PluginConstructorMap, PluginStartDefaults, PluginStartParamsMap } from './admin-plugin-types';
 import { parseAnyAst } from './graphql-utils';
-import { MockttpAdminPlugin } from './mockttp-admin-plugin';
 
 export interface AdminServerOptions<Plugins extends { [key: string]: AdminPlugin<any, any> }> {
     /**
@@ -53,7 +52,7 @@ export interface AdminServerOptions<Plugins extends { [key: string]: AdminPlugin
      * Override the default parameters for sessions started from this admin server. These values will be
      * used for each setting that is not explicitly specified by the client when creating a mock session.
      */
-    pluginDefaults?: Partial<PluginStartParamsMap<Plugins>>;
+    pluginDefaults?: PluginStartDefaults<Plugins>;
 
     /**
      * Some rule options can't easily be specified in remote clients, since they need to access
@@ -176,7 +175,7 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
 
         this.app.use(bodyParser.json({ limit: '50mb' }));
 
-        const defaultPluginStartParams: Partial<PluginStartParamsMap<Plugins>> = options.pluginDefaults ?? {};
+        const defaultPluginStartParams: PluginStartDefaults<Plugins> = options.pluginDefaults ?? {};
 
         this.app.post('/start', async (req, res) => {
             try {
