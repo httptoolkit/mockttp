@@ -478,6 +478,22 @@ nodeOnly(() => {
                 expect(bodyText).to.equal('Hello world');
             });
 
+            it("should not be able to read non-decodeable bodies", async () => {
+                const responseDeferred = getDeferred<CompletedResponse>();
+                await remoteServer.on('response', (res) => responseDeferred.resolve(res));
+
+                await remoteServer.forAnyRequest().thenReply(200, 'INVALID DATA', {
+                    'Content-Encoding': 'gzip'
+                });
+
+                await fetch(remoteServer.url);
+
+                const response = await responseDeferred;
+                expect(response.statusCode).to.equal(200);
+                const bodyText = await response.body.getText();
+                expect(bodyText).to.equal(undefined);
+            });
+
             it("should allow resetting the mock server configured responses", async () => {
                 await remoteServer.forGet("/mocked-endpoint").thenReply(200, "mocked data");
 

@@ -82,16 +82,18 @@ export function deserializeBodyReader(
     return buildBodyReader(encodedBody, headers, decoder);
 }
 
-function failIfDecodingRequired(error: string | undefined, buffer: Buffer, headers: Headers) {
+function failIfDecodingRequired(errorMessage: string | undefined, buffer: Buffer, headers: Headers) {
     if (!headers['content-encoding'] || headers['content-encoding'] === 'identity') {
         return buffer;
     }
 
-    if (error) {
-        throw new Error(`Decoding error: ${error}`);
-    } else {
-        throw new Error("Can't read encoded message body as client-side decoding has been disabled");
-    }
+    const error = errorMessage
+        ? new Error(`Decoding error (${headers['content-encoding']}): ${errorMessage}`)
+        : new Error("Can't read encoded message body without server-side decoding");
+
+    console.warn(error.message);
+
+    throw error;
 }
 
 /**
