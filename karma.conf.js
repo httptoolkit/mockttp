@@ -60,9 +60,6 @@ module.exports = function(config) {
                     { test: /\.ts$/, loader: 'ts-loader', exclude: /node_modules/ }
                 ]
             },
-            experiments: {
-                asyncWebAssembly: true
-            },
             node: {
                 __dirname: true
             },

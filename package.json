@@ -47,7 +47,8 @@
     "http2-wrapper": false,
     "cross-fetch": false,
     "cacheable-lookup": false,
-    "@httptoolkit/proxy-agent": false
+    "@httptoolkit/proxy-agent": false,
+    "http-encoding": false
   },
   "bin": {
     "mockttp": "dist/admin/admin-bin.js"
