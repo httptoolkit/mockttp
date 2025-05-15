@@ -1,4 +1,3 @@
-import * as semver from 'semver';
 import * as http from 'http';
 
 import { getLocal } from "../../..";
@@ -8,9 +7,10 @@ import {
     isNode,
     nodeOnly,
     delay,
-    SOCKET_RESET_SUPPORTED,
     openRawTlsSocket,
     http2ProxyRequest,
+    nodeSatisfies,
+    SOCKET_RESET_SUPPORTED,
     BROKEN_H1_OVER_H2_TUNNELLING
 } from "../../test-utils";
 
@@ -33,7 +33,7 @@ describe("Broken response handlers", function () {
         });
 
         it("should allow forcibly resetting the connection", async function () {
-            if (!semver.satisfies(process.version, SOCKET_RESET_SUPPORTED)) this.skip();
+            if (!nodeSatisfies(SOCKET_RESET_SUPPORTED)) this.skip();
 
             await server.forGet('/mocked-endpoint').thenResetConnection();
 
@@ -71,7 +71,7 @@ describe("Broken response handlers", function () {
 
         nodeOnly(() => {
             it("should allow forcibly closing proxied connections", async function () {
-                if (!semver.satisfies(process.version, SOCKET_RESET_SUPPORTED)) this.skip();
+                if (!nodeSatisfies(SOCKET_RESET_SUPPORTED)) this.skip();
 
                 await server.forGet('example.com').thenResetConnection();
 
@@ -93,7 +93,7 @@ describe("Broken response handlers", function () {
             });
 
             it("should allow forcibly closing h2-over-h2 proxy connections", async function () {
-                if (!semver.satisfies(process.version, SOCKET_RESET_SUPPORTED)) this.skip();
+                if (!nodeSatisfies(SOCKET_RESET_SUPPORTED)) this.skip();
 
                 await server.forGet('example.com').thenResetConnection();
 
@@ -107,8 +107,8 @@ describe("Broken response handlers", function () {
             });
 
             it("should allow forcibly closing h1.1-over-h2 proxy connections", async function () {
-                if (!semver.satisfies(process.version, SOCKET_RESET_SUPPORTED)) this.skip();
-                if (semver.satisfies(process.version, BROKEN_H1_OVER_H2_TUNNELLING)) this.skip();
+                if (!nodeSatisfies(SOCKET_RESET_SUPPORTED)) this.skip();
+                if (nodeSatisfies(BROKEN_H1_OVER_H2_TUNNELLING)) this.skip();
 
                 await server.forGet('example.com').thenResetConnection();
 

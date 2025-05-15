@@ -1,6 +1,5 @@
 import * as _ from 'lodash';
 import HttpsProxyAgent = require('https-proxy-agent');
-import * as semver from 'semver';
 
 import { getLocal, CompletedResponse, ClientError } from "../../..";
 import {
@@ -202,18 +201,9 @@ describe("Client error subscription", () => {
                 expect(clientError.errorCode).to.equal("HPE_HEADER_OVERFLOW");
                 expect(clientError.request.protocol).to.equal('https');
 
-                // What the parser exposes when it fails is different depending on the Node version:
-                if (semver.satisfies(process.version, '>=13')) {
-                    // Buffer overflows completely here, so parsing sees overwritten data as the start:
-                    expect(clientError.request.method?.slice(0, 10)).to.equal('XXXXXXXXXX');
-                    expect(clientError.request.url).to.equal(undefined);
-                } else {
-                    expect(clientError.request.method).to.equal("GET");
-                    expect(clientError.request.url).to.equal(server.urlFor("/mocked-endpoint"));
-                    expect(_.find(clientError.request.headers,
-                        (_v, key) => key.toLowerCase() === 'host')
-                    ).to.equal(`localhost:${server.port}`);
-                }
+                // Buffer overflows completely here, so parsing sees overwritten data as the start:
+                expect(clientError.request.method?.slice(0, 10)).to.equal('XXXXXXXXXX');
+                expect(clientError.request.url).to.equal(undefined);
 
                 const response = clientError.response as CompletedResponse;
                 expect(response.statusCode).to.equal(431);
@@ -379,18 +369,9 @@ describe("Client error subscription", () => {
 
                     expect(clientError.errorCode).to.equal("HPE_HEADER_OVERFLOW");
 
-                    if (semver.satisfies(process.version, '>=13')) {
-                        // Buffer overflows completely here, so parsing sees overwritten data as the start:
-                        expect(clientError.request.method?.slice(0, 10)).to.equal('XXXXXXXXXX');
-                        expect(clientError.request.url).to.equal(undefined);
-                    } else {
-                        expect(clientError.request.method).to.equal("GET");
-                        expect(clientError.request.url).to.equal("https://example.com/endpoint");
-                        expect(_.find(clientError.request.headers,
-                            (_v, key) => key.toLowerCase() === 'host')
-                        ).to.equal('example.com');
-                        expect(clientError.request.headers['long-value']?.slice(0, 10)).to.equal('XXXXXXXXXX');
-                    }
+                    // Buffer overflows completely here, so parsing sees overwritten data as the start:
+                    expect(clientError.request.method?.slice(0, 10)).to.equal('XXXXXXXXXX');
+                    expect(clientError.request.url).to.equal(undefined);
 
                     const reportResponse = clientError.response as CompletedResponse;
                     expect(reportResponse.statusCode).to.equal(431);

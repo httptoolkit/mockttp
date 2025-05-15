@@ -2,7 +2,6 @@ import _ = require("lodash");
 import * as https from 'https';
 import * as http2 from 'http2';
 import * as fs from 'fs/promises';
-import * as semver from 'semver';
 import portfinder = require('portfinder');
 import request = require("request-promise-native");
 import * as zlib from 'zlib';
@@ -15,8 +14,8 @@ import {
     http2ProxyRequest,
     makeDestroyable,
     DestroyableServer,
-    H2_TLS_ON_TLS_SUPPORTED,
     ignoreNetworkError,
+    nodeSatisfies,
     SOCKET_RESET_SUPPORTED
 } from "../../test-utils";
 import { CA } from "../../../src/util/tls";
@@ -369,7 +368,7 @@ nodeOnly(() => {
                     }).catch(e => e);
 
                     expect(result).to.be.instanceof(Error);
-                    if (semver.satisfies(process.version, SOCKET_RESET_SUPPORTED)) {
+                    if (nodeSatisfies(SOCKET_RESET_SUPPORTED)) {
                         expect((result as any).message).to.include('ECONNRESET');
                     } else {
                         expect((result as any).message).to.include('socket hang up');
@@ -468,10 +467,6 @@ nodeOnly(() => {
         });
 
         describe("when making HTTP/2 requests", () => {
-
-            before(function () {
-                if (!semver.satisfies(process.version, H2_TLS_ON_TLS_SUPPORTED)) this.skip();
-            });
 
             let http2Server: DestroyableServer<http2.Http2SecureServer>;
             let targetPort: number;
@@ -1088,10 +1083,6 @@ nodeOnly(() => {
             });
 
             describe("to an HTTP/1 server", () => {
-
-                before(function () {
-                    if (!semver.satisfies(process.version, H2_TLS_ON_TLS_SUPPORTED)) this.skip();
-                });
 
                 const remoteH1Server = getLocal({
                     https: {

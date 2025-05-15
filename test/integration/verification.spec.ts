@@ -1,14 +1,10 @@
-import * as semver from 'semver';
-import { AbortController } from 'node-abort-controller';
-
 import { getLocal } from "../..";
 import {
     expect,
     fetch,
     URLSearchParams,
     Headers,
-    delay,
-    HTTP_ABORTSIGNAL_SUPPORTED
+    delay
 } from "../test-utils";
 
 describe("HTTP request spying", function () {
@@ -82,8 +78,6 @@ describe("HTTP request spying", function () {
         });
 
         it("should let you spy on incoming requests once the response is aborted", async function () {
-            if (!semver.satisfies(process.version, HTTP_ABORTSIGNAL_SUPPORTED)) this.skip();
-
             const endpointMock = await server.forGet("/mocked-endpoint").thenTimeout();
 
             const abortController = new AbortController();

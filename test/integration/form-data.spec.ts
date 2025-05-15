@@ -1,11 +1,10 @@
-import * as semver from 'semver';
-
 import { getLocal } from "../..";
 import {
     expect,
     File,
     fetch as fetchPolyfill,
-    NATIVE_FETCH_SUPPORTED
+    NATIVE_FETCH_SUPPORTED,
+    nodeSatisfies
 } from "../test-utils";
 
 const fetch = globalThis.fetch ?? fetchPolyfill;
@@ -66,7 +65,7 @@ describe("Body getXFormData methods", () => {
     describe("given multipart/form-data", () => {
         before(function () {
             // Polyfill fetch encodes polyfill FormData into "[object FormData]", which is not parsable
-            if (process.version && !semver.satisfies(process.version, NATIVE_FETCH_SUPPORTED)) this.skip();
+            if (!nodeSatisfies(NATIVE_FETCH_SUPPORTED)) this.skip();
         });
 
         it("should automatically parse as form data", async () => {

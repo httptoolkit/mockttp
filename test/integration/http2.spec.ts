@@ -4,7 +4,6 @@ import * as tls from 'tls';
 import * as http from 'http';
 import * as https from 'https';
 import * as http2 from 'http2';
-import * as semver from 'semver';
 import * as fs from 'fs';
 import * as portfinder from 'portfinder';
 
@@ -18,9 +17,9 @@ import {
     makeDestroyable,
     cleanup,
     fetch,
-    H2_TLS_ON_TLS_SUPPORTED,
     BROKEN_H2_OVER_H2_TUNNELLING,
-    getDeferred
+    getDeferred,
+    nodeSatisfies
 } from "../test-utils";
 
 browserOnly(() => {
@@ -80,7 +79,7 @@ nodeOnly(() => {
 
         describe("without TLS", function () {
 
-            if (semver.satisfies(process.version, BROKEN_H2_OVER_H2_TUNNELLING)) return;
+            if (nodeSatisfies(BROKEN_H2_OVER_H2_TUNNELLING)) return;
 
             const server = getLocal();
 
@@ -375,8 +374,6 @@ nodeOnly(() => {
             });
 
             it("can respond to proxied HTTP/2 requests", async function() {
-                if (!semver.satisfies(process.version, H2_TLS_ON_TLS_SUPPORTED)) this.skip();
-
                 await server.forGet('https://example.com/mocked-endpoint')
                     .thenReply(200, "Proxied HTTP2 response!");
 
@@ -413,8 +410,6 @@ nodeOnly(() => {
             });
 
             it("should include request metadata in events for proxied HTTP/2 requests", async function() {
-                if (!semver.satisfies(process.version, H2_TLS_ON_TLS_SUPPORTED)) this.skip();
-
                 let seenRequestPromise = getDeferred<CompletedRequest>();
                 await server.on('request', (r) => seenRequestPromise.resolve(r));
 
@@ -462,8 +457,6 @@ nodeOnly(() => {
             });
 
             it("should include response metadata in events for proxied HTTP/2 responses", async function() {
-                if (!semver.satisfies(process.version, H2_TLS_ON_TLS_SUPPORTED)) this.skip();
-
                 let seenResponsePromise = getDeferred<CompletedResponse>();
                 await server.on('response', (r) => seenResponsePromise.resolve(r));
 
@@ -515,8 +508,6 @@ nodeOnly(() => {
             });
 
             it("can respond to HTTP1-proxied HTTP/2 requests", async function() {
-                if (!semver.satisfies(process.version, H2_TLS_ON_TLS_SUPPORTED)) this.skip();
-
                 await server.forGet('https://example.com/mocked-endpoint')
                     .thenReply(200, "Proxied HTTP2 response!");
 
@@ -579,8 +570,6 @@ nodeOnly(() => {
                 afterEach(() => http2Server.destroy());
 
                 it("can pass through end-to-end HTTP/2", async function () {
-                    if (!semver.satisfies(process.version, H2_TLS_ON_TLS_SUPPORTED)) this.skip();
-
                     await server.forGet(`https://localhost:${targetPort}/`)
                         .thenPassThrough({ ignoreHostHttpsErrors: ['localhost'] });
 

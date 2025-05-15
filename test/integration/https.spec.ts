@@ -2,7 +2,6 @@ import * as http from 'http';
 import * as tls from 'tls';
 import * as https from 'https';
 import * as fs from 'fs/promises';
-import * as semver from 'semver';
 
 import { getLocal } from "../..";
 import {
@@ -13,6 +12,7 @@ import {
     openRawSocket,
     openRawTlsSocket,
     http2ProxyRequest,
+    nodeSatisfies,
     DETAILED_TLS_ERROR_CODES
 } from "../test-utils";
 import { streamToBuffer } from '../../src/util/buffer-utils';
@@ -462,7 +462,7 @@ describe("When configured for HTTPS", () => {
                     throw new Error('Expected connection to fail');
                 } catch (e: any) {
                     expect(e.code).to.equal(
-                        semver.satisfies(process.version, DETAILED_TLS_ERROR_CODES)
+                        nodeSatisfies(DETAILED_TLS_ERROR_CODES)
                             ? 'ERR_SSL_TLSV1_ALERT_PROTOCOL_VERSION'
                             : 'ECONNRESET'
                     );
@@ -479,7 +479,7 @@ describe("When configured for HTTPS", () => {
                     throw new Error('Expected connection to fail');
                 } catch (e: any) {
                     expect(e.code).to.equal(
-                        semver.satisfies(process.version, DETAILED_TLS_ERROR_CODES)
+                        nodeSatisfies(DETAILED_TLS_ERROR_CODES)
                             ? 'ERR_SSL_TLSV1_ALERT_PROTOCOL_VERSION'
                             : 'ECONNRESET'
                     );
