@@ -218,7 +218,7 @@ export function updateRawHeaders(
 
 // See https://httptoolkit.com/blog/translating-http-2-into-http-1/ for details on the
 // transformations required between H2 & H1 when proxying.
-export function h2HeadersToH1(h2Headers: RawHeaders): RawHeaders {
+export function h2HeadersToH1(h2Headers: RawHeaders, method: string): RawHeaders {
     let h1Headers = h2Headers.filter(([key]) => key[0] !== ':');
 
     if (!findRawHeader(h1Headers, 'host') && findRawHeader(h2Headers, ':authority')) {
@@ -231,6 +231,18 @@ export function h2HeadersToH1(h2Headers: RawHeaders): RawHeaders {
     if (cookieHeaders.length > 1) {
         h1Headers = h1Headers.filter(([key]) => key.toLowerCase() !== 'cookie');
         h1Headers.push(['Cookie', cookieHeaders.join('; ')]);
+    }
+
+    // We don't know if the request has a body yet - but just in case, we ensure it could:
+    if (
+        // If the request is a method that probably has a body
+        method !== 'GET' &&
+        method !== 'HEAD' &&
+        !( // And you haven't set any kind of framing headers:
+            findRawHeader(h1Headers, 'content-length') ||
+            findRawHeader(h1Headers, 'transfer-encoding')?.includes('chunked'))
+    ) { // Add transfer-encoding chunked, which should support all possible cases:
+        h1Headers.push(['Transfer-Encoding', 'chunked']);
     }
 
     return h1Headers;

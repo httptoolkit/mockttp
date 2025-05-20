@@ -738,7 +738,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 MODIFIABLE_PSEUDOHEADERS.includes(key.toLowerCase() as any)
             );
         } else if (isH2Downstream && !shouldTryH2Upstream) {
-            rawHeaders = h2HeadersToH1(rawHeaders);
+            rawHeaders = h2HeadersToH1(rawHeaders, method);
         }
 
         let serverReq: http.ClientRequest;
