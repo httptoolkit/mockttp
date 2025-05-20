@@ -135,11 +135,11 @@ nodeOnly(() => {
                 await server.forAnyRequest().thenPassThrough({
                     proxyConfig: {
                         proxyUrl: intermediateProxy.url,
-                        noProxy: ['example.com:80']
+                        noProxy: ['example.testserver.host:80']
                     }
                 });
 
-                await request.get('http://example.com/').catch(() => {});
+                await request.get('http://example.testserver.host/').catch(() => {});
 
                 // And it didn't use the proxy
                 expect((await proxyEndpoint.getSeenRequests()).length).to.equal(0);
@@ -176,7 +176,7 @@ nodeOnly(() => {
                 await server.forAnyRequest().thenPassThrough({
                     proxyConfig: {
                         proxyUrl: intermediateProxy.url,
-                        noProxy: ['example.com']
+                        noProxy: ['example.testserver.host']
                     }
                 });
 
@@ -215,7 +215,7 @@ nodeOnly(() => {
                 await server.forAnyRequest().thenPassThrough({
                     proxyConfig: {
                         proxyUrl: intermediateProxy.url,
-                        noProxy: ['example.com:443']
+                        noProxy: ['example.testserver.host:443']
                     }
                 });
 

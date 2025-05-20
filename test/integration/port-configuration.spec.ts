@@ -20,7 +20,7 @@ describe("Port selection", function () {
     });
 
     it("should use a fixed port if one is specified", async function () {
-        this.retries(3); // Random ports can be in use, esp on Travis, so retry a little
+        this.retries(3); // Random ports can be in use, so retry a little
 
         const chosenPort = 10000 + _.random(1000);
         await server1.start(chosenPort);
@@ -28,7 +28,7 @@ describe("Port selection", function () {
     });
 
     it("should error if a fixed port is specified and unavailable", async function () {
-        this.retries(3); // Random ports can be in use, esp on Travis, so retry a little
+        this.retries(3); // Random ports can be in use, so retry a little
 
         const chosenPort = 10000 + _.random(1000);
         await server1.start(chosenPort);

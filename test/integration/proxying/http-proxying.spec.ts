@@ -89,11 +89,9 @@ nodeOnly(() => {
             });
 
             it("should be able to pass through requests", async function () {
-                this.retries(3); // Example.com can be unreliable
+                await server.forGet("http://example.testserver.host/").thenPassThrough();
 
-                await server.forGet("http://example.com/").thenPassThrough();
-
-                let response = await request.get("http://example.com/");
+                let response = await request.get("http://example.testserver.host/");
                 expect(response).to.include(
                     "This domain is for use in illustrative examples in documents."
                 );

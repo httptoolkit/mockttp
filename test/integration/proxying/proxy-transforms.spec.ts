@@ -54,7 +54,7 @@ nodeOnly(() => {
 
             it("forwards to the location even if the port & protocol is implicit", async () => {
                 await remoteServer.forGet('/').thenReply(200, "forwarded response");
-                await server.forAnyRequest().thenForwardTo('example.com');
+                await server.forAnyRequest().thenForwardTo('example.testserver.host');
 
                 let response = await request.get(server.urlFor("/"));
 

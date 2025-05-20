@@ -117,7 +117,7 @@ describe("When configured for HTTPS", () => {
                     keyPath: './test/fixtures/test-ca.key',
                     certPath: './test/fixtures/test-ca.pem',
                     tlsPassthrough: [
-                        { hostname: 'example.com' },
+                        { hostname: 'example.testserver.host' },
                         // A convenient server that doesn't require SNI to serve the right cert:
                         { hostname: 'ip-api.com' }
                     ]
@@ -144,14 +144,12 @@ describe("When configured for HTTPS", () => {
             });
 
             it("skips the server for matching HTTPS requests", async function () {
-                this.retries(3); // Example.com can be unreliable
-
                 const response: http.IncomingMessage = await new Promise((resolve, reject) =>
                     https.get({
                         host: 'localhost',
                         port: server.port,
-                        servername: 'example.com',
-                        headers: { 'Host': 'example.com' }
+                        servername: 'example.testserver.host',
+                        headers: { 'Host': 'example.testserver.host' }
                     }).on('response', resolve).on('error', reject)
                 );
 
@@ -166,7 +164,7 @@ describe("When configured for HTTPS", () => {
                 const response: http.IncomingMessage = await new Promise((resolve) =>
                     http.get({
                         port: server.port,
-                        headers: { 'Host': 'example.com' }
+                        headers: { 'Host': 'example.testserver.host' }
                     }).on('response', resolve)
                 );
 
@@ -196,12 +194,12 @@ describe("When configured for HTTPS", () => {
 
             it("bypasses Mockttp for TLS connections with matching SNI", async () => {
                 const tlsSocket = await openRawTlsSocket(server, {
-                    servername: 'example.com'
+                    servername: 'example.testserver.host'
                 });
 
                 const cert = tlsSocket.getPeerCertificate();
-                expect(cert.subject.CN).to.equal('*.example.com');
-                expect(cert.issuer.CN).to.include('DigiCert'); // <-- This is the real issuer, right now at least
+                expect(cert.subject.CN).to.equal('example.testserver.host');
+                expect(cert.issuer.CN).to.include('ZeroSSL RSA Domain Secure Site CA'); // <-- This is the real issuer, right now at least
             });
 
             it("bypasses Mockttp for TLS connections inside matching HTTP/1 CONNECT tunnel", async () => {
@@ -227,7 +225,7 @@ describe("When configured for HTTPS", () => {
             it("still handles matching CONNECT-tunnelled plain-HTTP requests", async () => {
                 const tunnel = await openRawSocket(server);
 
-                tunnel.write('CONNECT example.com:80 HTTP/1.1\r\n\r\n');
+                tunnel.write('CONNECT example.testserver.host:80 HTTP/1.1\r\n\r\n');
 
                 await delay(50);
                 const result = tunnel.read();
@@ -236,7 +234,7 @@ describe("When configured for HTTPS", () => {
                 const response: http.IncomingMessage = await new Promise((resolve) =>
                     http.get({
                         createConnection: () => tunnel,
-                        headers: { 'Host': 'example.com' }
+                        headers: { 'Host': 'example.testserver.host' }
                     }).on('response', resolve)
                 );
 
@@ -246,9 +244,7 @@ describe("When configured for HTTPS", () => {
             });
 
             it("bypasses Mockttp for TLS connections inside matching HTTP/2 CONNECT tunnel", async function () {
-                this.retries(3); // Example.com can be unreliable
-
-                const response = await http2ProxyRequest(server, 'https://example.com');
+                const response = await http2ProxyRequest(server, 'https://example.testserver.host');
 
                 expect(response.body.toString()).to.include(
                     "This domain is for use in illustrative examples in documents."
@@ -262,7 +258,7 @@ describe("When configured for HTTPS", () => {
                     keyPath: './test/fixtures/test-ca.key',
                     certPath: './test/fixtures/test-ca.pem',
                     tlsPassthrough: [
-                        { hostname: '*.com' }
+                        { hostname: '*.testserver.host' }
                     ]
                 }
             });
@@ -292,14 +288,12 @@ describe("When configured for HTTPS", () => {
             });
 
             it("skips the server for non-matching HTTPS requests", async function () {
-                this.retries(3); // Example.com can be unreliable
-
                 const response: http.IncomingMessage = await new Promise((resolve, reject) =>
                     https.get({
                         host: 'localhost',
                         port: server.port,
-                        servername: 'example.com',
-                        headers: { 'Host': 'example.com' }
+                        servername: 'example.testserver.host',
+                        headers: { 'Host': 'example.testserver.host' }
                     }).on('response', resolve).on('error', reject)
                 );
 
@@ -347,14 +341,12 @@ describe("When configured for HTTPS", () => {
             });
 
             it("skips the server for non-matching HTTPS requests", async function () {
-                this.retries(3); // Example.com can be unreliable
-
                 const response: http.IncomingMessage = await new Promise((resolve, reject) =>
                     https.get({
                         host: 'localhost',
                         port: server.port,
-                        servername: 'example.com',
-                        headers: { 'Host': 'example.com' }
+                        servername: 'example.testserver.host',
+                        headers: { 'Host': 'example.testserver.host' }
                     }).on('response', resolve).on('error', reject)
                 );
 
@@ -402,14 +394,12 @@ describe("When configured for HTTPS", () => {
             });
 
             it("skips the server for non-matching HTTPS requests", async function () {
-                this.retries(3); // Example.com can be unreliable
-
                 const response: http.IncomingMessage = await new Promise((resolve, reject) =>
                     https.get({
                         host: 'localhost',
                         port: server.port,
-                        servername: 'example.com',
-                        headers: { 'Host': 'example.com' }
+                        servername: 'example.testserver.host',
+                        headers: { 'Host': 'example.testserver.host' }
                     }).on('response', resolve).on('error', reject)
                 );
 
