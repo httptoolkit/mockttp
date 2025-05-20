@@ -92,9 +92,7 @@ export interface CallbackRequestResult {
      * in your request headers.
      *
      * If this is set, the Content-Length header will be automatically updated
-     * accordingly to match, unless you also provide a `headers` value that
-     * includes a Content-Length header, in which case that will take used
-     * as-is.
+     * or added accordingly, if required.
      *
      * You should only return one body field: either `body`, `rawBody` or
      * `json`.
@@ -106,9 +104,7 @@ export interface CallbackRequestResult {
      * as is, and is not automatically encoded.
      *
      * If this is set, the Content-Length header will be automatically updated
-     * accordingly to match, unless you also provide a `headers` value that
-     * includes a Content-Length header, in which case that will take used
-     * as-is.
+     * or added accordingly, if required.
      *
      * You should only return one body field: either `body`, `rawBody` or
      * `json`.
@@ -121,9 +117,7 @@ export interface CallbackRequestResult {
      * the Content-Encoding defined in your request headers.
      *
      * If this is set, the Content-Length header will be automatically updated
-     * accordingly to match, unless you also provide a `headers` value that
-     * includes a Content-Length header, in which case that will take used
-     * as-is.
+     * or added accordingly, if required.
      *
      * You should only return one body field: either `body`, `rawBody` or
      * `json`.
@@ -195,9 +189,7 @@ export interface CallbackResponseMessageResult {
      * response headers.
      *
      * If this is set, the Content-Length header will be automatically updated
-     * accordingly to match, unless you also provide a `headers` value that
-     * includes a Content-Length header, in which case that will take used
-     * as-is.
+     * or added accordingly, if required.
      *
      * Defaults to empty.
      *
@@ -211,9 +203,7 @@ export interface CallbackResponseMessageResult {
      * as is, and is not automatically encoded.
      *
      * If this is set, the Content-Length header will be automatically updated
-     * accordingly to match, unless you also provide a `headers` value that
-     * includes a Content-Length header, in which case that will take used
-     * as-is.
+     * or added accordingly, if required.
      *
      * You should only return one body field: either `body`, `rawBody` or
      * `json`.
@@ -226,9 +216,7 @@ export interface CallbackResponseMessageResult {
      * Content-Encoding defined in your response headers.
      *
      * If this is set, the Content-Length header will be automatically updated
-     * accordingly to match, unless you also provide a `headers` value that
-     * includes a Content-Length header, in which case that will take used
-     * as-is.
+     * or added accordingly, if required.
      *
      * You should only return one body field: either `body`, `rawBody` or
      * `json`.
