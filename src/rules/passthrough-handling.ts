@@ -286,50 +286,94 @@ export function getH2HeadersAfterModification(
     };
 }
 
-// Helper to handle content-length nicely for you when rewriting requests with callbacks
-export function getContentLengthAfterModification(
+// When modifying requests, we ensure you always have correct framing, as it's impossible
+// to send a request with framing that doesn't match the body.
+export function getRequestContentLengthAfterModification(
     body: string | Uint8Array | Buffer,
     originalHeaders: Headers | RawHeaders,
     replacementHeaders: Headers | RawHeaders | undefined,
-    mismatchAllowed: boolean = false
+    context: {
+        httpVersion: 1 | 2
+        // N.b. we ignore the method though - you can proxy requests that include a body
+        // even if they really shouldn't, as long as it's plausibly parseable.
+    }
 ): string | undefined {
     // If there was a content-length header, it might now be wrong, and it's annoying
     // to need to set your own content-length override when you just want to change
-    // the body. To help out, if you override the body but don't explicitly override
-    // the (now invalid) content-length, then we fix it for you.
+    // the body. To help out, if you override the body in a way that results in invalid
+    // content-length headers, we fix them for you.
 
-    if (getHeaderValue(originalHeaders, 'content-length') === undefined) {
-        // Nothing to override - use the replacement value, or undefined
-        return getHeaderValue(replacementHeaders || {}, 'content-length');
+    // For HTTP/2, framing is optional/advisory so we can just skip this entirely.
+    if (context.httpVersion !== 1) return undefined;
+
+    const resultingHeaders = replacementHeaders || originalHeaders;
+
+    if (getHeaderValue(resultingHeaders, 'transfer-encoding')?.includes('chunked')) {
+        return undefined; // No content-length header games needed
     }
 
-    if (!replacementHeaders) {
-        // There was a length set, and you've provided a body but not changed it.
-        // You probably just want to send this body and have it work correctly,
-        // so we should fix the content length for you automatically.
-        return byteLength(body).toString();
+    const expectedLength = byteLength(body).toString();
+    const contentLengthHeader = getHeaderValue(resultingHeaders, 'content-length');
+
+    if (contentLengthHeader === expectedLength) return undefined;
+    if (contentLengthHeader === undefined) return expectedLength; // Differs from responses
+
+    // The content-length is expected, but it's wrong or missing.
+
+    // If there is a wrong content-length set, and it's not just leftover from the original headers (i.e.
+    // you intentionally set it) then we show a warning since we're ignoring your (invalid) instructions.
+    if (contentLengthHeader && contentLengthHeader !== getHeaderValue(originalHeaders, 'content-length')) {
+        console.warn(`Invalid request content-length header was ignored - resetting from ${
+            contentLengthHeader
+        } to ${
+            expectedLength
+        }`);
     }
 
-    // There was a content length before, and you're replacing the headers entirely
-    const lengthOverride = getHeaderValue(replacementHeaders, 'content-length')?.toString();
+    return expectedLength;
+}
 
-    // If you're setting the content-length to the same as the origin headers, even
-    // though that's the wrong value, it *might* be that you're just extending the
-    // existing headers, and you're doing this by accident (we can't tell for sure).
-    // We use invalid content-length as instructed, but print a warning just in case.
-    if (
-        lengthOverride === getHeaderValue(originalHeaders, 'content-length') &&
-        lengthOverride !== byteLength(body).toString() &&
-        !mismatchAllowed // Set for HEAD responses
-    ) {
-        console.warn(oneLine`
-            Passthrough modifications overrode the body and the content-length header
-            with mismatched values, which may be a mistake. The body contains
-            ${byteLength(body)} bytes, whilst the header was set to ${lengthOverride}.
-        `);
+// When modifying responses, we ensure you always have correct framing, but in a slightly more
+// relaxed way than for requests: we allow no framing and HEAD responses, we just block invalid values.
+export function getResponseContentLengthAfterModification(
+    body: string | Uint8Array | Buffer,
+    originalHeaders: Headers | RawHeaders,
+    replacementHeaders: Headers | RawHeaders | undefined,
+    context: {
+        httpMethod: string
+        httpVersion: 1 | 2
+    }
+): string | undefined {
+    // For HEAD requests etc, you can set an arbitrary content-length header regardless
+    // of the empty body, so we don't bother checking anything. For HTTP/2, framing is
+    // optional/advisory so we can just skip this entirely.
+    if (context.httpVersion !== 1 || context.httpMethod === 'HEAD') return undefined;
+
+    const resultingHeaders = replacementHeaders || originalHeaders;
+
+    if (getHeaderValue(resultingHeaders, 'transfer-encoding')?.includes('chunked')) {
+        return undefined; // No content-length header games needed
     }
 
-    return lengthOverride;
+    const expectedLength = byteLength(body).toString();
+    const contentLengthHeader = getHeaderValue(resultingHeaders, 'content-length');
+
+    if (contentLengthHeader === expectedLength) return undefined;
+    if (contentLengthHeader === undefined) return undefined; // Differs from requests - we do allow this for responses
+
+    // The content-length is set, but it's wrong.
+
+    // If there is a wrong content-length set, and it's not just leftover from the original headers (i.e.
+    // you intentionally set it) then we show a warning since we're ignoring your (invalid) instructions.
+    if (contentLengthHeader && contentLengthHeader !== getHeaderValue(originalHeaders, 'content-length')) {
+        console.warn(`Invalid response content-length header was ignored - resetting from ${
+            contentLengthHeader
+        } to ${
+            expectedLength
+        }`);
+    }
+
+    return expectedLength;
 }
 
 // Function to check if we should skip https errors for the current hostname and port,

@@ -1,15 +1,17 @@
 import _ = require("lodash");
 import * as path from 'path';
 import * as http from 'http';
+import * as zlib from 'zlib';
 
 import request = require("request-promise-native");
-import * as zlib from 'zlib';
 
 import { getLocal, Mockttp } from "../../..";
 import {
     expect,
     nodeOnly,
-    defaultNodeConnectionHeader
+    defaultNodeConnectionHeader,
+    nodeSatisfies,
+    DEFAULT_REQ_HEADERS_DISABLED
 } from "../../test-utils";
 import { streamToBuffer } from "../../../src/util/buffer-utils";
 
@@ -310,6 +312,7 @@ nodeOnly(() => {
                 await server.forAnyRequest().thenPassThrough({
                     transformRequest: {
                         replaceHeaders: {
+                            'transfer-encoding': 'chunked', // Required for body
                             'custom-header': 'replaced-value'
                         }
                     }
@@ -324,11 +327,10 @@ nodeOnly(() => {
                 expect(response.url).to.equal(`http://localhost:${remoteServer.port}/abc`); // From tunnel, even without the host header
                 expect(response.method).to.equal('POST');
                 expect(response.headers).to.deep.equal({
-                    // Default Node headers:
-                    'connection': defaultNodeConnectionHeader,
+                    ...(!nodeSatisfies(DEFAULT_REQ_HEADERS_DISABLED)
+                        ? { 'connection': defaultNodeConnectionHeader }
+                    : {}),
                     'transfer-encoding': 'chunked',
-
-                    // No other headers, only injected value:
                     'custom-header': 'replaced-value'
                 });
                 expect(response.body).to.equal(JSON.stringify({ a: 1 }));

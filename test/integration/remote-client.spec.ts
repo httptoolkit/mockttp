@@ -254,7 +254,6 @@ nodeOnly(() => {
                     await remoteServer.forPost(targetServer.urlFor('/res')).thenPassThrough({
                         transformResponse: {
                             updateHeaders: {
-                                'custom-header': undefined, // Remove
                                 'injected-header': 'injected-value' // Add
                             },
                             updateJsonBody: {

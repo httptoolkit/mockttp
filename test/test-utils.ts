@@ -308,6 +308,7 @@ export const BROKEN_H1_OVER_H2_TUNNELLING = "^18.8";
 export const DEFAULT_KEEP_ALIVE = ">=19";
 export const FIXED_KEEP_ALIVE_BEHAVIOUR = ">=20";
 export const BROKEN_H2_OVER_H2_TUNNELLING = "~20.12"; // https://github.com/nodejs/node/issues/52344
+export const DEFAULT_REQ_HEADERS_DISABLED = "^22.13.0 || >=23.5.0";
 
 export const defaultNodeConnectionHeader = nodeSatisfies(DEFAULT_KEEP_ALIVE)
     ? 'keep-alive'

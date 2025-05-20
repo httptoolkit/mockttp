@@ -74,7 +74,8 @@ import {
     PassThroughLookupOptions,
 } from '../passthrough-handling-definitions';
 import {
-    getContentLengthAfterModification,
+    getRequestContentLengthAfterModification,
+    getResponseContentLengthAfterModification,
     getHostAfterModification,
     getH2HeadersAfterModification,
     MODIFIABLE_PSEUDOHEADERS,
@@ -556,19 +557,23 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 }
             }
 
-            if (reqBodyOverride) {
+            if (reqBodyOverride) { // Can't check framing without body changes, since we won't have the body yet
                 // We always re-encode the body to match the resulting content-encoding header:
                 reqBodyOverride = await encodeBodyBuffer(
                     reqBodyOverride,
                     rawHeaders
                 );
 
-                const updatedCLHeader = getContentLengthAfterModification(
+                const updatedCLHeader = getRequestContentLengthAfterModification(
                     reqBodyOverride,
                     clientReq.headers,
-                    (updateHeaders && getHeaderValue(updateHeaders, 'content-length') !== undefined)
-                        ? rawHeaders // Iff you replaced the content length
-                        : replaceHeaders
+                    (updateHeaders && (
+                        getHeaderValue(updateHeaders, 'content-length') !== undefined ||
+                        getHeaderValue(updateHeaders, 'transfer-encoding')?.includes('chunked')
+                    ))
+                        ? rawHeaders // Iff you replaced the relevant headers
+                        : replaceHeaders,
+                    { httpVersion: isH2Downstream ? 2 : 1 }
                 );
 
                 if (updatedCLHeader !== undefined) {
@@ -637,12 +642,13 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
 
             reqBodyOverride = await buildOverriddenBody(modifiedReq, headers);
 
-            if (reqBodyOverride) {
+            if (reqBodyOverride || modifiedReq?.headers) {
                 // Automatically match the content-length to the body, unless it was explicitly overriden.
-                headers['content-length'] = getContentLengthAfterModification(
-                    reqBodyOverride,
+                headers['content-length'] = getRequestContentLengthAfterModification(
+                    reqBodyOverride || completedRequest.body.buffer,
                     clientHeaders,
-                    modifiedReq?.headers
+                    modifiedReq?.headers,
+                    { httpVersion: isH2Downstream ? 2 : 1 }
                 );
             }
 
@@ -747,6 +753,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                 headers: shouldTryH2Upstream
                     ? rawHeadersToObjectPreservingCase(rawHeaders)
                     : flattenPairedRawHeaders(rawHeaders) as any,
+                setDefaultHeaders: shouldTryH2Upstream, // For now, we need this for unexpected H2->H1 header fallback
                 lookup: getDnsLookupFunction(this.lookupOptions) as typeof dns.lookup,
                 // ^ Cast required to handle __promisify__ type hack in the official Node types
                 agent,
@@ -889,7 +896,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                         }
                     }
 
-                    if (resBodyOverride) {
+                    if (resBodyOverride) { // Can't check framing without body changes, since we won't have the body yet
                         // In the above cases, the overriding data is assumed to always be in decoded form,
                         // so we re-encode the body to match the resulting content-encoding header:
                         resBodyOverride = await encodeBodyBuffer(
@@ -897,13 +904,13 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
                             serverRawHeaders
                         );
 
-                        const updatedCLHeader = getContentLengthAfterModification(
+                        const updatedCLHeader = getResponseContentLengthAfterModification(
                             resBodyOverride,
                             serverRes.headers,
                             (updateHeaders && getHeaderValue(updateHeaders, 'content-length') !== undefined)
                                 ? serverRawHeaders // Iff you replaced the content length
                                 : replaceHeaders,
-                            method === 'HEAD' // HEAD responses are allowed mismatched content-length
+                            { httpMethod: method, httpVersion: serverRes.httpVersion.startsWith('1.') ? 1 : 2 }
                         );
 
                         if (updatedCLHeader !== undefined) {
@@ -980,13 +987,20 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
 
                     resBodyOverride = await buildOverriddenBody(modifiedRes, serverHeaders);
 
-                    if (resBodyOverride) {
-                        serverHeaders['content-length'] = getContentLengthAfterModification(
-                            resBodyOverride,
+                    if (resBodyOverride || modifiedRes?.headers) {
+                        const updatedContentLength = getResponseContentLengthAfterModification(
+                            resBodyOverride || originalBody,
                             serverRes.headers,
                             modifiedRes?.headers,
-                            method === 'HEAD' // HEAD responses are allowed mismatched content-length
+                            {
+                                httpMethod: method,
+                                httpVersion: serverRes.httpVersion.startsWith('1.') ? 1 : 2
+                            }
                         );
+
+                        if (updatedContentLength !== undefined) {
+                            serverHeaders['content-length'] = updatedContentLength;
+                        }
                     }
 
                     serverRawHeaders = objectHeadersToRaw(serverHeaders);
