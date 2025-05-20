@@ -60,19 +60,27 @@ export type GeneratedCertificate = {
  * as HTTPS options to a Mockttp server.
  */
 export async function generateCACertificate(options: {
-    commonName?: string,
-    organizationName?: string,
-    countryName?: string,
+    subject?: {
+        commonName?: string,
+        organizationName?: string,
+        countryName?: string,
+        [key: string]: string | undefined // Add any other subject field you like
+    },
     bits?: number,
     nameConstraints?: {
         permitted?: string[]
     }
 } = {}) {
     options = _.defaults({}, options, {
+        bits: 2048,
+    });
+
+    const subjectOptions = _.defaults({}, options.subject, {
+        // These subject fields are required for a fully valid CA cert that will be
+        // accepted when imported anywhere:
         commonName: 'Mockttp Testing CA - DO NOT TRUST - TESTING ONLY',
         organizationName: 'Mockttp',
         countryName: 'XX', // ISO-3166-1 alpha-2 'unknown country' code
-        bits: 2048,
     });
 
     const keyPair = await new Promise<forge.pki.rsa.KeyPair>((resolve, reject) => {
@@ -94,12 +102,10 @@ export async function generateCACertificate(options: {
     // Valid for the next year by default.
     cert.validity.notAfter.setFullYear(cert.validity.notAfter.getFullYear() + 1);
 
-    cert.setSubject([
-        // All of these are required for a fully valid CA cert that will be accepted when imported anywhere:
-        { name: 'commonName', value: options.commonName },
-        { name: 'countryName', value: options.countryName },
-        { name: 'organizationName', value: options.organizationName }
-    ]);
+    cert.setSubject(Object.entries(subjectOptions).map(([key, value]) => ({
+        name: key,
+        value: value
+    })));
 
     const extensions: any[] = [
         { name: 'basicConstraints', cA: true, critical: true },

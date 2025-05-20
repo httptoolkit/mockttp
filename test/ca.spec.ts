@@ -57,7 +57,6 @@ nodeOnly(() => {
             });
 
             it("can generate a valid certificate for a domain included in a constrained CA", async () => {
-                
                 const { cert, key } = constrainedCA.generateCertificate("hello.example.com");
 
                 server = https.createServer({ cert, key }, (req: any, res: any) => {
@@ -79,8 +78,7 @@ nodeOnly(() => {
                         reject(err);
                     });
                     req.end();
-                });
-                
+                });                
             });
 
             it("can not generate a valid certificate for a domain not included in a constrained CA", async () => {
