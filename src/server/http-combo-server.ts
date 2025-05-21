@@ -169,7 +169,7 @@ export async function createComboServer(options: ComboServerOptions): Promise<De
 
     if (options.https) {
         const ca = await getCA(options.https);
-        const defaultCert = ca.generateCertificate(options.https.defaultDomain ?? 'localhost');
+        const defaultCert = await ca.generateCertificate(options.https.defaultDomain ?? 'localhost');
 
         const serverProtocolPreferences = options.http2 === true
             ? ['h2', 'http/1.1', 'http 1.1'] // 'http 1.1' is non-standard, but used by https-proxy-agent
@@ -203,11 +203,11 @@ export async function createComboServer(options: ComboServerOptions): Promise<De
             ca: [defaultCert.ca],
             ...ALPNOption,
             ...(options.https?.tlsServerOptions || {}),
-            SNICallback: (domain: string, cb: Function) => {
+            SNICallback: async (domain: string, cb: Function) => {
                 if (options.debug) console.log(`Generating certificate for ${domain}`);
 
                 try {
-                    const generatedCert = ca.generateCertificate(domain);
+                    const generatedCert = await ca.generateCertificate(domain);
                     cb(null, tls.createSecureContext({
                         key: generatedCert.key,
                         cert: generatedCert.cert,

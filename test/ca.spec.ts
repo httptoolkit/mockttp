@@ -1,32 +1,78 @@
 import * as https from 'https';
 import * as path from 'path';
 import * as fs from 'fs/promises';
-import * as forge from 'node-forge';
+import * as x509 from '@peculiar/x509';
 
-import { expect, fetch, ignoreNetworkError, nodeOnly } from "./test-utils";
+import {
+    DestroyableServer,
+    makeDestroyable,
+    expect,
+    fetch,
+    ignoreNetworkError,
+    nodeOnly
+} from "./test-utils";
 
-import { CA, generateCACertificate } from '../src/util/tls';
+import { CA, generateCACertificate, generateSPKIFingerprint } from '../src/util/tls';
+
+const validateLintSiteCertResults = (cert: string, results: any[]) => {
+    // We don't worry about warnings
+    const errors = results.filter((result: any) => result.Severity !== 'warning');
+    // We don't worry about OCSP/CRL/AIA issues, since we can't include a URL to fully
+    // support these in any practical way. In future, these may be optional for short-lived
+    // certs, so we could reduce our leaf cert lifetimes to avoid these issues.
+    const ignoredErrors = errors.filter((result: any) => {
+        return result.Finding.includes('OCSP') ||
+            result.Finding.includes('CRL') ||
+            result.Finding.includes('authorityInformationAccess') ||
+            result.Code.includes('authority_info_access')
+    });
+
+    const failures = errors.filter((result: any) => !ignoredErrors.includes(result));
+    const warnings = results.filter((result: any) => !failures.includes(result));
+
+    if (warnings.length || failures.length) console.log('Cert:', cert);
+    if (warnings.length) console.log('Cert warnings:', warnings);
+    if (failures.length) console.log('FAILURES:', warnings);
+
+    expect(failures).to.deep.equal([]);
+};
 
 nodeOnly(() => {
     describe("Certificate generation", () => {
         const caKey = fs.readFile(path.join(__dirname, 'fixtures', 'test-ca.key'), 'utf8');
         const caCert = fs.readFile(path.join(__dirname, 'fixtures', 'test-ca.pem'), 'utf8');
 
-        let server: https.Server;
+        let server: DestroyableServer<https.Server> | undefined;
+
+        afterEach(async () => {
+            await server?.destroy();
+            server = undefined;
+        });
 
         it("can generate a certificate for a domain", async () => {
             const ca = new CA({ key: await caKey, cert: await caCert, keyLength: 2048 });
 
-            const { cert, key } = ca.generateCertificate('localhost')
+            const { cert, key } = await ca.generateCertificate('localhost')
 
-            server = https.createServer({ cert, key }, (req: any, res: any) => {
+            server = makeDestroyable(https.createServer({ cert, key }, (req: any, res: any) => {
                 res.writeHead(200);
                 res.end('signed response!');
-            });
+            }));
 
-            await new Promise<void>((resolve) => server.listen(4430, resolve));
+            await new Promise<void>((resolve) => server!.listen(4430, resolve));
 
             await expect(fetch('https://localhost:4430')).to.have.responseText('signed response!');
+        });
+
+        it("can calculate the SPKI fingerprint for a certificate", async () => {
+            const ca = new CA({ key: await caKey, cert: await caCert, keyLength: 2048 });
+
+            const { cert } = await ca.generateCertificate('localhost');
+
+            const caFingerprint = await generateSPKIFingerprint(await caCert);
+            const certFingerprint = await generateSPKIFingerprint(cert);
+
+            expect(caFingerprint).not.to.equal(certFingerprint);
         });
 
         describe("with a constrained CA", () => {
@@ -57,13 +103,13 @@ nodeOnly(() => {
             });
 
             it("can generate a valid certificate for a domain included in a constrained CA", async () => {
-                const { cert, key } = constrainedCA.generateCertificate("hello.example.com");
+                const { cert, key } = await constrainedCA.generateCertificate("hello.example.com");
 
-                server = https.createServer({ cert, key }, (req: any, res: any) => {
+                server = makeDestroyable(https.createServer({ cert, key }, (req: any, res: any) => {
                     res.writeHead(200);
                     res.end("signed response!");
-                });
-                await new Promise<void>((resolve) => server.listen(4430, resolve));
+                }));
+                await new Promise<void>((resolve) => server!.listen(4430, resolve));
 
                 const req = localhostRequest({hostname: "hello.example.com", port: 4430});
                 return new Promise<void>((resolve, reject) => {
@@ -82,13 +128,13 @@ nodeOnly(() => {
             });
 
             it("can not generate a valid certificate for a domain not included in a constrained CA", async () => {
-                const { cert, key } = constrainedCA.generateCertificate("hello.other.com");
+                const { cert, key } = await constrainedCA.generateCertificate("hello.other.com");
 
-                server = https.createServer({ cert, key }, (req: any, res: any) => {
+                server = makeDestroyable(https.createServer({ cert, key }, (req: any, res: any) => {
                     res.writeHead(200);
                     res.end("signed response!");
-                });
-                await new Promise<void>((resolve) => server.listen(4430, resolve));
+                }));
+                await new Promise<void>((resolve) => server!.listen(4430, resolve));
 
                 const req = localhostRequest({hostname: "hello.other.com", port: 4430});
                 return new Promise<void>((resolve) => {
@@ -102,10 +148,6 @@ nodeOnly(() => {
                     req.end();
                 });
             });
-        });
-
-        afterEach((done) => {
-            if (server) server.close(done);
         });
     });
 
@@ -126,17 +168,15 @@ nodeOnly(() => {
             const caCertificate = await caCertificatePromise;
             const ca = new CA({ key: caCertificate.key, cert: caCertificate.cert, keyLength: 1024 });
 
-            const { cert, key } = ca.generateCertificate('localhost');
+            const { cert, key } = await ca.generateCertificate('localhost');
 
             expect(cert.length).to.be.greaterThan(1000);
-            expect(cert.split('\r\n')[0]).to.equal('-----BEGIN CERTIFICATE-----');
+            expect(cert.split('\n')[0]).to.equal('-----BEGIN CERTIFICATE-----');
             expect(key.length).to.be.greaterThan(1000);
-            expect(key.split('\r\n')[0]).to.equal('-----BEGIN RSA PRIVATE KEY-----');
+            expect(key.split('\n')[0]).to.equal('-----BEGIN RSA PRIVATE KEY-----');
         });
 
         it("should be able to generate a CA certificate that passes lintcert checks", async function () {
-            this.retries(3); // Remote server can be unreliable
-
             const caCertificate = await caCertificatePromise;
 
             const { cert } = caCertificate;
@@ -157,21 +197,22 @@ nodeOnly(() => {
 
             expect(response.status).to.equal(200);
             const results = await response.json();
-            expect(results).to.deep.equal([]);
+            validateLintSiteCertResults(cert, results);
         });
 
         it("should generate CA certs that can be used to create domain certs that pass lintcert checks", async function () {
             this.timeout(5000); // Large cert + remote request can make this slow
-            this.retries(3); // Remote server can be unreliable
 
             const caCertificate = await caCertificatePromise;
             const ca = new CA({ key: caCertificate.key, cert: caCertificate.cert, keyLength: 2048 });
 
-            const { cert } = ca.generateCertificate('httptoolkit.com');
+            const { cert } = await ca.generateCertificate('httptoolkit.com');
 
-
-            const certData = forge.pki.certificateFromPem(cert);
-            expect((certData.getExtension('subjectAltName') as any).altNames[0].value).to.equal('httptoolkit.com');
+            const certData = new x509.X509Certificate(cert);
+            const altNameExtension = certData.getExtension('2.5.29.17') as x509.SubjectAlternativeNameExtension;
+            expect(altNameExtension.names.items.map(({ type, value }) => ({ type, value }))).to.deep.equal([
+                { type: 'dns', 'value': 'httptoolkit.com' },
+            ]);
 
             const response = await ignoreNetworkError(
                 fetch('https://pkimet.al/lintcert', {
@@ -181,7 +222,7 @@ nodeOnly(() => {
                         'b64input': cert,
                         'format': 'json',
                         'severity': 'warning',
-                        'profile': 'autodetect'
+                        'profile': 'tbr_leaf_tlsserver_dv' // TLS Baseline domain-validated server
                     })
                 }),
                 { context: this }
@@ -189,7 +230,7 @@ nodeOnly(() => {
 
             expect(response.status).to.equal(200);
             const results = await response.json();
-            expect(results).to.deep.equal([]);
+            validateLintSiteCertResults(cert, results);
         });
 
         it("should generate wildcard certs that pass lintcert checks for invalid subdomain names", async function () {
@@ -198,45 +239,34 @@ nodeOnly(() => {
             const caCertificate = await caCertificatePromise;
             const ca = new CA({ key: caCertificate.key, cert: caCertificate.cert, keyLength: 2048 });
 
-            const { cert } = ca.generateCertificate('under_score.httptoolkit.com');
+            const { cert } = await ca.generateCertificate('under_score.httptoolkit.com');
 
-            const certData = forge.pki.certificateFromPem(cert);
-            expect((certData.getExtension('subjectAltName') as any).altNames[0].value).to.equal('*.httptoolkit.com');
+            const certData = new x509.X509Certificate(cert);
+            const altNameExtension = certData.getExtension('2.5.29.17') as x509.SubjectAlternativeNameExtension;
+            expect(altNameExtension.names.items.map(({ type, value }) => ({ type, value }))).to.deep.equal([
+                { type: 'dns', 'value': '*.httptoolkit.com' },
+            ]);
 
             const response = await ignoreNetworkError(
-                fetch('https://crt.sh/lintcert', {
+                fetch('https://pkimet.al/lintcert', {
                     method: 'POST',
                     headers: { 'content-type': 'application/x-www-form-urlencoded' },
-                    body: new URLSearchParams({'b64cert': cert})
+                    body: new URLSearchParams({
+                        'b64input': cert,
+                        'format': 'json',
+                        'severity': 'warning',
+                        'profile': 'tbr_leaf_tlsserver_dv' // TLS Baseline domain-validated server
+                    })
                 }),
                 { context: this, timeout: 9000 }
             );
 
             expect(response.status).to.equal(200);
-            const lintOutput = await response.text();
-
-            const lintResults = lintOutput
-                .split('\n')
-                .map(line => line.split('\t').slice(1))
-                .filter(line => line.length > 1);
-
-            const errors = lintResults
-                .filter(([level]) => level === 'ERROR' || level === 'FATAL')
-                .map(([_level, message]) => message)
-                .filter((message) =>
-                    // TODO: We don't yet support AIA due to https://github.com/digitalbazaar/forge/issues/988
-                    // This is relatively new, tricky to support (we'd need an OCSP server), and not yet required
-                    // anywhere AFAICT, so not a high priority short-term, but good to do later if possible.
-                    !message.includes("OCSP") &&
-                    !message.includes("authorityInformationAccess")
-                );
-
-            expect(errors.join('\n')).to.equal('');
+            const results = await response.json();
+            validateLintSiteCertResults(cert, results);
         });
 
         it("should generate a custom CA cert constrained to a domain that pass lintcert checks", async function() {
-            this.retries(3); // Remote server can be unreliable
-
             const caCertificate = await generateCACertificate({
                 subject: {
                     commonName: 'Custom CA',
@@ -256,7 +286,7 @@ nodeOnly(() => {
                     body: new URLSearchParams({
                         'b64input': cert,
                         'format': 'json',
-                        'severity': 'error',
+                        'severity': 'warning',
                         'profile': 'tbr_root_tlsserver' // TLS Baseline root CA
                     })
                 }),
@@ -265,7 +295,7 @@ nodeOnly(() => {
 
             expect(response.status).to.equal(200);
             const results = await response.json();
-            expect(results).to.deep.equal([]);
+            validateLintSiteCertResults(cert, results);
         });
 
     });

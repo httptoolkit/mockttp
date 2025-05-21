@@ -335,7 +335,7 @@ nodeOnly(() => {
                         keyPath: './test/fixtures/test-ca.key',
                         certPath: './test/fixtures/test-ca.pem'
                     });
-                    const cert = ca.generateCertificate('localhost');
+                    const cert = await ca.generateCertificate('localhost');
                     wsHttpsServer = makeDestroyable(https.createServer({
                         key: cert.key,
                         cert: cert.cert
@@ -403,7 +403,7 @@ nodeOnly(() => {
 
                 beforeEach(async () => {
                     const ca = await getCA(await untrustedCACert);
-                    const cert = ca.generateCertificate('localhost');
+                    const cert = await ca.generateCertificate('localhost');
                     wsHttpsServer = makeDestroyable(https.createServer({
                         key: cert.key,
                         cert: cert.cert

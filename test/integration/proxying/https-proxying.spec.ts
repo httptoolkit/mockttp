@@ -322,7 +322,7 @@ nodeOnly(() => {
                     const caCert = await fs.readFile('./test/fixtures/test-ca.pem');
                     const ca = new CA({ key: caKey.toString(), cert: caCert.toString(), keyLength: 1024 });
 
-                    const cert = ca.generateCertificate('localhost');
+                    const cert = await ca.generateCertificate('localhost');
 
                     oldServer = makeDestroyable(https.createServer({
                         ...cert,

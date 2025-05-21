@@ -6,9 +6,6 @@ import * as x509 from '@peculiar/x509';
 import * as asn1X509 from '@peculiar/asn1-x509';
 import * as asn1Schema from '@peculiar/asn1-schema';
 
-import * as forge from 'node-forge';
-const { asn1, pki, md, util } = forge;
-
 const crypto = globalThis.crypto;
 
 export type CAOptions = (CertDataOptions | CertPathOptions);
@@ -71,6 +68,17 @@ function arrayBufferToPem(buffer: ArrayBuffer, label: string): string {
     const base64 = Buffer.from(buffer).toString('base64');
     const lines = base64.match(/.{1,64}/g) || [];
     return `-----BEGIN ${label}-----\n${lines.join('\n')}\n-----END ${label}-----\n`;
+}
+
+async function pemToCryptoKey(pem: string) {
+    const derKey = x509.PemConverter.decodeFirst(pem);
+    return await crypto.subtle.importKey(
+        "pkcs8",
+        derKey,
+        { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+        true, // Extractable
+        ["sign"]
+    );
 }
 
 /**
@@ -202,16 +210,10 @@ export async function generateCACertificate(options: {
     };
 }
 
-
-export function generateSPKIFingerprint(certPem: PEM) {
-    let cert = pki.certificateFromPem(certPem.toString('utf8'));
-    return util.encode64(
-        pki.getPublicKeyFingerprint(cert.publicKey, {
-            type: 'SubjectPublicKeyInfo',
-            md: md.sha256.create(),
-            encoding: 'binary'
-        })
-    );
+export async function generateSPKIFingerprint(certPem: string): Promise<string> {
+    const cert = new x509.X509Certificate(certPem);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', cert.publicKey.rawData);
+    return Buffer.from(hashBuffer).toString('base64');
 }
 
 // Generates a unique serial number for a certificate as a hex string:
@@ -249,21 +251,25 @@ export async function getCA(options: CAOptions): Promise<CA> {
 // This would be a terrible idea for a real server, but for a mock server
 // it's ok - if anybody can steal this, they can steal the CA cert anyway.
 let KEY_PAIR: {
-    publicKey: forge.pki.rsa.PublicKey,
-    privateKey: forge.pki.rsa.PrivateKey,
+    value: Promise<CryptoKeyPair>,
     length: number
 } | undefined;
+const KEY_PAIR_ALGO = {
+    name: "RSASSA-PKCS1-v1_5",
+    hash: "SHA-256",
+    publicExponent: new Uint8Array([1, 0, 1])
+};
 
 export class CA {
-    private caCert: forge.pki.Certificate;
-    private caKey: forge.pki.PrivateKey;
+    private caCert: x509.X509Certificate;
+    private caKey: Promise<CryptoKey>;
     private options: CertDataOptions;
 
     private certCache: { [domain: string]: GeneratedCertificate };
 
     constructor(options: CertDataOptions) {
-        this.caKey = pki.privateKeyFromPem(options.key.toString());
-        this.caCert = pki.certificateFromPem(options.cert.toString());
+        this.caKey = pemToCryptoKey(options.key.toString());
+        this.caCert = new x509.X509Certificate(options.cert.toString());
         this.certCache = {};
         this.options = options ?? {};
 
@@ -271,16 +277,22 @@ export class CA {
 
         if (!KEY_PAIR || KEY_PAIR.length < keyLength) {
             // If we have no key, or not a long enough one, generate one.
-            KEY_PAIR = Object.assign(
-                pki.rsa.generateKeyPair(keyLength),
-                { length: keyLength }
-            );
+            KEY_PAIR = {
+                length: keyLength,
+                value: crypto.subtle.generateKey(
+                    { ...KEY_PAIR_ALGO, modulusLength: keyLength },
+                    true,
+                    ["sign", "verify"]
+                )
+            };
         }
     }
 
-    generateCertificate(domain: string): GeneratedCertificate {
+    async generateCertificate(domain: string): Promise<GeneratedCertificate> {
         // TODO: Expire domains from the cache? Based on their actual expiry?
         if (this.certCache[domain]) return this.certCache[domain];
+
+        const leafKeyPair = await KEY_PAIR!.value;
 
         if (domain.includes('_')) {
             // TLS certificates cannot cover domains with underscores, bizarrely. More info:
@@ -300,70 +312,80 @@ export class CA {
             domain = `*.${otherParts.join('.')}`;
         }
 
-        let cert = pki.createCertificate();
+        const subjectJsonNameParams: x509.JsonNameParams = [];
+        const subjectAttributes: Record<string, string> = {};
 
-        cert.publicKey = KEY_PAIR!.publicKey;
-        cert.serialNumber = generateSerialNumber();
+        if (domain[0] !== '*') { // Skip this for wildcards as CN cannot use them
+            subjectAttributes['commonName'] = domain;
+        }
+        subjectAttributes['countryName'] = this.options.countryName ?? 'XX';
+        // Most other subject attributes aren't allowed here by BR.
 
-        cert.validity.notBefore = new Date();
-        // Make it valid for the last 24h - helps in cases where clocks slightly disagree.
-        cert.validity.notBefore.setDate(cert.validity.notBefore.getDate() - 1);
-
-        cert.validity.notAfter = new Date();
-        // Valid for the next year by default. TODO: Shorten (and expire the cache) automatically.
-        cert.validity.notAfter.setFullYear(cert.validity.notAfter.getFullYear() + 1);
-
-        cert.setSubject([
-            ...(domain[0] === '*'
-                ? [] // We skip the CN (deprecated, rarely used) for wildcards, since they can't be used here.
-                : [{ name: 'commonName', value: domain }]
-            ),
-            { name: 'countryName', value: this.options?.countryName ?? 'XX' }, // ISO-3166-1 alpha-2 'unknown country' code
-            { name: 'localityName', value: this.options?.localityName ?? 'Unknown' },
-            { name: 'organizationName', value: this.options?.organizationName ?? 'Mockttp Cert - DO NOT TRUST' }
-        ]);
-        cert.setIssuer(this.caCert.subject.attributes);
-
-        const policyList = forge.asn1.create(forge.asn1.Class.UNIVERSAL, forge.asn1.Type.SEQUENCE, true, [
-            forge.asn1.create(forge.asn1.Class.UNIVERSAL, forge.asn1.Type.SEQUENCE, true, [
-                forge.asn1.create(
-                    forge.asn1.Class.UNIVERSAL,
-                    forge.asn1.Type.OID,
-                    false,
-                    forge.asn1.oidToDer('2.5.29.32.0').getBytes() // Mark all as Domain Verified
-                )
-            ])
-        ]);
-
-        cert.setExtensions([
-            { name: 'basicConstraints', cA: false, critical: true },
-            { name: 'keyUsage', digitalSignature: true, keyEncipherment: true, critical: true },
-            { name: 'extKeyUsage', serverAuth: true, clientAuth: true },
-            {
-                name: 'subjectAltName',
-                altNames: [{
-                    type: 2,
-                    value: domain
-                }]
-            },
-            { name: 'certificatePolicies', value: policyList },
-            { name: 'subjectKeyIdentifier' },
-            {
-                name: 'authorityKeyIdentifier',
-                // We have to calculate this ourselves due to
-                // https://github.com/digitalbazaar/forge/issues/462
-                keyIdentifier: (
-                    this.caCert as any // generateSubjectKeyIdentifier is missing from node-forge types
-                ).generateSubjectKeyIdentifier().getBytes()
+        // Apply BR-required order
+        const orderedSubjectKeys = ["countryName", "organizationName", "localityName", "commonName"];
+        for (const key of orderedSubjectKeys) {
+            if (subjectAttributes[key]) {
+                const mappedKey = SUBJECT_NAME_MAP[key] || key;
+                subjectJsonNameParams.push({ [mappedKey]: [subjectAttributes[key]] });
             }
-        ]);
+        }
+        const subjectDistinguishedName = new x509.Name(subjectJsonNameParams).toString();
+        const issuerDistinguishedName = this.caCert.subject;
 
-        cert.sign(this.caKey, md.sha256.create());
+        const notBefore = new Date();
+        notBefore.setDate(notBefore.getDate() - 1); // Valid from 24 hours ago
+
+        const notAfter = new Date();
+        notAfter.setFullYear(notAfter.getFullYear() + 1); // Valid for 1 year
+
+        const extensions: x509.Extension[] = [];
+        extensions.push(new x509.BasicConstraintsExtension(false, undefined, true));
+        extensions.push(new x509.KeyUsagesExtension(
+            x509.KeyUsageFlags.digitalSignature | x509.KeyUsageFlags.keyEncipherment,
+            true
+        ));
+        extensions.push(new x509.ExtendedKeyUsageExtension(
+            [asn1X509.id_kp_serverAuth, asn1X509.id_kp_clientAuth],
+            false
+        ));
+
+        extensions.push(new x509.SubjectAlternativeNameExtension(
+            [{ type: "dns", value: domain }],
+            false
+        ));
+
+        const policyInfo = new asn1X509.PolicyInformation({
+            policyIdentifier: '2.23.140.1.2.1' // Domain validated
+        });
+        const certificatePoliciesValue = new asn1X509.CertificatePolicies([policyInfo]);
+        extensions.push(new x509.Extension(
+            asn1X509.id_ce_certificatePolicies,
+            false,
+            asn1Schema.AsnConvert.serialize(certificatePoliciesValue)
+        ));
+
+        // We don't include SubjectKeyIdentifierExtension as that's no longer recommended
+        extensions.push(await x509.AuthorityKeyIdentifierExtension.create(this.caCert, false));
+
+        const certificate = await x509.X509CertificateGenerator.create({
+            serialNumber: generateSerialNumber(),
+            subject: subjectDistinguishedName,
+            issuer: issuerDistinguishedName,
+            notBefore,
+            notAfter,
+            signingAlgorithm: KEY_PAIR_ALGO,
+            publicKey: leafKeyPair.publicKey,
+            signingKey: await this.caKey,
+            extensions
+        });
 
         const generatedCertificate = {
-            key: pki.privateKeyToPem(KEY_PAIR!.privateKey),
-            cert: pki.certificateToPem(cert),
-            ca: pki.certificateToPem(this.caCert)
+            key: arrayBufferToPem(
+                await crypto.subtle.exportKey("pkcs8", leafKeyPair.privateKey as CryptoKey),
+                "RSA PRIVATE KEY"
+            ),
+            cert: certificate.toString("pem"),
+            ca: this.caCert.toString("pem")
         };
 
         this.certCache[domain] = generatedCertificate;
