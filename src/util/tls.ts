@@ -1,9 +1,15 @@
 import * as _ from 'lodash';
 import * as fs from 'fs/promises';
 import { v4 as uuid } from "uuid";
-import * as forge from 'node-forge';
 
+import * as x509 from '@peculiar/x509';
+import * as asn1X509 from '@peculiar/asn1-x509';
+import * as asn1Schema from '@peculiar/asn1-schema';
+
+import * as forge from 'node-forge';
 const { asn1, pki, md, util } = forge;
+
+const crypto = globalThis.crypto;
 
 export type CAOptions = (CertDataOptions | CertPathOptions);
 
@@ -50,6 +56,23 @@ export type GeneratedCertificate = {
     ca: string
 };
 
+const SUBJECT_NAME_MAP: { [key: string]: string } = {
+    commonName: "CN",
+    organizationName: "O",
+    organizationalUnitName: "OU",
+    countryName: "C",
+    localityName: "L",
+    stateOrProvinceName: "ST",
+    domainComponent: "DC",
+    serialNumber: "2.5.4.5"
+};
+
+function arrayBufferToPem(buffer: ArrayBuffer, label: string): string {
+    const base64 = Buffer.from(buffer).toString('base64');
+    const lines = base64.match(/.{1,64}/g) || [];
+    return `-----BEGIN ${label}-----\n${lines.join('\n')}\n-----END ${label}-----\n`;
+}
+
 /**
  * Generate a CA certificate for mocking HTTPS.
  *
@@ -68,122 +91,117 @@ export async function generateCACertificate(options: {
     },
     bits?: number,
     nameConstraints?: {
+        /**
+         * Array of permitted domains
+         */
         permitted?: string[]
     }
 } = {}) {
-    options = _.defaults({}, options, {
+    options = {
         bits: 2048,
-    });
-
-    const subjectOptions = _.defaults({}, options.subject, {
-        // These subject fields are required for a fully valid CA cert that will be
-        // accepted when imported anywhere:
-        commonName: 'Mockttp Testing CA - DO NOT TRUST - TESTING ONLY',
-        organizationName: 'Mockttp',
-        countryName: 'XX', // ISO-3166-1 alpha-2 'unknown country' code
-    });
-
-    const keyPair = await new Promise<forge.pki.rsa.KeyPair>((resolve, reject) => {
-        pki.rsa.generateKeyPair({ bits: options.bits }, (error, keyPair) => {
-            if (error) reject(error);
-            else resolve(keyPair);
-        });
-    });
-
-    const cert = pki.createCertificate();
-    cert.publicKey = keyPair.publicKey;
-    cert.serialNumber = generateSerialNumber();
-
-    cert.validity.notBefore = new Date();
-    // Make it valid for the last 24h - helps in cases where clocks slightly disagree
-    cert.validity.notBefore.setDate(cert.validity.notBefore.getDate() - 1);
-
-    cert.validity.notAfter = new Date();
-    // Valid for the next year by default.
-    cert.validity.notAfter.setFullYear(cert.validity.notAfter.getFullYear() + 1);
-
-    cert.setSubject(Object.entries(subjectOptions).map(([key, value]) => ({
-        name: key,
-        value: value
-    })));
-
-    const extensions: any[] = [
-        { name: 'basicConstraints', cA: true, critical: true },
-        { name: 'keyUsage', keyCertSign: true, digitalSignature: true, nonRepudiation: true, cRLSign: true, critical: true },
-        { name: 'subjectKeyIdentifier' },
-    ];
-    const permittedDomains = options.nameConstraints?.permitted || [];
-    if(permittedDomains.length > 0) {
-        extensions.push({
-            critical: true,
-            id: '2.5.29.30',
-            name: 'nameConstraints',
-            value: generateNameConstraints({
-              permitted: permittedDomains,
-            }),
-        })
-    }
-    cert.setExtensions(extensions);
-
-    // Self-issued too
-    cert.setIssuer(cert.subject.attributes);
-
-    // Self-sign the certificate - we're the root
-    cert.sign(keyPair.privateKey, md.sha256.create());
-
-    return {
-        key: pki.privateKeyToPem(keyPair.privateKey),
-        cert: pki.certificateToPem(cert)
+        ...options,
+        subject: {
+            commonName: 'Mockttp Testing CA - DO NOT TRUST - TESTING ONLY',
+            organizationName: 'Mockttp',
+            countryName: 'XX', // ISO-3166-1 alpha-2 'unknown country' code
+            ...options.subject
+        },
     };
-}
 
+    // We use RSA for now for maximum compatibility
+    const keyAlgorithm = {
+        name: "RSASSA-PKCS1-v1_5",
+        modulusLength: options.bits,
+        publicExponent: new Uint8Array([1, 0, 1]), // Standard 65537 fixed value
+        hash: "SHA-256"
+    };
 
-type GenerateNameConstraintsInput = {
-    /**
-     * Array of permitted domains
-     */
-    permitted?: string[];
-};
+    const keyPair = await crypto.subtle.generateKey(
+        keyAlgorithm,
+        true, // Key should be extractable to be exportable
+        ["sign", "verify"]
+    ) as CryptoKeyPair;
 
-/**
- * Generate name constraints in conformance with
- * [RFC 5280 § 4.2.1.10](https://datatracker.ietf.org/doc/html/rfc5280#section-4.2.1.10)
- */
-function generateNameConstraints(
-    input: GenerateNameConstraintsInput
-): forge.asn1.Asn1 {
-    const domainsToSequence = (ips: string[]) =>
-        ips.map((domain) => {
-            return asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, [
-                asn1.create(
-                    asn1.Class.CONTEXT_SPECIFIC,
-                    2,
-                    false,
-                    util.encodeUtf8(domain)
-                ),
-            ]);
+    // Baseline requirements set a specific order for standard CA fields:
+    const orderedKeys = ["countryName", "organizationName", "organizationalUnitName", "commonName"];
+    const subjectNameParts: x509.JsonNameParams = [];
+
+    for (const key of orderedKeys) {
+        const value = options.subject![key];
+        if (!value) continue;
+        const mappedKey = SUBJECT_NAME_MAP[key] || key;
+        subjectNameParts.push({ [mappedKey]: [value] });
+    }
+    for (const key in options.subject) {
+        if (orderedKeys.includes(key)) continue; // Already added above
+        const value = options.subject[key]!;
+        const mappedKey = SUBJECT_NAME_MAP[key] || key;
+        subjectNameParts.push({ [mappedKey]: [value] });
+    }
+    const subjectDistinguishedName = new x509.Name(subjectNameParts).toString();
+
+    const notBefore = new Date();
+    // Make it valid for the last 24h - helps in cases where clocks slightly disagree
+    notBefore.setDate(notBefore.getDate() - 1);
+
+    const notAfter = new Date();
+    // Valid for the next 10 years by default (BR sets an 8 year minimum)
+    notAfter.setFullYear(notAfter.getFullYear() + 10);
+
+    const extensions: x509.Extension[] = [
+        new x509.BasicConstraintsExtension(
+            true, // cA = true
+            undefined, // We don't set any path length constraint (should we? Not required by BR)
+            true
+        ),
+        new x509.KeyUsagesExtension(
+            x509.KeyUsageFlags.keyCertSign |
+            x509.KeyUsageFlags.digitalSignature |
+            x509.KeyUsageFlags.cRLSign,
+            true
+        ),
+        await x509.SubjectKeyIdentifierExtension.create(keyPair.publicKey as CryptoKey, false),
+        await x509.AuthorityKeyIdentifierExtension.create(keyPair.publicKey as CryptoKey, false)
+    ];
+
+    const permittedDomains = options.nameConstraints?.permitted || [];
+    if (permittedDomains.length > 0) {
+        const permittedSubtrees = permittedDomains.map(domain => {
+            const generalName = new asn1X509.GeneralName({ dNSName: domain });
+            return new asn1X509.GeneralSubtree({ base: generalName });
         });
-
-    const permittedAndExcluded: forge.asn1.Asn1[] = [];
-
-    if (input.permitted && input.permitted.length > 0) {
-        permittedAndExcluded.push(
-            asn1.create(
-                asn1.Class.CONTEXT_SPECIFIC,
-                0,
-                true,
-                domainsToSequence(input.permitted)
-            )
+        const nameConstraints = new asn1X509.NameConstraints({
+            permittedSubtrees: new asn1X509.GeneralSubtrees(permittedSubtrees)
+        });
+        extensions.push(new x509.Extension(
+            asn1X509.id_ce_nameConstraints,
+            true,
+            asn1Schema.AsnConvert.serialize(nameConstraints))
         );
     }
 
-    return asn1.create(
-        asn1.Class.UNIVERSAL,
-        asn1.Type.SEQUENCE,
-        true,
-        permittedAndExcluded
-    );
+    const certificate = await x509.X509CertificateGenerator.create({
+        serialNumber: generateSerialNumber(),
+        subject: subjectDistinguishedName,
+        issuer: subjectDistinguishedName, // Self-signed
+        notBefore,
+        notAfter,
+        signingAlgorithm: keyAlgorithm,
+        publicKey: keyPair.publicKey as CryptoKey,
+        signingKey: keyPair.privateKey as CryptoKey,
+        extensions
+    });
+
+    const privateKeyBuffer = await crypto.subtle.exportKey("pkcs8", keyPair.privateKey as CryptoKey);
+    const privateKeyPem = arrayBufferToPem(privateKeyBuffer, "RSA PRIVATE KEY");
+    const certificatePem = certificate.toString("pem");
+
+    return {
+        key: privateKeyPem,
+        cert: certificatePem
+    };
 }
+
 
 export function generateSPKIFingerprint(certPem: PEM) {
     let cert = pki.certificateFromPem(certPem.toString('utf8'));

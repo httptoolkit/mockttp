@@ -124,7 +124,7 @@ export async function ignoreNetworkError<T extends RequestPromise | Promise<Resp
 
     const result = await Promise.race([
         request,
-        delay(options.timeout ?? 1000).then(() => { throw TimeoutError; })
+        delay(options.timeout ?? 1500).then(() => { throw TimeoutError; })
     ]).catch(error => {
         console.log(error);
         if (error === TimeoutError || error.name === 'FetchError') {

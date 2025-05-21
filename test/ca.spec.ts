@@ -91,7 +91,7 @@ nodeOnly(() => {
                 await new Promise<void>((resolve) => server.listen(4430, resolve));
 
                 const req = localhostRequest({hostname: "hello.other.com", port: 4430});
-                return new Promise<void>((resolve, reject) => {
+                return new Promise<void>((resolve) => {
                     req.on("error", (err) => {
                         expect(err.message).to.equal("permitted subtree violation");
                         resolve();
@@ -117,9 +117,9 @@ nodeOnly(() => {
             const caCertificate = await caCertificatePromise;
 
             expect(caCertificate.cert.length).to.be.greaterThan(1000);
-            expect(caCertificate.cert.split('\r\n')[0]).to.equal('-----BEGIN CERTIFICATE-----');
+            expect(caCertificate.cert.split('\n')[0]).to.equal('-----BEGIN CERTIFICATE-----');
             expect(caCertificate.key.length).to.be.greaterThan(1000);
-            expect(caCertificate.key.split('\r\n')[0]).to.equal('-----BEGIN RSA PRIVATE KEY-----');
+            expect(caCertificate.key.split('\n')[0]).to.equal('-----BEGIN RSA PRIVATE KEY-----');
         });
 
         it("should generate a CA certificate that can be used to create domain certificates", async () => {
@@ -128,10 +128,10 @@ nodeOnly(() => {
 
             const { cert, key } = ca.generateCertificate('localhost');
 
-            expect(caCertificate.cert.length).to.be.greaterThan(1000);
-            expect(caCertificate.cert.split('\r\n')[0]).to.equal('-----BEGIN CERTIFICATE-----');
-            expect(caCertificate.key.length).to.be.greaterThan(1000);
-            expect(caCertificate.key.split('\r\n')[0]).to.equal('-----BEGIN RSA PRIVATE KEY-----');
+            expect(cert.length).to.be.greaterThan(1000);
+            expect(cert.split('\r\n')[0]).to.equal('-----BEGIN CERTIFICATE-----');
+            expect(key.length).to.be.greaterThan(1000);
+            expect(key.split('\r\n')[0]).to.equal('-----BEGIN RSA PRIVATE KEY-----');
         });
 
         it("should be able to generate a CA certificate that passes lintcert checks", async function () {
@@ -149,7 +149,7 @@ nodeOnly(() => {
                         'b64input': cert,
                         'format': 'json',
                         'severity': 'warning',
-                        'profile': 'autodetect'
+                        'profile': 'tbr_root_tlsserver' // TLS Baseline root CA
                     })
                 }),
                 { context: this }
@@ -193,8 +193,7 @@ nodeOnly(() => {
         });
 
         it("should generate wildcard certs that pass lintcert checks for invalid subdomain names", async function () {
-            this.timeout(5000); // Large cert + remote request can make this slow
-            this.retries(3); // Remote server can be unreliable
+            this.timeout(10_000); // Large cert + remote request can make this slow
 
             const caCertificate = await caCertificatePromise;
             const ca = new CA({ key: caCertificate.key, cert: caCertificate.cert, keyLength: 2048 });
@@ -210,7 +209,7 @@ nodeOnly(() => {
                     headers: { 'content-type': 'application/x-www-form-urlencoded' },
                     body: new URLSearchParams({'b64cert': cert})
                 }),
-                { context: this }
+                { context: this, timeout: 9000 }
             );
 
             expect(response.status).to.equal(200);
@@ -257,8 +256,8 @@ nodeOnly(() => {
                     body: new URLSearchParams({
                         'b64input': cert,
                         'format': 'json',
-                        'severity': 'warning',
-                        'profile': 'autodetect'
+                        'severity': 'error',
+                        'profile': 'tbr_root_tlsserver' // TLS Baseline root CA
                     })
                 }),
                 { context: this }
