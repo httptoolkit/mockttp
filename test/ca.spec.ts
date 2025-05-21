@@ -142,26 +142,22 @@ nodeOnly(() => {
             const { cert } = caCertificate;
 
             const response = await ignoreNetworkError(
-                fetch('https://crt.sh/lintcert', {
+                fetch('https://pkimet.al/lintcert', {
                     method: 'POST',
                     headers: { 'content-type': 'application/x-www-form-urlencoded' },
-                    body: new URLSearchParams({'b64cert': cert})
+                    body: new URLSearchParams({
+                        'b64input': cert,
+                        'format': 'json',
+                        'severity': 'warning',
+                        'profile': 'autodetect'
+                    })
                 }),
                 { context: this }
             );
 
-            const lintOutput = await response.text();
-
-            const lintResults = lintOutput
-                .split('\n')
-                .map(line => line.split('\t').slice(1))
-                .filter(line => line.length > 1);
-
-            const errors = lintResults
-                .filter(([level]) => level === 'ERROR')
-                .map(([_level, message]) => message);
-
-            expect(errors.join('\n')).to.equal('');
+            expect(response.status).to.equal(200);
+            const results = await response.json();
+            expect(results).to.deep.equal([]);
         });
 
         it("should generate CA certs that can be used to create domain certs that pass lintcert checks", async function () {
@@ -178,34 +174,22 @@ nodeOnly(() => {
             expect((certData.getExtension('subjectAltName') as any).altNames[0].value).to.equal('httptoolkit.com');
 
             const response = await ignoreNetworkError(
-                fetch('https://crt.sh/lintcert', {
+                fetch('https://pkimet.al/lintcert', {
                     method: 'POST',
                     headers: { 'content-type': 'application/x-www-form-urlencoded' },
-                    body: new URLSearchParams({'b64cert': cert})
+                    body: new URLSearchParams({
+                        'b64input': cert,
+                        'format': 'json',
+                        'severity': 'warning',
+                        'profile': 'autodetect'
+                    })
                 }),
                 { context: this }
             );
 
             expect(response.status).to.equal(200);
-            const lintOutput = await response.text();
-
-            const lintResults = lintOutput
-                .split('\n')
-                .map(line => line.split('\t').slice(1))
-                .filter(line => line.length > 1);
-
-            const errors = lintResults
-                .filter(([level]) => level === 'ERROR' || level === 'FATAL')
-                .map(([_level, message]) => message)
-                .filter((message) =>
-                    // TODO: We don't yet support AIA due to https://github.com/digitalbazaar/forge/issues/988
-                    // This is relatively new, tricky to support (we'd need an OCSP server), and not yet required
-                    // anywhere AFAICT, so not a high priority short-term, but good to do later if possible.
-                    !message.includes("OCSP") &&
-                    !message.includes("authorityInformationAccess")
-                );
-
-            expect(errors.join('\n')).to.equal('');
+            const results = await response.json();
+            expect(results).to.deep.equal([]);
         });
 
         it("should generate wildcard certs that pass lintcert checks for invalid subdomain names", async function () {
@@ -267,26 +251,22 @@ nodeOnly(() => {
             const { cert } = caCertificate;
 
             const response = await ignoreNetworkError(
-                fetch('https://crt.sh/lintcert', {
+                fetch('https://pkimet.al/lintcert', {
                     method: 'POST',
                     headers: { 'content-type': 'application/x-www-form-urlencoded' },
-                    body: new URLSearchParams({'b64cert': cert})
+                    body: new URLSearchParams({
+                        'b64input': cert,
+                        'format': 'json',
+                        'severity': 'warning',
+                        'profile': 'autodetect'
+                    })
                 }),
                 { context: this }
             );
 
-            const lintOutput = await response.text();
-
-            const lintResults = lintOutput
-                .split('\n')
-                .map(line => line.split('\t').slice(1))
-                .filter(line => line.length > 1);
-
-            const errors = lintResults
-                .filter(([level]) => level === 'ERROR')
-                .map(([_level, message]) => message);
-
-            expect(errors.join('\n')).to.equal('');
+            expect(response.status).to.equal(200);
+            const results = await response.json();
+            expect(results).to.deep.equal([]);
         });
 
     });
