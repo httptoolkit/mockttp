@@ -29,7 +29,7 @@ nodeOnly(() => {
             await expect(fetch('https://localhost:4430')).to.have.responseText('signed response!');
         });
 
-        describe("constrained CA", () => {
+        describe("with a constrained CA", () => {
             let constrainedCA: CA;
             let constrainedCaCert: string;
 
@@ -78,7 +78,7 @@ nodeOnly(() => {
                         reject(err);
                     });
                     req.end();
-                });                
+                });
             });
 
             it("can not generate a valid certificate for a domain not included in a constrained CA", async () => {
@@ -251,10 +251,14 @@ nodeOnly(() => {
             expect(errors.join('\n')).to.equal('');
         });
 
-        it("should generate a CA cert constrained to a domain that pass lintcert checks", async function(){
+        it("should generate a custom CA cert constrained to a domain that pass lintcert checks", async function() {
             this.retries(3); // Remote server can be unreliable
 
             const caCertificate = await generateCACertificate({
+                subject: {
+                    commonName: 'Custom CA',
+                    serialNumber: '1234'
+                },
                 nameConstraints: {
                     permitted: ['example.com']
                 }
