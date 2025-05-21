@@ -7,7 +7,7 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [16.x, 18.x, 20.x, 22.x, v22.14.0, 23.x]
+        node-version: [18.x, 20.x, 22.x, v22.14.0, 24.x]
 
     steps:
       - uses: actions/checkout@v4
@@ -23,12 +23,11 @@ jobs:
 
       - run: npm run ci-tests
         env:
-          # The new type stripping breaks our existing ts-node testing
-          # set up, so disable it:
-          NODE_OPTIONS: ${{ startsWith(matrix.node-version, '23') && '--no-experimental-strip-types' || '' }}
+          # The new type stripping breaks our existing ts-node testing set up, so disable it for Node 22+
+          NODE_OPTIONS: ${{ !startsWith(matrix.node-version, '20') && !startsWith(matrix.node-version, '18') && '--no-experimental-strip-types' || '' }}
 
       - name: Deploy docs
-        if: github.ref == 'refs/heads/main' && matrix.node-version == 'v20.18.1'
+        if: github.ref == 'refs/heads/main' && matrix.node-version == 'v22.14.0'
         uses: JamesIves/github-pages-deploy-action@v4
         with:
           single-commit: true
