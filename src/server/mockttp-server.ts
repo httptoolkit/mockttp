@@ -88,7 +88,6 @@ import {
 } from "../util/header-utils";
 import { AbortError } from "../rules/requests/request-handlers";
 import { WebSocketRuleData, WebSocketRule } from "../rules/websockets/websocket-rule";
-import { RejectWebSocketHandler, WebSocketHandler } from "../rules/websockets/websocket-handlers";
 import { SocksServerOptions } from "./socks-server";
 
 type ExtendedRawRequest = (http.IncomingMessage | http2.Http2ServerRequest) & {
@@ -125,8 +124,6 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
 
     private readonly initialDebugSetting: boolean;
 
-    private readonly defaultWsHandler!: WebSocketHandler;
-
     constructor(options: MockttpOptions = {}) {
         super(options);
 
@@ -138,8 +135,6 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         this.passthroughUnknownProtocols = options.passthrough?.includes('unknown-protocol') ?? false;
         this.maxBodySize = options.maxBodySize ?? Infinity;
         this.eventEmitter = new EventEmitter();
-
-        this.defaultWsHandler = new RejectWebSocketHandler(503, "Request for unmocked endpoint");
 
         this.app = connect();
 
@@ -858,18 +853,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
                         : undefined
                 });
             } else {
-                // Unmatched requests get passed through untouched automatically. This exists for
-                // historical/backward-compat reasons, to match the initial WS implementation, and
-                // will probably be removed to match handleRequest in future.
-                await this.defaultWsHandler.handle(
-                    request as OngoingRequest & http.IncomingMessage,
-                    socket,
-                    head,
-                    { emitEventCallback: (this.eventEmitter.listenerCount('rule-event') !== 0)
-                        ? (type, event) => this.announceRuleEventAsync(request.id, nextRule!.id, type, event)
-                        : undefined
-                    }
-                );
+                await this.sendUnmatchedWebSocketError(request, socket, head);
             }
         } catch (e) {
             if (e instanceof AbortError) {
@@ -949,6 +933,23 @@ ${await this.suggestRule(request)}`
         response.setHeader('Content-Type', 'text/plain');
         response.writeHead(503, "Request for unmocked endpoint");
         response.end(await this.getUnmatchedRequestExplanation(request));
+    }
+
+    private async sendUnmatchedWebSocketError(
+        request: OngoingRequest,
+        socket: net.Socket,
+        head: Buffer
+    ) {
+        const errorBody = await this.getUnmatchedRequestExplanation(request);
+        socket.on('error', () => {}); // Best efforts, we don't care about failures here.
+        socket.end([
+            'HTTP/1.1 503 Request for unmocked endpoint',
+            'Connection: close',
+            'Content-Type: text/plain'
+        ].join('\r\n') +
+        '\r\n\r\n' +
+        errorBody);
+        socket.destroy();
     }
 
     private async sendWebSocketErrorResponse(socket: net.Socket, error: unknown) {

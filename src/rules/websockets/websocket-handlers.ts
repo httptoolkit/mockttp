@@ -528,10 +528,9 @@ export class ListenWebSocketHandler extends ListenWebSocketHandlerDefinition {
 
 export class RejectWebSocketHandler extends RejectWebSocketHandlerDefinition {
 
-    async handle(req: OngoingRequest, socket: net.Socket, head: Buffer) {
+    async handle(req: OngoingRequest, socket: net.Socket) {
         socket.write(rawResponse(this.statusCode, this.statusMessage, objectHeadersToRaw(this.headers)));
-        if (this.body) socket.write(this.body);
-        socket.write('\r\n');
+        if (this.body) socket.end(this.body);
         socket.destroy();
     }
 
