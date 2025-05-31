@@ -36,7 +36,7 @@ export type CADefinition =
  * This defines the upstream connection parameters. These passthrough parameters
  * are shared between both WebSocket & Request passthrough rules.
  */
-export interface PassThroughHandlerConnectionOptions {
+export interface PassThroughStepConnectionOptions {
     /**
      * The forwarding configuration for the passthrough rule.
      * This generally shouldn't be used explicitly unless you're

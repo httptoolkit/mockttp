@@ -19,8 +19,8 @@ import { getHeaderValue } from '../util/header-utils';
 import {
     CallbackRequestResult,
     CallbackResponseMessageResult
-} from './requests/request-handler-definitions';
-import { AbortError } from './requests/request-handlers';
+} from './requests/request-step-definitions';
+import { AbortError } from './requests/request-steps';
 import {
     CADefinition,
     PassThroughLookupOptions

@@ -63,7 +63,7 @@ import {
 } from '../../serialization/body-serialization';
 import {
     MockttpDeserializationOptions
-} from '../../rules/rule-deserialization'
+} from '../rule-deserialization'
 
 import { assertParamDereferenced } from '../rule-parameters';
 
@@ -92,31 +92,31 @@ import {
 import {
     BeforePassthroughRequestRequest,
     BeforePassthroughResponseRequest,
-    CallbackHandlerDefinition,
+    CallbackStepDefinition,
     CallbackRequestMessage,
     CallbackRequestResult,
     CallbackResponseMessageResult,
     CallbackResponseResult,
-    CloseConnectionHandlerDefinition,
-    FileHandlerDefinition,
-    HandlerDefinitionLookup,
-    JsonRpcResponseHandlerDefinition,
-    PassThroughHandlerDefinition,
-    PassThroughHandlerOptions,
+    CloseConnectionStepDefinition,
+    FileStepDefinition,
+    StepDefinitionLookup,
+    JsonRpcResponseStepDefinition,
+    PassThroughStepDefinition,
+    PassThroughStepOptions,
     PassThroughResponse,
-    RequestHandlerDefinition,
+    RequestStepDefinition,
     RequestTransform,
-    ResetConnectionHandlerDefinition,
+    ResetConnectionStepDefinition,
     ResponseTransform,
     SerializedBuffer,
-    SerializedCallbackHandlerData,
+    SerializedCallbackStepData,
     SerializedPassThroughData,
-    SerializedStreamHandlerData,
+    SerializedStreamStepData,
     SERIALIZED_OMIT,
-    SimpleHandlerDefinition,
-    StreamHandlerDefinition,
-    TimeoutHandlerDefinition
-} from './request-handler-definitions';
+    SimpleStepDefinition,
+    StreamStepDefinition,
+    TimeoutStepDefinition
+} from './request-step-definitions';
 
 // Re-export various type definitions. This is mostly for compatibility with external
 // code that's manually building rule definitions.
@@ -126,13 +126,13 @@ export {
     CallbackResponseResult,
     ForwardingOptions,
     PassThroughResponse,
-    PassThroughHandlerOptions,
+    PassThroughStepOptions,
     PassThroughLookupOptions,
     RequestTransform,
     ResponseTransform
 }
 
-// An error that indicates that the handler is aborting the request.
+// An error that indicates that the step is aborting the request.
 // This could be intentional, or an upstream server aborting the request.
 export class AbortError extends TypedError {
 
@@ -149,19 +149,22 @@ function isSerializedBuffer(obj: any): obj is SerializedBuffer {
     return obj?.type === 'Buffer' && !!obj.data;
 }
 
-export interface RequestHandler extends RequestHandlerDefinition {
+export interface RequestStep extends RequestStepDefinition {
     handle(
         request: OngoingRequest,
         response: OngoingResponse,
-        options: RequestHandlerOptions
-    ): Promise<void>;
+        options: RequestStepOptions
+    ): Promise<
+        | undefined // Implicitly finished - equivalent to { continue: false }
+        | { continue: boolean } // Should the request continue to later steps?
+    >;
 }
 
-export interface RequestHandlerOptions {
+export interface RequestStepOptions {
     emitEventCallback?: (type: string, event: unknown) => void;
 }
 
-export class SimpleHandler extends SimpleHandlerDefinition {
+export class SimpleStep extends SimpleStepDefinition {
     async handle(_request: OngoingRequest, response: OngoingResponse) {
         if (this.headers) dropDefaultHeaders(response);
         writeHead(response, this.status, this.statusMessage, this.headers);
@@ -219,7 +222,7 @@ async function writeResponseFromCallback(
     response.end(result.rawBody || "");
 }
 
-export class CallbackHandler extends CallbackHandlerDefinition {
+export class CallbackStep extends CallbackStepDefinition {
 
     async handle(request: OngoingRequest, response: OngoingResponse) {
         let req = await waitForCompletedRequest(request);
@@ -228,8 +231,8 @@ export class CallbackHandler extends CallbackHandlerDefinition {
         try {
             outResponse = await this.callback(req);
         } catch (error) {
-            writeHead(response, 500, 'Callback handler threw an exception');
-            console.warn(`Callback handler exception: ${(error as ErrorLike).message ?? error}`);
+            writeHead(response, 500, 'Callback step threw an exception');
+            console.warn(`Callback step exception: ${(error as ErrorLike).message ?? error}`);
             response.end(isErrorLike(error) ? error.toString() : error);
             return;
         }
@@ -249,7 +252,7 @@ export class CallbackHandler extends CallbackHandlerDefinition {
     /**
      * @internal
      */
-    static deserialize({ name }: SerializedCallbackHandlerData, channel: ClientServerChannel, options: MockttpDeserializationOptions): CallbackHandler {
+    static deserialize({ name }: SerializedCallbackStepData, channel: ClientServerChannel, options: MockttpDeserializationOptions): CallbackStep {
         const rpcCallback = async (request: CompletedRequest) => {
             const callbackResult = await channel.request<
                 CallbackRequestMessage,
@@ -267,13 +270,13 @@ export class CallbackHandler extends CallbackHandlerDefinition {
         // Pass across the name from the real callback, for explain()
         Object.defineProperty(rpcCallback, "name", { value: name });
 
-        // Call the client's callback (via stream), and save a handler on our end for
+        // Call the client's callback (via stream), and save a step on our end for
         // the response that comes back.
-        return new CallbackHandler(rpcCallback);
+        return new CallbackStep(rpcCallback);
     }
 }
 
-export class StreamHandler extends StreamHandlerDefinition {
+export class StreamStep extends StreamStepDefinition {
 
     async handle(_request: OngoingRequest, response: OngoingResponse) {
         if (!this.stream.done) {
@@ -288,7 +291,7 @@ export class StreamHandler extends StreamHandlerDefinition {
             this.stream.on('error', (e) => response.destroy(e));
         } else {
             throw new Error(stripIndent`
-                Stream request handler called more than once - this is not supported.
+                Stream request step called more than once - this is not supported.
 
                 Streams can typically only be read once, so all subsequent requests would be empty.
                 To mock repeated stream requests, call 'thenStream' repeatedly with multiple streams.
@@ -301,8 +304,8 @@ export class StreamHandler extends StreamHandlerDefinition {
     /**
      * @internal
      */
-    static deserialize(handlerData: SerializedStreamHandlerData, channel: ClientServerChannel): StreamHandler {
-        const handlerStream = new Transform({
+    static deserialize(stepData: SerializedStreamStepData, channel: ClientServerChannel): StreamStep {
+        const stepStream = new Transform({
             objectMode: true,
             transform: function (this: Transform, message, encoding, callback) {
                 const { event, content } = message;
@@ -326,20 +329,20 @@ export class StreamHandler extends StreamHandlerDefinition {
 
         // When we get piped (i.e. to a live request), ping upstream to start streaming, and then
         // pipe the resulting data into our live stream (which is streamed to the request, like normal)
-        handlerStream.once('resume', () => {
-            channel.pipe(handlerStream);
+        stepStream.once('resume', () => {
+            channel.pipe(stepStream);
             channel.write({});
         });
 
-        return new StreamHandler(
-            handlerData.status,
-            handlerStream,
-            handlerData.headers
+        return new StreamStep(
+            stepData.status,
+            stepStream,
+            stepData.headers
         );
     }
 }
 
-export class FileHandler extends FileHandlerDefinition {
+export class FileStep extends FileStepDefinition {
     async handle(_request: OngoingRequest, response: OngoingResponse) {
         // Read the file first, to ensure we error cleanly if it's unavailable
         const fileContents = await fs.readFile(this.filePath);
@@ -392,7 +395,7 @@ const mapOmitToUndefined = <T extends { [key: string]: any }>(
             : v
     );
 
-export class PassThroughHandler extends PassThroughHandlerDefinition {
+export class PassThroughStep extends PassThroughStepDefinition {
 
     private _trustedCACertificates: MaybePromise<Array<string> | undefined>;
     private async trustedCACertificates(): Promise<Array<string> | undefined> {
@@ -408,7 +411,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
     async handle(
         clientReq: OngoingRequest,
         clientRes: OngoingResponse,
-        options: RequestHandlerOptions
+        options: RequestStepOptions
     ) {
         // Don't let Node add any default standard headers - we want full control
         dropDefaultHeaders(clientRes);
@@ -1229,7 +1232,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
         data: SerializedPassThroughData,
         channel: ClientServerChannel,
         { ruleParams, bodySerializer }: MockttpDeserializationOptions
-    ): PassThroughHandler {
+    ): PassThroughStep {
         let beforeRequest: ((req: CompletedRequest) => MaybePromise<CallbackRequestResult | void>) | undefined;
         if (data.hasBeforeRequestCallback) {
             beforeRequest = async (req: CompletedRequest) => {
@@ -1276,7 +1279,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
             };
         }
 
-        return new PassThroughHandler({
+        return new PassThroughStep({
             beforeRequest,
             beforeResponse,
             proxyConfig: deserializeProxyConfig(data.proxyConfig, channel, ruleParams),
@@ -1336,7 +1339,7 @@ export class PassThroughHandler extends PassThroughHandlerDefinition {
     }
 }
 
-export class CloseConnectionHandler extends CloseConnectionHandlerDefinition {
+export class CloseConnectionStep extends CloseConnectionStepDefinition {
     async handle(request: OngoingRequest) {
         const socket: net.Socket = (request as any).socket;
         socket.end();
@@ -1344,7 +1347,7 @@ export class CloseConnectionHandler extends CloseConnectionHandlerDefinition {
     }
 }
 
-export class ResetConnectionHandler extends ResetConnectionHandlerDefinition {
+export class ResetConnectionStep extends ResetConnectionStepDefinition {
     constructor() {
         super();
         requireSocketResetSupport();
@@ -1361,18 +1364,18 @@ export class ResetConnectionHandler extends ResetConnectionHandlerDefinition {
      */
     static deserialize() {
         requireSocketResetSupport();
-        return new ResetConnectionHandler();
+        return new ResetConnectionStep();
     }
 }
 
-export class TimeoutHandler extends TimeoutHandlerDefinition {
+export class TimeoutStep extends TimeoutStepDefinition {
     async handle() {
         // Do nothing, leaving the socket open but never sending a response.
         return new Promise<void>(() => {});
     }
 }
 
-export class JsonRpcResponseHandler extends JsonRpcResponseHandlerDefinition {
+export class JsonRpcResponseStep extends JsonRpcResponseStepDefinition {
     async handle(request: OngoingRequest, response: OngoingResponse) {
         const data: any = await request.body.asJson()
             .catch(() => {}); // Handle parsing errors with the check below
@@ -1393,14 +1396,14 @@ export class JsonRpcResponseHandler extends JsonRpcResponseHandlerDefinition {
     }
 }
 
-export const HandlerLookup: typeof HandlerDefinitionLookup = {
-    'simple': SimpleHandler,
-    'callback': CallbackHandler,
-    'stream': StreamHandler,
-    'file': FileHandler,
-    'passthrough': PassThroughHandler,
-    'close-connection': CloseConnectionHandler,
-    'reset-connection': ResetConnectionHandler,
-    'timeout': TimeoutHandler,
-    'json-rpc-response': JsonRpcResponseHandler
+export const StepLookup: typeof StepDefinitionLookup = {
+    'simple': SimpleStep,
+    'callback': CallbackStep,
+    'stream': StreamStep,
+    'file': FileStep,
+    'passthrough': PassThroughStep,
+    'close-connection': CloseConnectionStep,
+    'reset-connection': ResetConnectionStep,
+    'timeout': TimeoutStep,
+    'json-rpc-response': JsonRpcResponseStep
 }

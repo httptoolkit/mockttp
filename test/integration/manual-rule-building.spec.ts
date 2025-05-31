@@ -1,7 +1,7 @@
 import * as _ from "lodash";
 import * as WebSocket from 'isomorphic-ws';
 
-import { getLocal, matchers, requestHandlers, webSocketHandlers } from "../..";
+import { getLocal, matchers, requestSteps, webSocketSteps } from "../..";
 import { expect, fetch } from "../test-utils";
 
 describe("Mockttp rule building", function () {
@@ -13,7 +13,7 @@ describe("Mockttp rule building", function () {
     it("should allow manually adding a single rule", async () => {
         await server.addRequestRules({
             matchers: [new matchers.SimplePathMatcher('/endpoint')],
-            handler: new requestHandlers.SimpleHandlerDefinition(200, '', 'mock response'),
+            steps: [new requestSteps.SimpleStepDefinition(200, '', 'mock response')]
         });
 
         let response = await fetch(server.urlFor('/endpoint'));
@@ -28,7 +28,7 @@ describe("Mockttp rule building", function () {
         const rule = await server.addRequestRules({
             id: manualId,
             matchers: [new matchers.SimplePathMatcher('/endpoint')],
-            handler: new requestHandlers.SimpleHandlerDefinition(200, '', 'mock response'),
+            steps: [new requestSteps.SimpleStepDefinition(200, '', 'mock response')]
         });
 
         expect(rule[0].id).to.equal(manualId);
@@ -37,11 +37,11 @@ describe("Mockttp rule building", function () {
     it("should allow repeatedly adding rules", async () => {
         await server.addRequestRules({
             matchers: [new matchers.SimplePathMatcher('/endpoint')],
-            handler: new requestHandlers.SimpleHandlerDefinition(200, '', 'first mock response'),
+            steps: [new requestSteps.SimpleStepDefinition(200, '', 'first mock response')]
         });
         await server.addRequestRules({
             matchers: [new matchers.SimplePathMatcher('/endpoint')],
-            handler: new requestHandlers.SimpleHandlerDefinition(200, '', 'second mock response'),
+            steps: [new requestSteps.SimpleStepDefinition(200, '', 'second mock response')]
         });
 
         let firstResponse = await fetch(server.urlFor('/endpoint'));
@@ -56,11 +56,11 @@ describe("Mockttp rule building", function () {
     it("should allow completely replacing rules", async () => {
         await server.addRequestRules({
             matchers: [new matchers.SimplePathMatcher('/endpoint')],
-            handler: new requestHandlers.SimpleHandlerDefinition(200, '',  'original mock response')
+            steps: [new requestSteps.SimpleStepDefinition(200, '',  'original mock response')]
         });
         await server.setRequestRules({
             matchers: [new matchers.SimplePathMatcher('/endpoint')],
-            handler: new requestHandlers.SimpleHandlerDefinition(200, '', 'replacement mock response')
+            steps: [new requestSteps.SimpleStepDefinition(200, '', 'replacement mock response')]
         });
 
         let firstResponse = await fetch(server.urlFor('/endpoint'));
@@ -72,12 +72,12 @@ describe("Mockttp rule building", function () {
     it("should allow adding websocket rules", async function () {
         await server.addWebSocketRules({
             matchers: [new matchers.WildcardMatcher()],
-            handler: new webSocketHandlers.PassThroughWebSocketHandlerDefinition({
+            steps: [new webSocketSteps.PassThroughWebSocketStepDefinition({
                 forwarding: {
                     // Simple echo fixture, see websocket-test-server.js
                     targetHost: 'ws://localhost:8694'
                 }
-            })
+            })]
         });
 
         const ws = new WebSocket(server.url.replace('http', 'ws'));
@@ -97,17 +97,26 @@ describe("Mockttp rule building", function () {
         return expect((async () => { // Funky setup to handle sync & async failure for node & browser
             await server.addRequestRules({
                 matchers: [],
-                handler: new requestHandlers.SimpleHandlerDefinition(200, 'mock response'),
+                steps: [new requestSteps.SimpleStepDefinition(200, 'mock response')]
             })
         })()).to.be.rejectedWith('Cannot create a rule without at least one matcher');
     });
 
-    it("should reject rules with no configured handler", async () => {
+    it("should reject rules with no steps value", async () => {
         return expect((async () => { // Funky setup to handle sync & async failure for node & browser
             await server.addRequestRules({
                 matchers: [new matchers.SimplePathMatcher('/')],
-                handler: null as any
+                steps: null as any
             })
-        })()).to.be.rejectedWith('Cannot create a rule with no handler');
+        })()).to.be.rejectedWith('Cannot create a rule with no steps');
+    });
+
+    it("should reject rules with an empty steps list", async () => {
+        return expect((async () => { // Funky setup to handle sync & async failure for node & browser
+            await server.addRequestRules({
+                matchers: [new matchers.SimplePathMatcher('/')],
+                steps: []
+            })
+        })()).to.be.rejectedWith('Cannot create a rule with no steps');
     });
 });

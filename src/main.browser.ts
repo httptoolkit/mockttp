@@ -5,14 +5,14 @@ export { Method, RulePriority } from "./types";
 
 // Export rule data builders:
 import * as matchers from './rules/matchers';
-import * as requestHandlerDefinitions from './rules/requests/request-handler-definitions';
-import * as webSocketHandlerDefinitions from './rules/websockets/websocket-handler-definitions';
+import * as requestStepDefinitions from './rules/requests/request-step-definitions';
+import * as webSocketStepDefinitions from './rules/websockets/websocket-step-definitions';
 import * as completionCheckers from './rules/completion-checkers';
 
 export {
     matchers,
-    requestHandlerDefinitions as requestHandlers,
-    webSocketHandlerDefinitions as webSocketHandlers,
+    requestStepDefinitions as requestSteps,
+    webSocketStepDefinitions as webSocketSteps,
     completionCheckers
 };
 

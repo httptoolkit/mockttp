@@ -11,16 +11,16 @@ import {
 } from '../../serialization/serialization';
 import {
     MockttpDeserializationOptions
-} from '../../rules/rule-deserialization'
+} from '../rule-deserialization'
 
 import { OngoingRequest, RawHeaders } from "../../types";
 
 import {
-    CloseConnectionHandler,
-    RequestHandlerOptions,
-    ResetConnectionHandler,
-    TimeoutHandler
-} from '../requests/request-handlers';
+    CloseConnectionStep,
+    RequestStepOptions,
+    ResetConnectionStep,
+    TimeoutStep
+} from '../requests/request-steps';
 import { getEffectivePort } from '../../util/url';
 import { resetOrDestroy } from '../../util/socket-util';
 import { isHttp2 } from '../../util/request-utils';
@@ -35,7 +35,7 @@ import { MaybePromise } from '@httptoolkit/util';
 
 import { getAgent } from '../http-agents';
 import { ProxySettingSource } from '../proxy-config';
-import { assertParamDereferenced, RuleParameters } from '../rule-parameters';
+import { assertParamDereferenced } from '../rule-parameters';
 import {
     getUpstreamTlsOptions,
     getClientRelativeHostname,
@@ -46,17 +46,17 @@ import {
 } from '../passthrough-handling';
 
 import {
-    EchoWebSocketHandlerDefinition,
-    ListenWebSocketHandlerDefinition,
-    PassThroughWebSocketHandlerDefinition,
-    PassThroughWebSocketHandlerOptions,
-    RejectWebSocketHandlerDefinition,
+    EchoWebSocketStepDefinition,
+    ListenWebSocketStepDefinition,
+    PassThroughWebSocketStepDefinition,
+    PassThroughWebSocketStepOptions,
+    RejectWebSocketStepDefinition,
     SerializedPassThroughWebSocketData,
-    WebSocketHandlerDefinition,
-    WsHandlerDefinitionLookup,
-} from './websocket-handler-definitions';
+    WebSocketStepDefinition,
+    WsStepDefinitionLookup,
+} from './websocket-step-definitions';
 
-export interface WebSocketHandler extends WebSocketHandlerDefinition {
+export interface WebSocketStep extends WebSocketStepDefinition {
     handle(
         // The incoming upgrade request
         request: OngoingRequest & http.IncomingMessage,
@@ -64,9 +64,12 @@ export interface WebSocketHandler extends WebSocketHandlerDefinition {
         socket: net.Socket,
         // Initial data received
         head: Buffer,
-        // Other general handler options
-        options: RequestHandlerOptions
-    ): Promise<void>;
+        // Other general step options
+        options: RequestStepOptions
+    ): Promise<
+        | undefined // Implicitly finished - equivalent to { continue: false }
+        | { continue: boolean } // Should the request continue to later steps?
+    >;
 }
 
 interface InterceptedWebSocketRequest extends http.IncomingMessage {
@@ -206,9 +209,9 @@ const rawResponse = (
     ).join('\r\n') +
     '\r\n\r\n';
 
-export { PassThroughWebSocketHandlerOptions };
+export { PassThroughWebSocketStepOptions };
 
-export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefinition {
+export class PassThroughWebSocketStep extends PassThroughWebSocketStepDefinition {
 
     private wsServer?: WebSocket.Server;
 
@@ -243,7 +246,7 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
         return this._trustedCACertificates;
     }
 
-    async handle(req: OngoingRequest, socket: net.Socket, head: Buffer, options: RequestHandlerOptions) {
+    async handle(req: OngoingRequest, socket: net.Socket, head: Buffer, options: RequestStepOptions) {
         this.initializeWsServer();
 
         let { protocol, path } = url.parse(req.url!);
@@ -306,7 +309,7 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
         rawHeaders: RawHeaders,
         incomingSocket: net.Socket,
         head: Buffer,
-        options: RequestHandlerOptions
+        options: RequestStepOptions
     ) {
         const parsedUrl = url.parse(wsUrl);
 
@@ -479,7 +482,7 @@ export class PassThroughWebSocketHandler extends PassThroughWebSocketHandlerDefi
     }
 }
 
-export class EchoWebSocketHandler extends EchoWebSocketHandlerDefinition {
+export class EchoWebSocketStep extends EchoWebSocketStepDefinition {
 
     private wsServer?: WebSocket.Server;
 
@@ -502,7 +505,7 @@ export class EchoWebSocketHandler extends EchoWebSocketHandlerDefinition {
     }
 }
 
-export class ListenWebSocketHandler extends ListenWebSocketHandlerDefinition {
+export class ListenWebSocketStep extends ListenWebSocketStepDefinition {
 
     private wsServer?: WebSocket.Server;
 
@@ -526,7 +529,7 @@ export class ListenWebSocketHandler extends ListenWebSocketHandlerDefinition {
     }
 }
 
-export class RejectWebSocketHandler extends RejectWebSocketHandlerDefinition {
+export class RejectWebSocketStep extends RejectWebSocketStepDefinition {
 
     async handle(req: OngoingRequest, socket: net.Socket) {
         socket.write(rawResponse(this.statusCode, this.statusMessage, objectHeadersToRaw(this.headers)));
@@ -539,17 +542,17 @@ export class RejectWebSocketHandler extends RejectWebSocketHandlerDefinition {
 // These three work equally well for HTTP requests as websockets, but it's
 // useful to reexport there here for consistency.
 export {
-    CloseConnectionHandler,
-    ResetConnectionHandler,
-    TimeoutHandler
+    CloseConnectionStep,
+    ResetConnectionStep,
+    TimeoutStep
 };
 
-export const WsHandlerLookup: typeof WsHandlerDefinitionLookup = {
-    'ws-passthrough': PassThroughWebSocketHandler,
-    'ws-echo': EchoWebSocketHandler,
-    'ws-listen': ListenWebSocketHandler,
-    'ws-reject': RejectWebSocketHandler,
-    'close-connection': CloseConnectionHandler,
-    'reset-connection': ResetConnectionHandler,
-    'timeout': TimeoutHandler
+export const WsStepLookup: typeof WsStepDefinitionLookup = {
+    'ws-passthrough': PassThroughWebSocketStep,
+    'ws-echo': EchoWebSocketStep,
+    'ws-listen': ListenWebSocketStep,
+    'ws-reject': RejectWebSocketStep,
+    'close-connection': CloseConnectionStep,
+    'reset-connection': ResetConnectionStep,
+    'timeout': TimeoutStep
 };

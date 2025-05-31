@@ -1,7 +1,7 @@
 import { isString } from "lodash";
 import { MaybePromise } from "../main";
 
-import { CompletedRequest, Method, RulePriority } from "../types";
+import { CompletedRequest, RulePriority } from "../types";
 
 import {
     RuleCompletionChecker,

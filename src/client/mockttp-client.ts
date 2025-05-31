@@ -143,7 +143,7 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
 
         const { adminStream } = this.adminClient;
         return this.adminClient.sendQuery(
-            this.requestBuilder.buildAddRequestRulesQuery(rules, reset, adminStream)
+            this.requestBuilder.buildAddRulesQuery('http', rules, reset, adminStream)
         );
     }
 
@@ -156,7 +156,7 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
         const { adminStream } = this.adminClient;
 
         return this.adminClient.sendQuery(
-            this.requestBuilder.buildAddWebSocketRulesQuery(rules, reset, adminStream)
+            this.requestBuilder.buildAddRulesQuery('ws', rules, reset, adminStream)
         );
     }
 

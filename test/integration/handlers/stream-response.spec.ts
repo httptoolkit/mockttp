@@ -58,7 +58,7 @@ describe("Streaming response handler", function () {
         let responsePromise = await fetch(server.urlFor('/stream'));
 
         await expect(responsePromise).to.have.status(500);
-        expect(await responsePromise.text()).to.include('Stream request handler called more than once');
+        expect(await responsePromise.text()).to.include('Stream request step called more than once');
     });
 
     it("should allow multiple streaming responses", async () => {

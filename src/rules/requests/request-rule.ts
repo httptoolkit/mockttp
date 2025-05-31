@@ -6,8 +6,8 @@ import { buildBodyReader, buildInitiatedRequest, waitForCompletedRequest } from 
 import { MaybePromise } from '@httptoolkit/util';
 
 import * as matchers from "../matchers";
-import type { RequestHandlerDefinition } from "./request-handler-definitions";
-import { HandlerLookup, RequestHandler } from "./request-handlers";
+import { type RequestStepDefinition } from "./request-step-definitions";
+import { StepLookup, RequestStep } from "./request-steps";
 import * as completionCheckers from "../completion-checkers";
 import { validateMockRuleData } from '../rule-serialization';
 
@@ -29,13 +29,13 @@ export interface RequestRuleData {
     id?: string;
     priority?: number; // Higher is higher, by default 0 is fallback, 1 is normal, must be positive
     matchers: matchers.RequestMatcher[];
-    handler: RequestHandler | RequestHandlerDefinition;
+    steps: Array<RequestStep | RequestStepDefinition>;
     completionChecker?: completionCheckers.RuleCompletionChecker;
 }
 
 export class RequestRule implements RequestRule {
     private matchers: matchers.RequestMatcher[];
-    private handler: RequestHandler;
+    private steps: Array<RequestStep>;
     private completionChecker?: completionCheckers.RuleCompletionChecker;
 
     public id: string;
@@ -51,16 +51,18 @@ export class RequestRule implements RequestRule {
         this.matchers = data.matchers;
         this.completionChecker = data.completionChecker;
 
-        if ('handle' in data.handler) {
-            this.handler = data.handler;
-        } else {
-            // We transform the definition into a real handler, by creating an instance of the raw handler (which is
-            // a subtype of the definition with the same constructor) and copying the fields across.
-            this.handler = Object.assign(
-                Object.create(HandlerLookup[data.handler.type].prototype),
-                data.handler
-            );
-        }
+        this.steps = data.steps.map((step) => {
+            if ('handle' in step) {
+                return step;
+            } else {
+                // We transform the definition into a real step, by creating an instance of the raw step (which is
+                // a subtype of the definition with the same constructor) and copying the fields across.
+                return Object.assign(
+                    Object.create(StepLookup[step.type].prototype),
+                    step
+                );
+            }
+        });
     }
 
     matches(request: OngoingRequest) {
@@ -71,10 +73,14 @@ export class RequestRule implements RequestRule {
         record?: boolean,
         emitEventCallback?: (type: string, event: unknown) => void
     }): Promise<void> {
-        let handlerPromise = (async () => { // Catch (a)sync errors
-            return this.handler.handle(req, res, {
-                emitEventCallback: options.emitEventCallback
-            });
+        let stepsPromise = (async () => {
+            for (let step of this.steps) {
+                const result = await step.handle(req, res, {
+                    emitEventCallback: options.emitEventCallback
+                });
+
+                if (!result || result.continue === false) break;
+            }
         })();
 
         // Requests are added to rule.requests as soon as they start being handled,
@@ -82,13 +88,13 @@ export class RequestRule implements RequestRule {
         if (options.record) {
             this.requests.push(
                 Promise.race([
-                    // When the handler resolves, the request is completed:
-                    handlerPromise,
-                    // If the response is closed before the handler completes (due to aborts, handler
+                    // When the steps all resolve, the request is completed:
+                    stepsPromise,
+                    // If the response is closed before the step completes (due to aborts, step
                     // timeouts, whatever) then that also counts as the request being completed:
                     new Promise((resolve) => res.on('close', resolve))
                 ])
-                .catch(() => {}) // Ignore handler errors here - we're only tracking the request
+                .catch(() => {}) // Ignore step errors here - we're only tracking the request
                 .then(() => waitForCompletedRequest(req))
                 .catch((): CompletedRequest => {
                     // If for some reason the request is not completed, we still want to record it.
@@ -108,7 +114,7 @@ export class RequestRule implements RequestRule {
         // requests is still tracked
         this.requestCount += 1;
 
-        return handlerPromise as Promise<any>;
+        return stepsPromise as Promise<any>;
     }
 
     isComplete(): boolean | null {
@@ -127,7 +133,7 @@ export class RequestRule implements RequestRule {
 
     explain(withoutExactCompletion = false): string {
         let explanation = `Match requests ${matchers.explainMatchers(this.matchers)}, ` +
-        `and then ${this.handler.explain()}`;
+            `and then ${explainSteps(this.steps)}`;
 
         if (this.completionChecker) {
             explanation += `, ${this.completionChecker.explain(
@@ -141,8 +147,20 @@ export class RequestRule implements RequestRule {
     }
 
     dispose() {
-        this.handler.dispose();
+        this.steps.forEach(s => s.dispose());
         this.matchers.forEach(m => m.dispose());
         if (this.completionChecker) this.completionChecker.dispose();
     }
+}
+
+export function explainSteps(steps: RequestStepDefinition[]) {
+    if (steps.length === 1) return steps[0].explain();
+    if (steps.length === 2) {
+        return `${steps[0].explain()} then ${steps[1].explain()}`;
+    }
+
+    // With 3+, we need to oxford comma separate explanations to make them readable
+    return steps.slice(0, -1)
+        .map((s) => s.explain())
+        .join(', ') + ', and ' + steps.slice(-1)[0].explain();
 }

@@ -17,6 +17,7 @@ import { MockedEndpointClient } from "./mocked-endpoint-client";
 import { AdminClient } from './admin-client';
 import { serializeRuleData } from '../rules/rule-serialization';
 import { deserializeBodyReader } from '../serialization/body-serialization';
+import { unreachableCheck } from '@httptoolkit/util';
 
 function normalizeHttpMessage(message: any, event?: SubscribableEvent) {
     if (message.timingEvents) {
@@ -95,67 +96,30 @@ export class MockttpAdminRequestBuilder {
         this.messageBodyDecoding = options.messageBodyDecoding;
     }
 
-    buildAddRequestRulesQuery(
-        rules: Array<RequestRuleData>,
+    buildAddRulesQuery(
+        type: 'http' | 'ws',
+        rules: Array<RequestRuleData | WebSocketRuleData>,
         reset: boolean,
         adminStream: stream.Duplex
     ): AdminQuery<
         { endpoints: Array<{ id: string, explanation?: string }> },
         MockedEndpoint[]
     > {
-        const requestName = (reset ? 'Set' : 'Add') + 'Rules';
-        const mutationName = (reset ? 'set' : 'add') + 'Rules';
+        const ruleTypeName = type === 'http'
+                ? ''
+            : type === 'ws'
+                ? 'WebSocket'
+            : unreachableCheck(type);
+        const requestName = (reset ? 'Set' : 'Add') + ruleTypeName + 'Rules';
+        const mutationName = (reset ? 'set' : 'add') + ruleTypeName + 'Rules';
 
-        const serializedRules = rules.map((rule) => {
-            const serializedRule = serializeRuleData(rule, adminStream)
-            if (!this.schema.typeHasInputField('MockRule', 'id')) {
-                delete serializedRule.id;
-            }
-            return serializedRule;
-        });
-
-        return {
-            query: gql`
-                mutation ${requestName}($newRules: [MockRule!]!) {
-                    endpoints: ${mutationName}(input: $newRules) {
-                        id,
-                        ${this.schema.asOptionalField('MockedEndpoint', 'explanation')}
-                    }
-                }
-            `,
-            variables: {
-                newRules: serializedRules
-            },
-            transformResponse: (response, { adminClient }) => {
-                return response.endpoints.map(({ id, explanation }) =>
-                    new MockedEndpointClient(
-                        id,
-                        explanation,
-                        this.getEndpointDataGetter(adminClient, id)
-                    )
-                )
-            }
-        };
-    }
-
-    buildAddWebSocketRulesQuery(
-        rules: Array<WebSocketRuleData>,
-        reset: boolean,
-        adminStream: stream.Duplex
-    ): AdminQuery<
-        { endpoints: Array<{ id: string, explanation?: string }> },
-        MockedEndpoint[]
-    > {
-        // Seperate and simpler than buildAddRequestRulesQuery, because it doesn't have to
-        // deal with backward compatibility.
-        const requestName = (reset ? 'Set' : 'Add') + 'WebSocketRules';
-        const mutationName = (reset ? 'set' : 'add') + 'WebSocketRules';
-
-        const serializedRules = rules.map((rule) => serializeRuleData(rule, adminStream));
+        // Backward compatibility for old servers that don't support steps:
+        const supportsSteps = this.schema.typeHasInputField('MockRule', 'steps');
+        const serializedRules = rules.map((rule) => serializeRuleData(rule, adminStream, { supportsSteps }));
 
         return {
             query: gql`
-                mutation ${requestName}($newRules: [WebSocketMockRule!]!) {
+                mutation ${requestName}($newRules: [${ruleTypeName}MockRule!]!) {
                     endpoints: ${mutationName}(input: $newRules) {
                         id,
                         explanation

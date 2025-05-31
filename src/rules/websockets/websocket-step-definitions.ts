@@ -14,35 +14,35 @@ import { Explainable, Headers } from "../../types";
 
 import { ProxyConfig } from '../proxy-config';
 import {
-    PassThroughHandlerConnectionOptions,
+    PassThroughStepConnectionOptions,
     ForwardingOptions,
     PassThroughLookupOptions,
     CADefinition
 } from '../passthrough-handling-definitions';
 import {
-    CloseConnectionHandlerDefinition,
-    ResetConnectionHandlerDefinition,
-    TimeoutHandlerDefinition
-} from '../requests/request-handler-definitions';
+    CloseConnectionStepDefinition,
+    ResetConnectionStepDefinition,
+    TimeoutStepDefinition
+} from '../requests/request-step-definitions';
 
 /*
-This file defines websocket handler *definitions*, which includes everything necessary to define
-and serialize a websockt handler's behaviour, but doesn't include the actual handling logic (which
-lives in ./websocket-handlers instead). This is intended to allow tree-shaking in browser usage
+This file defines websocket step *definitions*, which includes everything necessary to define
+and serialize a websockt step's behaviour, but doesn't include the actual handling logic (which
+lives in ./websocket-steps instead). This is intended to allow tree-shaking in browser usage
 or remote clients to import only the necessary code, with no need to include all the real
 network processing and handling code that is only used at HTTP-runtime, so isn't relevant when
 defining rules.
 
-Every WebSocketHandler extends its definition, simply adding a handle() method, which handles
+Every WebSocketStep extends its definition, simply adding a handle() method, which handles
 requests according to the configuration, and adding a deserialize static method that takes
-the serialized output from the serialize() methods defined here and creates a working handler.
+the serialized output from the serialize() methods defined here and creates a working step.
 */
 
-export interface WebSocketHandlerDefinition extends Explainable, Serializable {
-    type: keyof typeof WsHandlerDefinitionLookup;
+export interface WebSocketStepDefinition extends Explainable, Serializable {
+    type: keyof typeof WsStepDefinitionLookup;
 }
 
-export type PassThroughWebSocketHandlerOptions = PassThroughHandlerConnectionOptions;
+export type PassThroughWebSocketStepOptions = PassThroughStepConnectionOptions;
 
 /**
  * @internal
@@ -58,10 +58,10 @@ export interface SerializedPassThroughWebSocketData {
     clientCertificateHostMap?: { [host: string]: { pfx: string, passphrase?: string } };
 }
 
-export class PassThroughWebSocketHandlerDefinition extends Serializable implements WebSocketHandlerDefinition {
+export class PassThroughWebSocketStepDefinition extends Serializable implements WebSocketStepDefinition {
     readonly type = 'ws-passthrough';
 
-    // Same lookup configuration as normal request PassThroughHandler:
+    // Same lookup configuration as normal request PassThroughStep:
     public readonly lookupOptions: PassThroughLookupOptions | undefined;
     public readonly proxyConfig?: ProxyConfig;
     public readonly simulateConnectionErrors: boolean;
@@ -74,7 +74,7 @@ export class PassThroughWebSocketHandlerDefinition extends Serializable implemen
 
     public readonly extraCACertificates: Array<CADefinition> = [];
 
-    constructor(options: PassThroughWebSocketHandlerOptions = {}) {
+    constructor(options: PassThroughWebSocketStepOptions = {}) {
         super();
 
         // If a location is provided, and it's not a bare hostname, it must be parseable
@@ -141,7 +141,7 @@ export class PassThroughWebSocketHandlerDefinition extends Serializable implemen
     }
 }
 
-export class EchoWebSocketHandlerDefinition extends Serializable implements WebSocketHandlerDefinition {
+export class EchoWebSocketStepDefinition extends Serializable implements WebSocketStepDefinition {
 
     readonly type = 'ws-echo';
 
@@ -150,7 +150,7 @@ export class EchoWebSocketHandlerDefinition extends Serializable implements WebS
     }
 }
 
-export class ListenWebSocketHandlerDefinition extends Serializable implements WebSocketHandlerDefinition {
+export class ListenWebSocketStepDefinition extends Serializable implements WebSocketStepDefinition {
 
     readonly type = 'ws-listen';
 
@@ -159,7 +159,7 @@ export class ListenWebSocketHandlerDefinition extends Serializable implements We
     }
 }
 
-export class RejectWebSocketHandlerDefinition extends Serializable implements WebSocketHandlerDefinition {
+export class RejectWebSocketStepDefinition extends Serializable implements WebSocketStepDefinition {
 
     readonly type = 'ws-reject';
 
@@ -181,17 +181,17 @@ export class RejectWebSocketHandlerDefinition extends Serializable implements We
 // These three work equally well for HTTP requests as websockets, but it's
 // useful to reexport there here for consistency.
 export {
-    CloseConnectionHandlerDefinition,
-    ResetConnectionHandlerDefinition,
-    TimeoutHandlerDefinition
+    CloseConnectionStepDefinition,
+    ResetConnectionStepDefinition,
+    TimeoutStepDefinition
 };
 
-export const WsHandlerDefinitionLookup = {
-    'ws-passthrough': PassThroughWebSocketHandlerDefinition,
-    'ws-echo': EchoWebSocketHandlerDefinition,
-    'ws-listen': ListenWebSocketHandlerDefinition,
-    'ws-reject': RejectWebSocketHandlerDefinition,
-    'close-connection': CloseConnectionHandlerDefinition,
-    'reset-connection': ResetConnectionHandlerDefinition,
-    'timeout': TimeoutHandlerDefinition
+export const WsStepDefinitionLookup = {
+    'ws-passthrough': PassThroughWebSocketStepDefinition,
+    'ws-echo': EchoWebSocketStepDefinition,
+    'ws-listen': ListenWebSocketStepDefinition,
+    'ws-reject': RejectWebSocketStepDefinition,
+    'close-connection': CloseConnectionStepDefinition,
+    'reset-connection': ResetConnectionStepDefinition,
+    'timeout': TimeoutStepDefinition
 };

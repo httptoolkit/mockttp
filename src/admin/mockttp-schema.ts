@@ -48,7 +48,8 @@ export const MockttpSchema = gql`
         id: String
         priority: Int
         matchers: [Raw!]!
-        handler: Raw!
+        handler: Raw # Backward compat, deprecated
+        steps: [Raw!] # Can only be unset if handler is set
         completionChecker: Raw
     }
 
@@ -56,7 +57,8 @@ export const MockttpSchema = gql`
         id: String
         priority: Int
         matchers: [Raw!]!
-        handler: Raw!
+        handler: Raw # Backward compat, deprecated
+        steps: [Raw!] # Can only be unset if handler is set
         completionChecker: Raw
     }
 

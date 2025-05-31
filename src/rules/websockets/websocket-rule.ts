@@ -16,8 +16,8 @@ import { validateMockRuleData } from '../rule-serialization';
 
 import * as matchers from "../matchers";
 import * as completionCheckers from "../completion-checkers";
-import { WebSocketHandler, WsHandlerLookup } from "./websocket-handlers";
-import type { WebSocketHandlerDefinition } from "./websocket-handler-definitions";
+import { WebSocketStep, WsStepLookup } from "./websocket-steps";
+import type { WebSocketStepDefinition } from "./websocket-step-definitions";
 
 // The internal representation of a mocked endpoint
 export interface WebSocketRule extends Explainable {
@@ -42,13 +42,13 @@ export interface WebSocketRuleData {
     id?: string;
     priority?: number; // Higher is higher, by default 0 is fallback, 1 is normal, must be positive
     matchers: matchers.RequestMatcher[];
-    handler: WebSocketHandler | WebSocketHandlerDefinition;
+    steps: Array<WebSocketStep | WebSocketStepDefinition>;
     completionChecker?: completionCheckers.RuleCompletionChecker;
 }
 
 export class WebSocketRule implements WebSocketRule {
     private matchers: matchers.RequestMatcher[];
-    private handler: WebSocketHandler;
+    private steps: WebSocketStep[];
     private completionChecker?: completionCheckers.RuleCompletionChecker;
 
     public id: string;
@@ -62,17 +62,20 @@ export class WebSocketRule implements WebSocketRule {
         this.id = data.id || uuid();
         this.priority = data.priority ?? RulePriority.DEFAULT;
         this.matchers = data.matchers;
-        if ('handle' in data.handler) {
-            this.handler = data.handler;
-        } else {
-            // We transform the definition into a real handler, by creating an raw instance of the handler (which is
-            // a subtype of the definition with the same constructor) and copying the fields across.
-            this.handler = Object.assign(
-                Object.create(WsHandlerLookup[data.handler.type].prototype),
-                data.handler
-            );
-        }
         this.completionChecker = data.completionChecker;
+
+        this.steps = data.steps.map((step) => {
+            if ('handle' in step) {
+                return step;
+            } else {
+                // We transform the definition into a real step, by creating an instance of the raw step (which is
+                // a subtype of the definition with the same constructor) and copying the fields across.
+                return Object.assign(
+                    Object.create(WsStepLookup[step.type].prototype),
+                    step
+                );
+            }
+        });
     }
 
     matches(request: OngoingRequest) {
@@ -88,8 +91,12 @@ export class WebSocketRule implements WebSocketRule {
             emitEventCallback?: (type: string, event: unknown) => void
         }
     ): Promise<void> {
-        let handlerPromise = (async () => { // Catch (a)sync errors
-            return this.handler.handle(req as OngoingRequest & http.IncomingMessage, res, head, options);
+        let stepsPromise = (async () => {
+            for (let step of this.steps) {
+                const result = await step.handle(req as OngoingRequest & http.IncomingMessage, res, head, options);
+
+                if (!result || result.continue === false) break;
+            }
         })();
 
         // Requests are added to rule.requests as soon as they start being handled,
@@ -98,7 +105,7 @@ export class WebSocketRule implements WebSocketRule {
             this.requests.push(
                 Promise.race([
                     // When the handler resolves, the request is completed:
-                    handlerPromise,
+                    stepsPromise,
                     // If the response is closed before the handler completes (due to aborts, handler
                     // timeouts, whatever) then that also counts as the request being completed:
                     new Promise((resolve) => res.on('close', resolve))
@@ -112,7 +119,7 @@ export class WebSocketRule implements WebSocketRule {
         // requests is still tracked
         this.requestCount += 1;
 
-        return handlerPromise as Promise<any>;
+        return stepsPromise as Promise<any>;
     }
 
     isComplete(): boolean | null {
@@ -131,7 +138,7 @@ export class WebSocketRule implements WebSocketRule {
 
     explain(withoutExactCompletion = false): string {
         let explanation = `Match websockets ${matchers.explainMatchers(this.matchers)}, ` +
-        `and then ${this.handler.explain()}`;
+        `and then ${explainSteps(this.steps)}`;
 
         if (this.completionChecker) {
             explanation += `, ${this.completionChecker.explain(
@@ -145,8 +152,20 @@ export class WebSocketRule implements WebSocketRule {
     }
 
     dispose() {
-        this.handler.dispose();
+        this.steps.forEach(s => s.dispose());
         this.matchers.forEach(m => m.dispose());
         if (this.completionChecker) this.completionChecker.dispose();
     }
+}
+
+export function explainSteps(steps: WebSocketStepDefinition[]) {
+    if (steps.length === 1) return steps[0].explain();
+    if (steps.length === 2) {
+        return `${steps[0].explain()} then ${steps[1].explain()}`;
+    }
+
+    // With 3+, we need to oxford comma separate explanations to make them readable
+    return steps.slice(0, -1)
+        .map((s) => s.explain())
+        .join(', ') + ', and ' + steps.slice(-1)[0].explain();
 }

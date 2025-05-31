@@ -37,25 +37,25 @@ import { ProxyConfig } from '../proxy-config';
 import {
     CADefinition,
     ForwardingOptions,
-    PassThroughHandlerConnectionOptions,
+    PassThroughStepConnectionOptions,
     PassThroughLookupOptions
 } from '../passthrough-handling-definitions';
 
 /*
-This file defines request handler *definitions*, which includes everything necessary to define
-and serialize a request handler's behaviour, but doesn't include the actual handling logic (which
-lives in ./request-handlers instead). This is intended to allow tree-shaking in browser usage
+This file defines request step *definitions*, which includes everything necessary to define
+and serialize their behaviour, but doesn't include the actual handling logic (which
+lives in ./request-steps instead). This is intended to allow tree-shaking in browser usage
 or remote clients to import only the necessary code, with no need to include all the real
 request-processing and handling code that is only used at HTTP-runtime, so isn't relevant when
 defining rules.
 
-Every RequestHandler extends its definition, simply adding a handle() method, which handles
+Every RequestStep extends its definition, simply adding a handle() method, which handles
 requests according to the configuration, and adding a deserialize static method that takes
-the serialized output from the serialize() methods defined here and creates a working handler.
+the serialized output from the serialize() methods defined here and creates a working step.
 */
 
-export interface RequestHandlerDefinition extends Explainable, Serializable {
-    type: keyof typeof HandlerDefinitionLookup;
+export interface RequestStepDefinition extends Explainable, Serializable {
+    type: keyof typeof StepDefinitionLookup;
 }
 
 export type SerializedBuffer = { type: 'Buffer', data: number[] };
@@ -251,7 +251,7 @@ function validateCustomHeaders(
     }
 }
 
-export class SimpleHandlerDefinition extends Serializable implements RequestHandlerDefinition {
+export class SimpleStepDefinition extends Serializable implements RequestStepDefinition {
     readonly type = 'simple';
 
     constructor(
@@ -287,7 +287,7 @@ export class SimpleHandlerDefinition extends Serializable implements RequestHand
 /**
  * @internal
  */
-export interface SerializedCallbackHandlerData {
+export interface SerializedCallbackStepData {
     type: string;
     name?: string;
 }
@@ -299,7 +299,7 @@ export interface CallbackRequestMessage {
     args: [Replace<CompletedRequest, { body: SerializedBody }>];
 }
 
-export class CallbackHandlerDefinition extends Serializable implements RequestHandlerDefinition {
+export class CallbackStepDefinition extends Serializable implements RequestStepDefinition {
     readonly type = 'callback';
 
     constructor(
@@ -315,7 +315,7 @@ export class CallbackHandlerDefinition extends Serializable implements RequestHa
     /**
      * @internal
      */
-    serialize(channel: ClientServerChannel): SerializedCallbackHandlerData {
+    serialize(channel: ClientServerChannel): SerializedCallbackStepData {
         channel.onRequest<
             CallbackRequestMessage,
             CallbackResponseResult
@@ -338,24 +338,24 @@ export class CallbackHandlerDefinition extends Serializable implements RequestHa
 /**
  * @internal
  */
-export interface SerializedStreamHandlerData {
+export interface SerializedStreamStepData {
     type: string;
     status: number;
     headers?: Headers;
 };
 
-interface StreamHandlerMessage {
+interface StreamStepMessage {
     event: 'data' | 'end' | 'close' | 'error';
-    content: StreamHandlerEventMessage;
+    content: StreamStepEventMessage;
 }
 
-type StreamHandlerEventMessage =
+type StreamStepEventMessage =
     { type: 'string', value: string } |
     { type: 'buffer', value: string } |
     { type: 'arraybuffer', value: string } |
     { type: 'nil' };
 
-export class StreamHandlerDefinition extends Serializable implements RequestHandlerDefinition {
+export class StreamStepDefinition extends Serializable implements RequestStepDefinition {
     readonly type = 'stream';
 
     constructor(
@@ -377,11 +377,11 @@ export class StreamHandlerDefinition extends Serializable implements RequestHand
     /**
      * @internal
      */
-    serialize(channel: ClientServerChannel): SerializedStreamHandlerData {
+    serialize(channel: ClientServerChannel): SerializedStreamStepData {
         const serializationStream = new Transform({
             objectMode: true,
             transform: function (this: Transform, chunk, _encoding, callback) {
-                let serializedEventData: StreamHandlerEventMessage | false =
+                let serializedEventData: StreamStepEventMessage | false =
                     _.isString(chunk) ? { type: 'string', value: chunk } :
                     _.isBuffer(chunk) ? { type: 'buffer', value: chunk.toString('base64') } :
                     (_.isArrayBuffer(chunk) || _.isTypedArray(chunk))
@@ -392,14 +392,14 @@ export class StreamHandlerDefinition extends Serializable implements RequestHand
                     callback(new Error(`Can't serialize streamed value: ${chunk.toString()}. Streaming must output strings, buffers or array buffers`));
                 }
 
-                callback(undefined, <StreamHandlerMessage> {
+                callback(undefined, <StreamStepMessage> {
                     event: 'data',
                     content: serializedEventData
                 });
             },
 
             flush: function(this: Transform, callback) {
-                this.push(<StreamHandlerMessage> {
+                this.push(<StreamStepMessage> {
                     event: 'end'
                 });
                 callback();
@@ -415,7 +415,7 @@ export class StreamHandlerDefinition extends Serializable implements RequestHand
     }
 }
 
-export class FileHandlerDefinition extends Serializable implements RequestHandlerDefinition {
+export class FileStepDefinition extends Serializable implements RequestStepDefinition {
     readonly type = 'file';
 
     constructor(
@@ -449,7 +449,7 @@ export interface PassThroughResponse {
     body: CompletedBody;
 }
 
-export interface PassThroughHandlerOptions extends PassThroughHandlerConnectionOptions {
+export interface PassThroughStepOptions extends PassThroughStepConnectionOptions {
     /**
      * A set of data to automatically transform a request. This includes properties
      * to support many transformation common use cases.
@@ -714,7 +714,7 @@ export interface BeforePassthroughResponseRequest {
  */
 export const SERIALIZED_OMIT = "__mockttp__transform__omit__";
 
-export class PassThroughHandlerDefinition extends Serializable implements RequestHandlerDefinition {
+export class PassThroughStepDefinition extends Serializable implements RequestStepDefinition {
     readonly type = 'passthrough';
 
     public readonly forwarding?: ForwardingOptions;
@@ -741,11 +741,11 @@ export class PassThroughHandlerDefinition extends Serializable implements Reques
     public readonly simulateConnectionErrors: boolean;
 
     // Used in subclass - awkwardly needs to be initialized here to ensure that its set when using a
-    // handler built from a definition. In future, we could improve this (compose instead of inheritance
-    // to better control handler construction?) but this will do for now.
+    // step built from a definition. In future, we could improve this (compose instead of inheritance
+    // to better control step construction?) but this will do for now.
     protected outgoingSockets = new Set<net.Socket>();
 
-    constructor(options: PassThroughHandlerOptions = {}) {
+    constructor(options: PassThroughStepOptions = {}) {
         super();
 
         // If a location is provided, and it's not a bare hostname, it must be parseable
@@ -978,7 +978,7 @@ export class PassThroughHandlerDefinition extends Serializable implements Reques
     }
 }
 
-export class CloseConnectionHandlerDefinition extends Serializable implements RequestHandlerDefinition {
+export class CloseConnectionStepDefinition extends Serializable implements RequestStepDefinition {
     readonly type = 'close-connection';
 
     explain() {
@@ -986,7 +986,7 @@ export class CloseConnectionHandlerDefinition extends Serializable implements Re
     }
 }
 
-export class ResetConnectionHandlerDefinition extends Serializable implements RequestHandlerDefinition {
+export class ResetConnectionStepDefinition extends Serializable implements RequestStepDefinition {
     readonly type = 'reset-connection';
 
     explain() {
@@ -994,7 +994,7 @@ export class ResetConnectionHandlerDefinition extends Serializable implements Re
     }
 }
 
-export class TimeoutHandlerDefinition extends Serializable implements RequestHandlerDefinition {
+export class TimeoutStepDefinition extends Serializable implements RequestStepDefinition {
     readonly type = 'timeout';
 
     explain() {
@@ -1002,7 +1002,7 @@ export class TimeoutHandlerDefinition extends Serializable implements RequestHan
     }
 }
 
-export class JsonRpcResponseHandlerDefinition extends Serializable implements RequestHandlerDefinition {
+export class JsonRpcResponseStepDefinition extends Serializable implements RequestStepDefinition {
     readonly type = 'json-rpc-response';
 
     constructor(
@@ -1026,14 +1026,14 @@ export class JsonRpcResponseHandlerDefinition extends Serializable implements Re
     }
 }
 
-export const HandlerDefinitionLookup = {
-    'simple': SimpleHandlerDefinition,
-    'callback': CallbackHandlerDefinition,
-    'stream': StreamHandlerDefinition,
-    'file': FileHandlerDefinition,
-    'passthrough': PassThroughHandlerDefinition,
-    'close-connection': CloseConnectionHandlerDefinition,
-    'reset-connection': ResetConnectionHandlerDefinition,
-    'timeout': TimeoutHandlerDefinition,
-    'json-rpc-response': JsonRpcResponseHandlerDefinition
+export const StepDefinitionLookup = {
+    'simple': SimpleStepDefinition,
+    'callback': CallbackStepDefinition,
+    'stream': StreamStepDefinition,
+    'file': FileStepDefinition,
+    'passthrough': PassThroughStepDefinition,
+    'close-connection': CloseConnectionStepDefinition,
+    'reset-connection': ResetConnectionStepDefinition,
+    'timeout': TimeoutStepDefinition,
+    'json-rpc-response': JsonRpcResponseStepDefinition
 }

@@ -26,19 +26,19 @@ export type {
 
 // Export rule data builders & type definitions:
 import * as matchers from './rules/matchers';
-import type { RequestHandler, RequestHandlerOptions } from './rules/requests/request-handlers';
-import * as requestHandlerDefinitions from './rules/requests/request-handler-definitions';
-import type { WebSocketHandler } from './rules/websockets/websocket-handlers';
-import * as webSocketHandlerDefinitions from './rules/websockets/websocket-handler-definitions';
+import type { RequestStep, RequestStepOptions } from './rules/requests/request-steps';
+import * as requestStepDefinitions from './rules/requests/request-step-definitions';
+import type { WebSocketStep } from './rules/websockets/websocket-steps';
+import * as webSocketStepDefinitions from './rules/websockets/websocket-step-definitions';
 import * as completionCheckers from './rules/completion-checkers';
 
 export {
     matchers,
-    RequestHandler,
-    RequestHandlerOptions,
-    requestHandlerDefinitions as requestHandlers,
-    WebSocketHandler,
-    webSocketHandlerDefinitions as webSocketHandlers,
+    RequestStep,
+    RequestStepOptions,
+    requestStepDefinitions as requestSteps,
+    WebSocketStep,
+    webSocketStepDefinitions as webSocketSteps,
     completionCheckers
 };
 
@@ -57,7 +57,7 @@ export type {
     CADefinition,
     ForwardingOptions,
     PassThroughLookupOptions,
-    PassThroughHandlerConnectionOptions
+    PassThroughStepConnectionOptions
 } from './rules/passthrough-handling-definitions';
 
 export type { RequestRuleBuilder } from "./rules/requests/request-rule-builder";

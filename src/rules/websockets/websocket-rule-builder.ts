@@ -2,15 +2,15 @@ import { MockedEndpoint, Headers } from "../../types";
 import type { WebSocketRuleData } from "./websocket-rule";
 
 import {
-    PassThroughWebSocketHandlerDefinition,
-    TimeoutHandlerDefinition,
-    CloseConnectionHandlerDefinition,
-    ResetConnectionHandlerDefinition,
-    PassThroughWebSocketHandlerOptions,
-    RejectWebSocketHandlerDefinition,
-    EchoWebSocketHandlerDefinition,
-    ListenWebSocketHandlerDefinition
-} from './websocket-handler-definitions';
+    PassThroughWebSocketStepDefinition,
+    TimeoutStepDefinition,
+    CloseConnectionStepDefinition,
+    ResetConnectionStepDefinition,
+    PassThroughWebSocketStepOptions,
+    RejectWebSocketStepDefinition,
+    EchoWebSocketStepDefinition,
+    ListenWebSocketStepDefinition
+} from './websocket-step-definitions';
 
 import { BaseRuleBuilder } from "../base-rule-builder";
 import { WildcardMatcher } from "../matchers";
@@ -54,7 +54,7 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
      * an error.
      *
      * This method takes options to configure how the request is passed
-     * through. See {@link PassThroughWebSocketHandlerOptions} for the full
+     * through. See {@link PassThroughWebSocketStepOptions} for the full
      * details of the options available.
      *
      * Calling this method registers the rule with the server, so it
@@ -67,10 +67,10 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
      *
      * @category Responses
      */
-    thenPassThrough(options: PassThroughWebSocketHandlerOptions = {}): Promise<MockedEndpoint> {
+    thenPassThrough(options: PassThroughWebSocketStepOptions = {}): Promise<MockedEndpoint> {
         const rule: WebSocketRuleData = {
             ...this.buildBaseRuleData(),
-            handler: new PassThroughWebSocketHandlerDefinition(options)
+            steps: [new PassThroughWebSocketStepDefinition(options)]
         };
 
         return this.addRule(rule);
@@ -87,7 +87,7 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
      * of the original request URL will be used instead.
      *
      * This method takes options to configure how the request is passed
-     * through. See {@link PassThroughWebSocketHandlerOptions} for the full
+     * through. See {@link PassThroughWebSocketStepOptions} for the full
      * details of the options available.
      *
      * Calling this method registers the rule with the server, so it
@@ -102,19 +102,19 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
      */
     async thenForwardTo(
         forwardToLocation: string,
-        options: Omit<PassThroughWebSocketHandlerOptions, 'forwarding'> & {
-            forwarding?: Omit<PassThroughWebSocketHandlerOptions['forwarding'], 'targetHost'>
+        options: Omit<PassThroughWebSocketStepOptions, 'forwarding'> & {
+            forwarding?: Omit<PassThroughWebSocketStepOptions['forwarding'], 'targetHost'>
         } = {}
     ): Promise<MockedEndpoint> {
         const rule: WebSocketRuleData = {
             ...this.buildBaseRuleData(),
-            handler: new PassThroughWebSocketHandlerDefinition({
+            steps: [new PassThroughWebSocketStepDefinition({
                 ...options,
                 forwarding: {
                     ...options.forwarding,
                     targetHost: forwardToLocation
                 }
-            })
+            })]
         };
 
         return this.addRule(rule);
@@ -137,7 +137,7 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
     thenEcho(): Promise<MockedEndpoint> {
         const rule: WebSocketRuleData = {
             ...this.buildBaseRuleData(),
-            handler: new EchoWebSocketHandlerDefinition()
+            steps: [new EchoWebSocketStepDefinition()]
         };
 
         return this.addRule(rule);
@@ -160,7 +160,7 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
     thenPassivelyListen(): Promise<MockedEndpoint> {
         const rule: WebSocketRuleData = {
             ...this.buildBaseRuleData(),
-            handler: new ListenWebSocketHandlerDefinition()
+            steps: [new ListenWebSocketStepDefinition()]
         };
 
         return this.addRule(rule);
@@ -189,12 +189,12 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
     ): Promise<MockedEndpoint> {
         const rule: WebSocketRuleData = {
             ...this.buildBaseRuleData(),
-            handler: new RejectWebSocketHandlerDefinition(
+            steps: [new RejectWebSocketStepDefinition(
                 statusCode,
                 statusMessage,
                 headers,
                 body
-            )
+            )]
         };
 
         return this.addRule(rule);
@@ -217,7 +217,7 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
     thenCloseConnection(): Promise<MockedEndpoint> {
         const rule: WebSocketRuleData = {
             ...this.buildBaseRuleData(),
-            handler: new CloseConnectionHandlerDefinition()
+            steps: [new CloseConnectionStepDefinition()]
         };
 
         return this.addRule(rule);
@@ -244,7 +244,7 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
     thenResetConnection(): Promise<MockedEndpoint> {
         const rule: WebSocketRuleData = {
             ...this.buildBaseRuleData(),
-            handler: new ResetConnectionHandlerDefinition()
+            steps: [new ResetConnectionStepDefinition()]
         };
 
         return this.addRule(rule);
@@ -267,7 +267,7 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
     thenTimeout(): Promise<MockedEndpoint> {
         const rule: WebSocketRuleData = {
             ...this.buildBaseRuleData(),
-            handler: new TimeoutHandlerDefinition()
+            steps: [new TimeoutStepDefinition()]
         };
 
         return this.addRule(rule);

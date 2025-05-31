@@ -1,15 +1,17 @@
 import { Duplex } from "stream";
 
-import { Serialized, deserialize } from "../serialization/serialization";
+import { Serialized, SerializedValue, deserialize } from "../serialization/serialization";
 
 import type { RequestRuleData } from "./requests/request-rule";
 import type { WebSocketRuleData } from "./websockets/websocket-rule";
+import type { RequestStepDefinition } from "./requests/request-step-definitions";
+import type { WebSocketStepDefinition } from "./websockets/websocket-step-definitions";
 
 import * as matchers from "./matchers";
 import * as completionCheckers from "./completion-checkers";
 
-import { HandlerLookup } from "./requests/request-handlers";
-import { WsHandlerLookup } from './websockets/websocket-handlers';
+import { RequestStep, StepLookup } from "./requests/request-steps";
+import { WsStepLookup } from './websockets/websocket-steps';
 
 import { RuleParameters } from "./rule-parameters";
 import { BodySerializer } from "../serialization/body-serialization";
@@ -23,17 +25,25 @@ export interface MockttpDeserializationOptions {
 }
 
 export function deserializeRuleData(
-    data: Serialized<RequestRuleData>,
+    data: Serialized<RequestRuleData> &
+        // API backward compat, only used if steps is missing:
+        { handler?: SerializedValue<RequestStepDefinition> },
     stream: Duplex,
     options: MockttpDeserializationOptions
 ): RequestRuleData {
+    const steps = data.steps
+            ? data.steps
+        : data.handler
+            ? [data.handler]
+        : [];
+
     return {
         id: data.id,
         priority: data.priority,
         matchers: data.matchers.map((m) =>
             deserialize(m, stream, options, matchers.MatcherLookup)
         ),
-        handler: deserialize(data.handler, stream, options, HandlerLookup),
+        steps: steps.map(step => deserialize(step, stream, options, StepLookup)),
         completionChecker: data.completionChecker && deserialize(
             data.completionChecker,
             stream,
@@ -44,16 +54,24 @@ export function deserializeRuleData(
 }
 
 export function deserializeWebSocketRuleData(
-    data: Serialized<WebSocketRuleData>,
+    data: Serialized<WebSocketRuleData> &
+        // API backward compat, only used if steps is missing:
+        { handler?: SerializedValue<WebSocketStepDefinition> },
     stream: Duplex,
     options: MockttpDeserializationOptions
 ): WebSocketRuleData {
+    const steps = data.steps
+            ? data.steps
+        : data.handler
+            ? [data.handler]
+        : [];
+
     return {
         id: data.id,
         matchers: data.matchers.map((m) =>
             deserialize(m, stream, options, matchers.MatcherLookup)
         ),
-        handler: deserialize(data.handler, stream, options, WsHandlerLookup),
+        steps: steps.map(step => deserialize(step, stream, options, WsStepLookup)),
         completionChecker: data.completionChecker && deserialize(
             data.completionChecker,
             stream,
