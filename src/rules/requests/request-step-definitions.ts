@@ -252,7 +252,9 @@ function validateCustomHeaders(
 }
 
 export class SimpleStepDefinition extends Serializable implements RequestStepDefinition {
+
     readonly type = 'simple';
+    static readonly isFinal = true;
 
     constructor(
         public status: number,
@@ -300,7 +302,9 @@ export interface CallbackRequestMessage {
 }
 
 export class CallbackStepDefinition extends Serializable implements RequestStepDefinition {
+
     readonly type = 'callback';
+    static readonly isFinal = true;
 
     constructor(
         public callback: (request: CompletedRequest) => MaybePromise<CallbackResponseResult>
@@ -356,7 +360,9 @@ type StreamStepEventMessage =
     { type: 'nil' };
 
 export class StreamStepDefinition extends Serializable implements RequestStepDefinition {
+
     readonly type = 'stream';
+    static readonly isFinal = true;
 
     constructor(
         public status: number,
@@ -416,7 +422,9 @@ export class StreamStepDefinition extends Serializable implements RequestStepDef
 }
 
 export class FileStepDefinition extends Serializable implements RequestStepDefinition {
+
     readonly type = 'file';
+    static readonly isFinal = true;
 
     constructor(
         public status: number,
@@ -715,7 +723,9 @@ export interface BeforePassthroughResponseRequest {
 export const SERIALIZED_OMIT = "__mockttp__transform__omit__";
 
 export class PassThroughStepDefinition extends Serializable implements RequestStepDefinition {
+
     readonly type = 'passthrough';
+    static readonly isFinal = true;
 
     public readonly forwarding?: ForwardingOptions;
 
@@ -980,6 +990,7 @@ export class PassThroughStepDefinition extends Serializable implements RequestSt
 
 export class CloseConnectionStepDefinition extends Serializable implements RequestStepDefinition {
     readonly type = 'close-connection';
+    static readonly isFinal = true;
 
     explain() {
         return 'close the connection';
@@ -988,6 +999,7 @@ export class CloseConnectionStepDefinition extends Serializable implements Reque
 
 export class ResetConnectionStepDefinition extends Serializable implements RequestStepDefinition {
     readonly type = 'reset-connection';
+    static readonly isFinal = true;
 
     explain() {
         return 'reset the connection';
@@ -996,6 +1008,7 @@ export class ResetConnectionStepDefinition extends Serializable implements Reque
 
 export class TimeoutStepDefinition extends Serializable implements RequestStepDefinition {
     readonly type = 'timeout';
+    static readonly isFinal = true;
 
     explain() {
         return 'time out (never respond)';
@@ -1004,6 +1017,7 @@ export class TimeoutStepDefinition extends Serializable implements RequestStepDe
 
 export class JsonRpcResponseStepDefinition extends Serializable implements RequestStepDefinition {
     readonly type = 'json-rpc-response';
+    static readonly isFinal = true;
 
     constructor(
         public readonly result:

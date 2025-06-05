@@ -59,7 +59,9 @@ export interface SerializedPassThroughWebSocketData {
 }
 
 export class PassThroughWebSocketStepDefinition extends Serializable implements WebSocketStepDefinition {
+
     readonly type = 'ws-passthrough';
+    static readonly isFinal = true;
 
     // Same lookup configuration as normal request PassThroughStep:
     public readonly lookupOptions: PassThroughLookupOptions | undefined;
@@ -144,6 +146,7 @@ export class PassThroughWebSocketStepDefinition extends Serializable implements 
 export class EchoWebSocketStepDefinition extends Serializable implements WebSocketStepDefinition {
 
     readonly type = 'ws-echo';
+    static readonly isFinal = true;
 
     explain(): string {
         return "echo all websocket messages";
@@ -153,6 +156,7 @@ export class EchoWebSocketStepDefinition extends Serializable implements WebSock
 export class ListenWebSocketStepDefinition extends Serializable implements WebSocketStepDefinition {
 
     readonly type = 'ws-listen';
+    static readonly isFinal = true;
 
     explain(): string {
         return "silently accept websocket messages without responding";
@@ -162,6 +166,7 @@ export class ListenWebSocketStepDefinition extends Serializable implements WebSo
 export class RejectWebSocketStepDefinition extends Serializable implements WebSocketStepDefinition {
 
     readonly type = 'ws-reject';
+    static readonly isFinal = true;
 
     constructor(
         public readonly statusCode: number,

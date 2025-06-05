@@ -119,4 +119,18 @@ describe("Mockttp rule building", function () {
             })
         })()).to.be.rejectedWith('Cannot create a rule with no steps');
     });
+
+    it("should reject rules with non-final final-only steps", async () => {
+        return expect((async () => { // Funky setup to handle sync & async failure for node & browser
+            await server.addRequestRules({
+                matchers: [new matchers.SimplePathMatcher('/endpoint')],
+                steps: [
+                    new requestSteps.SimpleStepDefinition(200),
+                    new requestSteps.SimpleStepDefinition(200)
+                ]
+            });
+        })()).to.be.rejectedWith(
+            'Cannot create a rule with a final step before the last position ("respond with status 200" in position 1 of 2)'
+        );
+    });
 });

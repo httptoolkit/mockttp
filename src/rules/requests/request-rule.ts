@@ -51,17 +51,23 @@ export class RequestRule implements RequestRule {
         this.matchers = data.matchers;
         this.completionChecker = data.completionChecker;
 
-        this.steps = data.steps.map((step) => {
-            if ('handle' in step) {
-                return step;
-            } else {
-                // We transform the definition into a real step, by creating an instance of the raw step (which is
-                // a subtype of the definition with the same constructor) and copying the fields across.
-                return Object.assign(
-                    Object.create(StepLookup[step.type].prototype),
-                    step
+        this.steps = data.steps.map((stepDefinition, i) => {
+            const step = 'handle' in stepDefinition
+                ? stepDefinition
+                : Object.assign(
+                    Object.create(StepLookup[stepDefinition.type].prototype),
+                    stepDefinition
+                ) as RequestStep;
+
+            if (StepLookup[step.type].isFinal && i !== data.steps.length - 1) {
+                throw new Error(
+                    `Cannot create a rule with a final step before the last position ("${
+                        step.explain()
+                    }" in position ${i + 1} of ${data.steps.length})`
                 );
             }
+
+            return step;
         });
     }
 
