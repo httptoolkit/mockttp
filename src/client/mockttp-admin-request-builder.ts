@@ -23,9 +23,6 @@ function normalizeHttpMessage(message: any, event?: SubscribableEvent) {
     if (message.timingEvents) {
         // Timing events are serialized as raw JSON
         message.timingEvents = JSON.parse(message.timingEvents);
-    } else if (event !== 'tls-client-error' && event !== 'client-error') {
-        // For backwards compat, all except errors should have timing events if they're missing
-        message.timingEvents = {};
     }
 
     if (message.rawHeaders) {
@@ -56,9 +53,6 @@ function normalizeHttpMessage(message: any, event?: SubscribableEvent) {
         );
     }
     delete message.decodedBody;
-
-    // For backwards compat, all except errors should have tags if they're missing
-    if (!message.tags) message.tags = [];
 
     if (event?.startsWith('tls-')) {
         // TLS passthrough & error events should have raw JSON socket metadata:
