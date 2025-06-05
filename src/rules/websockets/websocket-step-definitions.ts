@@ -21,6 +21,7 @@ import {
 } from '../passthrough-handling-definitions';
 import {
     CloseConnectionStepDefinition,
+    DelayStepDefinition,
     ResetConnectionStepDefinition,
     TimeoutStepDefinition
 } from '../requests/request-step-definitions';
@@ -188,7 +189,8 @@ export class RejectWebSocketStepDefinition extends Serializable implements WebSo
 export {
     CloseConnectionStepDefinition,
     ResetConnectionStepDefinition,
-    TimeoutStepDefinition
+    TimeoutStepDefinition,
+    DelayStepDefinition
 };
 
 export const WsStepDefinitionLookup = {
@@ -198,5 +200,6 @@ export const WsStepDefinitionLookup = {
     'ws-reject': RejectWebSocketStepDefinition,
     'close-connection': CloseConnectionStepDefinition,
     'reset-connection': ResetConnectionStepDefinition,
-    'timeout': TimeoutStepDefinition
+    'timeout': TimeoutStepDefinition,
+    'delay': DelayStepDefinition
 };

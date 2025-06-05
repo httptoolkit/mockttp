@@ -9,7 +9,9 @@ import {
     PassThroughWebSocketStepOptions,
     RejectWebSocketStepDefinition,
     EchoWebSocketStepDefinition,
-    ListenWebSocketStepDefinition
+    ListenWebSocketStepDefinition,
+    DelayStepDefinition,
+    WebSocketStepDefinition
 } from './websocket-step-definitions';
 
 import { BaseRuleBuilder } from "../base-rule-builder";
@@ -48,6 +50,16 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
         this.matchers.push(new WildcardMatcher());
     }
 
+    private steps: Array<WebSocketStepDefinition> = [];
+
+    /**
+     * Add a delay (in milliseconds) before the next step in the rule
+     */
+    waitFor(ms: number): this {
+        this.steps.push(new DelayStepDefinition(ms));
+        return this;
+    }
+
     /**
      * Pass matched websockets through to their real destination. This works
      * for proxied requests only, and direct requests will be rejected with
@@ -68,9 +80,11 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
      * @category Responses
      */
     thenPassThrough(options: PassThroughWebSocketStepOptions = {}): Promise<MockedEndpoint> {
+        this.steps.push(new PassThroughWebSocketStepDefinition(options));
+
         const rule: WebSocketRuleData = {
             ...this.buildBaseRuleData(),
-            steps: [new PassThroughWebSocketStepDefinition(options)]
+            steps: this.steps
         };
 
         return this.addRule(rule);
@@ -106,15 +120,17 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
             forwarding?: Omit<PassThroughWebSocketStepOptions['forwarding'], 'targetHost'>
         } = {}
     ): Promise<MockedEndpoint> {
+        this.steps.push(new PassThroughWebSocketStepDefinition({
+            ...options,
+            forwarding: {
+                ...options.forwarding,
+                targetHost: forwardToLocation
+            }
+        }));
+
         const rule: WebSocketRuleData = {
             ...this.buildBaseRuleData(),
-            steps: [new PassThroughWebSocketStepDefinition({
-                ...options,
-                forwarding: {
-                    ...options.forwarding,
-                    targetHost: forwardToLocation
-                }
-            })]
+            steps: this.steps
         };
 
         return this.addRule(rule);
@@ -135,9 +151,11 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
      * @category Responses
      */
     thenEcho(): Promise<MockedEndpoint> {
+        this.steps.push(new EchoWebSocketStepDefinition());
+
         const rule: WebSocketRuleData = {
             ...this.buildBaseRuleData(),
-            steps: [new EchoWebSocketStepDefinition()]
+            steps: this.steps
         };
 
         return this.addRule(rule);
@@ -158,9 +176,11 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
      * @category Responses
      */
     thenPassivelyListen(): Promise<MockedEndpoint> {
+        this.steps.push(new ListenWebSocketStepDefinition());
+
         const rule: WebSocketRuleData = {
             ...this.buildBaseRuleData(),
-            steps: [new ListenWebSocketStepDefinition()]
+            steps: this.steps
         };
 
         return this.addRule(rule);
@@ -187,14 +207,16 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
         headers?: Headers,
         body?: Buffer | string
     ): Promise<MockedEndpoint> {
+        this.steps.push(new RejectWebSocketStepDefinition(
+            statusCode,
+            statusMessage,
+            headers,
+            body
+        ));
+
         const rule: WebSocketRuleData = {
             ...this.buildBaseRuleData(),
-            steps: [new RejectWebSocketStepDefinition(
-                statusCode,
-                statusMessage,
-                headers,
-                body
-            )]
+            steps: this.steps
         };
 
         return this.addRule(rule);
@@ -215,9 +237,11 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
      * @category Responses
      */
     thenCloseConnection(): Promise<MockedEndpoint> {
+        this.steps.push(new CloseConnectionStepDefinition());
+
         const rule: WebSocketRuleData = {
             ...this.buildBaseRuleData(),
-            steps: [new CloseConnectionStepDefinition()]
+            steps: this.steps
         };
 
         return this.addRule(rule);
@@ -242,9 +266,11 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
      * @category Responses
      */
     thenResetConnection(): Promise<MockedEndpoint> {
+        this.steps.push(new ResetConnectionStepDefinition());
+
         const rule: WebSocketRuleData = {
             ...this.buildBaseRuleData(),
-            steps: [new ResetConnectionStepDefinition()]
+            steps: this.steps
         };
 
         return this.addRule(rule);
@@ -265,9 +291,11 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
      * @category Responses
      */
     thenTimeout(): Promise<MockedEndpoint> {
+        this.steps.push(new TimeoutStepDefinition());
+
         const rule: WebSocketRuleData = {
             ...this.buildBaseRuleData(),
-            steps: [new TimeoutStepDefinition()]
+            steps: this.steps
         };
 
         return this.addRule(rule);

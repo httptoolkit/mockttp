@@ -20,7 +20,7 @@ import {
     OngoingResponse
 } from "../../types";
 
-import { MaybePromise, ErrorLike, isErrorLike } from '@httptoolkit/util';
+import { MaybePromise, ErrorLike, isErrorLike, delay } from '@httptoolkit/util';
 import { isAbsoluteUrl, getEffectivePort } from '../../util/url';
 import {
     waitForCompletedRequest,
@@ -115,7 +115,8 @@ import {
     SERIALIZED_OMIT,
     SimpleStepDefinition,
     StreamStepDefinition,
-    TimeoutStepDefinition
+    TimeoutStepDefinition,
+    DelayStepDefinition
 } from './request-step-definitions';
 
 // Re-export various type definitions. This is mostly for compatibility with external
@@ -1396,6 +1397,13 @@ export class JsonRpcResponseStep extends JsonRpcResponseStepDefinition {
     }
 }
 
+export class DelayStep extends DelayStepDefinition {
+    async handle(): Promise<{ continue: true }> {
+        await delay(this.delayMs);
+        return { continue: true };
+    }
+}
+
 export const StepLookup: typeof StepDefinitionLookup = {
     'simple': SimpleStep,
     'callback': CallbackStep,
@@ -1405,5 +1413,6 @@ export const StepLookup: typeof StepDefinitionLookup = {
     'close-connection': CloseConnectionStep,
     'reset-connection': ResetConnectionStep,
     'timeout': TimeoutStep,
-    'json-rpc-response': JsonRpcResponseStep
+    'json-rpc-response': JsonRpcResponseStep,
+    'delay': DelayStep
 }

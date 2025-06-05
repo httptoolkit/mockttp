@@ -17,6 +17,7 @@ import { OngoingRequest, RawHeaders } from "../../types";
 
 import {
     CloseConnectionStep,
+    DelayStep,
     RequestStepOptions,
     ResetConnectionStep,
     TimeoutStep
@@ -544,7 +545,8 @@ export class RejectWebSocketStep extends RejectWebSocketStepDefinition {
 export {
     CloseConnectionStep,
     ResetConnectionStep,
-    TimeoutStep
+    TimeoutStep,
+    DelayStep
 };
 
 export const WsStepLookup: typeof WsStepDefinitionLookup = {
@@ -554,5 +556,6 @@ export const WsStepLookup: typeof WsStepDefinitionLookup = {
     'ws-reject': RejectWebSocketStep,
     'close-connection': CloseConnectionStep,
     'reset-connection': ResetConnectionStep,
-    'timeout': TimeoutStep
+    'timeout': TimeoutStep,
+    'delay': DelayStep
 };

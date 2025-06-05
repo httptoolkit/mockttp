@@ -17,7 +17,9 @@ import {
     FileStepDefinition,
     JsonRpcResponseStepDefinition,
     ResetConnectionStepDefinition,
-    CallbackResponseMessageResult
+    CallbackResponseMessageResult,
+    RequestStepDefinition,
+    DelayStepDefinition
 } from "./request-step-definitions";
 import { byteLength } from "../../util/util";
 import { BaseRuleBuilder } from "../base-rule-builder";
@@ -86,6 +88,16 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
         }
     }
 
+    private steps: Array<RequestStepDefinition> = [];
+
+    /**
+     * Add a delay (in milliseconds) before the next step in the rule
+     */
+    waitFor(ms: number): this {
+        this.steps.push(new DelayStepDefinition(ms));
+        return this;
+    }
+
     /**
      * Reply to matched requests with a given status code and (optionally) status message,
      * body, headers & trailers.
@@ -139,15 +151,17 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
             trailers = headersOrTrailers as Trailers | undefined;
         }
 
+        this.steps.push(new SimpleStepDefinition(
+            status,
+            statusMessage,
+            data,
+            headers,
+            trailers
+        ));
+
         const rule: RequestRuleData = {
             ...this.buildBaseRuleData(),
-            steps: [new SimpleStepDefinition(
-                status,
-                statusMessage,
-                data,
-                headers,
-                trailers
-            )]
+            steps: this.steps
         };
 
         return this.addRule(rule);
@@ -182,9 +196,11 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
             // connection after the response is sent, which can confuse clients.
         }, headers);
 
+        this.steps.push(new SimpleStepDefinition(status, undefined, jsonData, headers));
+
         const rule: RequestRuleData = {
             ...this.buildBaseRuleData(),
-            steps: [new SimpleStepDefinition(status, undefined, jsonData, headers)]
+            steps: this.steps
         };
 
         return this.addRule(rule);
@@ -216,9 +232,11 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
     thenCallback(callback:
         (request: CompletedRequest) => MaybePromise<CallbackResponseResult>
     ): Promise<MockedEndpoint> {
+        this.steps.push(new CallbackStepDefinition(callback));
+
         const rule: RequestRuleData = {
             ...this.buildBaseRuleData(),
-            steps: [new CallbackStepDefinition(callback)]
+            steps: this.steps
         }
 
         return this.addRule(rule);
@@ -245,9 +263,11 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
      * @category Responses
      */
     thenStream(status: number, stream: Readable, headers?: Headers): Promise<MockedEndpoint> {
+        this.steps.push(new StreamStepDefinition(status, stream, headers));
+
         const rule: RequestRuleData = {
             ...this.buildBaseRuleData(),
-            steps: [new StreamStepDefinition(status, stream, headers)]
+            steps: this.steps
         }
 
         return this.addRule(rule);
@@ -294,9 +314,11 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
             headers = pathOrHeaders as Headers | undefined;
         }
 
+        this.steps.push(new FileStepDefinition(status, statusMessage, path, headers));
+
         const rule: RequestRuleData = {
             ...this.buildBaseRuleData(),
-            steps: [new FileStepDefinition(status, statusMessage, path, headers)]
+            steps: this.steps
         };
 
         return this.addRule(rule);
@@ -322,9 +344,11 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
      * @category Responses
      */
     thenPassThrough(options?: PassThroughStepOptions): Promise<MockedEndpoint> {
+        this.steps.push(new PassThroughStepDefinition(options));
+
         const rule: RequestRuleData = {
             ...this.buildBaseRuleData(),
-            steps: [new PassThroughStepDefinition(options)]
+            steps: this.steps
         };
 
         return this.addRule(rule);
@@ -360,15 +384,17 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
             forwarding?: Omit<PassThroughStepOptions['forwarding'], 'targetHost'>
         } = {}
     ): Promise<MockedEndpoint> {
+        this.steps.push(new PassThroughStepDefinition({
+            ...options,
+            forwarding: {
+                ...options.forwarding,
+                targetHost: forwardToLocation
+            }
+        }));
+
         const rule: RequestRuleData = {
             ...this.buildBaseRuleData(),
-            steps: [new PassThroughStepDefinition({
-                ...options,
-                forwarding: {
-                    ...options.forwarding,
-                    targetHost: forwardToLocation
-                }
-            })]
+            steps: this.steps
         };
 
         return this.addRule(rule);
@@ -389,9 +415,11 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
      * @category Responses
      */
     thenCloseConnection(): Promise<MockedEndpoint> {
+        this.steps.push(new CloseConnectionStepDefinition());
+
         const rule: RequestRuleData = {
             ...this.buildBaseRuleData(),
-            steps: [new CloseConnectionStepDefinition()]
+            steps: this.steps
         };
 
         return this.addRule(rule);
@@ -416,9 +444,11 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
      * @category Responses
      */
     thenResetConnection(): Promise<MockedEndpoint> {
+        this.steps.push(new ResetConnectionStepDefinition());
+
         const rule: RequestRuleData = {
             ...this.buildBaseRuleData(),
-            steps: [new ResetConnectionStepDefinition()]
+            steps: this.steps
         };
 
         return this.addRule(rule);
@@ -439,9 +469,11 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
      * @category Responses
      */
     thenTimeout(): Promise<MockedEndpoint> {
+        this.steps.push(new TimeoutStepDefinition());
+
         const rule: RequestRuleData = {
             ...this.buildBaseRuleData(),
-            steps: [new TimeoutStepDefinition()]
+            steps: this.steps
         };
 
         return this.addRule(rule);
@@ -455,9 +487,11 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
      * @category Responses
      */
     thenSendJsonRpcResult(result: any) {
+        this.steps.push(new JsonRpcResponseStepDefinition({ result }));
+
         const rule = {
             ...this.buildBaseRuleData(),
-            steps: [new JsonRpcResponseStepDefinition({ result })]
+            steps: this.steps
         };
 
         return this.addRule(rule);
@@ -471,9 +505,11 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
      * @category Responses
      */
     thenSendJsonRpcError(error: any) {
+        this.steps.push(new JsonRpcResponseStepDefinition({ error }));
+
         const rule = {
             ...this.buildBaseRuleData(),
-            steps: [new JsonRpcResponseStepDefinition({ error })]
+            steps: this.steps
         };
 
         return this.addRule(rule);

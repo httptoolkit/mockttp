@@ -93,6 +93,21 @@ describe("Mockttp rule building", function () {
         expect(response).to.equal('test echo');
     });
 
+    it("should allow manually adding a multi-step rule", async () => {
+        await server.addRequestRules({
+            matchers: [new matchers.SimplePathMatcher('/endpoint')],
+            steps: [
+                new requestSteps.DelayStepDefinition(10),
+                new requestSteps.SimpleStepDefinition(200, '', 'mock response')
+            ]
+        });
+
+        let response = await fetch(server.urlFor('/endpoint'));
+        let responseText = await response.text();
+
+        expect(responseText).to.include('mock response');
+    });
+
     it("should reject rules with no configured matchers", async () => {
         return expect((async () => { // Funky setup to handle sync & async failure for node & browser
             await server.addRequestRules({
@@ -126,7 +141,7 @@ describe("Mockttp rule building", function () {
                 matchers: [new matchers.SimplePathMatcher('/endpoint')],
                 steps: [
                     new requestSteps.SimpleStepDefinition(200),
-                    new requestSteps.SimpleStepDefinition(200)
+                    new requestSteps.DelayStepDefinition(100)
                 ]
             });
         })()).to.be.rejectedWith(

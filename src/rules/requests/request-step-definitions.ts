@@ -1040,6 +1040,23 @@ export class JsonRpcResponseStepDefinition extends Serializable implements Reque
     }
 }
 
+export class DelayStepDefinition extends Serializable implements RequestStepDefinition {
+
+    readonly type = 'delay';
+    static readonly isFinal = false;
+
+    constructor(
+        public readonly delayMs: number
+    ) {
+        super()
+    }
+
+    explain(): string {
+        return `wait ${this.delayMs}ms`;
+    }
+
+}
+
 export const StepDefinitionLookup = {
     'simple': SimpleStepDefinition,
     'callback': CallbackStepDefinition,
@@ -1049,5 +1066,6 @@ export const StepDefinitionLookup = {
     'close-connection': CloseConnectionStepDefinition,
     'reset-connection': ResetConnectionStepDefinition,
     'timeout': TimeoutStepDefinition,
-    'json-rpc-response': JsonRpcResponseStepDefinition
+    'json-rpc-response': JsonRpcResponseStepDefinition,
+    'delay': DelayStepDefinition
 }
