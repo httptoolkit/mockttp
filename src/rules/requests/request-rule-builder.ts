@@ -6,7 +6,7 @@ import { Headers, CompletedRequest, Method, MockedEndpoint, Trailers } from "../
 import type { RequestRuleData } from "./request-rule";
 
 import {
-    SimpleStepDefinition,
+    FixedResponseStepDefinition,
     PassThroughStepDefinition,
     CallbackStepDefinition,
     CallbackResponseResult,
@@ -23,7 +23,7 @@ import {
 } from "./request-step-definitions";
 import { byteLength } from "../../util/util";
 import { BaseRuleBuilder } from "../base-rule-builder";
-import { MethodMatcher, RegexPathMatcher, SimplePathMatcher, WildcardMatcher } from "../matchers";
+import { MethodMatcher, RegexPathMatcher, FlexiblePathMatcher, WildcardMatcher } from "../matchers";
 
 /**
  * @class RequestRuleBuilder
@@ -76,7 +76,7 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
             if (path instanceof RegExp) {
                 this.matchers.push(new RegexPathMatcher(path));
             } else if (typeof path === 'string') {
-                this.matchers.push(new SimplePathMatcher(path));
+                this.matchers.push(new FlexiblePathMatcher(path));
             }
         }
 
@@ -151,7 +151,7 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
             trailers = headersOrTrailers as Trailers | undefined;
         }
 
-        this.steps.push(new SimpleStepDefinition(
+        this.steps.push(new FixedResponseStepDefinition(
             status,
             statusMessage,
             data,
@@ -196,7 +196,7 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
             // connection after the response is sent, which can confuse clients.
         }, headers);
 
-        this.steps.push(new SimpleStepDefinition(status, undefined, jsonData, headers));
+        this.steps.push(new FixedResponseStepDefinition(status, undefined, jsonData, headers));
 
         const rule: RequestRuleData = {
             ...this.buildBaseRuleData(),

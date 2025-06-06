@@ -251,7 +251,7 @@ function validateCustomHeaders(
     }
 }
 
-export class SimpleStepDefinition extends Serializable implements RequestStepDefinition {
+export class FixedResponseStepDefinition extends Serializable implements RequestStepDefinition {
 
     readonly type = 'simple';
     static readonly isFinal = true;
@@ -1058,7 +1058,7 @@ export class DelayStepDefinition extends Serializable implements RequestStepDefi
 }
 
 export const StepDefinitionLookup = {
-    'simple': SimpleStepDefinition,
+    'simple': FixedResponseStepDefinition,
     'callback': CallbackStepDefinition,
     'stream': StreamStepDefinition,
     'file': FileStepDefinition,

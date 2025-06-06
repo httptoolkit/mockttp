@@ -12,8 +12,8 @@ describe("Mockttp rule building", function () {
 
     it("should allow manually adding a single rule", async () => {
         await server.addRequestRules({
-            matchers: [new matchers.SimplePathMatcher('/endpoint')],
-            steps: [new requestSteps.SimpleStepDefinition(200, '', 'mock response')]
+            matchers: [new matchers.FlexiblePathMatcher('/endpoint')],
+            steps: [new requestSteps.FixedResponseStepDefinition(200, '', 'mock response')]
         });
 
         let response = await fetch(server.urlFor('/endpoint'));
@@ -27,8 +27,8 @@ describe("Mockttp rule building", function () {
 
         const rule = await server.addRequestRules({
             id: manualId,
-            matchers: [new matchers.SimplePathMatcher('/endpoint')],
-            steps: [new requestSteps.SimpleStepDefinition(200, '', 'mock response')]
+            matchers: [new matchers.FlexiblePathMatcher('/endpoint')],
+            steps: [new requestSteps.FixedResponseStepDefinition(200, '', 'mock response')]
         });
 
         expect(rule[0].id).to.equal(manualId);
@@ -36,12 +36,12 @@ describe("Mockttp rule building", function () {
 
     it("should allow repeatedly adding rules", async () => {
         await server.addRequestRules({
-            matchers: [new matchers.SimplePathMatcher('/endpoint')],
-            steps: [new requestSteps.SimpleStepDefinition(200, '', 'first mock response')]
+            matchers: [new matchers.FlexiblePathMatcher('/endpoint')],
+            steps: [new requestSteps.FixedResponseStepDefinition(200, '', 'first mock response')]
         });
         await server.addRequestRules({
-            matchers: [new matchers.SimplePathMatcher('/endpoint')],
-            steps: [new requestSteps.SimpleStepDefinition(200, '', 'second mock response')]
+            matchers: [new matchers.FlexiblePathMatcher('/endpoint')],
+            steps: [new requestSteps.FixedResponseStepDefinition(200, '', 'second mock response')]
         });
 
         let firstResponse = await fetch(server.urlFor('/endpoint'));
@@ -55,12 +55,12 @@ describe("Mockttp rule building", function () {
 
     it("should allow completely replacing rules", async () => {
         await server.addRequestRules({
-            matchers: [new matchers.SimplePathMatcher('/endpoint')],
-            steps: [new requestSteps.SimpleStepDefinition(200, '',  'original mock response')]
+            matchers: [new matchers.FlexiblePathMatcher('/endpoint')],
+            steps: [new requestSteps.FixedResponseStepDefinition(200, '',  'original mock response')]
         });
         await server.setRequestRules({
-            matchers: [new matchers.SimplePathMatcher('/endpoint')],
-            steps: [new requestSteps.SimpleStepDefinition(200, '', 'replacement mock response')]
+            matchers: [new matchers.FlexiblePathMatcher('/endpoint')],
+            steps: [new requestSteps.FixedResponseStepDefinition(200, '', 'replacement mock response')]
         });
 
         let firstResponse = await fetch(server.urlFor('/endpoint'));
@@ -95,10 +95,10 @@ describe("Mockttp rule building", function () {
 
     it("should allow manually adding a multi-step rule", async () => {
         await server.addRequestRules({
-            matchers: [new matchers.SimplePathMatcher('/endpoint')],
+            matchers: [new matchers.FlexiblePathMatcher('/endpoint')],
             steps: [
                 new requestSteps.DelayStepDefinition(10),
-                new requestSteps.SimpleStepDefinition(200, '', 'mock response')
+                new requestSteps.FixedResponseStepDefinition(200, '', 'mock response')
             ]
         });
 
@@ -112,7 +112,7 @@ describe("Mockttp rule building", function () {
         return expect((async () => { // Funky setup to handle sync & async failure for node & browser
             await server.addRequestRules({
                 matchers: [],
-                steps: [new requestSteps.SimpleStepDefinition(200, 'mock response')]
+                steps: [new requestSteps.FixedResponseStepDefinition(200, 'mock response')]
             })
         })()).to.be.rejectedWith('Cannot create a rule without at least one matcher');
     });
@@ -120,7 +120,7 @@ describe("Mockttp rule building", function () {
     it("should reject rules with no steps value", async () => {
         return expect((async () => { // Funky setup to handle sync & async failure for node & browser
             await server.addRequestRules({
-                matchers: [new matchers.SimplePathMatcher('/')],
+                matchers: [new matchers.FlexiblePathMatcher('/')],
                 steps: null as any
             })
         })()).to.be.rejectedWith('Cannot create a rule with no steps');
@@ -129,7 +129,7 @@ describe("Mockttp rule building", function () {
     it("should reject rules with an empty steps list", async () => {
         return expect((async () => { // Funky setup to handle sync & async failure for node & browser
             await server.addRequestRules({
-                matchers: [new matchers.SimplePathMatcher('/')],
+                matchers: [new matchers.FlexiblePathMatcher('/')],
                 steps: []
             })
         })()).to.be.rejectedWith('Cannot create a rule with no steps');
@@ -138,9 +138,9 @@ describe("Mockttp rule building", function () {
     it("should reject rules with non-final final-only steps", async () => {
         return expect((async () => { // Funky setup to handle sync & async failure for node & browser
             await server.addRequestRules({
-                matchers: [new matchers.SimplePathMatcher('/endpoint')],
+                matchers: [new matchers.FlexiblePathMatcher('/endpoint')],
                 steps: [
-                    new requestSteps.SimpleStepDefinition(200),
+                    new requestSteps.FixedResponseStepDefinition(200),
                     new requestSteps.DelayStepDefinition(100)
                 ]
             });

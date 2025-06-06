@@ -113,7 +113,7 @@ import {
     SerializedPassThroughData,
     SerializedStreamStepData,
     SERIALIZED_OMIT,
-    SimpleStepDefinition,
+    FixedResponseStepDefinition,
     StreamStepDefinition,
     TimeoutStepDefinition,
     DelayStepDefinition
@@ -165,7 +165,7 @@ export interface RequestStepOptions {
     emitEventCallback?: (type: string, event: unknown) => void;
 }
 
-export class SimpleStep extends SimpleStepDefinition {
+export class FixedResponseStep extends FixedResponseStepDefinition {
     async handle(_request: OngoingRequest, response: OngoingResponse) {
         if (this.headers) dropDefaultHeaders(response);
         writeHead(response, this.status, this.statusMessage, this.headers);
@@ -1405,7 +1405,7 @@ export class DelayStep extends DelayStepDefinition {
 }
 
 export const StepLookup: typeof StepDefinitionLookup = {
-    'simple': SimpleStep,
+    'simple': FixedResponseStep,
     'callback': CallbackStep,
     'stream': StreamStep,
     'file': FileStep,

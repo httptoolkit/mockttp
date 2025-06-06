@@ -189,7 +189,7 @@ export class PortMatcher extends Serializable implements RequestMatcher {
     }
 }
 
-export class SimplePathMatcher extends Serializable implements RequestMatcher {
+export class FlexiblePathMatcher extends Serializable implements RequestMatcher {
     readonly type = 'simple-path';
 
     constructor(
@@ -619,7 +619,7 @@ export const MatcherLookup = {
     'host': HostMatcher,
     'hostname': HostnameMatcher,
     'port': PortMatcher,
-    'simple-path': SimplePathMatcher,
+    'simple-path': FlexiblePathMatcher,
     'regex-path': RegexPathMatcher,
     'regex-url': RegexUrlMatcher,
     'header': HeaderMatcher,
