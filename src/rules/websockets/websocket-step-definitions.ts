@@ -20,25 +20,32 @@ import {
     CADefinition
 } from '../passthrough-handling-definitions';
 import {
-    CloseConnectionStepDefinition,
-    DelayStepDefinition,
-    ResetConnectionStepDefinition,
-    TimeoutStepDefinition
+    CloseConnectionStep,
+    DelayStep,
+    ResetConnectionStep,
+    TimeoutStep
 } from '../requests/request-step-definitions';
 
 /*
 This file defines websocket step *definitions*, which includes everything necessary to define
-and serialize a websockt step's behaviour, but doesn't include the actual handling logic (which
-lives in ./websocket-steps instead). This is intended to allow tree-shaking in browser usage
-or remote clients to import only the necessary code, with no need to include all the real
-network processing and handling code that is only used at HTTP-runtime, so isn't relevant when
-defining rules.
+and serialize a websocket step's behaviour, but doesn't include the actual handling logic (which
+lives in the Impl classes ./websocket-steps instead). This is intended to allow tree-shaking
+in browser usage or remote clients, importing only the necessary code, with no need to include
+all the real request-processing and handling code that is only used at HTTP-runtime, so isn't
+relevant when defining rules.
 
-Every WebSocketStep extends its definition, simply adding a handle() method, which handles
+Every WebSocketStepImpl extends its definition, simply adding a handle() method, which handles
 requests according to the configuration, and adding a deserialize static method that takes
 the serialized output from the serialize() methods defined here and creates a working step.
 */
 
+/**
+ * The definition of a websocket rule step, which can be passed to Mockttp to define
+ * a rule.
+ *
+ * Implementation of the step is not included in the definition classes, but
+ * instead exists in an *Impl class defined separately and used internally.
+ */
 export interface WebSocketStepDefinition extends Explainable, Serializable {
     type: keyof typeof WsStepDefinitionLookup;
 }
@@ -59,7 +66,7 @@ export interface SerializedPassThroughWebSocketData {
     clientCertificateHostMap?: { [host: string]: { pfx: string, passphrase?: string } };
 }
 
-export class PassThroughWebSocketStepDefinition extends Serializable implements WebSocketStepDefinition {
+export class PassThroughWebSocketStep extends Serializable implements WebSocketStepDefinition {
 
     readonly type = 'ws-passthrough';
     static readonly isFinal = true;
@@ -144,7 +151,7 @@ export class PassThroughWebSocketStepDefinition extends Serializable implements 
     }
 }
 
-export class EchoWebSocketStepDefinition extends Serializable implements WebSocketStepDefinition {
+export class EchoWebSocketStep extends Serializable implements WebSocketStepDefinition {
 
     readonly type = 'ws-echo';
     static readonly isFinal = true;
@@ -154,7 +161,7 @@ export class EchoWebSocketStepDefinition extends Serializable implements WebSock
     }
 }
 
-export class ListenWebSocketStepDefinition extends Serializable implements WebSocketStepDefinition {
+export class ListenWebSocketStep extends Serializable implements WebSocketStepDefinition {
 
     readonly type = 'ws-listen';
     static readonly isFinal = true;
@@ -164,7 +171,7 @@ export class ListenWebSocketStepDefinition extends Serializable implements WebSo
     }
 }
 
-export class RejectWebSocketStepDefinition extends Serializable implements WebSocketStepDefinition {
+export class RejectWebSocketStep extends Serializable implements WebSocketStepDefinition {
 
     readonly type = 'ws-reject';
     static readonly isFinal = true;
@@ -187,19 +194,19 @@ export class RejectWebSocketStepDefinition extends Serializable implements WebSo
 // These three work equally well for HTTP requests as websockets, but it's
 // useful to reexport there here for consistency.
 export {
-    CloseConnectionStepDefinition,
-    ResetConnectionStepDefinition,
-    TimeoutStepDefinition,
-    DelayStepDefinition
+    CloseConnectionStep,
+    ResetConnectionStep,
+    TimeoutStep,
+    DelayStep
 };
 
 export const WsStepDefinitionLookup = {
-    'ws-passthrough': PassThroughWebSocketStepDefinition,
-    'ws-echo': EchoWebSocketStepDefinition,
-    'ws-listen': ListenWebSocketStepDefinition,
-    'ws-reject': RejectWebSocketStepDefinition,
-    'close-connection': CloseConnectionStepDefinition,
-    'reset-connection': ResetConnectionStepDefinition,
-    'timeout': TimeoutStepDefinition,
-    'delay': DelayStepDefinition
+    'ws-passthrough': PassThroughWebSocketStep,
+    'ws-echo': EchoWebSocketStep,
+    'ws-listen': ListenWebSocketStep,
+    'ws-reject': RejectWebSocketStep,
+    'close-connection': CloseConnectionStep,
+    'reset-connection': ResetConnectionStep,
+    'timeout': TimeoutStep,
+    'delay': DelayStep
 };

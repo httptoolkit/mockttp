@@ -92,31 +92,31 @@ import {
 import {
     BeforePassthroughRequestRequest,
     BeforePassthroughResponseRequest,
-    CallbackStepDefinition,
+    CallbackStep,
     CallbackRequestMessage,
     CallbackRequestResult,
     CallbackResponseMessageResult,
     CallbackResponseResult,
-    CloseConnectionStepDefinition,
-    FileStepDefinition,
+    CloseConnectionStep,
+    FileStep,
     StepDefinitionLookup,
-    JsonRpcResponseStepDefinition,
-    PassThroughStepDefinition,
+    JsonRpcResponseStep,
+    PassThroughStep,
     PassThroughStepOptions,
     PassThroughResponse,
     RequestStepDefinition,
     RequestTransform,
-    ResetConnectionStepDefinition,
+    ResetConnectionStep,
     ResponseTransform,
     SerializedBuffer,
     SerializedCallbackStepData,
     SerializedPassThroughData,
     SerializedStreamStepData,
     SERIALIZED_OMIT,
-    FixedResponseStepDefinition,
-    StreamStepDefinition,
-    TimeoutStepDefinition,
-    DelayStepDefinition
+    FixedResponseStep,
+    StreamStep,
+    TimeoutStep,
+    DelayStep
 } from './request-step-definitions';
 
 // Re-export various type definitions. This is mostly for compatibility with external
@@ -150,7 +150,7 @@ function isSerializedBuffer(obj: any): obj is SerializedBuffer {
     return obj?.type === 'Buffer' && !!obj.data;
 }
 
-export interface RequestStep extends RequestStepDefinition {
+export interface RequestStepImpl extends RequestStepDefinition {
     handle(
         request: OngoingRequest,
         response: OngoingResponse,
@@ -165,7 +165,7 @@ export interface RequestStepOptions {
     emitEventCallback?: (type: string, event: unknown) => void;
 }
 
-export class FixedResponseStep extends FixedResponseStepDefinition {
+export class FixedResponseStepImpl extends FixedResponseStep {
     async handle(_request: OngoingRequest, response: OngoingResponse) {
         if (this.headers) dropDefaultHeaders(response);
         writeHead(response, this.status, this.statusMessage, this.headers);
@@ -223,7 +223,7 @@ async function writeResponseFromCallback(
     response.end(result.rawBody || "");
 }
 
-export class CallbackStep extends CallbackStepDefinition {
+export class CallbackStepImpl extends CallbackStep {
 
     async handle(request: OngoingRequest, response: OngoingResponse) {
         let req = await waitForCompletedRequest(request);
@@ -277,7 +277,7 @@ export class CallbackStep extends CallbackStepDefinition {
     }
 }
 
-export class StreamStep extends StreamStepDefinition {
+export class StreamStepImpl extends StreamStep {
 
     async handle(_request: OngoingRequest, response: OngoingResponse) {
         if (!this.stream.done) {
@@ -343,7 +343,7 @@ export class StreamStep extends StreamStepDefinition {
     }
 }
 
-export class FileStep extends FileStepDefinition {
+export class FileStepImpl extends FileStep {
     async handle(_request: OngoingRequest, response: OngoingResponse) {
         // Read the file first, to ensure we error cleanly if it's unavailable
         const fileContents = await fs.readFile(this.filePath);
@@ -396,7 +396,7 @@ const mapOmitToUndefined = <T extends { [key: string]: any }>(
             : v
     );
 
-export class PassThroughStep extends PassThroughStepDefinition {
+export class PassThroughStepImpl extends PassThroughStep {
 
     private _trustedCACertificates: MaybePromise<Array<string> | undefined>;
     private async trustedCACertificates(): Promise<Array<string> | undefined> {
@@ -1340,7 +1340,7 @@ export class PassThroughStep extends PassThroughStepDefinition {
     }
 }
 
-export class CloseConnectionStep extends CloseConnectionStepDefinition {
+export class CloseConnectionStepImpl extends CloseConnectionStep {
     async handle(request: OngoingRequest) {
         const socket: net.Socket = (request as any).socket;
         socket.end();
@@ -1348,7 +1348,7 @@ export class CloseConnectionStep extends CloseConnectionStepDefinition {
     }
 }
 
-export class ResetConnectionStep extends ResetConnectionStepDefinition {
+export class ResetConnectionStepImpl extends ResetConnectionStep {
     constructor() {
         super();
         requireSocketResetSupport();
@@ -1369,14 +1369,14 @@ export class ResetConnectionStep extends ResetConnectionStepDefinition {
     }
 }
 
-export class TimeoutStep extends TimeoutStepDefinition {
+export class TimeoutStepImpl extends TimeoutStep {
     async handle() {
         // Do nothing, leaving the socket open but never sending a response.
         return new Promise<void>(() => {});
     }
 }
 
-export class JsonRpcResponseStep extends JsonRpcResponseStepDefinition {
+export class JsonRpcResponseStepImpl extends JsonRpcResponseStep {
     async handle(request: OngoingRequest, response: OngoingResponse) {
         const data: any = await request.body.asJson()
             .catch(() => {}); // Handle parsing errors with the check below
@@ -1397,7 +1397,7 @@ export class JsonRpcResponseStep extends JsonRpcResponseStepDefinition {
     }
 }
 
-export class DelayStep extends DelayStepDefinition {
+export class DelayStepImpl extends DelayStep {
     async handle(): Promise<{ continue: true }> {
         await delay(this.delayMs);
         return { continue: true };
@@ -1405,14 +1405,14 @@ export class DelayStep extends DelayStepDefinition {
 }
 
 export const StepLookup: typeof StepDefinitionLookup = {
-    'simple': FixedResponseStep,
-    'callback': CallbackStep,
-    'stream': StreamStep,
-    'file': FileStep,
-    'passthrough': PassThroughStep,
-    'close-connection': CloseConnectionStep,
-    'reset-connection': ResetConnectionStep,
-    'timeout': TimeoutStep,
-    'json-rpc-response': JsonRpcResponseStep,
-    'delay': DelayStep
+    'simple': FixedResponseStepImpl,
+    'callback': CallbackStepImpl,
+    'stream': StreamStepImpl,
+    'file': FileStepImpl,
+    'passthrough': PassThroughStepImpl,
+    'close-connection': CloseConnectionStepImpl,
+    'reset-connection': ResetConnectionStepImpl,
+    'timeout': TimeoutStepImpl,
+    'json-rpc-response': JsonRpcResponseStepImpl,
+    'delay': DelayStepImpl
 }

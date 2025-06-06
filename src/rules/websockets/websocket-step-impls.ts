@@ -16,12 +16,12 @@ import {
 import { OngoingRequest, RawHeaders } from "../../types";
 
 import {
-    CloseConnectionStep,
-    DelayStep,
     RequestStepOptions,
-    ResetConnectionStep,
-    TimeoutStep
-} from '../requests/request-steps';
+    CloseConnectionStepImpl,
+    DelayStepImpl,
+    ResetConnectionStepImpl,
+    TimeoutStepImpl
+} from '../requests/request-step-impls';
 import { getEffectivePort } from '../../util/url';
 import { resetOrDestroy } from '../../util/socket-util';
 import { isHttp2 } from '../../util/request-utils';
@@ -47,17 +47,17 @@ import {
 } from '../passthrough-handling';
 
 import {
-    EchoWebSocketStepDefinition,
-    ListenWebSocketStepDefinition,
-    PassThroughWebSocketStepDefinition,
+    EchoWebSocketStep,
+    ListenWebSocketStep,
+    PassThroughWebSocketStep,
     PassThroughWebSocketStepOptions,
-    RejectWebSocketStepDefinition,
+    RejectWebSocketStep,
     SerializedPassThroughWebSocketData,
     WebSocketStepDefinition,
     WsStepDefinitionLookup,
 } from './websocket-step-definitions';
 
-export interface WebSocketStep extends WebSocketStepDefinition {
+export interface WebSocketStepImpl extends WebSocketStepDefinition {
     handle(
         // The incoming upgrade request
         request: OngoingRequest & http.IncomingMessage,
@@ -212,7 +212,7 @@ const rawResponse = (
 
 export { PassThroughWebSocketStepOptions };
 
-export class PassThroughWebSocketStep extends PassThroughWebSocketStepDefinition {
+export class PassThroughWebSocketStepImpl extends PassThroughWebSocketStep {
 
     private wsServer?: WebSocket.Server;
 
@@ -483,7 +483,7 @@ export class PassThroughWebSocketStep extends PassThroughWebSocketStepDefinition
     }
 }
 
-export class EchoWebSocketStep extends EchoWebSocketStepDefinition {
+export class EchoWebSocketStepImpl extends EchoWebSocketStep {
 
     private wsServer?: WebSocket.Server;
 
@@ -506,7 +506,7 @@ export class EchoWebSocketStep extends EchoWebSocketStepDefinition {
     }
 }
 
-export class ListenWebSocketStep extends ListenWebSocketStepDefinition {
+export class ListenWebSocketStepImpl extends ListenWebSocketStep {
 
     private wsServer?: WebSocket.Server;
 
@@ -530,7 +530,7 @@ export class ListenWebSocketStep extends ListenWebSocketStepDefinition {
     }
 }
 
-export class RejectWebSocketStep extends RejectWebSocketStepDefinition {
+export class RejectWebSocketStepImpl extends RejectWebSocketStep {
 
     async handle(req: OngoingRequest, socket: net.Socket) {
         socket.write(rawResponse(this.statusCode, this.statusMessage, objectHeadersToRaw(this.headers)));
@@ -543,19 +543,19 @@ export class RejectWebSocketStep extends RejectWebSocketStepDefinition {
 // These three work equally well for HTTP requests as websockets, but it's
 // useful to reexport there here for consistency.
 export {
-    CloseConnectionStep,
-    ResetConnectionStep,
-    TimeoutStep,
-    DelayStep
+    CloseConnectionStepImpl,
+    ResetConnectionStepImpl,
+    TimeoutStepImpl,
+    DelayStepImpl
 };
 
 export const WsStepLookup: typeof WsStepDefinitionLookup = {
-    'ws-passthrough': PassThroughWebSocketStep,
-    'ws-echo': EchoWebSocketStep,
-    'ws-listen': ListenWebSocketStep,
-    'ws-reject': RejectWebSocketStep,
-    'close-connection': CloseConnectionStep,
-    'reset-connection': ResetConnectionStep,
-    'timeout': TimeoutStep,
-    'delay': DelayStep
+    'ws-passthrough': PassThroughWebSocketStepImpl,
+    'ws-echo': EchoWebSocketStepImpl,
+    'ws-listen': ListenWebSocketStepImpl,
+    'ws-reject': RejectWebSocketStepImpl,
+    'close-connection': CloseConnectionStepImpl,
+    'reset-connection': ResetConnectionStepImpl,
+    'timeout': TimeoutStepImpl,
+    'delay': DelayStepImpl
 };

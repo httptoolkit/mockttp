@@ -86,7 +86,7 @@ import {
     pairFlatRawHeaders,
     rawHeadersToObject
 } from "../util/header-utils";
-import { AbortError } from "../rules/requests/request-steps";
+import { AbortError } from "../rules/requests/request-step-impls";
 import { WebSocketRuleData, WebSocketRule } from "../rules/websockets/websocket-rule";
 import { SocksServerOptions } from "./socks-server";
 

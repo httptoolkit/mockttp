@@ -44,16 +44,23 @@ import {
 /*
 This file defines request step *definitions*, which includes everything necessary to define
 and serialize their behaviour, but doesn't include the actual handling logic (which
-lives in ./request-steps instead). This is intended to allow tree-shaking in browser usage
-or remote clients to import only the necessary code, with no need to include all the real
-request-processing and handling code that is only used at HTTP-runtime, so isn't relevant when
-defining rules.
+lives in the Impl classes in ./request-steps instead). This is intended to allow tree-shaking
+in browser usage or remote clients, importing only the necessary code, with no need to include
+all the real request-processing and handling code that is only used at HTTP-runtime, so isn't
+relevant when defining rules.
 
-Every RequestStep extends its definition, simply adding a handle() method, which handles
+Every RequestStepImpl extends its definition, simply adding a handle() method, which handles
 requests according to the configuration, and adding a deserialize static method that takes
 the serialized output from the serialize() methods defined here and creates a working step.
 */
 
+/**
+ * The definition of a request rule step, which can be passed to Mockttp to define
+ * a rule.
+ *
+ * Implementation of the step is not included in the definition classes, but
+ * instead exists in an *Impl class defined separately and used internally.
+ */
 export interface RequestStepDefinition extends Explainable, Serializable {
     type: keyof typeof StepDefinitionLookup;
 }
@@ -251,7 +258,7 @@ function validateCustomHeaders(
     }
 }
 
-export class FixedResponseStepDefinition extends Serializable implements RequestStepDefinition {
+export class FixedResponseStep extends Serializable implements RequestStepDefinition {
 
     readonly type = 'simple';
     static readonly isFinal = true;
@@ -301,7 +308,7 @@ export interface CallbackRequestMessage {
     args: [Replace<CompletedRequest, { body: SerializedBody }>];
 }
 
-export class CallbackStepDefinition extends Serializable implements RequestStepDefinition {
+export class CallbackStep extends Serializable implements RequestStepDefinition {
 
     readonly type = 'callback';
     static readonly isFinal = true;
@@ -359,7 +366,7 @@ type StreamStepEventMessage =
     { type: 'arraybuffer', value: string } |
     { type: 'nil' };
 
-export class StreamStepDefinition extends Serializable implements RequestStepDefinition {
+export class StreamStep extends Serializable implements RequestStepDefinition {
 
     readonly type = 'stream';
     static readonly isFinal = true;
@@ -421,7 +428,7 @@ export class StreamStepDefinition extends Serializable implements RequestStepDef
     }
 }
 
-export class FileStepDefinition extends Serializable implements RequestStepDefinition {
+export class FileStep extends Serializable implements RequestStepDefinition {
 
     readonly type = 'file';
     static readonly isFinal = true;
@@ -722,7 +729,7 @@ export interface BeforePassthroughResponseRequest {
  */
 export const SERIALIZED_OMIT = "__mockttp__transform__omit__";
 
-export class PassThroughStepDefinition extends Serializable implements RequestStepDefinition {
+export class PassThroughStep extends Serializable implements RequestStepDefinition {
 
     readonly type = 'passthrough';
     static readonly isFinal = true;
@@ -988,7 +995,7 @@ export class PassThroughStepDefinition extends Serializable implements RequestSt
     }
 }
 
-export class CloseConnectionStepDefinition extends Serializable implements RequestStepDefinition {
+export class CloseConnectionStep extends Serializable implements RequestStepDefinition {
     readonly type = 'close-connection';
     static readonly isFinal = true;
 
@@ -997,7 +1004,7 @@ export class CloseConnectionStepDefinition extends Serializable implements Reque
     }
 }
 
-export class ResetConnectionStepDefinition extends Serializable implements RequestStepDefinition {
+export class ResetConnectionStep extends Serializable implements RequestStepDefinition {
     readonly type = 'reset-connection';
     static readonly isFinal = true;
 
@@ -1006,7 +1013,7 @@ export class ResetConnectionStepDefinition extends Serializable implements Reque
     }
 }
 
-export class TimeoutStepDefinition extends Serializable implements RequestStepDefinition {
+export class TimeoutStep extends Serializable implements RequestStepDefinition {
     readonly type = 'timeout';
     static readonly isFinal = true;
 
@@ -1015,7 +1022,7 @@ export class TimeoutStepDefinition extends Serializable implements RequestStepDe
     }
 }
 
-export class JsonRpcResponseStepDefinition extends Serializable implements RequestStepDefinition {
+export class JsonRpcResponseStep extends Serializable implements RequestStepDefinition {
     readonly type = 'json-rpc-response';
     static readonly isFinal = true;
 
@@ -1040,7 +1047,7 @@ export class JsonRpcResponseStepDefinition extends Serializable implements Reque
     }
 }
 
-export class DelayStepDefinition extends Serializable implements RequestStepDefinition {
+export class DelayStep extends Serializable implements RequestStepDefinition {
 
     readonly type = 'delay';
     static readonly isFinal = false;
@@ -1058,14 +1065,14 @@ export class DelayStepDefinition extends Serializable implements RequestStepDefi
 }
 
 export const StepDefinitionLookup = {
-    'simple': FixedResponseStepDefinition,
-    'callback': CallbackStepDefinition,
-    'stream': StreamStepDefinition,
-    'file': FileStepDefinition,
-    'passthrough': PassThroughStepDefinition,
-    'close-connection': CloseConnectionStepDefinition,
-    'reset-connection': ResetConnectionStepDefinition,
-    'timeout': TimeoutStepDefinition,
-    'json-rpc-response': JsonRpcResponseStepDefinition,
-    'delay': DelayStepDefinition
+    'simple': FixedResponseStep,
+    'callback': CallbackStep,
+    'stream': StreamStep,
+    'file': FileStep,
+    'passthrough': PassThroughStep,
+    'close-connection': CloseConnectionStep,
+    'reset-connection': ResetConnectionStep,
+    'timeout': TimeoutStep,
+    'json-rpc-response': JsonRpcResponseStep,
+    'delay': DelayStep
 }

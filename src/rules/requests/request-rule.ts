@@ -7,7 +7,7 @@ import { MaybePromise } from '@httptoolkit/util';
 
 import * as matchers from "../matchers";
 import { type RequestStepDefinition } from "./request-step-definitions";
-import { StepLookup, RequestStep } from "./request-steps";
+import { StepLookup, RequestStepImpl } from "./request-step-impls";
 import * as completionCheckers from "../completion-checkers";
 import { validateMockRuleData } from '../rule-serialization';
 
@@ -29,13 +29,13 @@ export interface RequestRuleData {
     id?: string;
     priority?: number; // Higher is higher, by default 0 is fallback, 1 is normal, must be positive
     matchers: matchers.RequestMatcher[];
-    steps: Array<RequestStep | RequestStepDefinition>;
+    steps: Array<RequestStepDefinition>;
     completionChecker?: completionCheckers.RuleCompletionChecker;
 }
 
 export class RequestRule implements RequestRule {
     private matchers: matchers.RequestMatcher[];
-    private steps: Array<RequestStep>;
+    private steps: Array<RequestStepImpl>;
     private completionChecker?: completionCheckers.RuleCompletionChecker;
 
     public id: string;
@@ -52,12 +52,10 @@ export class RequestRule implements RequestRule {
         this.completionChecker = data.completionChecker;
 
         this.steps = data.steps.map((stepDefinition, i) => {
-            const step = 'handle' in stepDefinition
-                ? stepDefinition
-                : Object.assign(
-                    Object.create(StepLookup[stepDefinition.type].prototype),
-                    stepDefinition
-                ) as RequestStep;
+            const step = Object.assign(
+                Object.create(StepLookup[stepDefinition.type].prototype),
+                stepDefinition
+            ) as RequestStepImpl;
 
             if (StepLookup[step.type].isFinal && i !== data.steps.length - 1) {
                 throw new Error(

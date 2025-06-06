@@ -20,7 +20,7 @@ import {
     CallbackRequestResult,
     CallbackResponseMessageResult
 } from './requests/request-step-definitions';
-import { AbortError } from './requests/request-steps';
+import { AbortError } from './requests/request-step-impls';
 import {
     CADefinition,
     PassThroughLookupOptions

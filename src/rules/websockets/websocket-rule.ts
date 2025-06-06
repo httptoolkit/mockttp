@@ -16,7 +16,7 @@ import { validateMockRuleData } from '../rule-serialization';
 
 import * as matchers from "../matchers";
 import * as completionCheckers from "../completion-checkers";
-import { WebSocketStep, WsStepLookup } from "./websocket-steps";
+import { WebSocketStepImpl, WsStepLookup } from "./websocket-step-impls";
 import type { WebSocketStepDefinition } from "./websocket-step-definitions";
 
 // The internal representation of a mocked endpoint
@@ -42,13 +42,13 @@ export interface WebSocketRuleData {
     id?: string;
     priority?: number; // Higher is higher, by default 0 is fallback, 1 is normal, must be positive
     matchers: matchers.RequestMatcher[];
-    steps: Array<WebSocketStep | WebSocketStepDefinition>;
+    steps: Array<WebSocketStepDefinition>;
     completionChecker?: completionCheckers.RuleCompletionChecker;
 }
 
 export class WebSocketRule implements WebSocketRule {
     private matchers: matchers.RequestMatcher[];
-    private steps: WebSocketStep[];
+    private steps: WebSocketStepImpl[];
     private completionChecker?: completionCheckers.RuleCompletionChecker;
 
     public id: string;
@@ -65,12 +65,10 @@ export class WebSocketRule implements WebSocketRule {
         this.completionChecker = data.completionChecker;
 
         this.steps = data.steps.map((stepDefinition, i) => {
-            const step = 'handle' in stepDefinition
-                ? stepDefinition
-                : Object.assign(
-                    Object.create(WsStepLookup[stepDefinition.type].prototype),
-                    stepDefinition
-                ) as WebSocketStep;
+            const step = Object.assign(
+                Object.create(WsStepLookup[stepDefinition.type].prototype),
+                stepDefinition
+            ) as WebSocketStepImpl;
 
             if (WsStepLookup[step.type].isFinal && i !== data.steps.length - 1) {
                 throw new Error(

@@ -10,8 +10,8 @@ import type { WebSocketStepDefinition } from "./websockets/websocket-step-defini
 import * as matchers from "./matchers";
 import * as completionCheckers from "./completion-checkers";
 
-import { RequestStep, StepLookup } from "./requests/request-steps";
-import { WsStepLookup } from './websockets/websocket-steps';
+import { RequestStepImpl, StepLookup } from "./requests/request-step-impls";
+import { WsStepLookup } from './websockets/websocket-step-impls';
 
 import { RuleParameters } from "./rule-parameters";
 import { BodySerializer } from "../serialization/body-serialization";

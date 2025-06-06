@@ -26,18 +26,16 @@ export type {
 
 // Export rule data builders & type definitions:
 import * as matchers from './rules/matchers';
-import type { RequestStep, RequestStepOptions } from './rules/requests/request-steps';
 import * as requestStepDefinitions from './rules/requests/request-step-definitions';
-import type { WebSocketStep } from './rules/websockets/websocket-steps';
 import * as webSocketStepDefinitions from './rules/websockets/websocket-step-definitions';
 import * as completionCheckers from './rules/completion-checkers';
 
+export type RequestStep = requestStepDefinitions.RequestStepDefinition;
+export type WebSocketStep = webSocketStepDefinitions.WebSocketStepDefinition;
+
 export {
     matchers,
-    RequestStep,
-    RequestStepOptions,
     requestStepDefinitions as requestSteps,
-    WebSocketStep,
     webSocketStepDefinitions as webSocketSteps,
     completionCheckers
 };

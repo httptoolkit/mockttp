@@ -2,15 +2,15 @@ import { MockedEndpoint, Headers } from "../../types";
 import type { WebSocketRuleData } from "./websocket-rule";
 
 import {
-    PassThroughWebSocketStepDefinition,
-    TimeoutStepDefinition,
-    CloseConnectionStepDefinition,
-    ResetConnectionStepDefinition,
+    PassThroughWebSocketStep,
+    TimeoutStep,
+    CloseConnectionStep,
+    ResetConnectionStep,
     PassThroughWebSocketStepOptions,
-    RejectWebSocketStepDefinition,
-    EchoWebSocketStepDefinition,
-    ListenWebSocketStepDefinition,
-    DelayStepDefinition,
+    RejectWebSocketStep,
+    EchoWebSocketStep,
+    ListenWebSocketStep,
+    DelayStep,
     WebSocketStepDefinition
 } from './websocket-step-definitions';
 
@@ -56,7 +56,7 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
      * Add a delay (in milliseconds) before the next step in the rule
      */
     waitFor(ms: number): this {
-        this.steps.push(new DelayStepDefinition(ms));
+        this.steps.push(new DelayStep(ms));
         return this;
     }
 
@@ -80,7 +80,7 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
      * @category Responses
      */
     thenPassThrough(options: PassThroughWebSocketStepOptions = {}): Promise<MockedEndpoint> {
-        this.steps.push(new PassThroughWebSocketStepDefinition(options));
+        this.steps.push(new PassThroughWebSocketStep(options));
 
         const rule: WebSocketRuleData = {
             ...this.buildBaseRuleData(),
@@ -120,7 +120,7 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
             forwarding?: Omit<PassThroughWebSocketStepOptions['forwarding'], 'targetHost'>
         } = {}
     ): Promise<MockedEndpoint> {
-        this.steps.push(new PassThroughWebSocketStepDefinition({
+        this.steps.push(new PassThroughWebSocketStep({
             ...options,
             forwarding: {
                 ...options.forwarding,
@@ -151,7 +151,7 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
      * @category Responses
      */
     thenEcho(): Promise<MockedEndpoint> {
-        this.steps.push(new EchoWebSocketStepDefinition());
+        this.steps.push(new EchoWebSocketStep());
 
         const rule: WebSocketRuleData = {
             ...this.buildBaseRuleData(),
@@ -176,7 +176,7 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
      * @category Responses
      */
     thenPassivelyListen(): Promise<MockedEndpoint> {
-        this.steps.push(new ListenWebSocketStepDefinition());
+        this.steps.push(new ListenWebSocketStep());
 
         const rule: WebSocketRuleData = {
             ...this.buildBaseRuleData(),
@@ -207,7 +207,7 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
         headers?: Headers,
         body?: Buffer | string
     ): Promise<MockedEndpoint> {
-        this.steps.push(new RejectWebSocketStepDefinition(
+        this.steps.push(new RejectWebSocketStep(
             statusCode,
             statusMessage,
             headers,
@@ -237,7 +237,7 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
      * @category Responses
      */
     thenCloseConnection(): Promise<MockedEndpoint> {
-        this.steps.push(new CloseConnectionStepDefinition());
+        this.steps.push(new CloseConnectionStep());
 
         const rule: WebSocketRuleData = {
             ...this.buildBaseRuleData(),
@@ -266,7 +266,7 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
      * @category Responses
      */
     thenResetConnection(): Promise<MockedEndpoint> {
-        this.steps.push(new ResetConnectionStepDefinition());
+        this.steps.push(new ResetConnectionStep());
 
         const rule: WebSocketRuleData = {
             ...this.buildBaseRuleData(),
@@ -291,7 +291,7 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
      * @category Responses
      */
     thenTimeout(): Promise<MockedEndpoint> {
-        this.steps.push(new TimeoutStepDefinition());
+        this.steps.push(new TimeoutStep());
 
         const rule: WebSocketRuleData = {
             ...this.buildBaseRuleData(),
