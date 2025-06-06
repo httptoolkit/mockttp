@@ -10,7 +10,6 @@ import {
     openRawTlsSocket,
     http2ProxyRequest,
     nodeSatisfies,
-    SOCKET_RESET_SUPPORTED,
     BROKEN_H1_OVER_H2_TUNNELLING
 } from "../../test-utils";
 
@@ -33,14 +32,12 @@ describe("Broken response handlers", function () {
         });
 
         it("should allow forcibly resetting the connection", async function () {
-            if (!nodeSatisfies(SOCKET_RESET_SUPPORTED)) this.skip();
-
             await server.forGet('/mocked-endpoint').thenResetConnection();
 
             let result = await fetch(server.urlFor('/mocked-endpoint')).catch(e => e);
 
             expect(result).to.be.instanceof(Error);
-            expect(result.message).to.contain('read ECONNRESET');
+            expect(result.message).to.contain(isNode ? 'read ECONNRESET' : 'Failed to fetch');
         });
 
 
@@ -71,8 +68,6 @@ describe("Broken response handlers", function () {
 
         nodeOnly(() => {
             it("should allow forcibly closing proxied connections", async function () {
-                if (!nodeSatisfies(SOCKET_RESET_SUPPORTED)) this.skip();
-
                 await server.forGet('example.com').thenResetConnection();
 
                 const tunnel = await openRawTlsSocket(server);
@@ -93,8 +88,6 @@ describe("Broken response handlers", function () {
             });
 
             it("should allow forcibly closing h2-over-h2 proxy connections", async function () {
-                if (!nodeSatisfies(SOCKET_RESET_SUPPORTED)) this.skip();
-
                 await server.forGet('example.com').thenResetConnection();
 
                 const response: any = await http2ProxyRequest(server, `https://example.com`)
@@ -107,7 +100,6 @@ describe("Broken response handlers", function () {
             });
 
             it("should allow forcibly closing h1.1-over-h2 proxy connections", async function () {
-                if (!nodeSatisfies(SOCKET_RESET_SUPPORTED)) this.skip();
                 if (nodeSatisfies(BROKEN_H1_OVER_H2_TUNNELLING)) this.skip();
 
                 await server.forGet('example.com').thenResetConnection();

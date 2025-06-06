@@ -15,8 +15,7 @@ import {
     makeDestroyable,
     DestroyableServer,
     ignoreNetworkError,
-    nodeSatisfies,
-    SOCKET_RESET_SUPPORTED
+    nodeSatisfies
 } from "../../test-utils";
 import { CA } from "../../../src/util/tls";
 import { streamToBuffer } from "../../../src/util/buffer-utils";
@@ -368,11 +367,7 @@ nodeOnly(() => {
                     }).catch(e => e);
 
                     expect(result).to.be.instanceof(Error);
-                    if (nodeSatisfies(SOCKET_RESET_SUPPORTED)) {
-                        expect((result as any).message).to.include('ECONNRESET');
-                    } else {
-                        expect((result as any).message).to.include('socket hang up');
-                    }
+                    expect((result as any).message).to.include('ECONNRESET');
                 });
 
                 it("should tag failed requests", async () => {

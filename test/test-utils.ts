@@ -301,9 +301,6 @@ export async function startDnsServer(callback: (question: dns2.DnsQuestion) => s
 export const nodeSatisfies = (range: string) =>
     isNode && semver.satisfies(process.version, range);
 
-export const DETAILED_TLS_ERROR_CODES = ">=18";
-export const NATIVE_FETCH_SUPPORTED = ">=18";
-export const SOCKET_RESET_SUPPORTED = ">=18.3";
 export const BROKEN_H1_OVER_H2_TUNNELLING = "^18.8";
 export const DEFAULT_KEEP_ALIVE = ">=19";
 export const FIXED_KEEP_ALIVE_BEHAVIOUR = ">=20";

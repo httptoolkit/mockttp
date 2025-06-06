@@ -12,8 +12,7 @@ import {
     openRawSocket,
     openRawTlsSocket,
     http2ProxyRequest,
-    nodeSatisfies,
-    DETAILED_TLS_ERROR_CODES
+    nodeSatisfies
 } from "../test-utils";
 import { streamToBuffer } from '../../src/util/buffer-utils';
 
@@ -451,11 +450,7 @@ describe("When configured for HTTPS", () => {
                     });
                     throw new Error('Expected connection to fail');
                 } catch (e: any) {
-                    expect(e.code).to.equal(
-                        nodeSatisfies(DETAILED_TLS_ERROR_CODES)
-                            ? 'ERR_SSL_TLSV1_ALERT_PROTOCOL_VERSION'
-                            : 'ECONNRESET'
-                    );
+                    expect(e.code).to.equal('ERR_SSL_TLSV1_ALERT_PROTOCOL_VERSION');
                 }
             });
 
@@ -468,11 +463,7 @@ describe("When configured for HTTPS", () => {
                     });
                     throw new Error('Expected connection to fail');
                 } catch (e: any) {
-                    expect(e.code).to.equal(
-                        nodeSatisfies(DETAILED_TLS_ERROR_CODES)
-                            ? 'ERR_SSL_TLSV1_ALERT_PROTOCOL_VERSION'
-                            : 'ECONNRESET'
-                    );
+                    expect(e.code).to.equal('ERR_SSL_TLSV1_ALERT_PROTOCOL_VERSION');
                 }
             });
 
