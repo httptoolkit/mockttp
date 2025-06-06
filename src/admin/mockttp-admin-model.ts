@@ -73,6 +73,23 @@ const decodeAndSerializeBody = async (body: CompletedBody, headers: Headers): Pr
     }
 };
 
+const serverSideRuleBodySerializer = async (body: CompletedBody, headers: Headers) => {
+    const encoded = body.buffer.toString('base64');
+    const result = await decodeAndSerializeBody(body, headers);
+    if (result === false) { // No decoding required - no-op.
+        return { encoded };
+    } else if (result.decodingError !== undefined) { // Failed decoding - we just return the error message.
+        return { encoded, decodingError: result.decodingError };
+    } else if (result.decoded) { // Success - we return both formats to the client
+        return { encoded, decoded: result.decoded.toString('base64') };
+    } else {
+        throw new UnreachableCheck(result);
+    }
+}
+
+// messageBodyDecoding === 'None' => Just send encoded body as base64
+const noopRuleBodySerializer = (body: CompletedBody) => body.buffer.toString('base64')
+
 export function buildAdminServerModel(
     mockServer: MockttpServer,
     stream: Duplex,
@@ -86,20 +103,8 @@ export function buildAdminServerModel(
 
     const ruleDeserializationOptions: MockttpDeserializationOptions = {
         bodySerializer: messageBodyDecoding === 'server-side'
-            ? async (body, headers) => {
-                const encoded = body.buffer.toString('base64');
-                const result = await decodeAndSerializeBody(body, headers);
-                if (result === false) { // No decoding required - no-op.
-                    return { encoded };
-                } else if (result.decodingError !== undefined) { // Failed decoding - we just return the error message.
-                    return { encoded, decodingError: result.decodingError };
-                } else if (result.decoded) { // Success - we return both formats to the client
-                    return { encoded, decoded: result.decoded.toString('base64') };
-                } else {
-                    throw new UnreachableCheck(result);
-                }
-            }
-            : (body) => body.buffer.toString('base64'), // 'None' = just send encoded body (as base64).
+            ? serverSideRuleBodySerializer
+            : noopRuleBodySerializer,
         ruleParams
     };
 
@@ -173,6 +178,9 @@ export function buildAdminServerModel(
                 return request.body.buffer;
             },
             decodedBody: async (request: CompletedRequest) => {
+                if (messageBodyDecoding === 'none') {
+                    throw new Error('Decoded body requested, but messageBodyDecoding is set to "none"');
+                }
                 return (await decodeAndSerializeBody(request.body, request.headers))
                     || {}; // No decoding required
             }
@@ -183,6 +191,9 @@ export function buildAdminServerModel(
                 return response.body.buffer;
             },
             decodedBody: async (response: CompletedResponse) => {
+                if (messageBodyDecoding === 'none') {
+                    throw new Error('Decoded body requested, but messageBodyDecoding is set to "none"');
+                }
                 return (await decodeAndSerializeBody(response.body, response.headers))
                     || {}; // No decoding required
             }
