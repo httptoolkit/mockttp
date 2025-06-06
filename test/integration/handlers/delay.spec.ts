@@ -29,7 +29,7 @@ describe("Delay steps", function () {
         const startTime = Date.now();
         let result = await fetch(server.urlFor('/mocked-endpoint')).catch(e => e);
         expect(await result.status).to.equal(200);
-        expect(Date.now() - startTime).to.be.greaterThan(100);
+        expect(Date.now() - startTime).to.be.greaterThanOrEqual(100);
     });
 
     nodeOnly(() => {
@@ -48,7 +48,7 @@ describe("Delay steps", function () {
             expect((result as Error).message).to.equal("Unexpected server response: 401");
             ws.close(1000);
 
-            expect(Date.now() - startTime).to.be.greaterThan(100);
+            expect(Date.now() - startTime).to.be.greaterThanOrEqual(100);
         });
     });
 });
