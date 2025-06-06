@@ -370,12 +370,11 @@ export class MockttpAdminRequestBuilder {
                     ${this.schema.typeHasField('TlsPassthroughEvent', 'destination')
                         ? 'destination { hostname, port }'
                         : `
-                            upstreamHost
+                            hostname
                             upstreamPort
                         `
                     }
 
-                    hostname
                     remoteIpAddress
                     remotePort
                     tags
@@ -390,12 +389,11 @@ export class MockttpAdminRequestBuilder {
                     ${this.schema.typeHasField('TlsPassthroughEvent', 'destination')
                         ? 'destination { hostname, port }'
                         : `
-                            upstreamHost
+                            hostname
                             upstreamPort
                         `
                     }
 
-                    hostname
                     remoteIpAddress
                     remotePort
                     tags
