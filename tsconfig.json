@@ -13,7 +13,8 @@
         "paths": {
             "https-proxy-agent": ["./custom-typings/proxy-agent-modules.d.ts"],
             "socks-proxy-agent": ["./custom-typings/proxy-agent-modules.d.ts"],
-            "pac-proxy-agent": ["./custom-typings/proxy-agent-modules.d.ts"]
+            "pac-proxy-agent": ["./custom-typings/proxy-agent-modules.d.ts"],
+            "urlpattern-polyfill": ["./custom-typings/urlpattern-polyfill.d.ts"],
         }
     },
     "compileOnSave": true,
