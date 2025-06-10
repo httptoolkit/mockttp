@@ -55,8 +55,10 @@ export type {
     CADefinition,
     ForwardingOptions,
     PassThroughLookupOptions,
-    PassThroughStepConnectionOptions
+    PassThroughStepConnectionOptions,
+    PassThroughInitialTransforms
 } from './rules/passthrough-handling-definitions';
+export type { MatchReplacePairs } from './rules/match-replace';
 
 export type { RequestRuleBuilder } from "./rules/requests/request-rule-builder";
 export type { WebSocketRuleBuilder } from "./rules/websockets/websocket-rule-builder";

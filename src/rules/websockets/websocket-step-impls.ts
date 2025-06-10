@@ -43,7 +43,8 @@ import {
     getDnsLookupFunction,
     shouldUseStrictHttps,
     getTrustedCAs,
-    getUrlHostname
+    getUrlHostname,
+    applyDestinationTransforms
 } from '../passthrough-handling';
 
 import {
@@ -53,9 +54,11 @@ import {
     PassThroughWebSocketStepOptions,
     RejectWebSocketStep,
     SerializedPassThroughWebSocketData,
+    WebSocketRequestTransform,
     WebSocketStepDefinition,
     WsStepDefinitionLookup,
 } from './websocket-step-definitions';
+import { deserializeMatchReplaceConfiguration } from '../match-replace';
 
 export interface WebSocketStepImpl extends WebSocketStepDefinition {
     handle(
@@ -250,14 +253,14 @@ export class PassThroughWebSocketStepImpl extends PassThroughWebSocketStep {
     async handle(req: OngoingRequest, socket: net.Socket, head: Buffer, options: RequestStepOptions) {
         this.initializeWsServer();
 
-        let { protocol, path } = url.parse(req.url!);
+        let reqUrl = req.url!;
+        let { protocol, pathname, search: query } = url.parse(reqUrl);
         let hostname: string | null = req.destination.hostname;
         let port: string | null = req.destination.port.toString();
-        const rawHeaders = req.rawHeaders;
+        let rawHeaders = req.rawHeaders;
 
         const reqMessage = req as unknown as http.IncomingMessage;
         const isH2Downstream = isHttp2(req);
-        const hostHeaderName = isH2Downstream ? ':authority' : 'host';
 
         hostname = await getClientRelativeHostname(
             hostname,
@@ -265,43 +268,19 @@ export class PassThroughWebSocketStepImpl extends PassThroughWebSocketStep {
             getDnsLookupFunction(this.lookupOptions)
         );
 
-        if (this.forwarding) {
-            const { targetHost, updateHostHeader } = this.forwarding;
-
-            let wsUrl: string;
-            if (!targetHost.includes('/')) {
-                // We're forwarding to a bare hostname, just overwrite that bit:
-                [hostname, port] = targetHost.split(':');
-            } else {
-                // Forwarding to a full URL; override the host & protocol, but never the path.
-                ({ protocol, hostname, port } = url.parse(targetHost));
-            }
-
-            // Connect directly to the forwarding target URL
-            wsUrl = `${protocol!}//${hostname}${port ? ':' + port : ''}${path}`;
-
-            // Optionally update the host header too:
-            let hostHeader = findRawHeader(rawHeaders, hostHeaderName);
-            if (!hostHeader) {
-                // Should never happen really, but just in case:
-                hostHeader = [hostHeaderName, hostname!];
-                rawHeaders.unshift(hostHeader);
-            };
-
-            if (updateHostHeader === undefined || updateHostHeader === true) {
-                // If updateHostHeader is true, or just not specified, match the new target
-                hostHeader[1] = hostname + (port ? `:${port}` : '');
-            } else if (updateHostHeader) {
-                // If it's an explicit custom value, use that directly.
-                hostHeader[1] = updateHostHeader;
-            } // Otherwise: falsey means don't touch it.
-
-            await this.connectUpstream(wsUrl, reqMessage, rawHeaders, socket, head, options);
-        } else {
-            // Connect directly according to the specified URL
-            const wsUrl = `${protocol}//${hostname}${port ? ':' + port : ''}${path}`;
-            await this.connectUpstream(wsUrl, reqMessage, rawHeaders, socket, head, options);
+        if (this.transformRequest) {
+            ({ reqUrl, rawHeaders } = applyDestinationTransforms(this.transformRequest, {
+                 isH2Downstream,
+                 rawHeaders,
+                 port,
+                 protocol,
+                 hostname,
+                 pathname,
+                 query
+            }));
         }
+
+        await this.connectUpstream(reqUrl, reqMessage, rawHeaders, socket, head, options);
     }
 
     private async connectUpstream(
@@ -469,7 +448,12 @@ export class PassThroughWebSocketStepImpl extends PassThroughWebSocketStep {
         channel: ClientServerChannel,
         { ruleParams }: MockttpDeserializationOptions
     ): any {
-        // By default, we assume we just need to assign the right prototype
+        // Backward compat for old clients:
+        if (data.forwarding && !data.transformRequest?.replaceHost) {
+            data.transformRequest ??= {};
+            data.transformRequest.replaceHost = data.forwarding;
+        }
+
         return _.create(this.prototype, {
             ...data,
             proxyConfig: deserializeProxyConfig(data.proxyConfig, channel, ruleParams),
@@ -479,6 +463,21 @@ export class PassThroughWebSocketStepImpl extends PassThroughWebSocketStep {
             clientCertificateHostMap: _.mapValues(data.clientCertificateHostMap,
                 ({ pfx, passphrase }) => ({ pfx: deserializeBuffer(pfx), passphrase })
             ),
+            transformRequest: data.transformRequest ? {
+                ...data.transformRequest,
+                ...(data.transformRequest?.matchReplaceHost !== undefined ? {
+                    matchReplaceHost: {
+                        ...data.transformRequest.matchReplaceHost,
+                        replacements: deserializeMatchReplaceConfiguration(data.transformRequest.matchReplaceHost.replacements)
+                    }
+                } : {}),
+                ...(data.transformRequest?.matchReplacePath !== undefined ? {
+                    matchReplacePath: deserializeMatchReplaceConfiguration(data.transformRequest.matchReplacePath)
+                } : {}),
+                ...(data.transformRequest?.matchReplaceQuery !== undefined ? {
+                    matchReplaceQuery: deserializeMatchReplaceConfiguration(data.transformRequest.matchReplaceQuery)
+                } : {}),
+            } as WebSocketRequestTransform : undefined
         });
     }
 }

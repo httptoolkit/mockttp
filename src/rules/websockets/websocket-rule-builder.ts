@@ -1,3 +1,4 @@
+import * as url from 'url';
 import { MockedEndpoint, Headers } from "../../types";
 import type { WebSocketRuleData } from "./websocket-rule";
 
@@ -115,16 +116,22 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
      * @category Responses
      */
     async thenForwardTo(
-        forwardToLocation: string,
-        options: Omit<PassThroughWebSocketStepOptions, 'forwarding'> & {
-            forwarding?: Omit<PassThroughWebSocketStepOptions['forwarding'], 'targetHost'>
-        } = {}
+        target: string,
+        options: PassThroughWebSocketStepOptions = {}
     ): Promise<MockedEndpoint> {
+        const protocolIndex = target.indexOf('://');
+        let { protocol, host } = protocolIndex !== -1
+            ? { protocol: target.slice(0, protocolIndex), host: target.slice(protocolIndex + 3) }
+            : { host: target, protocol: null};
+        if (protocol === 'http') protocol = 'ws';
+        if (protocol === 'https') protocol = 'wss';
+
         this.steps.push(new PassThroughWebSocketStep({
             ...options,
-            forwarding: {
-                ...options.forwarding,
-                targetHost: forwardToLocation
+            transformRequest: {
+                ...options.transformRequest,
+                setProtocol: protocol as 'ws' | 'wss' | undefined,
+                replaceHost: { targetHost: host }
             }
         }));
 

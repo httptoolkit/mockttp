@@ -1,5 +1,6 @@
 import { merge, isString, isBuffer } from "lodash";
 import { Readable } from "stream";
+import * as url from 'url';
 import { MaybePromise } from '@httptoolkit/util';
 
 import { Headers, CompletedRequest, Method, MockedEndpoint, Trailers } from "../../types";
@@ -379,16 +380,20 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
      * @category Responses
      */
     async thenForwardTo(
-        forwardToLocation: string,
-        options: Omit<PassThroughStepOptions, 'forwarding'> & {
-            forwarding?: Omit<PassThroughStepOptions['forwarding'], 'targetHost'>
-        } = {}
+        target: string,
+        options: PassThroughStepOptions = {}
     ): Promise<MockedEndpoint> {
+        const protocolIndex = target.indexOf('://');
+        let { protocol, host } = protocolIndex !== -1
+            ? { protocol: target.slice(0, protocolIndex), host: target.slice(protocolIndex + 3) }
+            : { host: target, protocol: null};
+
         this.steps.push(new PassThroughStep({
             ...options,
-            forwarding: {
-                ...options.forwarding,
-                targetHost: forwardToLocation
+            transformRequest: {
+                ...options.transformRequest,
+                setProtocol: protocol as 'http' | 'https' | undefined,
+                replaceHost: { targetHost: host }
             }
         }));
 

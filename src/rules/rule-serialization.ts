@@ -45,3 +45,4 @@ export function serializeRuleData<
         completionChecker: data.completionChecker && serialize(data.completionChecker, stream)
     } as Serialized<DataFormat>;
 };
+

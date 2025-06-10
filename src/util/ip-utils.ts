@@ -15,10 +15,13 @@ export const isIP = (ip: string) =>
 
 // We need to normalize ips some cases (especially comparisons), because the same ip may be reported
 // as ::ffff:127.0.0.1 and 127.0.0.1 on the two sides of the connection, for the same ip.
-export const normalizeIP = (ip: string | null | undefined) =>
-    (ip && ip.startsWith('::ffff:'))
+export function normalizeIP(ip: string): string;
+export function normalizeIP(ip: string | null | undefined): string | null | undefined;
+export function normalizeIP(ip: string | null | undefined): string | null | undefined {
+    return (ip && ip.startsWith('::ffff:'))
         ? ip.slice('::ffff:'.length)
         : ip;
+}
 
 export const isLocalhostAddress = (host: string | null | undefined) =>
     !!host && ( // Null/undef are something else weird, but not localhost

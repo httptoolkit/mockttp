@@ -1,4 +1,5 @@
 import { ProxyConfig } from "./proxy-config";
+import { MatchReplacePairs } from "./match-replace";
 
 export interface ForwardingOptions {
     targetHost: string,
@@ -38,13 +39,10 @@ export type CADefinition =
  */
 export interface PassThroughStepConnectionOptions {
     /**
-     * The forwarding configuration for the passthrough rule.
-     * This generally shouldn't be used explicitly unless you're
-     * building rule data by hand. Instead, call `thenPassThrough`
-     * to send data directly or `thenForwardTo` with options to
-     * configure traffic forwarding.
+     * A set of data to automatically transform a request. This includes properties
+     * to support many transformation common use cases.
      */
-    forwarding?: ForwardingOptions,
+    transformRequest?: PassThroughInitialTransforms;
 
     /**
      * A list of hostnames for which server certificate and TLS version errors
@@ -121,4 +119,49 @@ export interface PassThroughStepConnectionOptions {
      * transparently proxy network traffic, errors and all.
      */
     simulateConnectionErrors?: boolean;
+}
+
+/**
+ * This defines the request transforms that we support for all passed through
+ * requests (both HTTP and WebSockets).
+ */
+export interface PassThroughInitialTransforms {
+
+    // Made more specific in subclass overrides
+    setProtocol?: 'http' | 'https' | 'ws' | 'wss';
+
+    /**
+     * Replace the request host with a single fixed value, effectively forwarding
+     * all requests to a different hostname.
+     *
+     * This cannot be combined with matchReplaceHost.
+     *
+     * If updateHostHeader is true, the Host (or :authority for HTTP/2+) header
+     * will be updated automatically to match. If updateHostHeader is a string,
+     * that will be used directly as the header value. If it's false no change
+     * will be made. If not specified this defaults to true.
+     */
+    replaceHost?: { targetHost: string, updateHostHeader?: true | false | string };
+
+    /**
+     * Perform a series of string match & replace operations on the request host.
+     *
+     * This cannot be combined with replaceHost.
+     *
+     * If updateHostHeader is true, the Host (or :authority for HTTP/2+) header
+     * will be updated automatically to match. If updateHostHeader is a string,
+     * that will be used directly as the header value. If it's false no change
+     * will be made. If not specified this defaults to true.
+     */
+    matchReplaceHost?: { replacements: MatchReplacePairs, updateHostHeader?: true | false | string };
+
+    /**
+     * Perform a series of string match & replace operations on the request path.
+     */
+    matchReplacePath?: MatchReplacePairs;
+
+    /**
+     * Perform a series of string match & replace operations on the request query string.
+     */
+    matchReplaceQuery?: MatchReplacePairs;
 }

@@ -17,7 +17,8 @@ import {
     PassThroughStepConnectionOptions,
     ForwardingOptions,
     PassThroughLookupOptions,
-    CADefinition
+    CADefinition,
+    PassThroughInitialTransforms
 } from '../passthrough-handling-definitions';
 import {
     CloseConnectionStep,
@@ -25,6 +26,8 @@ import {
     ResetConnectionStep,
     TimeoutStep
 } from '../requests/request-step-definitions';
+import { Replace } from '../../util/type-utils';
+import { SerializedMatchReplacePairs, serializeMatchReplaceConfiguration } from '../match-replace';
 
 /*
 This file defines websocket step *definitions*, which includes everything necessary to define
@@ -50,20 +53,44 @@ export interface WebSocketStepDefinition extends Explainable, Serializable {
     type: keyof typeof WsStepDefinitionLookup;
 }
 
-export type PassThroughWebSocketStepOptions = PassThroughStepConnectionOptions;
+export interface PassThroughWebSocketStepOptions extends PassThroughStepConnectionOptions {
+
+    transformRequest?: WebSocketRequestTransform;
+
+}
+
+export interface WebSocketRequestTransform extends PassThroughInitialTransforms {
+
+    /**
+     * Override the request protocol. If replaceHost & matchReplaceHost are not specified
+     * and the URL no explicitly specified port, this will automatically switch to the
+     * appropriate port (e.g. from 80 to 443).
+     */
+    setProtocol?: 'ws' | 'wss';
+
+}
 
 /**
  * @internal
  */
 export interface SerializedPassThroughWebSocketData {
     type: 'ws-passthrough';
-    forwarding?: ForwardingOptions;
+    forwarding?: ForwardingOptions; // API backward compat
     lookupOptions?: PassThroughLookupOptions;
     proxyConfig?: SerializedProxyConfig;
     simulateConnectionErrors?: boolean;
     ignoreHostCertificateErrors?: string[] | boolean; // Doesn't match option name, backward compat
     extraCACertificates?: Array<{ cert: string } | { certPath: string }>;
     clientCertificateHostMap?: { [host: string]: { pfx: string, passphrase?: string } };
+
+    transformRequest?: Replace<WebSocketRequestTransform, {
+        'matchReplaceHost'?: {
+            replacements: SerializedMatchReplacePairs,
+            updateHostHeader?: boolean | string
+        },
+        'matchReplacePath'?: SerializedMatchReplacePairs,
+        'matchReplaceQuery'?: SerializedMatchReplacePairs
+    }>,
 }
 
 export class PassThroughWebSocketStep extends Serializable implements WebSocketStepDefinition {
@@ -76,7 +103,6 @@ export class PassThroughWebSocketStep extends Serializable implements WebSocketS
     public readonly proxyConfig?: ProxyConfig;
     public readonly simulateConnectionErrors: boolean;
 
-    public readonly forwarding?: ForwardingOptions;
     public readonly ignoreHostHttpsErrors: string[] | boolean = [];
     public readonly clientCertificateHostMap: {
         [host: string]: { pfx: Buffer, passphrase?: string }
@@ -84,24 +110,10 @@ export class PassThroughWebSocketStep extends Serializable implements WebSocketS
 
     public readonly extraCACertificates: Array<CADefinition> = [];
 
+    public readonly transformRequest?: WebSocketRequestTransform;
+
     constructor(options: PassThroughWebSocketStepOptions = {}) {
         super();
-
-        // If a location is provided, and it's not a bare hostname, it must be parseable
-        const { forwarding } = options;
-        if (forwarding?.targetHost.includes('/')) {
-            const { protocol, hostname, port, path } = url.parse(forwarding.targetHost);
-            if (path && path.trim() !== "/") {
-                const suggestion = url.format({ protocol, hostname, port }) ||
-                    forwarding.targetHost.slice(0, forwarding.targetHost.indexOf('/'));
-                throw new Error(stripIndent`
-                    URLs for forwarding cannot include a path, but "${forwarding.targetHost}" does. ${''
-                    }Did you mean ${suggestion}?
-                `);
-            }
-        }
-
-        this.forwarding = options.forwarding;
 
         this.ignoreHostHttpsErrors = options.ignoreHostHttpsErrors || [];
         if (!Array.isArray(this.ignoreHostHttpsErrors) && typeof this.ignoreHostHttpsErrors !== 'boolean') {
@@ -114,12 +126,44 @@ export class PassThroughWebSocketStep extends Serializable implements WebSocketS
 
         this.extraCACertificates = options.additionalTrustedCAs || [];
         this.clientCertificateHostMap = options.clientCertificateHostMap || {};
+
+        if (options.transformRequest) {
+            if (options.transformRequest.setProtocol && !['ws', 'wss'].includes(options.transformRequest.setProtocol)) {
+                throw new Error(`Invalid request protocol "${options.transformRequest.setProtocol}" must be "ws" or "wss"`);
+            }
+
+            if ([
+                options.transformRequest.replaceHost,
+                options.transformRequest.matchReplaceHost
+            ].filter(o => !!o).length > 1) {
+                throw new Error("Only one request host transform can be specified at a time");
+            }
+
+            if (options.transformRequest.replaceHost) {
+                const { targetHost } = options.transformRequest.replaceHost;
+                if (targetHost.includes('/')) {
+                    throw new Error(`Request transform replacement hosts cannot include a path or protocol, but "${targetHost}" does`);
+                }
+            }
+
+            if (options.transformRequest.matchReplaceHost) {
+                const values = Object.values(options.transformRequest.matchReplaceHost.replacements);
+                for (let replacementValue of values) {
+                    if (replacementValue.includes('/')) {
+                        throw new Error(`Request transform replacement hosts cannot include a path or protocol, but "${replacementValue}" does`);
+                    }
+                }
+            }
+
+            this.transformRequest = options.transformRequest;
+        }
     }
 
     explain() {
-        return this.forwarding
-            ? `forward the websocket to ${this.forwarding.targetHost}`
-            : 'pass the request through to the target host';
+        const { targetHost } = this.transformRequest?.replaceHost || {};
+        return targetHost
+            ? `forward the websocket to ${targetHost}`
+            : 'pass the websocket through to the target host';
     }
 
     /**
@@ -128,7 +172,10 @@ export class PassThroughWebSocketStep extends Serializable implements WebSocketS
     serialize(channel: ClientServerChannel): SerializedPassThroughWebSocketData {
         return {
             type: this.type,
-            forwarding: this.forwarding,
+            ...this.transformRequest?.replaceHost ? {
+                // Backward compat:
+                forwarding: this.transformRequest?.replaceHost
+            } : {},
             lookupOptions: this.lookupOptions,
             proxyConfig: serializeProxyConfig(this.proxyConfig, channel),
             simulateConnectionErrors: this.simulateConnectionErrors,
@@ -146,7 +193,22 @@ export class PassThroughWebSocketStep extends Serializable implements WebSocketS
             }),
             clientCertificateHostMap: _.mapValues(this.clientCertificateHostMap,
                 ({ pfx, passphrase }) => ({ pfx: serializeBuffer(pfx), passphrase })
-            )
+            ),
+            transformRequest: this.transformRequest ? {
+                ...this.transformRequest,
+                matchReplaceHost: !!this.transformRequest?.matchReplaceHost
+                    ? {
+                        ...this.transformRequest.matchReplaceHost,
+                        replacements: serializeMatchReplaceConfiguration(this.transformRequest.matchReplaceHost.replacements)
+                    }
+                    : undefined,
+                matchReplacePath: !!this.transformRequest?.matchReplacePath
+                    ? serializeMatchReplaceConfiguration(this.transformRequest.matchReplacePath)
+                    : undefined,
+                matchReplaceQuery: !!this.transformRequest?.matchReplaceQuery
+                    ? serializeMatchReplaceConfiguration(this.transformRequest.matchReplaceQuery)
+                    : undefined
+            } : undefined,
         };
     }
 }

@@ -14,7 +14,7 @@ import { CachedDns, dnsLookup, DnsLookupFunction } from '../util/dns';
 import { isMockttpBody, encodeBodyBuffer } from '../util/request-utils';
 import { areFFDHECurvesSupported } from '../util/openssl-compat';
 import { ErrorLike, unreachableCheck } from '@httptoolkit/util';
-import { getHeaderValue } from '../util/header-utils';
+import { findRawHeaderIndex, getHeaderValue } from '../util/header-utils';
 
 import {
     CallbackRequestResult,
@@ -23,8 +23,11 @@ import {
 import { AbortError } from './requests/request-step-impls';
 import {
     CADefinition,
+    PassThroughInitialTransforms,
     PassThroughLookupOptions
 } from './passthrough-handling-definitions';
+import { getDefaultPort } from '../util/url';
+import { applyMatchReplace } from './match-replace';
 
 // TLS settings for proxied connections, intended to avoid TLS fingerprint blocking
 // issues so far as possible, by closely emulating a Firefox Client Hello:
@@ -232,6 +235,91 @@ function deriveUrlLinkedHeader(
     return expectedValue;
 }
 
+export function applyDestinationTransforms(
+    transform: PassThroughInitialTransforms,
+    { isH2Downstream, rawHeaders, port, protocol, hostname, pathname, query }: {
+        isH2Downstream: boolean,
+        rawHeaders: RawHeaders,
+        port: string | null
+        protocol: string | null,
+        hostname: string,
+        pathname: string | null
+        query: string | null
+    },
+) {
+    const {
+        setProtocol,
+        replaceHost,
+        matchReplaceHost,
+        matchReplacePath,
+        matchReplaceQuery,
+    } = transform;
+
+    if (setProtocol) {
+        const wasDefaultPort = port === null || getDefaultPort(protocol || 'http') === parseInt(port, 10);
+        protocol = setProtocol + ':';
+
+        // If we were on the default port, update that accordingly:
+        if (wasDefaultPort) {
+            port = getDefaultPort(protocol).toString();
+        }
+    }
+
+    if (replaceHost) {
+        const { targetHost } = replaceHost;
+        [hostname, port] = targetHost.split(':');
+    }
+
+    if (matchReplaceHost) {
+        const result = applyMatchReplace(port === null ? hostname! : `${hostname}:${port}`, matchReplaceHost.replacements);
+        [hostname, port] = result.split(':');
+    }
+
+    if ((replaceHost?.updateHostHeader ?? matchReplaceHost?.updateHostHeader) !== false) {
+        const updateHostHeader = replaceHost?.updateHostHeader ?? matchReplaceHost?.updateHostHeader;
+        const hostHeaderName = isH2Downstream ? ':authority' : 'host';
+
+        let hostHeaderIndex = findRawHeaderIndex(rawHeaders, hostHeaderName);
+        let hostHeader: [string, string];
+
+        if (hostHeaderIndex === -1) {
+            // Should never happen really, but just in case:
+            hostHeader = [hostHeaderName, hostname!];
+            hostHeaderIndex = rawHeaders.length;
+        } else {
+            // Clone this - we don't want to modify the original headers, as they're used for events
+            hostHeader = _.clone(rawHeaders[hostHeaderIndex]);
+        }
+        rawHeaders[hostHeaderIndex] = hostHeader;
+
+        if (updateHostHeader === undefined || updateHostHeader === true) {
+            // If updateHostHeader is true, or just not specified, match the new target
+            hostHeader[1] = hostname + (port ? `:${port}` : '');
+        } else if (updateHostHeader) {
+            // If it's an explicit custom value, use that directly.
+            hostHeader[1] = updateHostHeader;
+        } // Otherwise: falsey means don't touch it.
+    }
+
+    if (matchReplacePath) {
+        pathname = applyMatchReplace(pathname || '/', matchReplacePath);
+    }
+
+    if (matchReplaceQuery) {
+        query = applyMatchReplace(query || '', matchReplaceQuery);
+    }
+
+    return {
+        reqUrl: new URL(`${protocol}//${hostname}${(port ? `:${port}` : '')}${pathname || '/'}${query || ''}`).toString(),
+        protocol,
+        hostname,
+        port,
+        pathname,
+        query,
+        rawHeaders
+    };
+}
+
 /**
  * Autocorrect the host header only in the case that if you didn't explicitly
  * override it yourself for some reason (e.g. if you're testing bad behaviour).
@@ -421,11 +509,11 @@ export const getDnsLookupFunction = _.memoize((lookupOptions: PassThroughLookupO
 });
 
 export async function getClientRelativeHostname(
-    hostname: string | null,
+    hostname: string,
     remoteIp: string | undefined,
     lookupFn: DnsLookupFunction
 ) {
-    if (!hostname || !remoteIp || isLocalhostAddress(remoteIp)) return hostname;
+    if (!remoteIp || isLocalhostAddress(remoteIp)) return hostname;
 
     // Otherwise, we have a request from a different machine (or Docker container/VM/etc) and we need
     // to make sure that 'localhost' means _that_ machine, not ourselves.
@@ -441,7 +529,7 @@ export async function getClientRelativeHostname(
         // effectively free. We ignore errors to delegate unresolvable etc to request processing later.
         isLocalhostAddress(await dnsLookup(lookupFn, hostname).catch(() => null))
     ) {
-        return normalizeIP(remoteIp) as string | null;
+        return normalizeIP(remoteIp);
 
         // Note that we just redirect - we don't update the host header. From the POV of the target, it's still
         // 'localhost' traffic that should appear identical to normal.

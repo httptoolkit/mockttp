@@ -21,7 +21,7 @@ import {
 } from "../../types";
 
 import { MaybePromise, ErrorLike, isErrorLike, delay } from '@httptoolkit/util';
-import { isAbsoluteUrl, getEffectivePort } from '../../util/url';
+import { isAbsoluteUrl, getEffectivePort, getDefaultPort } from '../../util/url';
 import {
     waitForCompletedRequest,
     buildBodyReader,
@@ -51,6 +51,7 @@ import {
     requireSocketResetSupport,
     resetOrDestroy
 } from '../../util/socket-util';
+import { applyMatchReplace, deserializeMatchReplaceConfiguration } from '../match-replace';
 import {
     ClientServerChannel,
     deserializeBuffer,
@@ -61,9 +62,7 @@ import {
     withDeserializedCallbackBuffers,
     WithSerializedCallbackBuffers
 } from '../../serialization/body-serialization';
-import {
-    MockttpDeserializationOptions
-} from '../rule-deserialization'
+import { MockttpDeserializationOptions } from '../rule-deserialization'
 
 import { assertParamDereferenced } from '../rule-parameters';
 
@@ -86,7 +85,8 @@ import {
     getDnsLookupFunction,
     getTrustedCAs,
     buildUpstreamErrorTags,
-    getUrlHostname
+    getUrlHostname,
+    applyDestinationTransforms
 } from '../passthrough-handling';
 
 import {
@@ -419,9 +419,9 @@ export class PassThroughStepImpl extends PassThroughStep {
 
         // Capture raw request data:
         let { method, url: reqUrl, rawHeaders, destination } = clientReq as OngoingRequest;
-        let { protocol, path } = url.parse(reqUrl);
-        let hostname: string | null = destination.hostname;
-        let port: string | null = destination.port.toString();
+        let { protocol, pathname, search: query } = url.parse(reqUrl);
+        let hostname: string = destination.hostname;
+        let port: string | null | undefined = destination.port.toString();
 
         // Check if this request is a request loop:
         if (isSocketLoop(this.outgoingSockets, (clientReq as any).socket)) {
@@ -448,60 +448,39 @@ export class PassThroughStepImpl extends PassThroughStep {
             getDnsLookupFunction(this.lookupOptions)
         );
 
-        if (this.forwarding) {
-            const { targetHost, updateHostHeader } = this.forwarding;
-            if (!targetHost.includes('/')) {
-                // We're forwarding to a bare hostname
-                [hostname, port] = targetHost.split(':');
-            } else {
-                // We're forwarding to a fully specified URL; override the host etc, but never the path.
-                ({ protocol, hostname, port } = url.parse(targetHost));
-            }
-
-            const hostHeaderName = isH2Downstream ? ':authority' : 'host';
-
-            let hostHeaderIndex = findRawHeaderIndex(rawHeaders, hostHeaderName);
-            let hostHeader: [string, string];
-
-            if (hostHeaderIndex === -1) {
-                // Should never happen really, but just in case:
-                hostHeader = [hostHeaderName, hostname!];
-                hostHeaderIndex = rawHeaders.length;
-            } else {
-                // Clone this - we don't want to modify the original headers, as they're used for events
-                hostHeader = _.clone(rawHeaders[hostHeaderIndex]);
-            }
-            rawHeaders[hostHeaderIndex] = hostHeader;
-
-            if (updateHostHeader === undefined || updateHostHeader === true) {
-                // If updateHostHeader is true, or just not specified, match the new target
-                hostHeader[1] = hostname + (port ? `:${port}` : '');
-            } else if (updateHostHeader) {
-                // If it's an explicit custom value, use that directly.
-                hostHeader[1] = updateHostHeader;
-            } // Otherwise: falsey means don't touch it.
-
-            reqUrl = new URL(`${protocol}//${hostname}${(port ? `:${port}` : '')}${path}`).toString();
-        }
-
         // Override the request details, if a transform or callback is specified:
         let reqBodyOverride: Uint8Array | undefined;
-
-        // Set during modification here - if set, we allow overriding certain H2 headers so that manual
-        // modification of the supported headers works as expected.
-        let headersManuallyModified = false;
 
         if (this.transformRequest) {
             const {
                 replaceMethod,
                 updateHeaders,
                 replaceHeaders,
+
                 replaceBody,
                 replaceBodyFromFile,
                 updateJsonBody,
                 patchJsonBody,
                 matchReplaceBody
             } = this.transformRequest;
+
+            ({
+                reqUrl,
+                protocol,
+                hostname,
+                port,
+                pathname,
+                query,
+                rawHeaders
+            } = applyDestinationTransforms(this.transformRequest, {
+                 isH2Downstream,
+                 rawHeaders,
+                 port,
+                 protocol,
+                 hostname,
+                 pathname,
+                 query
+            }));
 
             if (replaceMethod) {
                 method = replaceMethod;
@@ -551,10 +530,7 @@ export class PassThroughStepImpl extends PassThroughStep {
                     throw new Error("Can't match & replace non-decodeable request body");
                 }
 
-                let replacedBody = originalBody;
-                for (let [match, result] of matchReplaceBody) {
-                    replacedBody = replacedBody!.replace(match, result);
-                }
+                const replacedBody = applyMatchReplace(originalBody, matchReplaceBody);
 
                 if (replacedBody !== originalBody) {
                     reqBodyOverride = asBuffer(replacedBody);
@@ -618,19 +594,11 @@ export class PassThroughStepImpl extends PassThroughStep {
             method = modifiedReq?.method || method;
             reqUrl = modifiedReq?.url || reqUrl;
 
-            headersManuallyModified = !!modifiedReq?.headers;
             let headers = modifiedReq?.headers || clientHeaders;
 
             // We need to make sure the Host/:authority header is updated correctly - following the user's returned value if
             // they provided one, but updating it if not to match the effective target URL of the request:
-            const expectedTargetUrl = modifiedReq?.url
-                ?? (
-                    // If not overridden, we fall back to the original value, but we need to handle changes that forwarding
-                    // might have made as well, especially if it's intentionally left URL & headers out of sync:
-                    this.forwarding?.updateHostHeader === false
-                    ? clientReq.url
-                    : reqUrl
-                );
+            const expectedTargetUrl = modifiedReq?.url ?? reqUrl;
 
             Object.assign(headers,
                 isH2Downstream
@@ -659,7 +627,9 @@ export class PassThroughStepImpl extends PassThroughStep {
             // Reparse the new URL, if necessary
             if (modifiedReq?.url) {
                 if (!isAbsoluteUrl(modifiedReq?.url)) throw new Error("Overridden request URLs must be absolute");
-                ({ protocol, hostname, port, path } = url.parse(reqUrl));
+                const parsedUrl = url.parse(reqUrl);
+                ({ protocol, port, pathname, search: query } = parsedUrl);
+                hostname = parsedUrl.hostname!;
             }
 
             rawHeaders = objectHeadersToRaw(headers);
@@ -753,7 +723,7 @@ export class PassThroughStepImpl extends PassThroughStep {
                 hostname,
                 port,
                 family,
-                path,
+                path: `${pathname || '/'}${query || ''}`,
                 headers: shouldTryH2Upstream
                     ? rawHeadersToObjectPreservingCase(rawHeaders)
                     : flattenPairedRawHeaders(rawHeaders) as any,
@@ -947,7 +917,7 @@ export class PassThroughStepImpl extends PassThroughStep {
                             hostname: hostname || 'localhost',
                             port: effectivePort
                         },
-                        path: path ?? '',
+                        path: `${pathname || '/'}${query || ''}`,
                         headers: reqHeader,
                         rawHeaders: rawHeaders,
                         timingEvents: clientReq.timingEvents,
@@ -1182,7 +1152,7 @@ export class PassThroughStepImpl extends PassThroughStep {
                     protocol: protocol!.replace(/:$/, ''),
                     hostname: urlHost,
                     port,
-                    path,
+                    path: `${pathname || '/'}${query || ''}`,
                     rawHeaders
                 });
 
@@ -1280,6 +1250,12 @@ export class PassThroughStepImpl extends PassThroughStep {
             };
         }
 
+        // Backward compat for old clients:
+        if (data.forwarding && !data.transformRequest?.replaceHost) {
+            data.transformRequest ??= {};
+            data.transformRequest.replaceHost = data.forwarding;
+        }
+
         return new PassThroughStep({
             beforeRequest,
             beforeResponse,
@@ -1295,15 +1271,20 @@ export class PassThroughStepImpl extends PassThroughStep {
                 ...(data.transformRequest?.updateJsonBody !== undefined ? {
                     updateJsonBody: mapOmitToUndefined(JSON.parse(data.transformRequest.updateJsonBody))
                 } : {}),
+                ...(data.transformRequest?.matchReplaceHost !== undefined ? {
+                    matchReplaceHost: {
+                        ...data.transformRequest.matchReplaceHost,
+                        replacements: deserializeMatchReplaceConfiguration(data.transformRequest.matchReplaceHost.replacements)
+                    }
+                } : {}),
+                ...(data.transformRequest?.matchReplacePath !== undefined ? {
+                    matchReplacePath: deserializeMatchReplaceConfiguration(data.transformRequest.matchReplacePath)
+                } : {}),
+                ...(data.transformRequest?.matchReplaceQuery !== undefined ? {
+                    matchReplaceQuery: deserializeMatchReplaceConfiguration(data.transformRequest.matchReplaceQuery)
+                } : {}),
                 ...(data.transformRequest?.matchReplaceBody !== undefined ? {
-                    matchReplaceBody: data.transformRequest.matchReplaceBody.map(([match, result]) =>
-                        [
-                            !_.isString(match) && 'regexSource' in match
-                                ? new RegExp(match.regexSource, match.flags)
-                                : match,
-                            result
-                        ]
-                    )
+                    matchReplaceBody: deserializeMatchReplaceConfiguration(data.transformRequest.matchReplaceBody)
                 } : {})
             } as RequestTransform : undefined,
             transformResponse: data.transformResponse ? {
@@ -1318,17 +1299,9 @@ export class PassThroughStepImpl extends PassThroughStep {
                     updateJsonBody: mapOmitToUndefined(JSON.parse(data.transformResponse.updateJsonBody))
                 } : {}),
                 ...(data.transformResponse?.matchReplaceBody !== undefined ? {
-                    matchReplaceBody: data.transformResponse.matchReplaceBody.map(([match, result]) =>
-                        [
-                            !_.isString(match) && 'regexSource' in match
-                                ? new RegExp(match.regexSource, match.flags)
-                                : match,
-                            result
-                        ]
-                    )
+                    matchReplaceBody: deserializeMatchReplaceConfiguration(data.transformResponse.matchReplaceBody)
                 } : {})
             } as ResponseTransform : undefined,
-            forwarding: data.forwarding,
             lookupOptions: data.lookupOptions,
             simulateConnectionErrors: !!data.simulateConnectionErrors,
             ignoreHostHttpsErrors: data.ignoreHostCertificateErrors,

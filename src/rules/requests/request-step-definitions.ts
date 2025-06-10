@@ -1,9 +1,7 @@
 import _ = require('lodash');
-import url = require('url');
 import type * as net from 'net';
 import { encode as encodeBase64 } from 'base64-arraybuffer';
 import { Readable, Transform } from 'stream';
-import { stripIndent } from 'common-tags';
 import {
     Operation as JsonPatchOperation,
     validate as validateJsonPatch
@@ -22,6 +20,11 @@ import {
 import { Replace } from '../../util/type-utils';
 import { asBuffer } from '../../util/buffer-utils';
 import {
+    MatchReplacePairs,
+    SerializedMatchReplacePairs,
+    serializeMatchReplaceConfiguration
+} from '../match-replace';
+import {
     Serializable,
     ClientServerChannel,
     serializeBuffer,
@@ -38,7 +41,8 @@ import {
     CADefinition,
     ForwardingOptions,
     PassThroughStepConnectionOptions,
-    PassThroughLookupOptions
+    PassThroughLookupOptions,
+    PassThroughInitialTransforms
 } from '../passthrough-handling-definitions';
 
 /*
@@ -474,7 +478,7 @@ export interface PassThroughStepOptions extends PassThroughStepConnectionOptions
      * and can be more performant. The two options are mutually exclusive: you cannot
      * use both transformRequest and a beforeRequest callback.
      *
-     * Only one transformation for each target (method, headers & body) can be
+     * Only one transformation for each target (e.g. method, headers & body) can be
      * specified. If more than one is specified then an error will be thrown when the
      * rule is registered.
      */
@@ -526,7 +530,14 @@ export interface PassThroughStepOptions extends PassThroughStepConnectionOptions
     beforeResponse?: (res: PassThroughResponse, req: CompletedRequest) => MaybePromise<CallbackResponseResult | void> | void;
 }
 
-export interface RequestTransform {
+export interface RequestTransform extends PassThroughInitialTransforms {
+
+    /**
+     * Override the request protocol. If replaceHost & matchReplaceHost are not specified
+     * and the URL no explicitly specified port, this will automatically switch to the
+     * appropriate port (e.g. from 80 to 443).
+     */
+    setProtocol?: 'http' | 'https';
 
     /**
      * A replacement HTTP method. Case insensitive.
@@ -587,14 +598,8 @@ export interface RequestTransform {
 
     /**
      * Perform a series of string match & replace operations on the request body.
-     *
-     * This parameter should be an array of pairs, which will be applied to the body
-     * decoded as a string like `body.replace(p1, p2)`, applied in the order provided.
-     * The first parameter can be either a string or RegExp to match, and the second
-     * must be a string to insert. The normal `str.replace` $ placeholders can be
-     * used in the second argument, so that e.g. $1 will insert the 1st matched group.
      */
-    matchReplaceBody?: Array<[string | RegExp, string]>;
+    matchReplaceBody?: MatchReplacePairs;
 }
 
 export interface ResponseTransform {
@@ -658,14 +663,8 @@ export interface ResponseTransform {
 
     /**
      * Perform a series of string match & replace operations on the response body.
-     *
-     * This parameter should be an array of pairs, which will be applied to the body
-     * decoded as a string like `body.replace(p1, p2)`, applied in the order provided.
-     * The first parameter can be either a string or RegExp to match, and the second
-     * must be a string to insert. The normal `str.replace` $ placeholders can be
-     * used in the second argument, so that e.g. $1 will insert the 1st matched group.
      */
-    matchReplaceBody?: Array<[string | RegExp, string]>;
+    matchReplaceBody?: MatchReplacePairs;
 
 }
 
@@ -674,8 +673,7 @@ export interface ResponseTransform {
  */
 export interface SerializedPassThroughData {
     type: 'passthrough';
-    forwardToLocation?: string;
-    forwarding?: ForwardingOptions;
+    forwarding?: ForwardingOptions; // API backward compat
     proxyConfig?: SerializedProxyConfig;
     ignoreHostCertificateErrors?: string[] | boolean; // Doesn't match option name, backward compat
     extraCACertificates?: Array<{ cert: string } | { certPath: string }>;
@@ -687,19 +685,20 @@ export interface SerializedPassThroughData {
         'replaceBody'?: string, // Serialized as base64 buffer
         'updateHeaders'?: string, // // Serialized as a string to preserve undefined values
         'updateJsonBody'?: string, // Serialized as a string to preserve undefined values
-        'matchReplaceBody'?: Array<[
-            string | { regexSource: string, flags: string }, // Regexes serialized
-            string
-        ]>
+
+        'matchReplaceHost'?: {
+            replacements: SerializedMatchReplacePairs,
+            updateHostHeader?: boolean | string
+        },
+        'matchReplacePath'?: SerializedMatchReplacePairs,
+        'matchReplaceQuery'?: SerializedMatchReplacePairs,
+        'matchReplaceBody'?: SerializedMatchReplacePairs
     }>,
     transformResponse?: Replace<ResponseTransform, {
         'replaceBody'?: string, // Serialized as base64 buffer
         'updateHeaders'?: string, // // Serialized as a string to preserve undefined values
         'updateJsonBody'?: string, // Serialized as a string to preserve undefined values
-        'matchReplaceBody'?: Array<[
-            string | { regexSource: string, flags: string }, // Regexes serialized
-            string
-        ]>
+        'matchReplaceBody'?: SerializedMatchReplacePairs
     }>,
 
     hasBeforeRequestCallback?: boolean;
@@ -734,8 +733,6 @@ export class PassThroughStep extends Serializable implements RequestStepDefiniti
     readonly type = 'passthrough';
     static readonly isFinal = true;
 
-    public readonly forwarding?: ForwardingOptions;
-
     public readonly ignoreHostHttpsErrors: string[] | boolean = [];
     public readonly clientCertificateHostMap: {
         [host: string]: { pfx: Buffer, passphrase?: string }
@@ -765,22 +762,6 @@ export class PassThroughStep extends Serializable implements RequestStepDefiniti
     constructor(options: PassThroughStepOptions = {}) {
         super();
 
-        // If a location is provided, and it's not a bare hostname, it must be parseable
-        const { forwarding } = options;
-        if (forwarding?.targetHost.includes('/')) {
-            const { protocol, hostname, port, path } = url.parse(forwarding.targetHost);
-            if (path && path.trim() !== "/") {
-                const suggestion = url.format({ protocol, hostname, port }) ||
-                    forwarding.targetHost.slice(0, forwarding.targetHost.indexOf('/'));
-                throw new Error(stripIndent`
-                    URLs for forwarding cannot include a path, but "${forwarding.targetHost}" does. ${''
-                    }Did you mean ${suggestion}?
-                `);
-            }
-        }
-
-        this.forwarding = forwarding;
-
         this.ignoreHostHttpsErrors = options.ignoreHostHttpsErrors || [];
         if (!Array.isArray(this.ignoreHostHttpsErrors) && typeof this.ignoreHostHttpsErrors !== 'boolean') {
             throw new Error("ignoreHostHttpsErrors must be an array or a boolean");
@@ -795,10 +776,37 @@ export class PassThroughStep extends Serializable implements RequestStepDefiniti
         this.clientCertificateHostMap = options.clientCertificateHostMap || {};
 
         if (options.beforeRequest && options.transformRequest && !_.isEmpty(options.transformRequest)) {
-            throw new Error("BeforeRequest and transformRequest options are mutually exclusive");
+            throw new Error("Request callbacks and fixed transforms are mutually exclusive");
         } else if (options.beforeRequest) {
             this.beforeRequest = options.beforeRequest;
         } else if (options.transformRequest) {
+            if (options.transformRequest.setProtocol && !['http', 'https'].includes(options.transformRequest.setProtocol)) {
+                throw new Error(`Invalid request protocol "${options.transformRequest.setProtocol}" must be "http" or "https"`);
+            }
+
+            if ([
+                options.transformRequest.replaceHost,
+                options.transformRequest.matchReplaceHost
+            ].filter(o => !!o).length > 1) {
+                throw new Error("Only one request host transform can be specified at a time");
+            }
+
+            if (options.transformRequest.replaceHost) {
+                const { targetHost } = options.transformRequest.replaceHost;
+                if (targetHost.includes('/')) {
+                    throw new Error(`Request transform replacement hosts cannot include a path or protocol, but "${targetHost}" does`);
+                }
+            }
+
+            if (options.transformRequest.matchReplaceHost) {
+                const values = Object.values(options.transformRequest.matchReplaceHost.replacements);
+                for (let replacementValue of values) {
+                    if (replacementValue.includes('/')) {
+                        throw new Error(`Request transform replacement hosts cannot include a path or protocol, but "${replacementValue}" does`);
+                    }
+                }
+            }
+
             if ([
                 options.transformRequest.updateHeaders,
                 options.transformRequest.replaceHeaders
@@ -824,7 +832,7 @@ export class PassThroughStep extends Serializable implements RequestStepDefiniti
         }
 
         if (options.beforeResponse && options.transformResponse && !_.isEmpty(options.transformResponse)) {
-            throw new Error("BeforeResponse and transformResponse options are mutually exclusive");
+            throw new Error("Response callbacks and fixed transforms are mutually exclusive");
         } else if (options.beforeResponse) {
             this.beforeResponse = options.beforeResponse;
         } else if (options.transformResponse) {
@@ -854,8 +862,9 @@ export class PassThroughStep extends Serializable implements RequestStepDefiniti
     }
 
     explain() {
-        return this.forwarding
-            ? `forward the request to ${this.forwarding.targetHost}`
+        const { targetHost } = this.transformRequest?.replaceHost || {};
+        return targetHost
+            ? `forward the request to ${targetHost}`
             : 'pass the request through to the target host';
     }
 
@@ -906,10 +915,9 @@ export class PassThroughStep extends Serializable implements RequestStepDefiniti
 
         return {
             type: this.type,
-            ...this.forwarding ? {
-                forwarding: this.forwarding,
+            ...this.transformRequest?.replaceHost ? {
                 // Backward compat:
-                forwardToLocation: this.forwarding.targetHost
+                forwarding: this.transformRequest?.replaceHost
             } : {},
             proxyConfig: serializeProxyConfig(this.proxyConfig, channel),
             lookupOptions: this.lookupOptions,
@@ -948,15 +956,20 @@ export class PassThroughStep extends Serializable implements RequestStepDefiniti
                         (k, v) => v === undefined ? SERIALIZED_OMIT : v
                     )
                     : undefined,
+                matchReplaceHost: !!this.transformRequest?.matchReplaceHost
+                    ? {
+                        ...this.transformRequest.matchReplaceHost,
+                        replacements: serializeMatchReplaceConfiguration(this.transformRequest.matchReplaceHost.replacements)
+                    }
+                    : undefined,
+                matchReplacePath: !!this.transformRequest?.matchReplacePath
+                    ? serializeMatchReplaceConfiguration(this.transformRequest.matchReplacePath)
+                    : undefined,
+                matchReplaceQuery: !!this.transformRequest?.matchReplaceQuery
+                    ? serializeMatchReplaceConfiguration(this.transformRequest.matchReplaceQuery)
+                    : undefined,
                 matchReplaceBody: !!this.transformRequest?.matchReplaceBody
-                    ? this.transformRequest.matchReplaceBody.map(([match, result]) =>
-                        [
-                            match instanceof RegExp
-                                ? { regexSource: match.source, flags: match.flags }
-                                : match,
-                            result
-                        ]
-                    )
+                    ? serializeMatchReplaceConfiguration(this.transformRequest.matchReplaceBody)
                     : undefined,
             } : undefined,
             transformResponse: this.transformResponse ? {

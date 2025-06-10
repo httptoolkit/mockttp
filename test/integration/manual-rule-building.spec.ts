@@ -73,9 +73,11 @@ describe("Mockttp rule building", function () {
         await server.addWebSocketRules({
             matchers: [new matchers.WildcardMatcher()],
             steps: [new webSocketSteps.PassThroughWebSocketStep({
-                forwarding: {
-                    // Simple echo fixture, see websocket-test-server.js
-                    targetHost: 'ws://localhost:8694'
+                transformRequest: {
+                    replaceHost: {
+                        // Simple echo fixture, see websocket-test-server.js
+                        targetHost: 'localhost:8694'
+                    }
                 }
             })]
         });

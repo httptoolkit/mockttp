@@ -10,7 +10,7 @@ import type { WebSocketStepDefinition } from "./websockets/websocket-step-defini
 import * as matchers from "./matchers";
 import * as completionCheckers from "./completion-checkers";
 
-import { RequestStepImpl, StepLookup } from "./requests/request-step-impls";
+import { StepLookup } from "./requests/request-step-impls";
 import { WsStepLookup } from './websockets/websocket-step-impls';
 
 import { RuleParameters } from "./rule-parameters";
@@ -80,3 +80,4 @@ export function deserializeWebSocketRuleData(
         )
     };
 }
+

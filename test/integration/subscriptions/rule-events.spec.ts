@@ -88,9 +88,10 @@ describe("Rule event subscriptions", () => {
 
     it("should include upstream-perspective (= modified) request bodies", async () => {
         await remoteServer.forAnyRequest().thenReply(200);
-        const forwardingRule = await server.forAnyRequest().thenForwardTo(remoteServer.url, {
+        const forwardingRule = await server.forAnyRequest().thenPassThrough({
             beforeRequest: () => {
                 return {
+                    url: remoteServer.url,
                     method: 'POST',
                     body: 'MODIFIED REQUEST BODY'
                 };
@@ -133,8 +134,11 @@ describe("Rule event subscriptions", () => {
 
     it("should fire no events if beforeRequest closes response", async () => {
         await remoteServer.forAnyRequest().thenReply(200);
-        const forwardingRule = await server.forAnyRequest().thenForwardTo(remoteServer.url, {
-            beforeRequest: () => ({ response: 'close' })
+        await server.forAnyRequest().thenPassThrough({
+            beforeRequest: () => ({
+                url: remoteServer.url, // To match config above - but should be ignored here
+                response: 'close'
+            })
         });
 
         const ruleEvents: RuleEvent<any>[] = [];
