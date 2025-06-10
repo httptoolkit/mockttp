@@ -88,7 +88,7 @@ async function strictOriginMatch(
         return expectedOrigin === origin;
     }
 
-    if (_.isRegExp(expectedOrigin)) {
+    if (expectedOrigin instanceof RegExp) {
         return !!origin.match(expectedOrigin);
     }
 

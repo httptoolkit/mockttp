@@ -951,7 +951,7 @@ export class PassThroughStep extends Serializable implements RequestStepDefiniti
                 matchReplaceBody: !!this.transformRequest?.matchReplaceBody
                     ? this.transformRequest.matchReplaceBody.map(([match, result]) =>
                         [
-                            _.isRegExp(match)
+                            match instanceof RegExp
                                 ? { regexSource: match.source, flags: match.flags }
                                 : match,
                             result
@@ -981,7 +981,7 @@ export class PassThroughStep extends Serializable implements RequestStepDefiniti
                 matchReplaceBody: !!this.transformResponse?.matchReplaceBody
                     ? this.transformResponse.matchReplaceBody.map(([match, result]) =>
                         [
-                            _.isRegExp(match)
+                            match instanceof RegExp
                                 ? { regexSource: match.source, flags: match.flags }
                                 : match,
                             result
