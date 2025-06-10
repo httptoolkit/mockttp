@@ -93,7 +93,7 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
     /**
      * Add a delay (in milliseconds) before the next step in the rule
      */
-    waitFor(ms: number): this {
+    delay(ms: number): this {
         this.steps.push(new DelayStep(ms));
         return this;
     }

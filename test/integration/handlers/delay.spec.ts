@@ -15,7 +15,7 @@ describe("Delay steps", function () {
     afterEach(() => server.stop());
 
     it("should do nothing if delaying for 0ms", async () => {
-        await server.forGet('/mocked-endpoint').waitFor(0).thenReply(200);
+        await server.forGet('/mocked-endpoint').delay(0).thenReply(200);
 
         const startTime = Date.now();
         let result = await fetch(server.urlFor('/mocked-endpoint')).catch(e => e);
@@ -24,7 +24,7 @@ describe("Delay steps", function () {
     });
 
     it("should delay if set to a non-zero value", async () => {
-        await server.forGet('/mocked-endpoint').waitFor(100).thenReply(200);
+        await server.forGet('/mocked-endpoint').delay(100).thenReply(200);
 
         const startTime = Date.now();
         let result = await fetch(server.urlFor('/mocked-endpoint')).catch(e => e);
@@ -34,7 +34,7 @@ describe("Delay steps", function () {
 
     nodeOnly(() => {
         it("should also delay websocket responses", async () => {
-            await server.forAnyWebSocket().waitFor(100).thenRejectConnection(401);
+            await server.forAnyWebSocket().delay(100).thenRejectConnection(401);
 
             const startTime = Date.now();
             const ws = new WebSocket(`ws://localhost:${server.port}`);
