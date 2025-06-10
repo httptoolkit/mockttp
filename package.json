@@ -151,8 +151,7 @@
     "url": "^0.11.0",
     "util": "^0.12.4",
     "webpack": "^5.72.0",
-    "zlib-browserify": "^0.0.3",
-    "zstd-codec": "^0.1.4"
+    "zlib-browserify": "^0.0.3"
   },
   "engines": {
     "node": ">=20.0.0"
