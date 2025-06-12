@@ -236,7 +236,7 @@ function deriveUrlLinkedHeader(
 }
 
 export function applyDestinationTransforms(
-    transform: PassThroughInitialTransforms,
+    transform: PassThroughInitialTransforms & { setProtocol?: string },
     { isH2Downstream, rawHeaders, port, protocol, hostname, pathname, query }: {
         isH2Downstream: boolean,
         rawHeaders: RawHeaders,

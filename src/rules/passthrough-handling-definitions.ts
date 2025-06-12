@@ -127,9 +127,6 @@ export interface PassThroughStepConnectionOptions {
  */
 export interface PassThroughInitialTransforms {
 
-    // Made more specific in subclass overrides
-    setProtocol?: 'http' | 'https' | 'ws' | 'wss';
-
     /**
      * Replace the request host with a single fixed value, effectively forwarding
      * all requests to a different hostname.
