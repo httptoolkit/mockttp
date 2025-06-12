@@ -19,6 +19,7 @@ export declare class URLPattern {
   readonly pathname: string;
   readonly search: string;
   readonly hash: string;
+  readonly hasRegExpGroups: boolean;
 }
 
 interface URLPatternInit {
