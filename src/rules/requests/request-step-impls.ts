@@ -1252,8 +1252,13 @@ export class PassThroughStepImpl extends PassThroughStep {
 
         // Backward compat for old clients:
         if (data.forwarding && !data.transformRequest?.replaceHost) {
+            const [targetHost, setProtocol] = data.forwarding.targetHost.split('://').reverse();
             data.transformRequest ??= {};
-            data.transformRequest.replaceHost = data.forwarding;
+            data.transformRequest.replaceHost = {
+                targetHost,
+                updateHostHeader: data.forwarding.updateHostHeader ?? true
+            };
+            data.transformRequest.setProtocol = setProtocol as 'http' | 'https' | undefined;
         }
 
         return new PassThroughStep({
