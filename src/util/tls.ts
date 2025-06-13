@@ -202,7 +202,7 @@ export async function generateCACertificate(options: {
     });
 
     const privateKeyBuffer = await crypto.subtle.exportKey("pkcs8", keyPair.privateKey as CryptoKey);
-    const privateKeyPem = arrayBufferToPem(privateKeyBuffer, "RSA PRIVATE KEY");
+    const privateKeyPem = arrayBufferToPem(privateKeyBuffer, "PRIVATE KEY");
     const certificatePem = certificate.toString("pem");
 
     return {
@@ -383,7 +383,7 @@ export class CA {
         const generatedCertificate = {
             key: arrayBufferToPem(
                 await crypto.subtle.exportKey("pkcs8", leafKeyPair.privateKey as CryptoKey),
-                "RSA PRIVATE KEY"
+                "PRIVATE KEY"
             ),
             cert: certificate.toString("pem"),
             ca: this.caCert.toString("pem")

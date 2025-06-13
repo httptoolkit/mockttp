@@ -161,7 +161,7 @@ nodeOnly(() => {
             expect(caCertificate.cert.length).to.be.greaterThan(1000);
             expect(caCertificate.cert.split('\n')[0]).to.equal('-----BEGIN CERTIFICATE-----');
             expect(caCertificate.key.length).to.be.greaterThan(1000);
-            expect(caCertificate.key.split('\n')[0]).to.equal('-----BEGIN RSA PRIVATE KEY-----');
+            expect(caCertificate.key.split('\n')[0]).to.equal('-----BEGIN PRIVATE KEY-----');
         });
 
         it("should generate a CA certificate that can be used to create domain certificates", async () => {
@@ -173,7 +173,7 @@ nodeOnly(() => {
             expect(cert.length).to.be.greaterThan(1000);
             expect(cert.split('\n')[0]).to.equal('-----BEGIN CERTIFICATE-----');
             expect(key.length).to.be.greaterThan(1000);
-            expect(key.split('\n')[0]).to.equal('-----BEGIN RSA PRIVATE KEY-----');
+            expect(key.split('\n')[0]).to.equal('-----BEGIN PRIVATE KEY-----');
         });
 
         it("should be able to generate a CA certificate that passes lintcert checks", async function () {
