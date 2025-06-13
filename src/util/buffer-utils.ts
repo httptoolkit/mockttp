@@ -151,8 +151,8 @@ export function splitBuffer(input: Buffer, splitter: string, maxParts = Infinity
         let endOfPart = remainingBuffer.indexOf(splitter);
         if (endOfPart === -1) endOfPart = remainingBuffer.length;
 
-        parts.push(remainingBuffer.slice(0, endOfPart));
-        remainingBuffer = remainingBuffer.slice(endOfPart + splitter.length);
+        parts.push(remainingBuffer.subarray(0, endOfPart));
+        remainingBuffer = remainingBuffer.subarray(endOfPart + splitter.length);
 
         if (parts.length === maxParts - 1) {
             parts.push(remainingBuffer);
