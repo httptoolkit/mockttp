@@ -1,4 +1,6 @@
+import { Buffer } from 'buffer';
 import * as _ from 'lodash';
+
 import { SocketMetadata } from './socket-extensions';
 
 const METADATA_USERNAME = 'metadata';

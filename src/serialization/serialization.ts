@@ -1,5 +1,7 @@
-import * as _ from 'lodash';
+import { Buffer } from 'buffer';
 import { Duplex } from 'stream';
+
+import * as _ from 'lodash';
 import { v4 as uuid } from "uuid";
 
 import { MaybePromise } from '@httptoolkit/util';

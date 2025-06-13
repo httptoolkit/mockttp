@@ -1,7 +1,7 @@
 import { getLocal } from "../..";
 import { expect, fetch, URLSearchParams, Headers, isNode } from "../test-utils";
 import * as _ from "lodash";
-import { Readable } from "stream";
+import { Readable } from 'stream';
 
 describe("Mockttp explanation messages", function () {
 

@@ -1,4 +1,4 @@
-import { Duplex } from "stream";
+import { Duplex } from 'stream';
 import { DocumentNode } from "graphql";
 import { IResolvers } from "@graphql-tools/utils";
 import { MaybePromise } from "@httptoolkit/util";

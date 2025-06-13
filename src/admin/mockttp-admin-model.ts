@@ -1,5 +1,5 @@
 import * as _ from "lodash";
-import { Duplex } from "stream";
+import { Duplex } from 'stream';
 
 import { PubSub } from "graphql-subscriptions";
 import type { IResolvers } from "@graphql-tools/utils";

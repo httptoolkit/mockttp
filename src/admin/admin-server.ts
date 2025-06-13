@@ -1,9 +1,11 @@
+import { Buffer } from 'buffer';
+import * as http from 'http';
+import * as net from 'net';
+
 import * as _ from 'lodash';
 import * as express from 'express';
 import * as cors from 'cors';
 import corsGate = require('cors-gate');
-import * as http from 'http';
-import * as net from 'net';
 import * as bodyParser from 'body-parser';
 import * as Ws from 'ws';
 import { v4 as uuid } from "uuid";

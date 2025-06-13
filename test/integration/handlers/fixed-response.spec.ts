@@ -1,3 +1,4 @@
+import { Buffer } from 'buffer';
 import * as http from 'http';
 
 import { getLocal } from "../../..";

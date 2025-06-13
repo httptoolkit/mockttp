@@ -1,10 +1,10 @@
+import { Buffer } from 'buffer';
+
 import { getLocal } from "../..";
 import {
     expect,
     File,
-    fetch as fetchPolyfill,
-    nodeSatisfies,
-    isNode
+    fetch as fetchPolyfill
 } from "../test-utils";
 
 const fetch = globalThis.fetch ?? fetchPolyfill;

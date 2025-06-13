@@ -1,5 +1,7 @@
-import * as _ from 'lodash';
+import { Buffer } from 'buffer';
 import * as net from 'net';
+
+import * as _ from 'lodash';
 
 import { resetOrDestroy } from '../util/socket-util';
 import { SocketMetadata } from '../util/socket-extensions';

@@ -1,4 +1,4 @@
-import { Duplex } from "stream";
+import { Duplex } from 'stream';
 
 import { Serialized, serialize } from "../serialization/serialization";
 

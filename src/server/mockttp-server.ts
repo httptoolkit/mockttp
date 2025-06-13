@@ -1,10 +1,12 @@
-import _ = require("lodash");
-import net = require("net");
-import url = require("url");
-import tls = require("tls");
-import http = require("http");
-import http2 = require("http2");
-import { EventEmitter } from "events";
+import { Buffer } from 'buffer';
+import * as net from "net";
+import * as url from "url";
+import * as tls from "tls";
+import * as http from "http";
+import * as http2 from "http2";
+
+import * as _ from "lodash";
+import { EventEmitter } from 'events';
 import portfinder = require("portfinder");
 import connect = require("connect");
 import { v4 as uuid } from "uuid";

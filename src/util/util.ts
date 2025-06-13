@@ -1,3 +1,5 @@
+import { Buffer } from 'buffer';
+
 export function nthIndexOf(input: string, matcher: string, n: number) {
     let index = -1;
 

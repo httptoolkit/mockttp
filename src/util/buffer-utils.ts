@@ -1,4 +1,4 @@
-import * as _ from 'lodash';
+import { Buffer } from 'buffer';
 import { EventEmitter } from 'events';
 import * as stream from 'stream';
 

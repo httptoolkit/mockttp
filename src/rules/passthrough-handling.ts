@@ -1,7 +1,9 @@
-import * as _ from 'lodash';
+import { Buffer } from 'buffer';
 import * as fs from 'fs/promises';
 import * as tls from 'tls';
-import url = require('url');
+import * as url from 'url';
+
+import * as _ from 'lodash';
 import { oneLine } from 'common-tags';
 import CacheableLookup from 'cacheable-lookup';
 import * as semver from 'semver';

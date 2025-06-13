@@ -1,6 +1,8 @@
-import { PassThrough } from "stream";
+import { Buffer } from 'buffer';
+import { PassThrough } from 'stream';
 import * as net from 'net';
 import * as zlib from 'zlib';
+
 import * as portfinder from 'portfinder';
 import request = require("request-promise-native");
 

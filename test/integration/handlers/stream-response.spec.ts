@@ -1,5 +1,8 @@
-import * as semver from 'semver';
+import { Buffer } from 'buffer';
 import { PassThrough } from 'stream';
+
+import * as semver from 'semver';
+
 import { getLocal } from "../../..";
 import { expect, fetch, isNode, delay } from "../../test-utils";
 

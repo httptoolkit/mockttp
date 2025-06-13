@@ -1,5 +1,5 @@
 import { merge, isString, isBuffer } from "lodash";
-import { Readable } from "stream";
+import { Readable } from 'stream';
 import * as url from 'url';
 import { MaybePromise } from '@httptoolkit/util';
 

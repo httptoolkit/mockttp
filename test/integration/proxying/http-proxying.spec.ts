@@ -1,8 +1,10 @@
-import _ = require("lodash");
+import { Buffer } from 'buffer';
 import * as http from 'http';
+import * as zlib from 'zlib';
+
+import _ = require("lodash");
 import portfinder = require('portfinder');
 import request = require("request-promise-native");
-import * as zlib from 'zlib';
 
 import {
     Mockttp,

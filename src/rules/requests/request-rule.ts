@@ -1,3 +1,5 @@
+import { Buffer } from 'buffer';
+
 import * as _ from 'lodash';
 import { v4 as uuid } from "uuid";
 

@@ -1,7 +1,9 @@
-import * as _ from 'lodash';
+import { Buffer } from 'buffer';
 import * as net from 'net';
 import * as url from 'url';
 import * as http from 'http';
+
+import * as _ from 'lodash';
 import * as WebSocket from 'ws';
 
 import {

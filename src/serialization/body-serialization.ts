@@ -1,3 +1,5 @@
+import { Buffer } from 'buffer';
+
 import * as _ from 'lodash';
 import { encode as encodeBase64 } from 'base64-arraybuffer';
 import { MaybePromise, UnreachableCheck } from '@httptoolkit/util';

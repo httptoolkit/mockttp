@@ -1,5 +1,7 @@
+import { Buffer } from 'buffer';
+import { Readable } from 'stream';
+
 import { FormDataEncoder, FormDataLike } from "form-data-encoder"
-import { Readable } from "stream";
 
 import { getLocal } from "../../..";
 import { expect, fetch, Headers, FormData, File, isNode } from "../../test-utils";

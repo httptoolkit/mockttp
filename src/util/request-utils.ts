@@ -1,13 +1,15 @@
-import * as _ from 'lodash';
+import { Buffer } from 'buffer';
+import * as stream from 'stream';
 import * as net from 'net';
 import { TLSSocket } from 'tls';
+import * as querystring from 'querystring';
+import * as url from 'url';
 import * as http from 'http';
 import * as http2 from 'http2';
-import * as stream from 'stream';
-import * as querystring from 'querystring';
+
+import * as _ from 'lodash';
 import * as multipart from 'parse-multipart-data';
 import now = require("performance-now");
-import * as url from 'url';
 import type { SUPPORTED_ENCODING } from 'http-encoding';
 import { MaybePromise } from '@httptoolkit/util';
 

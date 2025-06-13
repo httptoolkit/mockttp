@@ -1,7 +1,9 @@
+import { Buffer } from 'buffer';
 import * as net from 'net';
-import * as WebSocket from 'isomorphic-ws';
 import * as http from 'http';
 import * as https from 'https';
+
+import * as WebSocket from 'isomorphic-ws';
 import HttpProxyAgent = require('http-proxy-agent');
 import HttpsProxyAgent = require('https-proxy-agent');
 import * as portfinder from 'portfinder';

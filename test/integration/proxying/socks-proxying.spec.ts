@@ -1,3 +1,4 @@
+import { Buffer } from 'buffer';
 import * as net from 'net';
 import * as http from 'http';
 

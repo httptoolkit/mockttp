@@ -1,10 +1,12 @@
-import _ = require("lodash");
+import { Buffer } from 'buffer';
 import * as https from 'https';
 import * as http2 from 'http2';
 import * as fs from 'fs/promises';
+import * as zlib from 'zlib';
+
+import _ = require("lodash");
 import portfinder = require('portfinder');
 import request = require("request-promise-native");
-import * as zlib from 'zlib';
 
 import { getLocal, Mockttp, CompletedResponse } from "../../..";
 import {
@@ -14,8 +16,7 @@ import {
     http2ProxyRequest,
     makeDestroyable,
     DestroyableServer,
-    ignoreNetworkError,
-    nodeSatisfies
+    ignoreNetworkError
 } from "../../test-utils";
 import { CA } from "../../../src/util/tls";
 import { streamToBuffer } from "../../../src/util/buffer-utils";

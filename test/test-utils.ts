@@ -1,15 +1,18 @@
 import * as sourceMapSupport from 'source-map-support'
 sourceMapSupport.install({ handleUncaughtExceptions: false });
 
-import * as _ from 'lodash';
+import { Buffer } from 'buffer';
+import * as streams from 'stream';
 import * as net from 'net';
 import * as tls from 'tls';
+import * as URL from 'url';
 import * as http from 'http';
 import * as https from 'https';
 import * as http2 from 'http2';
+
+
+import * as _ from 'lodash';
 import * as http2Wrapper from 'http2-wrapper';
-import * as streams from 'stream';
-import * as URL from 'url';
 import * as CrossFetch from "cross-fetch";
 import {
     FormData as FormDataPolyfill,

@@ -1,10 +1,11 @@
-import _ = require('lodash');
-import url = require('url');
+import { Buffer } from 'buffer';
 import type dns = require('dns');
+import url = require('url');
 import net = require('net');
-import tls = require('tls');
 import http = require('http');
 import https = require('https');
+
+import * as _ from 'lodash';
 import * as fs from 'fs/promises';
 import * as h2Client from 'http2-wrapper';
 import { decode as decodeBase64 } from 'base64-arraybuffer';

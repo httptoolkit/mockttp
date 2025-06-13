@@ -1,3 +1,4 @@
+import { Buffer } from 'buffer';
 import * as zlib from 'zlib';
 
 import { expect, nodeOnly } from './test-utils';

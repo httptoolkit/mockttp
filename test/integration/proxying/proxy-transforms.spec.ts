@@ -1,8 +1,9 @@
-import _ = require("lodash");
+import { Buffer } from 'buffer';
 import * as path from 'path';
 import * as http from 'http';
 import * as zlib from 'zlib';
 
+import _ = require("lodash");
 import request = require("request-promise-native");
 
 import { getLocal, Mockttp } from "../../..";
