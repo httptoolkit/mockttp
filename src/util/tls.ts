@@ -2,7 +2,6 @@ import { Buffer } from 'buffer';
 import * as fs from 'fs/promises';
 
 import * as _ from 'lodash';
-import { v4 as uuid } from "uuid";
 
 import * as x509 from '@peculiar/x509';
 import * as asn1X509 from '@peculiar/asn1-x509';
@@ -220,7 +219,7 @@ export async function generateSPKIFingerprint(certPem: string): Promise<string> 
 
 // Generates a unique serial number for a certificate as a hex string:
 function generateSerialNumber() {
-    return 'A' + uuid().replace(/-/g, '');
+    return 'A' + crypto.randomUUID().replace(/-/g, '');
     // We add a leading 'A' to ensure it's always positive (not 'F') and always
     // valid (e.g. leading 000 is bad padding, and would be unparseable).
 }

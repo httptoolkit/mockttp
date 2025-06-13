@@ -2,7 +2,6 @@ import { Buffer } from 'buffer';
 import { Duplex } from 'stream';
 
 import * as _ from 'lodash';
-import { v4 as uuid } from "uuid";
 
 import { MaybePromise } from '@httptoolkit/util';
 import {
@@ -125,7 +124,7 @@ export class ClientServerChannel extends Duplex {
     ) {
         super({ objectMode: true });
 
-        this.topicId = topicId || uuid();
+        this.topicId = topicId || crypto.randomUUID();
         this.rawStream.on('error', this._onRawStreamError);
         this.rawStream.on('finish', this._onRawStreamFinish);
     }
@@ -192,7 +191,7 @@ export class ClientServerChannel extends Duplex {
             data = actionOrData;
         }
 
-        const requestId = uuid();
+        const requestId = crypto.randomUUID();
 
         return new Promise<R>((resolve, reject) => {
             const responseListener = (response: RequestMessage<R>) => {
@@ -324,7 +323,7 @@ export function serializeProxyConfig(
     channel: ClientServerChannel
 ): SerializedProxyConfig {
     if (_.isFunction(proxyConfig)) {
-        const callbackId = `proxyConfig-callback-${uuid()}`;
+        const callbackId = `proxyConfig-callback-${crypto.randomUUID()}`;
 
         channel.onRequest<
             ProxySettingCallbackParams,

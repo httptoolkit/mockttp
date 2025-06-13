@@ -9,7 +9,6 @@ import * as _ from "lodash";
 import { EventEmitter } from 'events';
 import portfinder = require("portfinder");
 import connect = require("connect");
-import { v4 as uuid } from "uuid";
 import cors = require("cors");
 import now = require("performance-now");
 import WebSocket = require("ws");
@@ -687,7 +686,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             });
         }
 
-        const id = uuid();
+        const id = crypto.randomUUID();
 
         const tags: string[] = getSocketMetadataTags(socketMetadata);
 
@@ -1050,7 +1049,7 @@ ${await this.suggestRule(request)}`
             const isHeaderOverflow = errorCode === "HPE_HEADER_OVERFLOW";
 
             const commonParams = {
-                id: uuid(),
+                id: crypto.randomUUID(),
                 tags: [
                     `client-error:${error.code || 'UNKNOWN'}`,
                     ...getSocketMetadataTags(socket[SocketMetadata])
@@ -1142,7 +1141,7 @@ ${await this.suggestRule(request)}`
         this.announceClientErrorAsync(session.initialSocket, {
             errorCode: error.code,
             request: {
-                id: uuid(),
+                id: crypto.randomUUID(),
                 tags: [
                     `client-error:${error.code || 'UNKNOWN'}`,
                     ...(isBadPreface ? ['client-error:bad-preface'] : []),
@@ -1192,7 +1191,7 @@ ${await this.suggestRule(request)}`
                 ? buildRawSocketEventData(socket)
                 : buildTlsSocketEventData(socket as tls.TLSSocket),
             {
-                id: uuid(),
+                id: crypto.randomUUID(),
                 hostname: hostname, // Deprecated, but kept here for backward compat
                 destination: { hostname, port: targetPort }
             }

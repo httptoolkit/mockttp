@@ -1,8 +1,7 @@
-import * as _ from 'lodash';
-import { v4 as uuid } from "uuid";
 import * as net from 'net';
 import * as http from 'http';
 
+import * as _ from 'lodash';
 import {
     OngoingRequest,
     CompletedRequest,
@@ -59,7 +58,7 @@ export class WebSocketRule implements WebSocketRule {
     constructor(data: WebSocketRuleData) {
         validateMockRuleData(data);
 
-        this.id = data.id || uuid();
+        this.id = data.id || crypto.randomUUID();
         this.priority = data.priority ?? RulePriority.DEFAULT;
         this.matchers = data.matchers;
         this.completionChecker = data.completionChecker;

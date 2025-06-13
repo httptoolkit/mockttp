@@ -1,7 +1,6 @@
 import { Buffer } from 'buffer';
 
 import * as _ from 'lodash';
-import { v4 as uuid } from "uuid";
 
 import { OngoingRequest, CompletedRequest, OngoingResponse, Explainable, RulePriority } from "../../types";
 import { buildBodyReader, buildInitiatedRequest, waitForCompletedRequest } from '../../util/request-utils';
@@ -48,7 +47,7 @@ export class RequestRule implements RequestRule {
     constructor(data: RequestRuleData) {
         validateMockRuleData(data);
 
-        this.id = data.id || uuid();
+        this.id = data.id || crypto.randomUUID();
         this.priority = data.priority ?? RulePriority.DEFAULT;
         this.matchers = data.matchers;
         this.completionChecker = data.completionChecker;

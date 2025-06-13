@@ -8,7 +8,6 @@ import * as cors from 'cors';
 import corsGate = require('cors-gate');
 import * as bodyParser from 'body-parser';
 import * as Ws from 'ws';
-import { v4 as uuid } from "uuid";
 
 import { createHandler as createGraphQLHandler } from 'graphql-http/lib/use/express';
 import { execute, GraphQLScalarType, subscribe } from 'graphql';
@@ -210,7 +209,7 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
                     )
                 );
 
-                const sessionId = uuid();
+                const sessionId = crypto.randomUUID();
                 await this.startSessionManagementAPI(sessionId, sessionPlugins);
 
                 res.json({
