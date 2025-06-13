@@ -31,6 +31,7 @@ export interface WebSocketRule extends Explainable {
         head: Buffer,
         options: {
             record: boolean,
+            debug: boolean,
             emitEventCallback?: (type: string, event: unknown) => void
         }
     ): Promise<void>;
@@ -91,6 +92,7 @@ export class WebSocketRule implements WebSocketRule {
         head: Buffer,
         options: {
             record: boolean,
+            debug: boolean,
             emitEventCallback?: (type: string, event: unknown) => void
         }
     ): Promise<void> {

@@ -776,6 +776,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
                 if (this.debug) console.log(`Request matched rule: ${nextRule.explain()}`);
                 await nextRule.handle(request, response, {
                     record: this.recordTraffic,
+                    debug: this.debug,
                     emitEventCallback: (this.eventEmitter.listenerCount('rule-event') !== 0)
                         ? (type, event) => this.announceRuleEventAsync(request.id, nextRule!.id, type, event)
                         : undefined
@@ -849,6 +850,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
                 if (this.debug) console.log(`Websocket matched rule: ${nextRule.explain()}`);
                 await nextRule.handle(request, socket, head, {
                     record: this.recordTraffic,
+                    debug: this.debug,
                     emitEventCallback: (this.eventEmitter.listenerCount('rule-event') !== 0)
                         ? (type, event) => this.announceRuleEventAsync(request.id, nextRule!.id, type, event)
                         : undefined

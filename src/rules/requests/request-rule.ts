@@ -21,6 +21,7 @@ export interface RequestRule extends Explainable {
     matches(request: OngoingRequest): MaybePromise<boolean>;
     handle(request: OngoingRequest, response: OngoingResponse, options: {
         record: boolean,
+        debug: boolean,
         emitEventCallback?: (type: string, event: unknown) => void
     }): Promise<void>;
     isComplete(): boolean | null;
@@ -76,12 +77,14 @@ export class RequestRule implements RequestRule {
 
     handle(req: OngoingRequest, res: OngoingResponse, options: {
         record?: boolean,
+        debug: boolean,
         emitEventCallback?: (type: string, event: unknown) => void
     }): Promise<void> {
         let stepsPromise = (async () => {
             for (let step of this.steps) {
                 const result = await step.handle(req, res, {
-                    emitEventCallback: options.emitEventCallback
+                    emitEventCallback: options.emitEventCallback,
+                    debug: options.debug
                 });
 
                 if (!result || result.continue === false) break;

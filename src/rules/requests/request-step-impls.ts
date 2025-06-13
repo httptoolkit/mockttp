@@ -164,6 +164,7 @@ export interface RequestStepImpl extends RequestStepDefinition {
 
 export interface RequestStepOptions {
     emitEventCallback?: (type: string, event: unknown) => void;
+    debug: boolean;
 }
 
 export class FixedResponseStepImpl extends FixedResponseStep {
