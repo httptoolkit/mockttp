@@ -18,7 +18,7 @@ import {
     DestroyableServer,
     ignoreNetworkError
 } from "../../test-utils";
-import { CA } from "../../../src/util/tls";
+import { getCA } from "../../../src/util/certificates";
 import { streamToBuffer } from "../../../src/util/buffer-utils";
 
 const INITIAL_ENV = _.cloneDeep(process.env);
@@ -320,7 +320,7 @@ nodeOnly(() => {
                 beforeEach(async () => {
                     const caKey = await fs.readFile('./test/fixtures/test-ca.key');
                     const caCert = await fs.readFile('./test/fixtures/test-ca.pem');
-                    const ca = new CA({ key: caKey.toString(), cert: caCert.toString(), keyLength: 1024 });
+                    const ca = await getCA({ key: caKey.toString(), cert: caCert.toString(), keyLength: 1024 });
 
                     const cert = await ca.generateCertificate('localhost');
 

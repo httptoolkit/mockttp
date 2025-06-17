@@ -1,7 +1,7 @@
 import { stripIndent } from "common-tags";
 import * as cors from 'cors';
 
-import type { CAOptions } from './util/tls';
+import type { CAOptions } from './util/certificates';
 
 import { RequestRuleBuilder } from "./rules/requests/request-rule-builder";
 import { WebSocketRuleBuilder } from "./rules/websockets/websocket-rule-builder";

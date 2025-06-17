@@ -19,7 +19,7 @@ import {
     makeDestroyable,
     delay
 } from '../test-utils';
-import { getCA } from '../../src/util/tls';
+import { getCA } from '../../src/util/certificates';
 import { pairFlatRawHeaders } from '../../src/util/header-utils';
 
 browserOnly(() => {

@@ -74,7 +74,7 @@ export type { ServerMockedEndpoint } from "./server/mocked-endpoint";
 export {
     generateCACertificate,
     generateSPKIFingerprint
-} from './util/tls';
+} from './util/certificates';
 
 // Export various referenced utility types:
 export type {
@@ -82,7 +82,7 @@ export type {
     PEM,
     CertDataOptions,
     CertPathOptions
-} from './util/tls';
+} from './util/certificates';
 export type { CachedDns, DnsLookupFunction } from './util/dns';
 export type { Serialized, SerializedValue } from './serialization/serialization';
 

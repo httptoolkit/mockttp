@@ -18,7 +18,7 @@ import {
 import { URLPattern } from "urlpattern-polyfill";
 
 import { Destination, TlsHandshakeFailure } from '../types';
-import { getCA } from '../util/tls';
+import { getCA } from '../util/certificates';
 import { shouldPassThrough } from '../util/server-utils';
 import { getDestination } from '../util/url';
 import {

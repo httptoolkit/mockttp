@@ -12,7 +12,7 @@ import {
     nodeOnly
 } from "./test-utils";
 
-import { CA, generateCACertificate, generateSPKIFingerprint } from '../src/util/tls';
+import { getCA, CA, generateCACertificate, generateSPKIFingerprint } from '../src/util/certificates';
 
 const validateLintSiteCertResults = (cert: string, results: any[]) => {
     // We don't worry about warnings
@@ -50,7 +50,7 @@ nodeOnly(() => {
         });
 
         it("can generate a certificate for a domain", async () => {
-            const ca = new CA({ key: await caKey, cert: await caCert, keyLength: 2048 });
+            const ca = await getCA({ key: await caKey, cert: await caCert, keyLength: 2048 });
 
             const { cert, key } = await ca.generateCertificate('localhost')
 
@@ -65,7 +65,7 @@ nodeOnly(() => {
         });
 
         it("can calculate the SPKI fingerprint for a certificate", async () => {
-            const ca = new CA({ key: await caKey, cert: await caCert, keyLength: 2048 });
+            const ca = await getCA({ key: await caKey, cert: await caCert, keyLength: 2048 });
 
             const { cert } = await ca.generateCertificate('localhost');
 
@@ -73,6 +73,15 @@ nodeOnly(() => {
             const certFingerprint = await generateSPKIFingerprint(cert);
 
             expect(caFingerprint).not.to.equal(certFingerprint);
+        });
+
+        it("can use a PKCS#1 RSA private key as a CA", async () => {
+            // We only need these for backward compatibility, but it is generally good practice to
+            // be able to handle this properly, and very convenient if you currently have one.
+            await getCA({
+                keyPath: path.join(__dirname, 'fixtures', 'ca-pkcs1.key'),
+                certPath: path.join(__dirname, 'fixtures', 'ca-pkcs1.pem'),
+            });
         });
 
         describe("with a constrained CA", () => {
@@ -99,7 +108,7 @@ nodeOnly(() => {
                     nameConstraints: { permitted: ["example.com"] },
                 });
                 constrainedCaCert = rootCa.cert;
-                constrainedCA = new CA(rootCa);
+                constrainedCA = await getCA(rootCa);
             });
 
             it("can generate a valid certificate for a domain included in a constrained CA", async () => {
@@ -166,7 +175,7 @@ nodeOnly(() => {
 
         it("should generate a CA certificate that can be used to create domain certificates", async () => {
             const caCertificate = await caCertificatePromise;
-            const ca = new CA({ key: caCertificate.key, cert: caCertificate.cert, keyLength: 1024 });
+            const ca = await getCA({ key: caCertificate.key, cert: caCertificate.cert, keyLength: 1024 });
 
             const { cert, key } = await ca.generateCertificate('localhost');
 
@@ -204,7 +213,7 @@ nodeOnly(() => {
             this.timeout(5000); // Large cert + remote request can make this slow
 
             const caCertificate = await caCertificatePromise;
-            const ca = new CA({ key: caCertificate.key, cert: caCertificate.cert, keyLength: 2048 });
+            const ca = await getCA({ key: caCertificate.key, cert: caCertificate.cert, keyLength: 2048 });
 
             const { cert } = await ca.generateCertificate('httptoolkit.com');
 
@@ -237,7 +246,7 @@ nodeOnly(() => {
             this.timeout(10_000); // Large cert + remote request can make this slow
 
             const caCertificate = await caCertificatePromise;
-            const ca = new CA({ key: caCertificate.key, cert: caCertificate.cert, keyLength: 2048 });
+            const ca = await getCA({ key: caCertificate.key, cert: caCertificate.cert, keyLength: 2048 });
 
             const { cert } = await ca.generateCertificate('under_score.httptoolkit.com');
 

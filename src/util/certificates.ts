@@ -7,6 +7,9 @@ import * as x509 from '@peculiar/x509';
 import * as asn1X509 from '@peculiar/asn1-x509';
 import * as asn1Schema from '@peculiar/asn1-schema';
 
+// Import for PKCS#8 structure
+import { PrivateKeyInfo } from '@peculiar/asn1-pkcs8';
+
 const crypto = globalThis.crypto;
 
 export type CAOptions = (CertDataOptions | CertPathOptions);
@@ -71,11 +74,50 @@ function arrayBufferToPem(buffer: ArrayBuffer, label: string): string {
     return `-----BEGIN ${label}-----\n${lines.join('\n')}\n-----END ${label}-----\n`;
 }
 
+// OID for rsaEncryption - used to wrap PKCS#1 keys into PKCS#8 below:
+const rsaEncryptionOid = "1.2.840.113549.1.1.1";
+
 async function pemToCryptoKey(pem: string) {
-    const derKey = x509.PemConverter.decodeFirst(pem);
+    // The PEM might be PKCS#8 ("BEGIN PRIVATE KEY") or PKCS#1 ("BEGIN
+    // RSA PRIVATE KEY"). We want to transparently accept both, but
+    // we can only import PKCS#8, so we detect & convert if required.
+
+    const keyData = x509.PemConverter.decodeFirst(pem);
+    let pkcs8KeyData: ArrayBuffer;
+
+    try {
+        // Try to parse the PEM as PKCS#8 PrivateKeyInfo - if it works,
+        // we can just use it directly as-is:
+        asn1Schema.AsnConvert.parse(keyData, PrivateKeyInfo);
+        pkcs8KeyData = keyData;
+    } catch (e: any) {
+        // If parsing as PKCS#8 fails, assume it's PKCS#1 (RSAPrivateKey)
+        // and proceed to wrap it as an RSA key in a PrivateKeyInfo structure.
+        const rsaPrivateKeyDer = keyData;
+
+        try {
+            const privateKeyInfo = new PrivateKeyInfo({
+                version: 0,
+                privateKeyAlgorithm: new asn1X509.AlgorithmIdentifier({
+                    algorithm: rsaEncryptionOid
+                }),
+                privateKey: new asn1Schema.OctetString(rsaPrivateKeyDer)
+            });
+            pkcs8KeyData = asn1Schema.AsnConvert.serialize(privateKeyInfo);
+        } catch (conversionError: any) {
+            throw new Error(
+                `Unsupported or malformed key format. Failed to parse as PKCS#8 with ${
+                    e.message || e.toString()
+                } and failed to convert to PKCS#1 with ${
+                    conversionError.message || conversionError.toString()
+                }`
+            );
+        }
+    }
+
     return await crypto.subtle.importKey(
-        "pkcs8",
-        derKey,
+        "pkcs8", // N.b, pkcs1 is not supported, which is why we need the above
+        pkcs8KeyData,
         { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
         true, // Extractable
         ["sign"]
@@ -243,7 +285,10 @@ export async function getCA(options: CAOptions): Promise<CA> {
         throw new Error('Unrecognized https options: you need to provide either a keyPath & certPath, or a key & cert.')
     }
 
-    return new CA(certOptions);
+    const caCert = new x509.X509Certificate(certOptions.cert.toString());
+    const caKey = await pemToCryptoKey(certOptions.key.toString());
+
+    return new CA(caCert, caKey, options);
 }
 
 // We share a single keypair across all certificates in this process, and
@@ -261,20 +306,22 @@ const KEY_PAIR_ALGO = {
     publicExponent: new Uint8Array([1, 0, 1])
 };
 
-export class CA {
-    private caCert: x509.X509Certificate;
-    private caKey: Promise<CryptoKey>;
-    private options: CertDataOptions;
+export type { CA };
+
+class CA {
+    private options: BaseCAOptions;
 
     private certCache: { [domain: string]: GeneratedCertificate };
 
-    constructor(options: CertDataOptions) {
-        this.caKey = pemToCryptoKey(options.key.toString());
-        this.caCert = new x509.X509Certificate(options.cert.toString());
+    constructor(
+        private caCert: x509.X509Certificate,
+        private caKey: CryptoKey,
+        options?: BaseCAOptions
+    ) {
         this.certCache = {};
         this.options = options ?? {};
 
-        const keyLength = options.keyLength || 2048;
+        const keyLength = this.options.keyLength || 2048;
 
         if (!KEY_PAIR || KEY_PAIR.length < keyLength) {
             // If we have no key, or not a long enough one, generate one.
@@ -376,7 +423,7 @@ export class CA {
             notAfter,
             signingAlgorithm: KEY_PAIR_ALGO,
             publicKey: leafKeyPair.publicKey,
-            signingKey: await this.caKey,
+            signingKey: this.caKey,
             extensions
         });
 
