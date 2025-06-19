@@ -617,13 +617,17 @@ export class PassThroughStepImpl extends PassThroughStep {
             reqBodyOverride = await buildOverriddenBody(modifiedReq, headers);
 
             if (reqBodyOverride || modifiedReq?.headers) {
-                // Automatically match the content-length to the body, unless it was explicitly overriden.
-                headers['content-length'] = getRequestContentLengthAfterModification(
+                // Automatically match the content-length to the body:
+                const updatedCLHeader = getRequestContentLengthAfterModification(
                     reqBodyOverride || completedRequest.body.buffer,
                     clientHeaders,
                     modifiedReq?.headers,
                     { httpVersion: isH2Downstream ? 2 : 1 }
                 );
+
+                if (updatedCLHeader !== undefined) {
+                    headers['content-length'] = updatedCLHeader;
+                }
             }
 
             // Reparse the new URL, if necessary

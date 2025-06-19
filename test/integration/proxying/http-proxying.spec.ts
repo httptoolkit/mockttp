@@ -620,6 +620,99 @@ nodeOnly(() => {
                 expect(decodedRequestBody.toString()).to.equal("Raw manually encoded data");
             });
 
+            it("should be able to rewrite a request's body and fix the content-length automatically", async () => {
+                await remoteServer.forPost('/').thenCallback(async (req) => ({
+                    statusCode: 200,
+                    json: { // Echo request back as JSON in response
+                        headers: req.headers,
+                        body: await req.body.getText()
+                    }
+                }));
+
+                await server.forPost(remoteServer.urlFor("/")).thenPassThrough({
+                    beforeRequest: async (req) => {
+                        expect(await req.body.getText()).to.equal('initial body');
+
+                        const body = Buffer.from(await req.body.getText() + ' extended');
+
+                        return {
+                            body,
+                            headers: {
+                                'content-length': '0' // Wrong!
+                            }
+                        };
+                    }
+                });
+
+                let response = await request.post(remoteServer.urlFor("/"), {
+                    body: "initial body"
+                });
+                const requestData = JSON.parse(response);
+                expect(requestData.headers['content-length']).to.equal('21'); // Fixed
+                expect(requestData.body).to.equal("initial body extended");
+            });
+
+            it("should be able to rewrite a request's body and add the missing content-length automatically", async () => {
+                await remoteServer.forPost('/').thenCallback(async (req) => ({
+                    statusCode: 200,
+                    json: { // Echo request back as JSON in response
+                        headers: req.headers,
+                        body: await req.body.getText()
+                    }
+                }));
+
+                await server.forPost(remoteServer.urlFor("/")).thenPassThrough({
+                    beforeRequest: async (req) => {
+                        expect(await req.body.getText()).to.equal('initial body');
+
+                        const body = Buffer.from(await req.body.getText() + ' extended');
+
+                        const headers = { ...req.headers };
+                        delete headers['content-length']; // Remove the existing content-length
+
+                        return { body, headers };
+                    }
+                });
+
+                let response = await request.post(remoteServer.urlFor("/"), {
+                    body: "initial body"
+                });
+                const requestData = JSON.parse(response);
+                expect(requestData.headers['content-length']).to.equal('21'); // Fixed
+                expect(requestData.body).to.equal("initial body extended");
+            });
+
+            it("should be able to rewrite a request's body without a content-length given transfer-encoding", async () => {
+                await remoteServer.forPost('/').thenCallback(async (req) => ({
+                    statusCode: 200,
+                    json: { // Echo request back as JSON in response
+                        headers: req.headers,
+                        body: await req.body.getText()
+                    }
+                }));
+
+                await server.forPost(remoteServer.urlFor("/")).thenPassThrough({
+                    beforeRequest: async (req) => {
+                        expect(await req.body.getText()).to.equal('initial body');
+
+                        const body = Buffer.from(await req.body.getText() + ' extended');
+
+                        return {
+                            body,
+                            headers: { 'transfer-encoding': 'chunked' }
+                        };
+                    }
+                });
+
+                let response = await request.post(remoteServer.urlFor("/"), {
+                    body: "initial body"
+                });
+                const requestData = JSON.parse(response);
+                expect(requestData.headers['content-length']).to.equal(undefined);
+                expect(requestData.headers['transfer-encoding']).to.equal('chunked');
+                expect(requestData.body).to.equal("initial body extended");
+            });
+
             it("should be able to edit a request to inject a response directly", async () => {
                 const remoteEndpoint = await remoteServer.forPost('/').thenReply(200);
 
