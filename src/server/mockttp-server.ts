@@ -1209,22 +1209,24 @@ ${await this.suggestRule(request)}`
 
         if (type === 'raw') {
             socket.on('data', (data) => {
+                const eventTimestamp = now();
                 setImmediate(() => {
                     this.eventEmitter.emit('raw-passthrough-data', {
                         id: eventData.id,
                         direction: 'received',
                         content: data,
-                        eventTimestamp: now()
+                        eventTimestamp
                     } satisfies RawPassthroughDataEvent);
                 });
             });
             upstreamSocket.on('data', (data) => {
+                const eventTimestamp = now();
                 setImmediate(() => {
                     this.eventEmitter.emit('raw-passthrough-data', {
                         id: eventData.id,
                         direction: 'sent',
                         content: data,
-                        eventTimestamp: now()
+                        eventTimestamp
                     } satisfies RawPassthroughDataEvent);
                 });
             });
