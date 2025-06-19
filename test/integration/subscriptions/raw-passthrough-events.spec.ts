@@ -110,6 +110,37 @@ nodeOnly(() => {
             expect(fourthDataEvent.eventTimestamp).to.be.greaterThan(thirdDataEvent.eventTimestamp);
         });
 
+        it("should expose large received data", async () => {
+            const openDeferred = getDeferred<RawPassthroughEvent>();
+            let receivedDataEvents = [] as RawPassthroughDataEvent[];
+
+            await server.on('raw-passthrough-opened', (e) => openDeferred.resolve(e));
+            await server.on('raw-passthrough-data', (e) => {
+                if (e.direction === 'received') {
+                    receivedDataEvents.push(e)
+                }
+            });
+
+            const socksSocket = await openSocksSocket(server, 'localhost', remotePort);
+
+            const message = 'hello'.repeat(20_000); // =100KB each
+
+            // Write 500KB in 100KB chunks with a brief delay. Larger than one TCP packet (65K)
+            // in all cases, should cause some weirdness.
+            for (let i = 0; i < 5; i++) {
+                socksSocket.write(message);
+                await delay(0);
+            }
+
+            await openDeferred;
+            await delay(10);
+
+            const totalLength = receivedDataEvents.reduce((sum, e) => sum + e.content.toString().length, 0);
+            expect(totalLength).to.equal(500_000);
+            expect(receivedDataEvents[0].content.slice(0, 5).toString()).to.equal('hello');
+            expect(receivedDataEvents[receivedDataEvents.length - 1].content.slice(-5).toString()).to.equal('hello');
+        });
+
         describe("with a remote client", () => {
             const adminServer = getAdminServer();
             const remoteClient = getRemote({
