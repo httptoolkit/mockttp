@@ -222,20 +222,28 @@ export function buildSocksServer(options: SocksServerOptions): SocksServer {
 
         let address: SocksTcpAddress;
 
-        if (addressType === 0x1) {
+        if (addressType === 0x1) { // IPv4
             const addressData = await readBytes(socket, 6);
             const ip = addressData.subarray(0, 4).join('.');
             const port = addressData.readUInt16BE(4);
             address = { type: 'ipv4', ip, port };
-        } else if (addressType === 0x3) {
+        } else if (addressType === 0x3) { // DNS
             const nameLength = await readBytes(socket, 1);
             const nameAndPortData = await readBytes(socket, nameLength[0] + 2);
             const name = nameAndPortData.subarray(0, nameLength[0]).toString('utf8');
             const port = nameAndPortData.readUInt16BE(nameLength[0]);
             address = { type: 'hostname', hostname: name, port };
-        } else if (addressType === 0x4) {
+        } else if (addressType === 0x4) { // IPv6
             const addressData = await readBytes(socket, 18);
-            const ip = addressData.subarray(0, 16).join(':');
+
+            const ipv6Bytes = addressData.subarray(0, 16);
+            const hextets = [];
+            for (let i = 0; i < ipv6Bytes.length; i += 2) {
+                const hextet = ((ipv6Bytes[i] << 8) | ipv6Bytes[i + 1]).toString(16);
+                hextets.push(hextet);
+            }
+            const ip = hextets.join(':');
+
             const port = addressData.readUInt16BE(16);
             address = { type: 'ipv6', ip, port };
         } else {
