@@ -225,13 +225,6 @@ export async function openSocksSocket(
     return socksConn.socket;
 }
 
-// Write a message to a socket that will trigger a respnse, but kill the socket
-// before the response is received, so a real response triggers a reset.
-export async function writeAndReset(socket: net.Socket, content: string) {
-    socket.write(content);
-    setTimeout(() => socket.destroy(), 0);
-}
-
 export function makeAbortableRequest(server: Mockttp, path: string) {
     if (isNode) {
         let req = http.request({

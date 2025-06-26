@@ -1,6 +1,5 @@
 import * as _ from 'lodash';
 import HttpsProxyAgent = require('https-proxy-agent');
-import * as semver from 'semver';
 
 import {
     getLocal,
@@ -16,7 +15,6 @@ import {
     delay,
     openRawSocket,
     openRawTlsSocket,
-    writeAndReset,
     watchForEvent,
     http2DirectRequest
 } from "../../test-utils";
@@ -149,25 +147,46 @@ describe("TLS error subscriptions", () => {
             await expectNoClientErrors();
         });
 
-        it("should not be sent for requests from TLS clients that reset later in the connection", async function () {
-            this.retries(3); // Can be slightly unstable, due to the race for RESET
+        it("should be sent for requests from TLS clients that reset directly after handshake", async function () {
+            const events: any[] = [];
+            await goodServer.on('tls-client-error', () => events.push('tls-client-error'));
+            await goodServer.on('client-error', () => events.push('client-error'));
 
+            const tcpSocket = await openRawSocket(goodServer)
+            await openRawTlsSocket(tcpSocket);
+            tcpSocket.resetAndDestroy();
+
+            await delay(50);
+
+            // We see a TLS error (reset like this is a common form of cert rejection) but no client error
+            // (no HTTP request has even been attempted):
+            expect(events).to.deep.equal(['tls-client-error']);
+        });
+
+        it("should not be sent for requests from TLS clients that reset later in the connection", async function () {
             let seenTlsErrorPromise = getDeferred<TlsHandshakeFailure>();
             await goodServer.on('tls-client-error', (r) => seenTlsErrorPromise.resolve(r));
 
             let seenClientErrorPromise = getDeferred<ClientError>();
             await goodServer.on('client-error', (e) => seenClientErrorPromise.resolve(e));
 
-            const tlsSocket = await openRawTlsSocket(goodServer);
-            writeAndReset(tlsSocket, "GET / HTTP/1.1\r\n\r\n");
+            const tcpSocket = await openRawSocket(goodServer)
+            const tlsSocket = await openRawTlsSocket(tcpSocket);
+            tlsSocket.write("GET / HTTP/1.1\r\nHost: hello.world.invalid\r\n"); // Incomplete HTTP request
+
+            // Kill the underlying socket before the request head completes (but after some content is sent):
+            setTimeout(() => {
+                tcpSocket.resetAndDestroy()
+            }, 10);
 
             const seenTlsError = await Promise.race([
-                delay(100).then(() => false),
+                delay(50).then(() => false),
                 seenTlsErrorPromise
             ]);
-            expect(seenTlsError).to.equal(false);
+
 
             // No TLS error, but we do expect a client reset error:
+            expect(seenTlsError).to.equal(false);
             expect((await seenClientErrorPromise).errorCode).to.equal('ECONNRESET');
         });
 
@@ -175,15 +194,16 @@ describe("TLS error subscriptions", () => {
             let seenTlsErrorPromise = getDeferred<TlsHandshakeFailure>();
             await goodServer.on('tls-client-error', (r) => seenTlsErrorPromise.resolve(r));
 
-            const tlsSocket = await openRawSocket(goodServer);
-            writeAndReset(tlsSocket, ""); // Send nothing, just connect & RESET
+            const rawSocket = await openRawSocket(goodServer);
+            rawSocket.resetAndDestroy(); // Immediate reset without sending any data
 
             const seenTlsError = await Promise.race([
-                delay(100).then(() => false),
+                delay(50).then(() => false),
                 seenTlsErrorPromise
             ]);
-            expect(seenTlsError).to.equal(false);
 
+            // No TLS error, no client reset error:
+            expect(seenTlsError).to.equal(false);
             await expectNoClientErrors();
         });
     });
