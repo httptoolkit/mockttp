@@ -10,9 +10,11 @@ import {
     getLocal
 } from "../../..";
 import {
+    delay,
     expect,
     getDeferred,
     nodeOnly,
+    openRawSocket,
     openSocksSocket,
     sendRawRequest
 } from "../../test-utils";
@@ -139,6 +141,30 @@ nodeOnly(() => {
                 });
                 expect((await passthroughEvent).hostname).to.equal('invalid.example');
                 expect((await passthroughEvent).port).to.equal(remoteServer.port.toString());
+            });
+
+            it("should not crash given a failed SOCKS handshake", async () => {
+                const events = [];
+                await server.on('request-initiated', (req) => events.push(req));
+                await server.on('client-error', (err) => events.push(err));
+                await server.on('tls-client-error', (err) => events.push(err));
+                await server.on('raw-passthrough-opened', (err) => events.push(err));
+
+                const socket = await openRawSocket(server);
+                socket.write(Buffer.from([0x05, 0x01, 0x00])); // Version 5, 1 method, no auth
+
+                const result = await new Promise((resolve, reject) => {
+                    socket.once('data', resolve);
+                    socket.on('error', reject);
+                })
+                expect(result).to.deep.equal(Buffer.from([0x05, 0x0])); // Server accepts no auth
+
+                // Server is now waiting for destination - we reset the connection instead
+                socket.resetAndDestroy();
+
+                // No crash! And no events.
+                await delay(10);
+                expect(events.length).to.equal(0);
             });
 
         });

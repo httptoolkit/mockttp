@@ -79,7 +79,7 @@ export function buildSocksServer(options: SocksServerOptions): SocksServer {
     return net.createServer(handleSocksConnect);
 
 
-    async function handleSocksConnect(this: net.Server, socket: net.Socket) {
+    async function handleSocksConnect(this: net.Server, socket: net.Socket): Promise<void> {
         const server = this;
         // Until we pass this socket onwards, we handle (and drop) any errors on it:
         socket.on('error', ignoreError);
@@ -88,18 +88,18 @@ export function buildSocksServer(options: SocksServerOptions): SocksServer {
             const firstByte = await readBytes(socket, 1);;
             const version = firstByte[0];
             if (version === 0x04) {
-                return handleSocksV4(socket, (address: SocksTcpAddress) => {
+                await handleSocksV4(socket, (address: SocksTcpAddress) => {
                     socket.removeListener('error', ignoreError);
                     server.emit('socks-tcp-connect', socket, address);
                 });
             } else if (version === 0x05) {
-                return handleSocksV5(socket, (address: SocksTcpAddress) => {
+                await handleSocksV5(socket, (address: SocksTcpAddress) => {
                     socket.removeListener('error', ignoreError);
                     server.emit('socks-tcp-connect', socket, address);
                 });
             } else {
                 // Should never happen, since this is sniffed by Httpolyglot, but just in case:
-                return resetOrDestroy(socket);
+                resetOrDestroy(socket);
             }
         } catch (err) {
             // We log but otherwise ignore failures, e.g. if the client closes the
@@ -329,7 +329,7 @@ async function handleUsernamePasswordMetadata(socket: net.Socket) {
 async function readBytes(socket: net.Socket, length?: number | undefined): Promise<Buffer> {
     const buffer = socket.read(length);
     if (buffer === null) {
-        return new Promise((resolve, reject) => {
+        return new Promise<Buffer>((resolve, reject) => {
             socket.once('readable', () => resolve(readBytes(socket, length)));
             socket.once('close', () => reject(new Error('Socket closed')));
             socket.once('error', reject);
