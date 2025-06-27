@@ -68,7 +68,8 @@ import {
     LastHopEncrypted,
     LastTunnelAddress,
     TlsSetupCompleted,
-    SocketMetadata
+    SocketMetadata,
+    TlsMetadata
 } from '../util/socket-extensions';
 import { getSocketMetadataTags, getSocketMetadataFromProxyAuth } from '../util/socket-metadata'
 import {
@@ -612,23 +613,24 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
                 ? getDestination(req.protocol, req.socket[LastTunnelAddress])
                 : undefined;
 
-            const isTunnelToIp = tunnelDestination && isIP(tunnelDestination.hostname);
+            const isTunnelToIp = !!tunnelDestination && isIP(tunnelDestination.hostname);
 
             const urlDestination = getDestination(req.protocol,
                 (!isTunnelToIp
                 ? (
                     req.socket[LastTunnelAddress] ?? // Tunnel domain name is preferred if available
                     getHeaderValue(rawHeaders, ':authority') ??
-                    getHeaderValue(rawHeaders, 'host')
+                    getHeaderValue(rawHeaders, 'host') ??
+                    req.socket[TlsMetadata]?.sniHostname
                 )
                 : (
                     getHeaderValue(rawHeaders, ':authority') ??
                     getHeaderValue(rawHeaders, 'host') ??
+                    req.socket[TlsMetadata]?.sniHostname ??
                     req.socket[LastTunnelAddress] // We use the IP iff we have no hostname available at all
                 ))
                 ?? `localhost:${this.port}` // If you specify literally nothing, it's a direct request
             );
-
 
             // Actual destination always follows the tunnel - even if it's an IP
             req.destination = tunnelDestination

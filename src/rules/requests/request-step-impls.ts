@@ -86,7 +86,7 @@ import {
     getDnsLookupFunction,
     getTrustedCAs,
     buildUpstreamErrorTags,
-    getUrlHostname,
+    getEffectiveHostname,
     applyDestinationTransforms
 } from '../passthrough-handling';
 
@@ -422,11 +422,17 @@ export class PassThroughStepImpl extends PassThroughStep {
         // Capture raw request data:
         let { method, url: reqUrl, rawHeaders, destination } = clientReq as OngoingRequest;
         let { protocol, pathname, search: query } = url.parse(reqUrl);
-        let hostname: string = destination.hostname;
+        const clientSocket = (clientReq as any).socket as net.Socket;
+
+        // Actual IP address or hostname
+        let hostAddress = destination.hostname;
+        // Same as hostAddress, unless it's an IP, in which case it's our best guess of the
+        // functional 'name' for the host (from Host header or SNI).
+        let hostname: string = getEffectiveHostname(hostAddress, clientSocket, rawHeaders);
         let port: string | null | undefined = destination.port.toString();
 
         // Check if this request is a request loop:
-        if (isSocketLoop(this.outgoingSockets, (clientReq as any).socket)) {
+        if (isSocketLoop(this.outgoingSockets, clientSocket)) {
             throw new Error(oneLine`
                 Passthrough loop detected. This probably means you're sending a request directly
                 to a passthrough endpoint, which is forwarding it to the target URL, which is a
@@ -444,8 +450,8 @@ export class PassThroughStepImpl extends PassThroughStep {
 
         const isH2Downstream = isHttp2(clientReq);
 
-        hostname = await getClientRelativeHostname(
-            hostname,
+        hostAddress = await getClientRelativeHostname(
+            hostAddress,
             clientReq.remoteIpAddress,
             getDnsLookupFunction(this.lookupOptions)
         );
@@ -466,6 +472,8 @@ export class PassThroughStepImpl extends PassThroughStep {
                 matchReplaceBody
             } = this.transformRequest;
 
+            const originalHostname = hostname;
+
             ({
                 reqUrl,
                 protocol,
@@ -483,6 +491,12 @@ export class PassThroughStepImpl extends PassThroughStep {
                  pathname,
                  query
             }));
+
+            // If you modify the hostname, we also treat that as modifying the
+            // resulting destination in turn:
+            if (hostname !== originalHostname) {
+                hostAddress = hostname;
+            }
 
             if (replaceMethod) {
                 method = replaceMethod;
@@ -579,8 +593,7 @@ export class PassThroughStepImpl extends PassThroughStep {
 
             if (modifiedReq?.response) {
                 if (modifiedReq.response === 'close') {
-                    const socket: net.Socket = (clientReq as any).socket;
-                    socket.end();
+                    clientSocket.end();
                     throw new AbortError('Connection closed intentionally by rule', 'E_RULE_BREQ_CLOSE');
                 } else if (modifiedReq.response === 'reset') {
                     requireSocketResetSupport();
@@ -594,18 +607,27 @@ export class PassThroughStepImpl extends PassThroughStep {
             }
 
             method = modifiedReq?.method || method;
-            reqUrl = modifiedReq?.url || reqUrl;
+
+            // Reparse the new URL, if necessary
+            if (modifiedReq?.url) {
+                if (!isAbsoluteUrl(modifiedReq?.url)) throw new Error("Overridden request URLs must be absolute");
+
+                reqUrl = modifiedReq.url;
+
+                const parsedUrl = url.parse(reqUrl);
+                ({ protocol, port, pathname, search: query } = parsedUrl);
+                hostname = parsedUrl.hostname!;
+                hostAddress = hostname;
+            }
 
             let headers = modifiedReq?.headers || clientHeaders;
 
             // We need to make sure the Host/:authority header is updated correctly - following the user's returned value if
             // they provided one, but updating it if not to match the effective target URL of the request:
-            const expectedTargetUrl = modifiedReq?.url ?? reqUrl;
-
             Object.assign(headers,
                 isH2Downstream
-                    ? getH2HeadersAfterModification(expectedTargetUrl, clientHeaders, modifiedReq?.headers)
-                    : { 'host': getHostAfterModification(expectedTargetUrl, clientHeaders, modifiedReq?.headers) }
+                    ? getH2HeadersAfterModification(reqUrl, clientHeaders, modifiedReq?.headers)
+                    : { 'host': getHostAfterModification(reqUrl, clientHeaders, modifiedReq?.headers) }
             );
 
             validateCustomHeaders(
@@ -628,14 +650,6 @@ export class PassThroughStepImpl extends PassThroughStep {
                 if (updatedCLHeader !== undefined) {
                     headers['content-length'] = updatedCLHeader;
                 }
-            }
-
-            // Reparse the new URL, if necessary
-            if (modifiedReq?.url) {
-                if (!isAbsoluteUrl(modifiedReq?.url)) throw new Error("Overridden request URLs must be absolute");
-                const parsedUrl = url.parse(reqUrl);
-                ({ protocol, port, pathname, search: query } = parsedUrl);
-                hostname = parsedUrl.hostname!;
             }
 
             rawHeaders = objectHeadersToRaw(headers);
@@ -726,7 +740,7 @@ export class PassThroughStepImpl extends PassThroughStep {
             serverReq = await makeRequest({
                 protocol,
                 method,
-                hostname,
+                hostname: hostAddress,
                 port,
                 family,
                 path: `${pathname || '/'}${query || ''}`,
@@ -739,7 +753,7 @@ export class PassThroughStepImpl extends PassThroughStep {
                 agent,
 
                 // TLS options:
-                ...getUpstreamTlsOptions(strictHttpsChecks),
+                ...getUpstreamTlsOptions({ strictHttpsChecks, serverName: hostname }),
                 ...clientCert,
                 ...caConfig
             }, (serverRes) => (async () => {
@@ -944,7 +958,7 @@ export class PassThroughStepImpl extends PassThroughStep {
                         }
 
                         if (modifiedRes === 'close') {
-                            (clientReq as any).socket.end();
+                            clientSocket.end();
                         } else if (modifiedRes === 'reset') {
                             requireSocketResetSupport();
                             resetOrDestroy(clientReq);
@@ -1151,12 +1165,10 @@ export class PassThroughStepImpl extends PassThroughStep {
             // Fire rule events, to allow in-depth debugging of upstream traffic & modifications,
             // so anybody interested can see _exactly_ what we're sending upstream here:
             if (options.emitEventCallback) {
-                const urlHost = getUrlHostname(hostname, rawHeaders);
-
                 options.emitEventCallback('passthrough-request-head', {
                     method,
                     protocol: protocol!.replace(/:$/, ''),
-                    hostname: urlHost,
+                    hostname,
                     port,
                     path: `${pathname || '/'}${query || ''}`,
                     rawHeaders

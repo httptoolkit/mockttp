@@ -15,7 +15,7 @@ import {
     MockttpDeserializationOptions
 } from '../rule-deserialization'
 
-import { OngoingRequest, RawHeaders } from "../../types";
+import { Destination, OngoingRequest, RawHeaders } from "../../types";
 
 import {
     RequestStepOptions,
@@ -24,7 +24,7 @@ import {
     ResetConnectionStepImpl,
     TimeoutStepImpl
 } from '../requests/request-step-impls';
-import { getEffectivePort } from '../../util/url';
+import { getDefaultPort, getEffectivePort } from '../../util/url';
 import { resetOrDestroy } from '../../util/socket-util';
 import { isHttp2 } from '../../util/request-utils';
 import {
@@ -45,7 +45,7 @@ import {
     getDnsLookupFunction,
     shouldUseStrictHttps,
     getTrustedCAs,
-    getUrlHostname,
+    getEffectiveHostname,
     applyDestinationTransforms
 } from '../passthrough-handling';
 
@@ -257,21 +257,28 @@ export class PassThroughWebSocketStepImpl extends PassThroughWebSocketStep {
 
         let reqUrl = req.url!;
         let { protocol, pathname, search: query } = url.parse(reqUrl);
-        let hostname: string | null = req.destination.hostname;
-        let port: string | null = req.destination.port.toString();
         let rawHeaders = req.rawHeaders;
+
+        // Actual IP address or hostname
+        let hostAddress = req.destination.hostname;
+        // Same as hostAddress, unless it's an IP, in which case it's our best guess of the
+        // functional 'name' for the host (from Host header or SNI).
+        let hostname: string = getEffectiveHostname(hostAddress, socket, rawHeaders);
+        let port: string | null = req.destination.port.toString();
 
         const reqMessage = req as unknown as http.IncomingMessage;
         const isH2Downstream = isHttp2(req);
 
-        hostname = await getClientRelativeHostname(
-            hostname,
+        hostAddress = await getClientRelativeHostname(
+            hostAddress,
             req.remoteIpAddress,
             getDnsLookupFunction(this.lookupOptions)
         );
 
         if (this.transformRequest) {
-            ({ reqUrl, rawHeaders } = applyDestinationTransforms(this.transformRequest, {
+            const originalHostname = hostname;
+
+            ({ protocol, hostname, port, reqUrl, rawHeaders } = applyDestinationTransforms(this.transformRequest, {
                  isH2Downstream,
                  rawHeaders,
                  port,
@@ -280,12 +287,26 @@ export class PassThroughWebSocketStepImpl extends PassThroughWebSocketStep {
                  pathname,
                  query
             }));
+
+            // If you modify the hostname, we also treat that as modifying the
+            // resulting destination in turn:
+            if (hostname !== originalHostname) {
+                hostAddress = hostname;
+            }
         }
 
-        await this.connectUpstream(reqUrl, reqMessage, rawHeaders, socket, head, options);
+        const destination = {
+            hostname: hostAddress,
+            port: port
+                ? parseInt(port, 10)
+                : getDefaultPort(protocol ?? 'http')
+        };
+
+        await this.connectUpstream(destination, reqUrl, reqMessage, rawHeaders, socket, head, options);
     }
 
     private async connectUpstream(
+        destination: Destination,
         wsUrl: string,
         req: http.IncomingMessage,
         rawHeaders: RawHeaders,
@@ -295,10 +316,11 @@ export class PassThroughWebSocketStepImpl extends PassThroughWebSocketStep {
     ) {
         const parsedUrl = url.parse(wsUrl);
 
+        const effectiveHostname = parsedUrl.hostname!; // N.b. not necessarily the same as destination
         const effectivePort = getEffectivePort(parsedUrl);
 
         const strictHttpsChecks = shouldUseStrictHttps(
-            parsedUrl.hostname!,
+            effectiveHostname,
             effectivePort,
             this.ignoreHostHttpsErrors
         );
@@ -306,7 +328,7 @@ export class PassThroughWebSocketStepImpl extends PassThroughWebSocketStep {
         // Use a client cert if it's listed for the host+port or whole hostname
         const hostWithPort = `${parsedUrl.hostname}:${effectivePort}`;
         const clientCert = this.clientCertificateHostMap[hostWithPort] ||
-            this.clientCertificateHostMap[parsedUrl.hostname!] ||
+            this.clientCertificateHostMap[effectiveHostname] ||
             {};
 
         const trustedCerts = await this.trustedCACertificates();
@@ -318,7 +340,7 @@ export class PassThroughWebSocketStepImpl extends PassThroughWebSocketStep {
 
         const agent = await getAgent({
             protocol: parsedUrl.protocol as 'ws:' | 'wss:',
-            hostname: parsedUrl.hostname!,
+            hostname: effectiveHostname,
             port: effectivePort,
             proxySettingSource,
             tryHttp2: false, // We don't support websockets over H2 yet
@@ -350,6 +372,9 @@ export class PassThroughWebSocketStepImpl extends PassThroughWebSocketStep {
         }
 
         const upstreamWebSocket = new WebSocket(wsUrl, filteredSubprotocols, {
+            host: destination.hostname,
+            port: destination.port,
+
             maxPayload: 0,
             agent,
             lookup: getDnsLookupFunction(this.lookupOptions),
@@ -360,7 +385,7 @@ export class PassThroughWebSocketStepImpl extends PassThroughWebSocketStep {
             ) as { [key: string]: string }, // Simplify to string - doesn't matter though, only used by http module anyway
 
             // TLS options:
-            ...getUpstreamTlsOptions(strictHttpsChecks),
+            ...getUpstreamTlsOptions({ strictHttpsChecks, serverName: effectiveHostname }),
             ...clientCert,
             ...caConfig
         } as WebSocket.ClientOptions & { lookup: any, maxPayload: number });
@@ -382,7 +407,7 @@ export class PassThroughWebSocketStepImpl extends PassThroughWebSocketStep {
 
             // This effectively matches the URL preprocessing logic in MockttpServer.preprocessRequest,
             // so that the resulting event matches the req.url property elsewhere.
-            const urlHost = getUrlHostname(upstreamReq.host, rawHeaders);
+            const urlHost = getEffectiveHostname(upstreamReq.host, req.socket, rawHeaders);
 
             options.emitEventCallback('passthrough-websocket-connect', {
                 method: upstreamReq.method,

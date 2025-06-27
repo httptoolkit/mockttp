@@ -1,6 +1,9 @@
 import { Buffer } from 'buffer';
 import * as net from 'net';
+import * as tls from 'tls';
 import * as http from 'http';
+import * as https from 'https';
+import { readTlsClientHello, TlsHelloData } from 'read-tls-client-hello';
 
 import {
     CompletedResponse,
@@ -10,20 +13,37 @@ import {
     getLocal
 } from "../../..";
 import {
+    DEFAULT_REQ_HEADERS_DISABLED,
+    Deferred,
     delay,
+    DestroyableServer,
     expect,
     getDeferred,
+    makeDestroyable,
     nodeOnly,
+    nodeSatisfies,
     openRawSocket,
     openSocksSocket,
     sendRawRequest
 } from "../../test-utils";
 import { streamToBuffer } from '../../../src/util/buffer-utils';
 
-function h1RequestOverSocket(socket: net.Socket, url: string, options: http.RequestOptions = {}) {
-    const request = http.request(url, {
+function h1RequestOverSocket(
+    socket: net.Socket,
+    url: string,
+    options: http.RequestOptions & { noSNI?: boolean } = {}) {
+    const parsedURL = new URL(url);
+
+    const request = (parsedURL.protocol === 'https:' ? https : http).request(url, {
         ...options,
-        createConnection: () => socket
+        createConnection: () => parsedURL.protocol === 'https:'
+            ? tls.connect({
+                socket,
+                servername: options.noSNI
+                    ? undefined
+                    : parsedURL.hostname
+            })
+            : socket
     });
     request.end();
 
@@ -50,10 +70,16 @@ nodeOnly(() => {
             let server: Mockttp;
 
             beforeEach(async () => {
-                server = getLocal({ socks: true });
+                server = getLocal({
+                    socks: true,
+                    https: {
+                        keyPath: './test/fixtures/test-ca.key',
+                        certPath: './test/fixtures/test-ca.pem'
+                    }
+                });
                 await server.start();
                 await remoteServer.forGet("/").thenReply(200, "Hello world!");
-                await server.forAnyRequest().thenPassThrough();
+                await server.forUnmatchedRequest().thenPassThrough();
             });
 
             afterEach(async () => {
@@ -114,8 +140,11 @@ nodeOnly(() => {
             });
 
             it("should use the SOCKS destination IP over the Host header, but not in the URL or passthrough events", async () => {
-                const seenRequest = getDeferred<Request>();
-                await server.on('request', (req) => seenRequest.resolve(req));
+                const seenFinalRequest = getDeferred<Request>();
+                await remoteServer.on('request', (req) => seenFinalRequest.resolve(req));
+
+                const seenProxyRequest = getDeferred<Request>();
+                await server.on('request', (req) => seenProxyRequest.resolve(req));
 
                 const passthroughEvent = getDeferred<any>();
                 await server.on('rule-event', (event) => {
@@ -123,24 +152,227 @@ nodeOnly(() => {
                 });
 
                 const socksSocket = await openSocksSocket(server, '127.0.0.1', remoteServer.port, { type: 5 });
-                const response = await h1RequestOverSocket(socksSocket, remoteServer.url, {
+                const response = await h1RequestOverSocket(socksSocket, "http://unused.invalid", {
                     headers: {
                         Host: "invalid.example:1234" // This should be ignored - tunnel sets destination
                     }
                 });
+
                 expect(response.statusCode).to.equal(200);
                 const body = await streamToBuffer(response);
                 expect(body.toString()).to.equal("Hello world!");
 
                 // The URL should show the conceptual target hostname - not the hostname's IP. If you
                 // specify only an IP when tunneling, we assume that the Host header is the real hostname.
-                expect((await seenRequest).url).to.equal(`http://invalid.example:${remoteServer.port}/`);
-                expect((await seenRequest).destination).to.deep.equal({
+                expect((await seenProxyRequest).url).to.equal(`http://invalid.example:${remoteServer.port}/`);
+                expect((await seenFinalRequest).url).to.equal(`http://invalid.example:1234/`);
+                expect((await seenProxyRequest).destination).to.deep.equal({
                     hostname: '127.0.0.1',
                     port: remoteServer.port
                 });
                 expect((await passthroughEvent).hostname).to.equal('invalid.example');
                 expect((await passthroughEvent).port).to.equal(remoteServer.port.toString());
+            });
+
+            it("should hide & override a SOCKS destination IP given a request transform on the hostname", async () => {
+                const seenFinalRequest = getDeferred<Request>();
+                await remoteServer.on('request', (req) => seenFinalRequest.resolve(req));
+
+                server.forAnyRequest().thenPassThrough({
+                    transformRequest: {
+                        matchReplaceHost: {
+                            replacements: [['invalid.example', 'fixed.localhost']],
+                            updateHostHeader: true
+                        }
+                    }
+                });
+
+                const seenProxyRequest = getDeferred<Request>();
+                await server.on('request', (req) => seenProxyRequest.resolve(req));
+
+                const passthroughEvent = getDeferred<any>();
+                await server.on('rule-event', (event) => {
+                    if (event.eventType === 'passthrough-request-head') passthroughEvent.resolve(event.eventData);
+                });
+
+                // Send to 0.0.0.0 - this IP will never be reachable, but transform will fix it
+                const socksSocket = await openSocksSocket(server, '0.0.0.0', remoteServer.port, { type: 5 });
+                const response = await h1RequestOverSocket(socksSocket, "http://unused.invalid", {
+                    headers: {
+                        Host: "invalid.example:1234" // This is the 'effective hostname' - best guess of IP identity
+                    }
+                });
+
+                expect(response.statusCode).to.equal(200);
+                const body = await streamToBuffer(response);
+                expect(body.toString()).to.equal("Hello world!");
+
+                expect((await seenProxyRequest).url).to.equal(`http://invalid.example:${remoteServer.port}/`);
+                expect((await seenProxyRequest).destination).to.deep.equal({
+                    hostname: '0.0.0.0',
+                    port: remoteServer.port
+                });
+
+                expect((await seenFinalRequest).url).to.equal(`http://fixed.localhost:8000/`); // Host header updated
+                expect((await passthroughEvent).hostname).to.equal('fixed.localhost');
+                expect((await passthroughEvent).port).to.equal(remoteServer.port.toString());
+            });
+
+            it("should hide & override a SOCKS destination IP given a beforeRequest callback", async () => {
+                const seenFinalRequest = getDeferred<Request>();
+                await remoteServer.on('request', (req) => seenFinalRequest.resolve(req));
+
+                server.forAnyRequest().thenPassThrough({
+                    beforeRequest: (req) => {
+                        req.url = req.url.replace('invalid.example', 'fixed.localhost');
+                        return {
+                            url: req.url, // Redirect the request
+                            headers: { host: 'another.invalid:4321' } // Set another host header, should be ignored
+                        };
+                    }
+                });
+
+                const seenProxyRequest = getDeferred<Request>();
+                await server.on('request', (req) => seenProxyRequest.resolve(req));
+
+                const passthroughEvent = getDeferred<any>();
+                await server.on('rule-event', (event) => {
+                    if (event.eventType === 'passthrough-request-head') passthroughEvent.resolve(event.eventData);
+                });
+
+                // Send to 0.0.0.0 - this IP will never be reachable
+                const socksSocket = await openSocksSocket(server, '0.0.0.0', remoteServer.port, { type: 5 });
+                const response = await h1RequestOverSocket(socksSocket, "http://unused.invalid", {
+                    headers: {
+                        Host: "invalid.example:1234" // This is the 'effective hostname' - best guess of IP identity
+                    }
+                });
+
+                expect(response.statusCode).to.equal(200);
+                const body = await streamToBuffer(response);
+                expect(body.toString()).to.equal("Hello world!");
+
+                // The URL should show the conceptual target hostname - not the hostname's IP. If you
+                // specify only an IP when tunneling, we assume that the (original) Host header is the hostname.
+                expect((await seenProxyRequest).url).to.equal(`http://invalid.example:${remoteServer.port}/`);
+                expect((await seenProxyRequest).destination).to.deep.equal({
+                    hostname: '0.0.0.0',
+                    port: remoteServer.port
+                });
+
+                // Host header & destination changed independently:
+                expect((await seenFinalRequest).url).to.equal(`http://another.invalid:4321/`);
+                expect((await passthroughEvent).hostname).to.equal('fixed.localhost');
+                expect((await passthroughEvent).port).to.equal(remoteServer.port.toString());
+            });
+
+            describe("given a target TLS server", () => {
+
+                let netServer!: DestroyableServer<net.Server>;
+                let clientHelloDeferred!: Deferred<TlsHelloData>;
+
+                beforeEach(async () => {
+                    netServer = makeDestroyable(net.createServer());
+                    netServer.listen();
+                    await new Promise((resolve) => netServer.once('listening', resolve));
+
+                    clientHelloDeferred = getDeferred();
+
+                    netServer.on('connection', async (socket) => {
+                        clientHelloDeferred.resolve(await readTlsClientHello(socket));
+                        socket.end();
+                    })
+                });
+
+                afterEach(() => netServer.destroy());
+
+                it("should use the SOCKS destination IP but not for SNI", async () => {
+                    const tlsServerPort = (netServer.address() as net.AddressInfo).port;
+
+                    const socksSocket = await openSocksSocket(server, '127.0.0.1', tlsServerPort, { type: 5 });
+                    h1RequestOverSocket(socksSocket, `https://sni-hostname.test`, {
+                        headers: {
+                            Host: "invalid.example:1234" // This should be used for SNI only
+                        }
+                    }).catch(() => {});
+
+                    const clientHello = await clientHelloDeferred;
+                    expect(clientHello.serverName).to.equal('invalid.example'); // SNI should be set to the hostname
+                });
+
+                it("should use the SOCKS destination IP, but fall back to SNI in URL & passthrough events", async function () {
+                    if (!nodeSatisfies(DEFAULT_REQ_HEADERS_DISABLED)) this.skip();
+
+                    const tlsServerPort = (netServer.address() as net.AddressInfo).port;
+
+                    const seenProxyRequest = getDeferred<Request>();
+                    await server.on('request', (req) => seenProxyRequest.resolve(req));
+
+                    const passthroughEvent = getDeferred<any>();
+                    await server.on('rule-event', (event) => {
+                        if (event.eventType === 'passthrough-request-head') passthroughEvent.resolve(event.eventData);
+                    });
+
+                    const socksSocket = await openSocksSocket(server, '127.0.0.1', tlsServerPort, { type: 5 });
+                    await h1RequestOverSocket(socksSocket, "https://sni-hostname.localhost", {
+                        headers: {
+                            // No host header! Only 'name' is in the SNI from the HTTPS URL
+                        },
+                        setDefaultHeaders: false
+                    }).catch(() => {});
+
+                    expect((await seenProxyRequest).destination).to.deep.equal({
+                        hostname: '127.0.0.1',
+                        port: tlsServerPort
+                    });
+
+                    // The URL should show the conceptual target hostname - not the hostname's IP. If you
+                    // specify only an IP when tunneling, we fall back to SNI as the real hostname.
+                    expect((await seenProxyRequest).url).to.equal(`https://sni-hostname.localhost:${tlsServerPort}/`);
+
+                    expect((await passthroughEvent).hostname).to.equal('sni-hostname.localhost');
+                    expect((await passthroughEvent).port).to.equal(tlsServerPort.toString());
+
+                    const clientHello = await clientHelloDeferred;
+                    expect(clientHello.serverName).to.equal('sni-hostname.localhost'); // SNI should be proxied through
+                });
+
+                it("should use the SOCKS destination IP if that's all we have", async function () {
+                    if (!nodeSatisfies(DEFAULT_REQ_HEADERS_DISABLED)) this.skip();
+
+                    const tlsServerPort = (netServer.address() as net.AddressInfo).port;
+
+                    const seenProxyRequest = getDeferred<Request>();
+                    await server.on('request', (req) => seenProxyRequest.resolve(req));
+
+                    const passthroughEvent = getDeferred<any>();
+                    await server.on('rule-event', (event) => {
+                        if (event.eventType === 'passthrough-request-head') passthroughEvent.resolve(event.eventData);
+                    });
+
+                    const socksSocket = await openSocksSocket(server, '127.0.0.1', tlsServerPort, { type: 5 });
+                    await h1RequestOverSocket(socksSocket, "https://127.0.0.1", {
+                        noSNI: true,
+                        headers: {
+                            // No host header *AND* no SNI
+                        },
+                        setDefaultHeaders: false
+                    }).catch(() => {});
+
+                    expect((await seenProxyRequest).destination).to.deep.equal({
+                        hostname: '127.0.0.1',
+                        port: tlsServerPort
+                    });
+
+                    // No SNI or Host or anything - we just use the IP as-is:
+                    expect((await seenProxyRequest).url).to.equal(`https://127.0.0.1:${tlsServerPort}/`);
+                    expect((await passthroughEvent).hostname).to.equal('127.0.0.1');
+                    expect((await passthroughEvent).port).to.equal(tlsServerPort.toString());
+
+                    const clientHello = await clientHelloDeferred;
+                    expect(clientHello.serverName).to.equal(undefined); // Can't send IP in SNI
+                });
+
             });
 
             it("should not crash given a failed SOCKS handshake", async () => {

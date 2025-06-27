@@ -2,11 +2,13 @@ import { Buffer } from 'buffer';
 import * as fs from 'fs/promises';
 import * as tls from 'tls';
 import * as url from 'url';
+import type * as net from 'net';
 
 import * as _ from 'lodash';
 import { oneLine } from 'common-tags';
 import CacheableLookup from 'cacheable-lookup';
 import * as semver from 'semver';
+import { ErrorLike, unreachableCheck } from '@httptoolkit/util';
 
 import { CompletedBody, Headers, RawHeaders } from '../types';
 import { byteLength } from '../util/util';
@@ -15,8 +17,9 @@ import { isIP, isLocalhostAddress, normalizeIP } from '../util/ip-utils';
 import { CachedDns, dnsLookup, DnsLookupFunction } from '../util/dns';
 import { isMockttpBody, encodeBodyBuffer } from '../util/request-utils';
 import { areFFDHECurvesSupported } from '../util/openssl-compat';
-import { ErrorLike, unreachableCheck } from '@httptoolkit/util';
 import { findRawHeaderIndex, getHeaderValue } from '../util/header-utils';
+import { getDefaultPort } from '../util/url';
+import { TlsMetadata } from '../util/socket-extensions';
 
 import {
     CallbackRequestResult,
@@ -28,7 +31,6 @@ import {
     PassThroughInitialTransforms,
     PassThroughLookupOptions
 } from './passthrough-handling-definitions';
-import { getDefaultPort } from '../util/url';
 import { applyMatchReplace } from './match-replace';
 
 // TLS settings for proxied connections, intended to avoid TLS fingerprint blocking
@@ -41,7 +43,13 @@ const SSL_OP_NO_ENCRYPT_THEN_MAC = 1 << 19;
 
 // All settings are designed to exactly match Firefox v103, since that's a good baseline
 // that seems to be widely accepted and is easy to emulate from Node.js.
-export const getUpstreamTlsOptions = (strictChecks: boolean): tls.SecureContextOptions => ({
+export const getUpstreamTlsOptions = ({ strictHttpsChecks, serverName }: {
+    strictHttpsChecks: boolean,
+    serverName?: string
+}): tls.ConnectionOptions => ({
+    servername: serverName && !isIP(serverName)
+        ? serverName
+        : undefined, // Can't send IPs in SNI
     ecdhCurve: [
         'X25519',
         'prime256v1', // N.B. Equivalent to secp256r1
@@ -88,12 +96,12 @@ export const getUpstreamTlsOptions = (strictChecks: boolean): tls.SecureContextO
 
         // This magic cipher is the very obtuse way that OpenSSL downgrades the overall
         // security level to allow various legacy settings, protocols & ciphers:
-        ...(!strictChecks
+        ...(!strictHttpsChecks
             ? ['@SECLEVEL=0']
             : []
         )
     ].join(':'),
-    secureOptions: strictChecks
+    secureOptions: strictHttpsChecks
         ? SSL_OP_TLSEXT_PADDING | SSL_OP_NO_ENCRYPT_THEN_MAC
         : SSL_OP_TLSEXT_PADDING | SSL_OP_NO_ENCRYPT_THEN_MAC | SSL_OP_LEGACY_SERVER_CONNECT,
     ...({
@@ -107,10 +115,10 @@ export const getUpstreamTlsOptions = (strictChecks: boolean): tls.SecureContextO
     allowPartialTrustChain: semver.satisfies(process.version, '>=22.9.0'),
 
     // Allow TLSv1, if !strict:
-    minVersion: strictChecks ? tls.DEFAULT_MIN_VERSION : 'TLSv1',
+    minVersion: strictHttpsChecks ? tls.DEFAULT_MIN_VERSION : 'TLSv1',
 
     // Skip certificate validation entirely, if not strict:
-    rejectUnauthorized: strictChecks,
+    rejectUnauthorized: strictHttpsChecks,
 });
 
 export async function getTrustedCAs(
@@ -182,13 +190,14 @@ export async function buildOverriddenBody(
 }
 
 /**
- * Effectively match the slightly-different-context logic in MockttpServer for showing a
- * request's destination within the URL. We prioritise domain names over IPs, and
- * derive the most appropriate name available. In this case, we drop the port, since that's
- * always specified elsewhere.
+ * Effectively match the slightly-different-context logic in MockttpServer for generating a 'name'
+ * for a request's destination (e.g. in the URL). We prioritise domain names over IPs, and
+ * derive the most appropriate name available. In this method we consider only hostnames, so we
+ * drop the port, as that's always specified elsewhere.
  */
-export function getUrlHostname(
+export function getEffectiveHostname(
     destinationHostname: string | null,
+    socket: net.Socket,
     rawHeaders: RawHeaders
 ) {
     return destinationHostname && !isIP(destinationHostname)
@@ -196,7 +205,8 @@ export function getUrlHostname(
         : ( // Use header info rather than raw IPs, if we can:
             getHeaderValue(rawHeaders, ':authority') ??
             getHeaderValue(rawHeaders, 'host') ??
-            destinationHostname ?? // Use destination if it's a bare IP, if we have nothing else
+            socket[TlsMetadata]?.sniHostname ??
+            destinationHostname ?? // Use bare IP destination if we have nothing else
             'localhost'
         ).replace(/:\d+$/, '');
 }
@@ -223,8 +233,8 @@ function deriveUrlLinkedHeader(
             // existing value, we accept it but print a warning. This would be easy to
             // do if you mutate the existing headers, for example, and ignore the host.
             console.warn(oneLine`
-                Passthrough callback overrode the URL and the ${headerName} header
-                with mismatched values, which may be a mistake. The URL implies
+                Passthrough callback set the URL and the ${headerName} header
+                to mismatched values, which may be a mistake. The URL implies
                 ${expectedValue}, whilst the header was set to ${replacementValue}.
             `);
         }
