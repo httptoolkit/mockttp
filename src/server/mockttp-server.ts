@@ -32,7 +32,8 @@ import {
     RuleEvent,
     RawTrailers,
     RawPassthroughEvent,
-    RawPassthroughDataEvent
+    RawPassthroughDataEvent,
+    RawHeaders
 } from "../types";
 import { DestroyableServer } from "destroyable-server";
 import {
@@ -596,141 +597,170 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
      * For both normal requests & websockets, we do some standard preprocessing to ensure we have the absolute
      * URL destination in place, and timing, tags & id metadata all ready for an OngoingRequest.
      */
-    private preprocessRequest(req: ExtendedRawRequest, type: 'request' | 'websocket'): OngoingRequest {
-        parseRequestBody(req, { maxSize: this.maxBodySize });
+    private preprocessRequest(req: ExtendedRawRequest, type: 'request' | 'websocket'): OngoingRequest | null {
+        try {
+            parseRequestBody(req, { maxSize: this.maxBodySize });
 
-        let rawHeaders = pairFlatRawHeaders(req.rawHeaders);
-        let socketMetadata: SocketMetadata | undefined = req.socket[SocketMetadata];
+            let rawHeaders = pairFlatRawHeaders(req.rawHeaders);
+            let socketMetadata: SocketMetadata | undefined = req.socket[SocketMetadata];
 
-        // Make req.url always absolute, if it isn't already, using the host header.
-        // It might not be if this is a direct request, or if it's being transparently proxied.
-        if (!isAbsoluteUrl(req.url!)) {
-            req.protocol = getHeaderValue(rawHeaders, ':scheme') ||
-                (req.socket[LastHopEncrypted] ? 'https' : 'http');
-            req.path = req.url;
+            // Make req.url always absolute, if it isn't already, using the host header.
+            // It might not be if this is a direct request, or if it's being transparently proxied.
+            if (!isAbsoluteUrl(req.url!)) {
+                req.protocol = getHeaderValue(rawHeaders, ':scheme') ||
+                    (req.socket[LastHopEncrypted] ? 'https' : 'http');
+                req.path = req.url;
 
-            const tunnelDestination = req.socket[LastTunnelAddress]
-                ? getDestination(req.protocol, req.socket[LastTunnelAddress])
-                : undefined;
+                const tunnelDestination = req.socket[LastTunnelAddress]
+                    ? getDestination(req.protocol, req.socket[LastTunnelAddress])
+                    : undefined;
 
-            const isTunnelToIp = !!tunnelDestination && isIP(tunnelDestination.hostname);
+                const isTunnelToIp = !!tunnelDestination && isIP(tunnelDestination.hostname);
 
-            const urlDestination = getDestination(req.protocol,
-                (!isTunnelToIp
-                ? (
-                    req.socket[LastTunnelAddress] ?? // Tunnel domain name is preferred if available
-                    getHeaderValue(rawHeaders, ':authority') ??
-                    getHeaderValue(rawHeaders, 'host') ??
-                    req.socket[TlsMetadata]?.sniHostname
-                )
-                : (
-                    getHeaderValue(rawHeaders, ':authority') ??
-                    getHeaderValue(rawHeaders, 'host') ??
-                    req.socket[TlsMetadata]?.sniHostname ??
-                    req.socket[LastTunnelAddress] // We use the IP iff we have no hostname available at all
-                ))
-                ?? `localhost:${this.port}` // If you specify literally nothing, it's a direct request
-            );
+                const urlDestination = getDestination(req.protocol,
+                    (!isTunnelToIp
+                    ? (
+                        req.socket[LastTunnelAddress] ?? // Tunnel domain name is preferred if available
+                        getHeaderValue(rawHeaders, ':authority') ??
+                        getHeaderValue(rawHeaders, 'host') ??
+                        req.socket[TlsMetadata]?.sniHostname
+                    )
+                    : (
+                        getHeaderValue(rawHeaders, ':authority') ??
+                        getHeaderValue(rawHeaders, 'host') ??
+                        req.socket[TlsMetadata]?.sniHostname ??
+                        req.socket[LastTunnelAddress] // We use the IP iff we have no hostname available at all
+                    ))
+                    ?? `localhost:${this.port}` // If you specify literally nothing, it's a direct request
+                );
 
-            // Actual destination always follows the tunnel - even if it's an IP
-            req.destination = tunnelDestination
-                ?? urlDestination;
+                // Actual destination always follows the tunnel - even if it's an IP
+                req.destination = tunnelDestination
+                    ?? urlDestination;
 
-            // URL port should always match the real port - even if (e.g) the Host header is lying.
-            urlDestination.port = req.destination.port;
+                // URL port should always match the real port - even if (e.g) the Host header is lying.
+                urlDestination.port = req.destination.port;
 
-            const absoluteUrl = `${req.protocol}://${
-                normalizeHost(req.protocol, `${urlDestination.hostname}:${urlDestination.port}`)
-            }${req.path}`;
+                const absoluteUrl = `${req.protocol}://${
+                    normalizeHost(req.protocol, `${urlDestination.hostname}:${urlDestination.port}`)
+                }${req.path}`;
 
-            if (!getHeaderValue(rawHeaders, ':path')) {
-                (req as Mutable<ExtendedRawRequest>).url = new url.URL(absoluteUrl).toString();
+                let effectiveUrl: string;
+                try {
+                    effectiveUrl = new URL(absoluteUrl).toString();
+                } catch (e: any) {
+                    req.url = absoluteUrl;
+                    throw e;
+                }
+
+                if (!getHeaderValue(rawHeaders, ':path')) {
+                    (req as Mutable<ExtendedRawRequest>).url = effectiveUrl;
+                } else {
+                    // Node's HTTP/2 compat logic maps .url to headers[':path']. We want them to
+                    // diverge: .url should always be absolute, while :path may stay relative,
+                    // so we override the built-in getter & setter:
+                    Object.defineProperty(req, 'url', {
+                        value: effectiveUrl
+                    });
+                }
             } else {
-                // Node's HTTP/2 compat logic maps .url to headers[':path']. We want them to
-                // diverge: .url should always be absolute, while :path may stay relative,
-                // so we override the built-in getter & setter:
+                // We have an absolute request. This is effectively a combined tunnel + end-server request,
+                // so we need to handle both of those, and hide the proxy-specific bits from later logic.
+                req.protocol = req.url!.split('://', 1)[0];
+                req.path = getPathFromAbsoluteUrl(req.url!);
+                req.destination = getDestination(
+                    req.protocol,
+                    req.socket[LastTunnelAddress] ?? getHostFromAbsoluteUrl(req.url!)
+                );
+
+                const proxyAuthHeader = getHeaderValue(rawHeaders, 'proxy-authorization');
+                if (proxyAuthHeader) {
+                    // Use this metadata for this request, but _only_ this request - it's not relevant
+                    // to other requests on the same socket so we don't add it to req.socket.
+                    socketMetadata = getSocketMetadataFromProxyAuth(req.socket, proxyAuthHeader);
+                }
+
+                rawHeaders = rawHeaders.filter(([key]) => {
+                    const lcKey = key.toLowerCase();
+                    return lcKey !== 'proxy-connection' &&
+                        lcKey !== 'proxy-authorization';
+                })
+            }
+
+            if (type === 'websocket') {
+                req.protocol = req.protocol === 'https'
+                    ? 'wss'
+                    : 'ws';
+
+                // Transform the protocol in req.url too:
                 Object.defineProperty(req, 'url', {
-                    value: new url.URL(absoluteUrl).toString()
+                    value: req.url!.replace(/^http/, 'ws')
                 });
             }
-        } else {
-            // We have an absolute request. This is effectively a combined tunnel + end-server request,
-            // so we need to handle both of those, and hide the proxy-specific bits from later logic.
-            req.protocol = req.url!.split('://', 1)[0];
-            req.path = getPathFromAbsoluteUrl(req.url!);
-            req.destination = getDestination(
-                req.protocol,
-                req.socket[LastTunnelAddress] ?? getHostFromAbsoluteUrl(req.url!)
-            );
 
-            const proxyAuthHeader = getHeaderValue(rawHeaders, 'proxy-authorization');
-            if (proxyAuthHeader) {
-                // Use this metadata for this request, but _only_ this request - it's not relevant
-                // to other requests on the same socket so we don't add it to req.socket.
-                socketMetadata = getSocketMetadataFromProxyAuth(req.socket, proxyAuthHeader);
-            }
+            const id = crypto.randomUUID();
 
-            rawHeaders = rawHeaders.filter(([key]) => {
-                const lcKey = key.toLowerCase();
-                return lcKey !== 'proxy-connection' &&
-                    lcKey !== 'proxy-authorization';
-            })
-        }
+            const tags: string[] = getSocketMetadataTags(socketMetadata);
 
-        if (type === 'websocket') {
-            req.protocol = req.protocol === 'https'
-                ? 'wss'
-                : 'ws';
+            const timingEvents: TimingEvents = {
+                startTime: Date.now(),
+                startTimestamp: now()
+            };
 
-            // Transform the protocol in req.url too:
-            Object.defineProperty(req, 'url', {
-                value: req.url!.replace(/^http/, 'ws')
+            req.on('end', () => {
+                timingEvents.bodyReceivedTimestamp ||= now();
             });
+
+            const headers = rawHeadersToObject(rawHeaders);
+
+            // Not writable for HTTP/2:
+            makePropertyWritable(req, 'headers');
+            makePropertyWritable(req, 'rawHeaders');
+
+            let rawTrailers: RawTrailers | undefined;
+            Object.defineProperty(req, 'rawTrailers', {
+                get: () => rawTrailers,
+                set: (flatRawTrailers) => {
+                    rawTrailers = flatRawTrailers
+                        ? pairFlatRawHeaders(flatRawTrailers)
+                        : undefined;
+                }
+            });
+
+            return Object.assign(req, {
+                id,
+                headers,
+                rawHeaders,
+                rawTrailers, // Just makes the type happy - really managed by property above
+                remoteIpAddress: req.socket.remoteAddress,
+                remotePort: req.socket.remotePort,
+                timingEvents,
+                tags
+            }) as OngoingRequest;
+        } catch (e: any) {
+            const error: Error = Object.assign(e, {
+                code: e.code ?? 'PREPROCESSING_FAILED',
+                badRequest: req
+            });
+
+            const h2Session = req.httpVersionMajor > 1 &&
+                (req as any).stream?.session;
+
+            if (h2Session) {
+                this.handleInvalidHttp2Request(error, h2Session);
+            } else {
+                this.handleInvalidHttp1Request(error, req.socket)
+            }
+
+            return null; // Null -> preprocessing failed, error already handled here
         }
 
-        const id = crypto.randomUUID();
-
-        const tags: string[] = getSocketMetadataTags(socketMetadata);
-
-        const timingEvents: TimingEvents = {
-            startTime: Date.now(),
-            startTimestamp: now()
-        };
-
-        req.on('end', () => {
-            timingEvents.bodyReceivedTimestamp ||= now();
-        });
-
-        const headers = rawHeadersToObject(rawHeaders);
-
-        // Not writable for HTTP/2:
-        makePropertyWritable(req, 'headers');
-        makePropertyWritable(req, 'rawHeaders');
-
-        let rawTrailers: RawTrailers | undefined;
-        Object.defineProperty(req, 'rawTrailers', {
-            get: () => rawTrailers,
-            set: (flatRawTrailers) => {
-                rawTrailers = flatRawTrailers
-                    ? pairFlatRawHeaders(flatRawTrailers)
-                    : undefined;
-            }
-        });
-
-        return Object.assign(req, {
-            id,
-            headers,
-            rawHeaders,
-            rawTrailers, // Just makes the type happy - really managed by property above
-            remoteIpAddress: req.socket.remoteAddress,
-            remotePort: req.socket.remotePort,
-            timingEvents,
-            tags
-        }) as OngoingRequest;
     }
 
     private async handleRequest(rawRequest: ExtendedRawRequest, rawResponse: http.ServerResponse) {
         const request = this.preprocessRequest(rawRequest, 'request');
+        if (request === null) return; // Preprocessing failed - don't handle this
+
         if (this.debug) console.log(`Handling request for ${rawRequest.url}`);
 
         let result: 'responded' | 'aborted' | null = null;
@@ -824,9 +854,10 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     }
 
     private async handleWebSocket(rawRequest: ExtendedRawRequest, socket: net.Socket, head: Buffer) {
-        if (this.debug) console.log(`Handling websocket for ${rawRequest.url}`);
-
         const request = this.preprocessRequest(rawRequest, 'websocket');
+        if (request === null) return; // Preprocessing failed - don't handle this
+
+        if (this.debug) console.log(`Handling websocket for ${rawRequest.url}`);
 
         socket.on('error', (error) => {
             console.log('Response error:', this.debug ? error : error.message);
@@ -1008,7 +1039,7 @@ ${await this.suggestRule(request)}`
     // Called on server clientError, e.g. if the client disconnects during initial
     // request data, or sends totally invalid gibberish. Only called for HTTP/1.1 errors.
     private handleInvalidHttp1Request(
-        error: Error & { code?: string, rawPacket?: Buffer },
+        error: Error & { code?: string, rawPacket?: Buffer, badRequest?: ExtendedRawRequest },
         socket: net.Socket
     ) {
         if (socket[ClientErrorInProgress]) {
@@ -1065,11 +1096,17 @@ ${await this.suggestRule(request)}`
                 ?? Buffer.from([]);
 
             // For packets where we get more than just httpolyglot-peeked data, guess-parse them:
-            const parsedRequest = rawPacket.byteLength > 1
-                ? tryToParseHttpRequest(rawPacket, socket)
-                : {};
+            const parsedRequest = error.badRequest ??
+                (rawPacket.byteLength > 1
+                    ? tryToParseHttpRequest(rawPacket, socket)
+                    : {}
+                );
 
             if (isHeaderOverflow) commonParams.tags.push('header-overflow');
+
+            const rawHeaders = parsedRequest.rawHeaders?.[0] && typeof parsedRequest.rawHeaders[0] === 'string'
+                ? pairFlatRawHeaders(parsedRequest.rawHeaders as string[])
+                : parsedRequest.rawHeaders as RawHeaders | undefined;
 
             const request: ClientError['request'] = {
                 ...commonParams,
@@ -1079,7 +1116,7 @@ ${await this.suggestRule(request)}`
                 url: parsedRequest.url,
                 path: parsedRequest.path,
                 headers: parsedRequest.headers || {},
-                rawHeaders: parsedRequest.rawHeaders || [],
+                rawHeaders: rawHeaders || [],
                 remoteIpAddress: socket.remoteAddress,
                 remotePort: socket.remotePort,
                 destination: parsedRequest.destination
@@ -1131,7 +1168,7 @@ ${await this.suggestRule(request)}`
     // Handle HTTP/2 client errors. This is a work in progress, but usefully reports
     // some of the most obvious cases.
     private handleInvalidHttp2Request(
-        error: Error & { code?: string, errno?: number },
+        error: Error & { code?: string, errno?: number, badRequest?: ExtendedRawRequest },
         session: http2.Http2Session
     ) {
         // Unlike with HTTP/1.1, we have no control of the actual handling of
@@ -1142,6 +1179,10 @@ ${await this.suggestRule(request)}`
 
         const isBadPreface = (error.errno === -903);
 
+        const rawHeaders = error.badRequest?.rawHeaders?.[0] && typeof error.badRequest?.rawHeaders[0] === 'string'
+            ? pairFlatRawHeaders(error.badRequest?.rawHeaders as string[])
+            : error.badRequest?.rawHeaders as RawHeaders | undefined;
+
         this.announceClientErrorAsync(session.initialSocket, {
             errorCode: error.code,
             request: {
@@ -1151,19 +1192,18 @@ ${await this.suggestRule(request)}`
                     ...(isBadPreface ? ['client-error:bad-preface'] : []),
                     ...getSocketMetadataTags(socket?.[SocketMetadata])
                 ],
-                httpVersion: '2',
+                httpVersion: error.badRequest?.httpVersion ?? '2',
 
                 // Best guesses:
                 timingEvents: { startTime: Date.now(), startTimestamp: now() },
-                protocol: isTLS ? "https" : "http",
-                url: isTLS ? `https://${
-                    (socket as tls.TLSSocket).servername // Use the hostname from SNI
-                }/` : undefined,
+                protocol: error.badRequest?.protocol || (isTLS ? "https" : "http"),
+                url: error.badRequest?.url ||
+                    (isTLS ? `https://${(socket as tls.TLSSocket).servername}/` : undefined),
 
-                // Unknowable:
-                path: undefined,
-                headers: {},
-                rawHeaders: []
+                path: error.badRequest?.path,
+                headers: error.badRequest?.headers || {},
+                rawHeaders: rawHeaders || [],
+                destination: error.badRequest?.destination
             },
             response: 'aborted' // These h2 errors get no app-level response, just a shutdown.
         });
