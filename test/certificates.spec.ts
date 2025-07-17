@@ -21,10 +21,10 @@ const validateLintSiteCertResults = (cert: string, results: any[]) => {
     // support these in any practical way. In future, these may be optional for short-lived
     // certs, so we could reduce our leaf cert lifetimes to avoid these issues.
     const ignoredErrors = errors.filter((result: any) => {
-        return result.Finding.includes('OCSP') ||
-            result.Finding.includes('CRL') ||
-            result.Finding.includes('authorityInformationAccess') ||
-            result.Code.includes('authority_info_access')
+        return result.Finding?.includes('OCSP') ||
+            result.Finding?.toLowerCase().includes('crl') ||
+            result.Finding?.includes('authorityInformationAccess') ||
+            result.Code?.includes('authority_info_access')
     });
 
     const failures = errors.filter((result: any) => !ignoredErrors.includes(result));
