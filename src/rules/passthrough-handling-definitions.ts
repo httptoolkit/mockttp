@@ -68,7 +68,9 @@ export interface PassThroughStepConnectionOptions {
 
     /**
      * A mapping of hosts to client certificates to use, in the form of
-     * `{ key, cert }` objects (none, by default)
+     * `{ key, cert }` objects (none, by default). `*` can be used as a wildcard
+     * to send a client certificate for all hosts that request it. If a wildcard
+     * is present, specific hostname matches will still take precendence.
      */
     clientCertificateHostMap?: {
         [host: string]: { pfx: Buffer, passphrase?: string }

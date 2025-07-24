@@ -459,6 +459,42 @@ nodeOnly(() => {
 
                     expect(response).to.equal("OK");
                 });
+
+                it("uses a wildcard client certificate for the hostname", async () => {
+                    await server.forAnyRequest().thenPassThrough({
+                        ignoreHostHttpsErrors: ['localhost'],
+                        clientCertificateHostMap: {
+                            ['*']: {
+                                pfx: await fs.readFile('./test/fixtures/test-ca.pfx'),
+                                passphrase: 'test-passphrase'
+                            }
+                        }
+                    });
+
+                    let response = await request.get(`https://localhost:${authenticatingServerPort}/`);
+
+                    expect(response).to.equal("OK");
+                });
+
+                it("uses a hostname-specific client certificate in preference over a wildcard", async () => {
+                    await server.forAnyRequest().thenPassThrough({
+                        ignoreHostHttpsErrors: ['localhost'],
+                        clientCertificateHostMap: {
+                            '*': { // If this were selected, it wouldn't work - passphrase is wrong
+                                pfx: await fs.readFile('./test/fixtures/test-ca.pfx'),
+                                passphrase: 'TOTALLY-WRONG-PASSPHRASE'
+                            },
+                            [`localhost:${authenticatingServerPort}`]: {
+                                pfx: await fs.readFile('./test/fixtures/test-ca.pfx'),
+                                passphrase: 'test-passphrase'
+                            }
+                        }
+                    });
+
+                    let response = await request.get(`https://localhost:${authenticatingServerPort}/`);
+
+                    expect(response).to.equal("OK");
+                });
             });
         });
 

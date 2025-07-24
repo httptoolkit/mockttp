@@ -67,6 +67,7 @@ export function getUpstreamTlsOptions({
     const hostWithPort = `${hostname}:${port}`;
     const clientCert = clientCertificateHostMap[hostWithPort] ||
         clientCertificateHostMap[hostname] ||
+        clientCertificateHostMap['*'] ||
         {};
 
     return {
