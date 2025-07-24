@@ -521,10 +521,10 @@ nodeOnly(() => {
             it("should return a 502 for failing upstream requests by default", async () => {
                 await server.forAnyRequest().thenPassThrough();
 
-                const response = await http2ProxyRequest(server, `https://invalid.example`);
+                const response = await http2ProxyRequest(server, `https://example.invalid`);
 
                 expect(response.headers[':status']).to.equal(502);
-                expect(response.body.toString('utf8')).to.include("ENOTFOUND invalid.example");
+                expect(response.body.toString('utf8')).to.include("ENOTFOUND example.invalid");
             });
 
             it("should simulate connection errors for failing upstream requests if enabled", async () => {
@@ -532,7 +532,7 @@ nodeOnly(() => {
                     simulateConnectionErrors: true
                 });
 
-                const result = await http2ProxyRequest(server, `https://invalid.example`)
+                const result = await http2ProxyRequest(server, `https://example.invalid`)
                     .catch(e => e);
 
                 expect(result).to.be.instanceof(Error);

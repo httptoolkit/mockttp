@@ -213,7 +213,7 @@ nodeOnly(() => {
                     port: remoteServer.port
                 });
 
-                expect((await seenFinalRequest).url).to.equal(`http://fixed.localhost:8000/`); // Host header updated
+                expect((await seenFinalRequest).url).to.equal(`http://fixed.localhost:${remoteServer.port}/`); // Host header updated
                 expect((await passthroughEvent).hostname).to.equal('fixed.localhost');
                 expect((await passthroughEvent).port).to.equal(remoteServer.port.toString());
             });
