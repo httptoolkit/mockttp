@@ -22,7 +22,7 @@ import {
 } from "../../types";
 
 import { MaybePromise, ErrorLike, isErrorLike, delay } from '@httptoolkit/util';
-import { isAbsoluteUrl, getEffectivePort, getDefaultPort } from '../../util/url';
+import { isAbsoluteUrl, getEffectivePort } from '../../util/url';
 import {
     waitForCompletedRequest,
     buildBodyReader,
@@ -39,7 +39,6 @@ import {
     rawHeadersToObjectPreservingCase,
     flattenPairedRawHeaders,
     pairFlatRawHeaders,
-    findRawHeaderIndex,
     dropDefaultHeaders,
     validateHeader,
     updateRawHeaders,
@@ -81,7 +80,6 @@ import {
     MODIFIABLE_PSEUDOHEADERS,
     buildOverriddenBody,
     getUpstreamTlsOptions,
-    shouldUseStrictHttps,
     getClientRelativeHostname,
     getDnsLookupFunction,
     getTrustedCAs,
@@ -656,23 +654,7 @@ export class PassThroughStepImpl extends PassThroughStep {
         }
 
         const effectivePort = getEffectivePort({ protocol, port });
-
-        const strictHttpsChecks = shouldUseStrictHttps(
-            hostname!,
-            effectivePort,
-            this.ignoreHostHttpsErrors
-        );
-
-        // Use a client cert if it's listed for the host+port or whole hostname
-        const hostWithPort = `${hostname}:${effectivePort}`;
-        const clientCert = this.clientCertificateHostMap[hostWithPort] ||
-            this.clientCertificateHostMap[hostname!] ||
-            {};
-
-        const trustedCerts = await this.trustedCACertificates();
-        const caConfig = trustedCerts
-            ? { ca: trustedCerts }
-            : {};
+        const trustedCAs = await this.trustedCACertificates();
 
         // We only do H2 upstream for HTTPS. Http2-wrapper doesn't support H2C, it's rarely used
         // and we can't use ALPN to detect HTTP/2 support cleanly.
@@ -753,9 +735,13 @@ export class PassThroughStepImpl extends PassThroughStep {
                 agent,
 
                 // TLS options:
-                ...getUpstreamTlsOptions({ strictHttpsChecks, serverName: hostname }),
-                ...clientCert,
-                ...caConfig
+                ...getUpstreamTlsOptions({
+                    hostname,
+                    port: effectivePort,
+                    ignoreHostHttpsErrors: this.ignoreHostHttpsErrors,
+                    clientCertificateHostMap: this.clientCertificateHostMap,
+                    trustedCAs
+                })
             }, (serverRes) => (async () => {
                 serverRes.on('error', (e: any) => {
                     reportUpstreamAbort(e)

@@ -28,7 +28,6 @@ import { getDefaultPort, getEffectivePort } from '../../util/url';
 import { resetOrDestroy } from '../../util/socket-util';
 import { isHttp2 } from '../../util/request-utils';
 import {
-    findRawHeader,
     findRawHeaders,
     objectHeadersToRaw,
     pairFlatRawHeaders,
@@ -43,7 +42,6 @@ import {
     getUpstreamTlsOptions,
     getClientRelativeHostname,
     getDnsLookupFunction,
-    shouldUseStrictHttps,
     getTrustedCAs,
     getEffectiveHostname,
     applyDestinationTransforms
@@ -319,22 +317,7 @@ export class PassThroughWebSocketStepImpl extends PassThroughWebSocketStep {
         const effectiveHostname = parsedUrl.hostname!; // N.b. not necessarily the same as destination
         const effectivePort = getEffectivePort(parsedUrl);
 
-        const strictHttpsChecks = shouldUseStrictHttps(
-            effectiveHostname,
-            effectivePort,
-            this.ignoreHostHttpsErrors
-        );
-
-        // Use a client cert if it's listed for the host+port or whole hostname
-        const hostWithPort = `${parsedUrl.hostname}:${effectivePort}`;
-        const clientCert = this.clientCertificateHostMap[hostWithPort] ||
-            this.clientCertificateHostMap[effectiveHostname] ||
-            {};
-
-        const trustedCerts = await this.trustedCACertificates();
-        const caConfig = trustedCerts
-            ? { ca: trustedCerts }
-            : {};
+        const trustedCAs = await this.trustedCACertificates();
 
         const proxySettingSource = assertParamDereferenced(this.proxyConfig) as ProxySettingSource;
 
@@ -385,9 +368,13 @@ export class PassThroughWebSocketStepImpl extends PassThroughWebSocketStep {
             ) as { [key: string]: string }, // Simplify to string - doesn't matter though, only used by http module anyway
 
             // TLS options:
-            ...getUpstreamTlsOptions({ strictHttpsChecks, serverName: effectiveHostname }),
-            ...clientCert,
-            ...caConfig
+            ...getUpstreamTlsOptions({
+                hostname: effectiveHostname,
+                port: effectivePort,
+                ignoreHostHttpsErrors: this.ignoreHostHttpsErrors,
+                clientCertificateHostMap: this.clientCertificateHostMap,
+                trustedCAs,
+            })
         } as WebSocket.ClientOptions & { lookup: any, maxPayload: number });
 
         if (options.emitEventCallback) {

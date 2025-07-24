@@ -43,83 +43,117 @@ const SSL_OP_NO_ENCRYPT_THEN_MAC = 1 << 19;
 
 // All settings are designed to exactly match Firefox v103, since that's a good baseline
 // that seems to be widely accepted and is easy to emulate from Node.js.
-export const getUpstreamTlsOptions = ({ strictHttpsChecks, serverName }: {
-    strictHttpsChecks: boolean,
-    serverName?: string
-}): tls.ConnectionOptions => ({
-    servername: serverName && !isIP(serverName)
-        ? serverName
-        : undefined, // Can't send IPs in SNI
-    ecdhCurve: [
-        'X25519',
-        'prime256v1', // N.B. Equivalent to secp256r1
-        'secp384r1',
-        'secp521r1',
-        ...(NEW_CURVES_SUPPORTED
-            ? [ // Only available with OpenSSL v3+:
-                'ffdhe2048',
-                'ffdhe3072'
-            ] : []
-        )
-    ].join(':'),
-    sigalgs: [
-        'ecdsa_secp256r1_sha256',
-        'ecdsa_secp384r1_sha384',
-        'ecdsa_secp521r1_sha512',
-        'rsa_pss_rsae_sha256',
-        'rsa_pss_rsae_sha384',
-        'rsa_pss_rsae_sha512',
-        'rsa_pkcs1_sha256',
-        'rsa_pkcs1_sha384',
-        'rsa_pkcs1_sha512',
-        'ECDSA+SHA1',
-        'rsa_pkcs1_sha1'
-    ].join(':'),
-    ciphers: [
-        'TLS_AES_128_GCM_SHA256',
-        'TLS_CHACHA20_POLY1305_SHA256',
-        'TLS_AES_256_GCM_SHA384',
-        'ECDHE-ECDSA-AES128-GCM-SHA256',
-        'ECDHE-RSA-AES128-GCM-SHA256',
-        'ECDHE-ECDSA-CHACHA20-POLY1305',
-        'ECDHE-RSA-CHACHA20-POLY1305',
-        'ECDHE-ECDSA-AES256-GCM-SHA384',
-        'ECDHE-RSA-AES256-GCM-SHA384',
-        'ECDHE-ECDSA-AES256-SHA',
-        'ECDHE-ECDSA-AES128-SHA',
-        'ECDHE-RSA-AES128-SHA',
-        'ECDHE-RSA-AES256-SHA',
-        'AES128-GCM-SHA256',
-        'AES256-GCM-SHA384',
-        'AES128-SHA',
-        'AES256-SHA',
+export function getUpstreamTlsOptions({
+    hostname,
+    port,
 
-        // This magic cipher is the very obtuse way that OpenSSL downgrades the overall
-        // security level to allow various legacy settings, protocols & ciphers:
-        ...(!strictHttpsChecks
-            ? ['@SECLEVEL=0']
-            : []
-        )
-    ].join(':'),
-    secureOptions: strictHttpsChecks
-        ? SSL_OP_TLSEXT_PADDING | SSL_OP_NO_ENCRYPT_THEN_MAC
-        : SSL_OP_TLSEXT_PADDING | SSL_OP_NO_ENCRYPT_THEN_MAC | SSL_OP_LEGACY_SERVER_CONNECT,
-    ...({
-        // Valid, but not included in Node.js TLS module types:
-        requestOSCP: true
-    } as any),
+    ignoreHostHttpsErrors,
+    clientCertificateHostMap,
+    trustedCAs
+}: {
+    // The effective hostname & port we're connecting to - note that this isn't exactly
+    // the same as the destination (e.g. if you tunnel to an IP but set a hostname via SNI
+    // then this is the hostname, not the IP).
+    hostname: string,
+    port: number,
 
-    // Trust intermediate certificates from the trusted CA list too. Without this, trusted CAs
-    // are only used when they are self-signed root certificates. Seems to cause issues in Node v20
-    // in HTTP/2 tests, so disabled below the supported v22 version.
-    allowPartialTrustChain: semver.satisfies(process.version, '>=22.9.0'),
+    // The general config that's relevant to this request:
+    ignoreHostHttpsErrors: string[] | boolean,
+    clientCertificateHostMap: { [host: string]: { pfx: Buffer, passphrase?: string } },
+    trustedCAs: Array<string> | undefined
+}): tls.ConnectionOptions {
+    const strictHttpsChecks = shouldUseStrictHttps(hostname, port, ignoreHostHttpsErrors);
 
-    // Allow TLSv1, if !strict:
-    minVersion: strictHttpsChecks ? tls.DEFAULT_MIN_VERSION : 'TLSv1',
+    const hostWithPort = `${hostname}:${port}`;
+    const clientCert = clientCertificateHostMap[hostWithPort] ||
+        clientCertificateHostMap[hostname] ||
+        {};
 
-    // Skip certificate validation entirely, if not strict:
-    rejectUnauthorized: strictHttpsChecks,
-});
+    return {
+        servername: hostname && !isIP(hostname)
+            ? hostname
+            : undefined, // Can't send IPs in SNI
+
+        // We precisely control the various TLS parameters here to limit TLS fingerprinting issues:
+        ecdhCurve: [
+            'X25519',
+            'prime256v1', // N.B. Equivalent to secp256r1
+            'secp384r1',
+            'secp521r1',
+            ...(NEW_CURVES_SUPPORTED
+                ? [ // Only available with OpenSSL v3+:
+                    'ffdhe2048',
+                    'ffdhe3072'
+                ] : []
+            )
+        ].join(':'),
+        sigalgs: [
+            'ecdsa_secp256r1_sha256',
+            'ecdsa_secp384r1_sha384',
+            'ecdsa_secp521r1_sha512',
+            'rsa_pss_rsae_sha256',
+            'rsa_pss_rsae_sha384',
+            'rsa_pss_rsae_sha512',
+            'rsa_pkcs1_sha256',
+            'rsa_pkcs1_sha384',
+            'rsa_pkcs1_sha512',
+            'ECDSA+SHA1',
+            'rsa_pkcs1_sha1'
+        ].join(':'),
+        ciphers: [
+            'TLS_AES_128_GCM_SHA256',
+            'TLS_CHACHA20_POLY1305_SHA256',
+            'TLS_AES_256_GCM_SHA384',
+            'ECDHE-ECDSA-AES128-GCM-SHA256',
+            'ECDHE-RSA-AES128-GCM-SHA256',
+            'ECDHE-ECDSA-CHACHA20-POLY1305',
+            'ECDHE-RSA-CHACHA20-POLY1305',
+            'ECDHE-ECDSA-AES256-GCM-SHA384',
+            'ECDHE-RSA-AES256-GCM-SHA384',
+            'ECDHE-ECDSA-AES256-SHA',
+            'ECDHE-ECDSA-AES128-SHA',
+            'ECDHE-RSA-AES128-SHA',
+            'ECDHE-RSA-AES256-SHA',
+            'AES128-GCM-SHA256',
+            'AES256-GCM-SHA384',
+            'AES128-SHA',
+            'AES256-SHA',
+
+            // This magic cipher is the very obtuse way that OpenSSL downgrades the overall
+            // security level to allow various legacy settings, protocols & ciphers:
+            ...(!strictHttpsChecks
+                ? ['@SECLEVEL=0']
+                : []
+            )
+        ].join(':'),
+        secureOptions: strictHttpsChecks
+            ? SSL_OP_TLSEXT_PADDING | SSL_OP_NO_ENCRYPT_THEN_MAC
+            : SSL_OP_TLSEXT_PADDING | SSL_OP_NO_ENCRYPT_THEN_MAC | SSL_OP_LEGACY_SERVER_CONNECT,
+        ...({
+            // Valid, but not included in Node.js TLS module types:
+            requestOSCP: true
+        } as any),
+
+        // Trust intermediate certificates from the trusted CA list too. Without this, trusted CAs
+        // are only used when they are self-signed root certificates. Seems to cause issues in Node v20
+        // in HTTP/2 tests, so disabled below the supported v22 version.
+        allowPartialTrustChain: semver.satisfies(process.version, '>=22.9.0'),
+
+        // Allow TLSv1, if !strict:
+        minVersion: strictHttpsChecks ? tls.DEFAULT_MIN_VERSION : 'TLSv1',
+
+        // Skip certificate validation entirely, if not strict:
+        rejectUnauthorized: strictHttpsChecks,
+
+        // Override the set of trusted CAs, if configured to do so:
+        ...(trustedCAs ? {
+            ca: trustedCAs
+        } : {}),
+
+        // Use a client cert, if one matches for this hostname+port:
+        ...clientCert
+    }
+}
 
 export async function getTrustedCAs(
     trustedCAs: Array<CADefinition> | undefined,
@@ -478,7 +512,7 @@ export function getResponseContentLengthAfterModification(
 
 // Function to check if we should skip https errors for the current hostname and port,
 // based on the given config
-export function shouldUseStrictHttps(
+function shouldUseStrictHttps(
     hostname: string,
     port: number,
     ignoreHostHttpsErrors: string[] | boolean
