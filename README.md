@@ -81,7 +81,7 @@ describe("Mockttp", () => {
     it("lets you mock without specifying a port, allowing parallel testing", async () => {
         await mockServer.forGet("/mocked-endpoint").thenReply(200, "Tip top testing");
 
-        // Try mockServer.url or .urlFor(path) to get a the dynamic URL for the server's port
+        // Try mockServer.url or .urlFor(path) to get the dynamic URL for the server's port
         let response = await superagent.get(mockServer.urlFor("/mocked-endpoint"));
 
         expect(response.text).to.equal("Tip top testing");
