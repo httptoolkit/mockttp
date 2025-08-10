@@ -1284,7 +1284,7 @@ ${await this.suggestRule(request)}`
                     ...eventData,
                     timingEvents: {
                         ...eventData.timingEvents,
-                        disconnectedTimestamp: now()
+                        disconnectTimestamp: now()
                     }
                 });
             });
