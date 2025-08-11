@@ -152,8 +152,11 @@ describe("When configured for HTTPS", () => {
                         host: 'localhost',
                         port: server.port,
                         servername: 'example.testserver.host',
-                        headers: { 'Host': 'example.testserver.host' }
-                    }).on('response', resolve).on('error', reject)
+                        headers: { 'Host': 'example.testserver.host', 'content-length': '0' }
+                    })
+                    .on('response', resolve)
+                    .on('error', reject)
+                    .end()
                 );
                 console.log('got response');
 
