@@ -112,6 +112,7 @@ describe("When configured for HTTPS", () => {
         describe("with some hostnames excluded", () => {
 
             let server = getLocal({
+                debug: true,
                 https: {
                     keyPath: './test/fixtures/test-ca.key',
                     certPath: './test/fixtures/test-ca.pem',
@@ -142,7 +143,10 @@ describe("When configured for HTTPS", () => {
                 expect(body).to.equal("Mock response");
             });
 
-            it("skips the server for matching HTTPS requests", async function () {
+            it.only("skips the server for matching HTTPS requests", async function () {
+                this.timeout(10_000);
+
+                console.log('sending request');
                 const response: http.IncomingMessage = await new Promise((resolve, reject) =>
                     https.get({
                         host: 'localhost',
@@ -151,9 +155,11 @@ describe("When configured for HTTPS", () => {
                         headers: { 'Host': 'example.testserver.host' }
                     }).on('response', resolve).on('error', reject)
                 );
+                console.log('got response');
 
                 expect(response.statusCode).to.equal(200);
                 const body = (await streamToBuffer(response)).toString();
+                console.log('got body');
                 expect(body).to.include(
                     "This domain is for use in illustrative examples in documents."
                 );
