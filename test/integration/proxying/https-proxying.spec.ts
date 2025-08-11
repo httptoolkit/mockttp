@@ -101,7 +101,8 @@ nodeOnly(() => {
                 // Any hash is fine, as long as it's not a super common Node.js hash:
                 expect(ja3Hash).be.oneOf([
                     '66bd0ddf06e1943541373fc7283c0c00', // Node <17
-                    '555d2f0593c1e23a9b59cfaa7dc0e43a' // Node 17+
+                    '555d2f0593c1e23a9b59cfaa7dc0e43a', // Node 17+
+                    'd4262504d91b8e4c9a7788df0b11c26b'  // Node 24.5+
                 ]);
             });
 
