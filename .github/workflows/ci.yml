@@ -23,6 +23,7 @@ jobs:
 
       - run: npm run ci-tests
         env:
+          NODE_DEBUG: net,http,tls
           # Node v18 needs webcrypto, Node v22+ needs no strip-types (because we use ts-node for full TS instead)
           NODE_OPTIONS: >-
             ${{ startsWith(matrix.node-version, '18') && '--experimental-global-webcrypto' ||
