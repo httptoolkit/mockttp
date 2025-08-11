@@ -434,7 +434,8 @@ describe("When configured for HTTPS", () => {
                 const tlsSocket = await openRawTlsSocket(server, {
                     rejectUnauthorized: false,
                     minVersion: 'TLSv1.2',
-                    maxVersion: 'TLSv1.2'
+                    maxVersion: 'TLSv1.2',
+                    ciphers: 'DEFAULT@SECLEVEL=0'
                 });
 
                 expect(tlsSocket.getProtocol()).to.equal('TLSv1.2');
@@ -446,11 +447,13 @@ describe("When configured for HTTPS", () => {
                     await openRawTlsSocket(server, {
                         rejectUnauthorized: false,
                         minVersion: 'TLSv1',
-                        maxVersion: 'TLSv1'
+                        maxVersion: 'TLSv1',
+                        ciphers: 'DEFAULT@SECLEVEL=0'
                     });
                     throw new Error('Expected connection to fail');
                 } catch (e: any) {
                     expect(e.code).to.equal('ERR_SSL_TLSV1_ALERT_PROTOCOL_VERSION');
+
                 }
             });
 
@@ -459,7 +462,8 @@ describe("When configured for HTTPS", () => {
                     await openRawTlsSocket(server, {
                         rejectUnauthorized: false,
                         minVersion: 'TLSv1.1',
-                        maxVersion: 'TLSv1.1'
+                        maxVersion: 'TLSv1.1',
+                        ciphers: 'DEFAULT@SECLEVEL=0'
                     });
                     throw new Error('Expected connection to fail');
                 } catch (e: any) {
@@ -471,7 +475,8 @@ describe("When configured for HTTPS", () => {
                 const tlsSocket = await openRawTlsSocket(server, {
                     rejectUnauthorized: false,
                     minVersion: 'TLSv1.3',
-                    maxVersion: 'TLSv1.3'
+                    maxVersion: 'TLSv1.3',
+                    ciphers: 'DEFAULT@SECLEVEL=0'
                 });
 
                 expect(tlsSocket.getProtocol()).to.equal('TLSv1.3');
