@@ -1286,20 +1286,6 @@ ${await this.suggestRule(request)}`
             }
         });
 
-        console.log(`Socket state: ${
-            socket.destroyed ? 'destroyed' : 'active'
-        }, ${
-            socket.closed ? 'closed' : 'not closed'
-        }, ${
-            socket.writable ? 'writable' : 'not writable'
-        }, ${
-            socket.readable ? 'readable' : 'not readable'
-        }, ${
-            socket.readableFlowing ? 'flowing' : 'not flowing'
-        }, ${
-            socket.isPaused() ? 'paused' : 'not paused'
-        }`);
-
         socket.on('data', (d) => {
             console.log('Downstream socket sending data', d.subarray(0, 100).toString('hex'), '...');
         });
@@ -1354,6 +1340,23 @@ ${await this.suggestRule(request)}`
 
         upstreamSocket.once('connect', () => this.outgoingPassthroughSockets.add(upstreamSocket));
         upstreamSocket.once('close', () => this.outgoingPassthroughSockets.delete(upstreamSocket));
+
+        socket.pause();
+        upstreamSocket.once('connect', () => socket.resume());
+
+        console.log(`Socket state: ${
+            socket.destroyed ? 'destroyed' : 'active'
+        }, ${
+            socket.closed ? 'closed' : 'not closed'
+        }, ${
+            socket.writable ? 'writable' : 'not writable'
+        }, ${
+            socket.readable ? 'readable' : 'not readable'
+        }, flowing? ${
+            socket.readableFlowing
+        }, ${
+            socket.isPaused() ? 'paused' : 'not paused'
+        }`);
 
         if (this.debug) console.log(`Passing through bypassed ${type} connection to ${hostname}:${targetPort}${
             !port ? ' (assumed port)' : ''
