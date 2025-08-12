@@ -7,7 +7,8 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [18.x, 20.x, 22.x, v22.14.0, 24.x]
+        # No v24.5.0 for now due to issues with TLS passthrough
+        node-version: [18.x, 20.x, 22.x, v22.14.0, v24.4.1]
 
     steps:
       - uses: actions/checkout@v4
