@@ -1251,6 +1251,15 @@ ${await this.suggestRule(request)}`
         upstreamSocket.on('connect', () => {
             console.log(`Upstream socket connected to ${hostname}:${targetPort}`);
         });
+        upstreamSocket.on('ready', () => {
+            console.log(`Upstream socket ready for ${hostname}:${targetPort}`);
+        });
+        upstreamSocket.on('drain', () => {
+            console.log(`Upstream socket drained for ${hostname}:${targetPort}`);
+        });
+        upstreamSocket.on('end', () => {
+            console.log(`Upstream socket ended for ${hostname}:${targetPort}`);
+        });
         upstreamSocket.on('error', (error) => {
             console.error(`Upstream socket error for ${hostname}:${targetPort}:`, error);
         });
@@ -1275,6 +1284,28 @@ ${await this.suggestRule(request)}`
             } else {
                 console.log(`Upstream socket lookup for ${hostname}:${targetPort}: ${address} (${family})`);
             }
+        });
+
+        console.log(`Socket state: ${
+            socket.destroyed ? 'destroyed' : 'active'
+        }, ${
+            socket.closed ? 'closed' : 'not closed'
+        }, ${
+            socket.writable ? 'writable' : 'not writable'
+        }, ${
+            socket.readable ? 'readable' : 'not readable'
+        }, ${
+            socket.readableFlowing ? 'flowing' : 'not flowing'
+        }, ${
+            socket.isPaused() ? 'paused' : 'not paused'
+        }`);
+
+        socket.on('data', (d) => {
+            console.log('Downstream socket sending data', d.subarray(0, 100).toString('hex'), '...');
+        });
+
+        upstreamSocket.on('data', (d) => {
+            console.log('Upstream socket receiving data', d.subarray(0, 100).toString('hex'), '...');
         });
 
         socket.pipe(upstreamSocket);
