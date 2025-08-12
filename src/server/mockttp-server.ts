@@ -1243,8 +1243,39 @@ ${await this.suggestRule(request)}`
 
         setImmediate(() => this.eventEmitter.emit(`${type}-passthrough-opened`, eventData));
 
+        console.log(`Passing through socket to ${hostname}:${targetPort}${
+            !port ? ' (assumed port)' : ''
+        }`);
         const upstreamSocket = net.connect({ host: hostname, port: targetPort });
         upstreamSocket.setNoDelay(true);
+        upstreamSocket.on('connect', () => {
+            console.log(`Upstream socket connected to ${hostname}:${targetPort}`);
+        });
+        upstreamSocket.on('error', (error) => {
+            console.error(`Upstream socket error for ${hostname}:${targetPort}:`, error);
+        });
+        upstreamSocket.on('close', () => {
+            console.log(`Upstream socket closed for ${hostname}:${targetPort}`);
+        });
+        upstreamSocket.on('connectionAttempt', (attempt) => {
+            console.log(`Upstream socket connection attempt for ${hostname}:${targetPort}:`, attempt);
+        });
+        upstreamSocket.on('connectionAttemptFailed', (attempt) => {
+            console.error(`Upstream socket connection attempt failed for ${hostname}:${targetPort}:`, attempt);
+        });
+        upstreamSocket.on('connectionAttemptTimeout', (attempt) => {
+            console.error(`Upstream socket connection attempt timed out for ${hostname}:${targetPort}:`, attempt);
+        });
+        upstreamSocket.on('timeout', () => {
+            console.warn(`Upstream socket timeout for ${hostname}:${targetPort}`);
+        });
+        upstreamSocket.on('lookup', (err, address, family, host) => {
+            if (err) {
+                console.error(`Upstream socket lookup error for ${hostname}:${targetPort}:`, err);
+            } else {
+                console.log(`Upstream socket lookup for ${hostname}:${targetPort}: ${address} (${family})`);
+            }
+        });
 
         socket.pipe(upstreamSocket);
         upstreamSocket.pipe(socket);
