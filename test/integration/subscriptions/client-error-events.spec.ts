@@ -73,6 +73,11 @@ describe("Client error subscription", () => {
                 'client-error:HPE_HEADER_OVERFLOW',
                 'header-overflow'
             ]);
+
+            expect(clientError.request.timingEvents.startTime).to.be.greaterThan(0);
+            expect(clientError.request.timingEvents.startTimestamp).to.be.greaterThan(0);
+            expect(clientError.request.timingEvents.responseSentTimestamp)
+                .to.be.greaterThan(clientError.request.timingEvents.startTimestamp);
         });
 
         nodeOnly(() => {
@@ -150,6 +155,11 @@ describe("Client error subscription", () => {
 
                 expect(response.statusCode).to.equal(undefined);
                 expect(response.statusMessage).to.equal(undefined);
+
+                expect(clientError.request.timingEvents.startTime).to.be.greaterThan(0);
+                expect(clientError.request.timingEvents.startTimestamp).to.be.greaterThan(0);
+                expect(clientError.request.timingEvents.abortedTimestamp)
+                    .to.be.greaterThan(clientError.request.timingEvents.startTimestamp);
             });
         });
     });
@@ -290,6 +300,11 @@ describe("Client error subscription", () => {
                 ]);
                 expect(error.request.url).to.equal(server.url + '/');
                 expect(error.response).to.equal('aborted');
+
+                expect(error.request.timingEvents.startTime).to.be.greaterThan(0);
+                expect(error.request.timingEvents.startTimestamp).to.be.greaterThan(0);
+                expect(error.request.timingEvents.abortedTimestamp)
+                    .to.be.greaterThan(error.request.timingEvents.startTimestamp);
             });
 
             it("should report HTTP/2 requests that fail after the preface", async () => {

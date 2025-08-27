@@ -70,7 +70,8 @@ import {
     LastTunnelAddress,
     TlsSetupCompleted,
     SocketMetadata,
-    TlsMetadata
+    TlsMetadata,
+    SocketTimingInfo
 } from '../util/socket-extensions';
 import { getSocketMetadataTags, getSocketMetadataFromProxyAuth } from '../util/socket-metadata'
 import {
@@ -1089,7 +1090,13 @@ ${await this.suggestRule(request)}`
                     `client-error:${error.code || 'UNKNOWN'}`,
                     ...getSocketMetadataTags(socket[SocketMetadata])
                 ],
-                timingEvents: { startTime: Date.now(), startTimestamp: now() } as TimingEvents
+                timingEvents: (socket?.[SocketTimingInfo]
+                    ? {
+                        startTime: socket[SocketTimingInfo].initialSocket,
+                        startTimestamp: socket[SocketTimingInfo].initialSocketTimestamp
+                    }
+                    : { startTime: Date.now(), startTimestamp: now() }
+                ) as TimingEvents
             };
 
             const rawPacket = socket[ClientErrorInProgress]?.rawPacket
@@ -1183,6 +1190,15 @@ ${await this.suggestRule(request)}`
             ? pairFlatRawHeaders(error.badRequest?.rawHeaders as string[])
             : error.badRequest?.rawHeaders as RawHeaders | undefined;
 
+        const timingEvents: TimingEvents = socket?.[SocketTimingInfo]
+            ? {
+                startTime: socket[SocketTimingInfo].initialSocket,
+                startTimestamp: socket[SocketTimingInfo].initialSocketTimestamp
+            }
+            : { startTime: Date.now(), startTimestamp: now() };
+
+        timingEvents.abortedTimestamp = now();
+
         this.announceClientErrorAsync(session.initialSocket, {
             errorCode: error.code,
             request: {
@@ -1193,9 +1209,9 @@ ${await this.suggestRule(request)}`
                     ...getSocketMetadataTags(socket?.[SocketMetadata])
                 ],
                 httpVersion: error.badRequest?.httpVersion ?? '2',
+                timingEvents,
 
                 // Best guesses:
-                timingEvents: { startTime: Date.now(), startTimestamp: now() },
                 protocol: error.badRequest?.protocol || (isTLS ? "https" : "http"),
                 url: error.badRequest?.url ||
                     (isTLS ? `https://${(socket as tls.TLSSocket).servername}/` : undefined),
