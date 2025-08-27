@@ -1,6 +1,5 @@
 import { Buffer } from 'buffer';
 import * as net from "net";
-import * as url from "url";
 import * as tls from "tls";
 import * as http from "http";
 import * as http2 from "http2";
@@ -62,7 +61,8 @@ import {
     buildRawSocketEventData,
     buildTlsSocketEventData,
     isSocketLoop,
-    resetOrDestroy
+    resetOrDestroy,
+    buildSocketErrorRequestTimings
 } from "../util/socket-util";
 import {
     ClientErrorInProgress,
@@ -708,6 +708,12 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
                 startTimestamp: now()
             };
 
+            // Set/update the last request time on the socket
+            let socketTimingInfo = req.socket[SocketTimingInfo];
+            if (socketTimingInfo) {
+                socketTimingInfo.lastRequestTimestamp = timingEvents.startTimestamp;
+            }
+
             req.on('end', () => {
                 timingEvents.bodyReceivedTimestamp ||= now();
             });
@@ -1090,13 +1096,7 @@ ${await this.suggestRule(request)}`
                     `client-error:${error.code || 'UNKNOWN'}`,
                     ...getSocketMetadataTags(socket[SocketMetadata])
                 ],
-                timingEvents: (socket?.[SocketTimingInfo]
-                    ? {
-                        startTime: socket[SocketTimingInfo].initialSocket,
-                        startTimestamp: socket[SocketTimingInfo].initialSocketTimestamp
-                    }
-                    : { startTime: Date.now(), startTimestamp: now() }
-                ) as TimingEvents
+                timingEvents: buildSocketErrorRequestTimings(socket)
             };
 
             const rawPacket = socket[ClientErrorInProgress]?.rawPacket
@@ -1190,13 +1190,7 @@ ${await this.suggestRule(request)}`
             ? pairFlatRawHeaders(error.badRequest?.rawHeaders as string[])
             : error.badRequest?.rawHeaders as RawHeaders | undefined;
 
-        const timingEvents: TimingEvents = socket?.[SocketTimingInfo]
-            ? {
-                startTime: socket[SocketTimingInfo].initialSocket,
-                startTimestamp: socket[SocketTimingInfo].initialSocketTimestamp
-            }
-            : { startTime: Date.now(), startTimestamp: now() };
-
+        const timingEvents = buildSocketErrorRequestTimings(socket);
         timingEvents.abortedTimestamp = now();
 
         this.announceClientErrorAsync(session.initialSocket, {

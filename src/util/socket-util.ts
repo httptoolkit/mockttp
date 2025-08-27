@@ -9,6 +9,7 @@ import { isNode } from './util';
 import {
     OngoingRequest,
     RawPassthroughEvent,
+    TimingEvents,
     TlsConnectionEvent
 } from '../types';
 import {
@@ -210,3 +211,31 @@ export function buildSocketTimingInfo(): Required<net.Socket>[typeof SocketTimin
     return { initialSocket: Date.now(), initialSocketTimestamp: now() };
 }
 
+// If we get an error linked to a socket, we want to calculate a rough estimate of when the
+// request was started, using the socket timing data:
+export function buildSocketErrorRequestTimings(socket: net.Socket | undefined): TimingEvents {
+    if (socket?.[SocketTimingInfo]) {
+        if (socket[SocketTimingInfo].lastRequestTimestamp) {
+            // If this isn't the first request (or was partially received) we use the
+            // most recent received request time as the start of this request:
+            const startTimestamp = socket[SocketTimingInfo].lastRequestTimestamp;
+            const startTime = socket[SocketTimingInfo].initialSocket +
+                (startTimestamp - socket[SocketTimingInfo].initialSocketTimestamp);
+            return {
+                startTime,
+                startTimestamp
+            };
+        } else {
+            // If this is the first request, treat socket creation as the start:
+            return {
+                startTime: socket[SocketTimingInfo].initialSocket,
+                startTimestamp: socket[SocketTimingInfo].initialSocketTimestamp
+            };
+        }
+    } else {
+        return {
+            startTime: Date.now(),
+            startTimestamp: now()
+        };
+    }
+}

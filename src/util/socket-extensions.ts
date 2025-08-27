@@ -54,6 +54,7 @@ declare module 'net' {
             initialSocketTimestamp: number;
             tunnelSetupTimestamp?: number; // Latest CONNECT completion, if any
             tlsConnectedTimestamp?: number; // Latest TLS handshake completion, if any
+            lastRequestTimestamp?: number; // Latest request or websocket request time, if any
         }
 
         // Set on TLSSocket, defined here for convenient access on _all_ sockets
