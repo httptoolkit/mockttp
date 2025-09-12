@@ -21,7 +21,6 @@ import { MockttpPluginOptions } from '../admin/mockttp-admin-plugin';
 import { AdminPlugin, PluginClientResponsesMap, PluginStartParamsMap } from '../admin/admin-plugin-types';
 import { SchemaIntrospector } from './schema-introspection';
 import { AdminQuery, getSingleSelectedFieldName } from './admin-query';
-import { MockttpOptions } from '../mockttp';
 
 const { fetch, Headers } = isNode || typeof globalThis.fetch === 'undefined'
     ? CrossFetch
@@ -223,7 +222,7 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
         this.debug = !!options.debug;
         this.adminClientOptions = _.defaults(options, {
             adminServerUrl: `http://localhost:${DEFAULT_ADMIN_SERVER_PORT}`,
-            adminStreamReconnectAttempts: 5
+            adminStreamReconnectAttempts: 8
         });
     }
 
@@ -309,9 +308,8 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
             if (retries > 0) {
                 // We delay re-retrying briefly - this helps to handle cases like the computer going
                 // to sleep (where the server & client pause in parallel, but race to do so).
-                // The delay increases exponentially with retry attempts (10ms, 50, 250, 1250, 6250)
                 const retryAttempt = this.adminClientOptions.adminStreamReconnectAttempts - retries;
-                await delay(10 * Math.pow(5, retryAttempt));
+                await delay(Math.min(25 * Math.pow(2, retryAttempt), 2_000));
 
                 return this.tryToReconnectStream(adminSessionBaseUrl, targetStream, retries - 1);
             }
