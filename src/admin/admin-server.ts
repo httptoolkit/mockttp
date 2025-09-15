@@ -476,16 +476,15 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
         this.eventEmitter.emit('mock-session-started', plugins, sessionId);
     }
 
-    stop(): Promise<void> {
+    async stop(): Promise<void> {
         if (!this.server) return Promise.resolve();
 
-        return Promise.all([
-            this.server.destroy(),
-        ].concat(
+        await Promise.all(
             Object.values(this.sessions).map((s) => s.stop())
-        )).then(() => {
-            this.server = null;
-        });
+        );
+
+        await this.server.destroy();
+        this.server = null;
     }
 
     private static baseSchema = gql`
