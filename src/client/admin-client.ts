@@ -222,7 +222,7 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
         this.debug = !!options.debug;
         this.adminClientOptions = _.defaults(options, {
             adminServerUrl: `http://localhost:${DEFAULT_ADMIN_SERVER_PORT}`,
-            adminStreamReconnectAttempts: 8
+            adminStreamReconnectAttempts: 10
         });
     }
 
@@ -287,7 +287,7 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
     private async tryToReconnectStream(
         adminSessionBaseUrl: string,
         targetStream: Duplex,
-        retries = this.adminClientOptions.adminStreamReconnectAttempts
+        retries = this.adminClientOptions.adminStreamReconnectAttempts - 1
     ) {
         this.emit('stream-reconnecting');
 
