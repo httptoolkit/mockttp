@@ -317,7 +317,7 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
             }
 
             // Otherwise, once retries have failed, we give up entirely:
-            console.warn('Admin client stream reconnection failed, shutting down:', err.message);
+            console.warn('Admin client stream reconnection failed, shutting down:', err.message ?? err);
             if (this.debug) console.warn(err);
             this.emit('stream-reconnect-failed', err);
             targetStream.emit('server-shutdown');
