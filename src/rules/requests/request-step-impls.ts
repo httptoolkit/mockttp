@@ -29,7 +29,8 @@ import {
     shouldKeepAlive,
     isHttp2,
     writeHead,
-    encodeBodyBuffer
+    encodeBodyBuffer,
+    waitForCompletedResponse
 } from '../../util/request-utils';
 import {
     h1HeadersToH2,
@@ -115,7 +116,9 @@ import {
     FixedResponseStep,
     StreamStep,
     TimeoutStep,
-    DelayStep
+    DelayStep,
+    WebhookStep,
+    WaitForRequestBodyStep
 } from './request-step-definitions';
 
 // Re-export various type definitions. This is mostly for compatibility with external
@@ -1386,6 +1389,94 @@ export class DelayStepImpl extends DelayStep {
     }
 }
 
+export class WaitForRequestBodyImpl extends WaitForRequestBodyStep {
+    async handle(request: OngoingRequest): Promise<{ continue: true }> {
+        await request.body.asBuffer();
+        return { continue: true };
+    }
+}
+
+const encodeWebhookBody = (body: Buffer) => {
+    return {
+        format: 'base64',
+        data: body.toString('base64')
+    };
+};
+
+export class WebhookStepImpl extends WebhookStep {
+
+    private sendEvent(data: {
+        eventType: string;
+        eventData: {};
+    }) {
+        const content = JSON.stringify(data);
+        const req = http.request(this.url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(content)
+            }
+        }).end(content);
+
+        req.on('error', (e) => {
+            console.warn(`Error sending webhook to ${this.url}:`, e);
+        });
+
+        req.on('response', (res) => {
+            if (res.statusCode !== 200) {
+                console.warn(`Received unexpected ${res.statusCode} response from webhook ${this.url} for ${data.eventType}`);
+            }
+
+            res.on('error', () => {});
+            res.resume();
+        });
+    }
+
+    async handle(request: OngoingRequest, response: OngoingResponse) {
+        if (this.events.includes('request')) {
+            waitForCompletedRequest(request).then((completedReq) => {
+                const eventData = {
+                    ..._.pick(completedReq, [
+                        'id',
+                        'method',
+                        'url',
+                        'headers',
+                        'trailers'
+                    ]),
+                    body: encodeWebhookBody(completedReq.body.buffer)
+                }
+
+                this.sendEvent({
+                    eventType: 'request',
+                    eventData: eventData
+                });
+            }).catch(() => {});
+        }
+
+        if (this.events.includes('response')) {
+            waitForCompletedResponse(response).then((completedRes) => {
+                const eventData = {
+                    ..._.pick(completedRes, [
+                        'id',
+                        'statusCode',
+                        'statusMessage',
+                        'headers',
+                        'trailers'
+                    ]),
+                    body: encodeWebhookBody(completedRes.body.buffer)
+                }
+
+                this.sendEvent({
+                    eventType: 'response',
+                    eventData: eventData
+                });
+            }).catch(() => {});
+        }
+
+        return { continue: true };
+    }
+}
+
 export const StepLookup: typeof StepDefinitionLookup = {
     'simple': FixedResponseStepImpl,
     'callback': CallbackStepImpl,
@@ -1396,5 +1487,7 @@ export const StepLookup: typeof StepDefinitionLookup = {
     'reset-connection': ResetConnectionStepImpl,
     'timeout': TimeoutStepImpl,
     'json-rpc-response': JsonRpcResponseStepImpl,
-    'delay': DelayStepImpl
+    'delay': DelayStepImpl,
+    'wait-for-request-body': WaitForRequestBodyImpl,
+    'webhook': WebhookStepImpl
 }

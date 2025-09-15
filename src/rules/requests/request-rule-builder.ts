@@ -20,7 +20,10 @@ import {
     JsonRpcResponseStep,
     ResetConnectionStep,
     CallbackResponseMessageResult,
-    DelayStep
+    DelayStep,
+    WebhookStep,
+    WaitForRequestBodyStep,
+    RequestWebhookEvents
 } from "./request-step-definitions";
 import { byteLength } from "../../util/util";
 import { BaseRuleBuilder } from "../base-rule-builder";
@@ -96,6 +99,32 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
      */
     delay(ms: number): this {
         this.steps.push(new DelayStep(ms));
+        return this;
+    }
+
+    /**
+     * Wait until the request body has been fully received before continuing.
+     *
+     * Without this, other handlers like `thenReply` will react immediately, e.g. sending a
+     * response as soon as the headers are received, before the body has arrived. That is
+     * perfectly valid and will probably work fine, but could cause strange behaviour
+     * in some edge cases, and is not representative of how real server responses would
+     * generally behave.
+     */
+    waitForRequestBody(): this {
+        this.steps.push(new WaitForRequestBodyStep());
+        return this;
+    }
+
+    /**
+     * Register a webhook for the given events. The provided URL will receive a POST request
+     * with a JSON body containing the details of the configured events when they occur. If
+     * no event list is specified then it defaults to `['request', 'response']`.
+     *
+     * The JSON body will contain `{ eventType: string, eventData: object }`.
+     */
+    addWebhook(url: string, events?: RequestWebhookEvents[]): this {
+        this.steps.push(new WebhookStep(url, events ?? ['request', 'response']));
         return this;
     }
 

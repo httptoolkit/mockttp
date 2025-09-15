@@ -6,7 +6,7 @@ import {
     Operation as JsonPatchOperation,
     validate as validateJsonPatch
 } from 'fast-json-patch';
-import { MaybePromise } from '@httptoolkit/util';
+import { MaybePromise, joinAnd } from '@httptoolkit/util';
 
 import {
     Headers,
@@ -19,6 +19,7 @@ import {
 
 import { Replace } from '../../util/type-utils';
 import { asBuffer } from '../../util/buffer-utils';
+import { isAbsoluteUrl } from '../../util/url';
 import {
     MatchReplacePairs,
     SerializedMatchReplacePairs,
@@ -1077,6 +1078,47 @@ export class DelayStep extends Serializable implements RequestStepDefinition {
 
 }
 
+export class WaitForRequestBodyStep extends Serializable implements RequestStepDefinition {
+
+    readonly type = 'wait-for-request-body'
+    static readonly isFinal = false;
+
+    explain(): string {
+        return 'wait for the full request body to be received';
+    }
+
+}
+
+export type RequestWebhookEvents =
+    | 'request'
+    | 'response';
+
+export class WebhookStep extends Serializable implements RequestStepDefinition {
+
+    readonly type = 'webhook';
+    static readonly isFinal = false;
+
+    constructor(
+        public readonly url: string,
+        public readonly events: RequestWebhookEvents[]
+    ) {
+        super();
+
+        if (!isAbsoluteUrl(url)) {
+            throw new Error(`Webhook URL "${url}" must be absolute`);
+        }
+    }
+
+    explain(): string {
+        // We actively support sending no events to make it easier to quickly toggle
+        // settings here during debugging without breaking anything unnecessarily.
+        return `use ${this.url} as a webhook for ${
+            this.events?.length ? joinAnd(this.events) : 'no'
+        } events`;
+    }
+
+}
+
 export const StepDefinitionLookup = {
     'simple': FixedResponseStep,
     'callback': CallbackStep,
@@ -1087,5 +1129,7 @@ export const StepDefinitionLookup = {
     'reset-connection': ResetConnectionStep,
     'timeout': TimeoutStep,
     'json-rpc-response': JsonRpcResponseStep,
-    'delay': DelayStep
+    'delay': DelayStep,
+    'wait-for-request-body': WaitForRequestBodyStep,
+    'webhook': WebhookStep
 }
