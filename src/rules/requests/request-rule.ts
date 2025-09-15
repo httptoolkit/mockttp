@@ -4,7 +4,7 @@ import * as _ from 'lodash';
 
 import { OngoingRequest, CompletedRequest, OngoingResponse, Explainable, RulePriority } from "../../types";
 import { buildBodyReader, buildInitiatedRequest, waitForCompletedRequest } from '../../util/request-utils';
-import { MaybePromise } from '@httptoolkit/util';
+import { joinAnd, MaybePromise } from '@httptoolkit/util';
 
 import * as matchers from "../matchers";
 import { type RequestStepDefinition } from "./request-step-definitions";
@@ -140,8 +140,13 @@ export class RequestRule implements RequestRule {
     }
 
     explain(withoutExactCompletion = false): string {
-        let explanation = `Match requests ${matchers.explainMatchers(this.matchers)}, ` +
-            `and then ${explainSteps(this.steps)}`;
+        let explanation = `Match ${
+            this.priority === RulePriority.FALLBACK ? 'otherwise unmatched ' : ''
+        }requests ${
+            matchers.explainMatchers(this.matchers)
+        }, and ${
+            explainSteps(this.steps)
+        }`;
 
         if (this.completionChecker) {
             explanation += `, ${this.completionChecker.explain(
@@ -162,13 +167,8 @@ export class RequestRule implements RequestRule {
 }
 
 export function explainSteps(steps: RequestStepDefinition[]) {
-    if (steps.length === 1) return steps[0].explain();
-    if (steps.length === 2) {
-        return `${steps[0].explain()} then ${steps[1].explain()}`;
-    }
-
-    // With 3+, we need to oxford comma separate explanations to make them readable
-    return steps.slice(0, -1)
-        .map((s) => s.explain())
-        .join(', ') + ', and ' + steps.slice(-1)[0].explain();
+    return joinAnd(steps.map(s => s.explain()), {
+        finalSeparator: 'then ',
+        oxfordComma: true
+    });
 }

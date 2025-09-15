@@ -9,7 +9,7 @@ import {
     RulePriority
 } from "../../types";
 import { waitForCompletedRequest } from '../../util/request-utils';
-import { MaybePromise } from '@httptoolkit/util';
+import { joinAnd, MaybePromise } from '@httptoolkit/util';
 
 import { validateMockRuleData } from '../rule-serialization';
 
@@ -142,8 +142,13 @@ export class WebSocketRule implements WebSocketRule {
     }
 
     explain(withoutExactCompletion = false): string {
-        let explanation = `Match websockets ${matchers.explainMatchers(this.matchers)}, ` +
-        `and then ${explainSteps(this.steps)}`;
+        let explanation = `Match ${
+            this.priority === RulePriority.FALLBACK ? 'otherwise unmatched ' : ''
+        }websockets ${
+            matchers.explainMatchers(this.matchers)
+        }, and ${
+            explainSteps(this.steps)
+        }`;
 
         if (this.completionChecker) {
             explanation += `, ${this.completionChecker.explain(
@@ -164,13 +169,8 @@ export class WebSocketRule implements WebSocketRule {
 }
 
 export function explainSteps(steps: WebSocketStepDefinition[]) {
-    if (steps.length === 1) return steps[0].explain();
-    if (steps.length === 2) {
-        return `${steps[0].explain()} then ${steps[1].explain()}`;
-    }
-
-    // With 3+, we need to oxford comma separate explanations to make them readable
-    return steps.slice(0, -1)
-        .map((s) => s.explain())
-        .join(', ') + ', and ' + steps.slice(-1)[0].explain();
+    return joinAnd(steps.map(s => s.explain()), {
+        finalSeparator: 'and ',
+        oxfordComma: true
+    });
 }

@@ -4,7 +4,7 @@ import * as url from 'url';
 import * as _ from 'lodash';
 import { oneLine } from 'common-tags';
 import * as multipart from 'parse-multipart-data';
-import { MaybePromise } from '@httptoolkit/util';
+import { MaybePromise, joinAnd } from '@httptoolkit/util';
 
 import { CompletedRequest, Method, Explainable, OngoingRequest } from "../types";
 import {
@@ -659,14 +659,6 @@ export async function matchesAll(req: OngoingRequest, matchers: RequestMatcher[]
 }
 
 export function explainMatchers(matchers: RequestMatcher[]) {
-    if (matchers.length === 1) return matchers[0].explain();
-    if (matchers.length === 2) {
-        // With just two explanations, you can just combine them
-        return `${matchers[0].explain()} ${matchers[1].explain()}`;
-    }
-
-    // With 3+, we need to oxford comma separate explanations to make them readable
-    return matchers.slice(0, -1)
-    .map((m) => m.explain())
-    .join(', ') + ', and ' + matchers.slice(-1)[0].explain();
+    if (matchers.length === 2) return `${matchers[0].explain()} ${matchers[1].explain()}`;
+    return joinAnd(matchers.map(m => m.explain()), { oxfordComma: true });
 }
