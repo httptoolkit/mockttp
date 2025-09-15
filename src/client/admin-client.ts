@@ -269,11 +269,12 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
             // If never connected successfully, we do nothing.
         });
 
-        targetStream.on('finish', () => { // Client has shutdown
+        targetStream.on('end', () => { // Client has shutdown
             // Ignore any further WebSocket events - the websocket stream is no longer useful
             wsStream.removeAllListeners('connect');
             wsStream.removeAllListeners('ws-close');
             wsStream.destroy();
+            streamConnected = false;
         });
 
         return wsStream;
@@ -290,6 +291,9 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
         retries = this.adminClientOptions.adminStreamReconnectAttempts
     ) {
         this.emit('stream-reconnecting');
+
+        // If the client stops running, stop retrying:
+        if (!(await this.running)) return;
 
         // Unclean shutdown means something has gone wrong somewhere. Try to reconnect.
         const newStream = this.attachStreamWebsocket(adminSessionBaseUrl, targetStream);
