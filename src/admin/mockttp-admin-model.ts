@@ -31,6 +31,7 @@ import { SubscribableEvent } from "../main";
 const graphqlSubscriptionPairs = Object.entries({
     'requestInitiated': 'request-initiated',
     'requestReceived': 'request',
+    'responseInitiated': 'response-initiated',
     'responseCompleted': 'response',
     'webSocketRequest': 'websocket-request',
     'webSocketAccepted': 'websocket-accepted',

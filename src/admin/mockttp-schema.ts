@@ -20,6 +20,7 @@ export const MockttpSchema = gql`
     extend type Subscription {
         requestInitiated: InitiatedRequest!
         requestReceived: Request!
+        responseInitiated: InitiatedResponse!
         responseCompleted: Response!
         webSocketRequest: Request!
         webSocketAccepted: Response!
@@ -204,6 +205,18 @@ export const MockttpSchema = gql`
         rawHeaders: Json!
 
         error: Json
+    }
+
+    type InitiatedResponse {
+        id: ID!
+        timingEvents: Json!
+        tags: [String!]!
+
+        statusCode: Int!
+        statusMessage: String!
+
+        headers: Json!
+        rawHeaders: Json!
     }
 
     type Response {

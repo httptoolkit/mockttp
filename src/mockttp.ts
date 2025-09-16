@@ -22,7 +22,8 @@ import {
     AbortedRequest,
     RuleEvent,
     RawPassthroughEvent,
-    RawPassthroughDataEvent
+    RawPassthroughDataEvent,
+    InitiatedResponse
 } from "./types";
 import type { RequestRuleData } from "./rules/requests/request-rule";
 import type { WebSocketRuleData } from "./rules/websockets/websocket-rule";
@@ -363,6 +364,21 @@ export interface Mockttp {
      * @category Events
      */
     on(event: 'request', callback: (req: CompletedRequest) => void): Promise<void>;
+
+    /**
+     * Subscribe to hear about response details as soon as the initial response (the
+     * status code & headers) are sent, without waiting for the body.
+     *
+     * This is only useful in some niche use cases, such as logging all requests seen
+     * by the server independently of the rules defined.
+     *
+     * The callback will be called asynchronously from request handling. This function
+     * returns a promise, and the callback is not guaranteed to be registered until
+     * the promise is resolved.
+     *
+     * @category Events
+     */
+    on(event: 'response-initiated', callback: (req: InitiatedResponse) => void): Promise<void>;
 
     /**
      * Subscribe to hear about response details when the response is completed.
@@ -885,6 +901,7 @@ export interface MockttpOptions {
 export type SubscribableEvent =
     | 'request-initiated'
     | 'request'
+    | 'response-initiated'
     | 'response'
     | 'websocket-request'
     | 'websocket-accepted'

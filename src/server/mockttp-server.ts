@@ -32,7 +32,8 @@ import {
     RawTrailers,
     RawPassthroughEvent,
     RawPassthroughDataEvent,
-    RawHeaders
+    RawHeaders,
+    InitiatedResponse
 } from "../types";
 import { DestroyableServer } from "destroyable-server";
 import {
@@ -82,7 +83,8 @@ import {
     buildInitiatedRequest,
     tryToParseHttpRequest,
     buildBodyReader,
-    parseRawHttpResponse
+    parseRawHttpResponse,
+    buildInitiatedResponse
 } from "../util/request-utils";
 import { asBuffer } from "../util/buffer-utils";
 import {
@@ -327,6 +329,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
 
     public on(event: 'request-initiated', callback: (req: InitiatedRequest) => void): Promise<void>;
     public on(event: 'request', callback: (req: CompletedRequest) => void): Promise<void>;
+    public on(event: 'response-initiated', callback: (req: InitiatedResponse) => void): Promise<void>;
     public on(event: 'response', callback: (req: CompletedResponse) => void): Promise<void>;
     public on(event: 'abort', callback: (req: InitiatedRequest) => void): Promise<void>;
     public on(event: 'websocket-request', callback: (req: CompletedRequest) => void): Promise<void>;
@@ -378,6 +381,21 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             });
         })
         .catch(console.error);
+    }
+
+    private announceInitialResponseAsync(response: OngoingResponse) {
+        if (this.eventEmitter.listenerCount('response-initiated') === 0) return;
+
+        setImmediate(() => {
+            const initiatedRes = buildInitiatedResponse(response);
+            this.eventEmitter.emit('response-initiated', Object.assign(
+                initiatedRes,
+                {
+                    timingEvents: _.clone(initiatedRes.timingEvents),
+                    tags: _.clone(initiatedRes.tags)
+                }
+            ));
+        });
     }
 
     private announceResponseAsync(response: OngoingResponse | CompletedResponse) {
@@ -790,7 +808,10 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             rawResponse,
             request.timingEvents,
             request.tags,
-            { maxSize: this.maxBodySize }
+            {
+                maxSize: this.maxBodySize,
+                onWriteHead: () => this.announceInitialResponseAsync(response)
+            }
         );
         response.id = request.id;
         response.on('error', (error) => {

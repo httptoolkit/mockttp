@@ -24,7 +24,8 @@ import {
     TimingEvents,
     InitiatedRequest,
     RawHeaders,
-    Destination
+    Destination,
+    InitiatedResponse
 } from "../types";
 
 import {
@@ -354,7 +355,10 @@ export function trackResponse(
     response: http.ServerResponse,
     timingEvents: TimingEvents,
     tags: string[],
-    options: { maxSize: number }
+    options: {
+        maxSize: number,
+        onWriteHead: () => void
+    }
 ): OngoingResponse {
     let trackedResponse = <OngoingResponse> response;
 
@@ -378,6 +382,8 @@ export function trackResponse(
     trackedResponse.writeHead = function (this: typeof trackedResponse, ...args: any) {
         if (!timingEvents.headersSentTimestamp) {
             timingEvents.headersSentTimestamp = now();
+            // Notify listeners that the head is being written:
+            options.onWriteHead();
         }
 
         // HTTP/2 responses shouldn't have a status message:
@@ -466,6 +472,30 @@ export function trackResponse(
 }
 
 /**
+ * Build an initiated response: the external representation of a response
+ * that's just started.
+ */
+export function buildInitiatedResponse(response: OngoingResponse): InitiatedResponse {
+    const initiatedResponse: InitiatedResponse = _(response).pick([
+        'id',
+        'statusCode',
+        'timingEvents',
+        'tags'
+    ]).assign({
+        statusMessage: '',
+        headers: response.getHeaders(),
+        rawHeaders: response.getRawHeaders(),
+    }).valueOf();
+
+    if (!(response instanceof http2.Http2ServerResponse)) {
+        // H2 has no status messages, and generates a warning if you look for one
+        initiatedResponse.statusMessage = response.statusMessage;
+    }
+
+    return initiatedResponse;
+}
+
+/**
  * Build a completed response: the external representation of a response
  * that's been completely written out and sent back to the client.
  */
@@ -478,29 +508,11 @@ export async function waitForCompletedResponse(
     const body = await waitForBody(response.body, response.getHeaders());
     response.timingEvents.responseSentTimestamp = response.timingEvents.responseSentTimestamp || now();
 
-    const completedResponse: CompletedResponse = _(response).pick([
-        'id',
-        'statusCode',
-        'timingEvents',
-        'tags'
-    ]).assign({
-        statusMessage: '',
-
-        headers: response.getHeaders(),
-        rawHeaders: response.getRawHeaders(),
-
+    return Object.assign(buildInitiatedResponse(response), {
         body: body,
-
         rawTrailers: response.getRawTrailers(),
         trailers: rawHeadersToObject(response.getRawTrailers())
-    }).valueOf();
-
-    if (!(response instanceof http2.Http2ServerResponse)) {
-        // H2 has no status messages, and generates a warning if you look for one
-        completedResponse.statusMessage = response.statusMessage;
-    }
-
-    return completedResponse;
+    });
 }
 
 // Take raw HTTP request bytes received, have a go at parsing something useful out of them.

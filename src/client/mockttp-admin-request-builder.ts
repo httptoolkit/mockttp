@@ -244,6 +244,16 @@ export class MockttpAdminRequestBuilder {
                     tags
                 }
             }`,
+            'response-initiated': gql`subscription OnResponseInitiated {
+                responseInitiated {
+                    id
+                    statusCode
+                    statusMessage
+                    rawHeaders
+                    timingEvents
+                    tags
+                }
+            }`,
             response: gql`subscription OnResponse {
                 responseCompleted {
                     id

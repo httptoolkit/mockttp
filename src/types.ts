@@ -321,17 +321,20 @@ export interface OngoingResponse extends http.ServerResponse {
     tags: string[];
 }
 
-export interface CompletedResponse {
+export interface InitiatedResponse {
     id: string;
     statusCode: number;
     statusMessage: string;
     headers: Headers;
     rawHeaders: RawHeaders;
+    timingEvents: TimingEvents;
+    tags: string[];
+}
+
+export interface CompletedResponse extends InitiatedResponse {
     body: CompletedBody;
     rawTrailers: RawTrailers;
     trailers: Trailers;
-    timingEvents: TimingEvents;
-    tags: string[];
 }
 
 export interface WebSocketMessage {

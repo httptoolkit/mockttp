@@ -1,4 +1,5 @@
 import * as _ from 'lodash';
+import { PassThrough } from 'stream';
 import * as http from 'http';
 import * as zlib from 'zlib';
 
@@ -7,7 +8,8 @@ import {
     CompletedRequest,
     CompletedResponse,
     TimingEvents,
-    AbortedRequest
+    AbortedRequest,
+    InitiatedResponse
 } from "../../..";
 import {
     expect,
@@ -18,6 +20,55 @@ import {
     delay,
     makeAbortableRequest
 } from "../../test-utils";
+
+describe("Response initiated subscriptions", () => {
+    describe("with a local HTTP server", () => {
+        let server = getLocal();
+
+        beforeEach(() => server.start());
+        afterEach(() => server.stop());
+
+        it("should notify with response details as soon as they're ready", async () => {
+            let seenResponsePromise = getDeferred<InitiatedResponse>();
+            await server.on('response-initiated', (r) => seenResponsePromise.resolve(r));
+
+            const bodyStream = new PassThrough();
+            await server.forAnyRequest().thenStream(400, bodyStream, {
+                'a': 'b',
+                'access-control-allow-origin': '*',
+                'access-control-expose-headers': '*'
+            });
+
+            const realResponse = await fetch(server.urlFor("/mocked-endpoint"));
+            const realResponseHeaders = Object.fromEntries(realResponse.headers as any);
+
+            let seenResponse = await seenResponsePromise;
+            expect(seenResponse.statusCode).to.equal(400);
+            expect(seenResponse.statusMessage).to.equal('Bad Request');
+
+            expect(seenResponse.headers).to.deep.equal(realResponseHeaders);
+            expect(seenResponse.rawHeaders).to.deep.equal(Object.entries(realResponseHeaders));
+
+            expect((seenResponse as any).body).to.equal(undefined); // No body included yet
+            expect((seenResponse as any).trailers).to.equal(undefined); // No trailers yet
+            expect((seenResponse as any).rawTrailers).to.equal(undefined);
+
+            expect(seenResponse.id).to.be.a('string');
+            expect(seenResponse.tags).to.deep.equal([]);
+
+            const timingEvents = seenResponse.timingEvents;
+            expect(timingEvents.startTimestamp).to.be.a('number');
+            expect(timingEvents.bodyReceivedTimestamp).to.be.a('number');
+            expect(timingEvents.headersSentTimestamp).to.be.a('number');
+
+            expect(timingEvents.bodyReceivedTimestamp).to.be.greaterThan(timingEvents.startTimestamp);
+            expect(timingEvents.headersSentTimestamp).to.be.greaterThan(timingEvents.startTimestamp);
+
+            expect(timingEvents.responseSentTimestamp).to.equal(undefined);
+            expect(timingEvents.abortedTimestamp).to.equal(undefined);
+        });
+    });
+});
 
 describe("Response subscriptions", () => {
 
