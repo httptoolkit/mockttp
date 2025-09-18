@@ -1,3 +1,4 @@
+import { Writable } from 'stream';
 import * as net from 'net';
 import * as http from 'http';
 
@@ -32,6 +33,7 @@ export interface WebSocketRule extends Explainable {
         options: {
             record: boolean,
             debug: boolean,
+            keyLogStream?: Writable,
             emitEventCallback?: (type: string, event: unknown) => void
         }
     ): Promise<void>;
@@ -93,6 +95,7 @@ export class WebSocketRule implements WebSocketRule {
         options: {
             record: boolean,
             debug: boolean,
+            keyLogStream?: Writable,
             emitEventCallback?: (type: string, event: unknown) => void
         }
     ): Promise<void> {

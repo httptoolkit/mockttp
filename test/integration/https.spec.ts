@@ -2,8 +2,10 @@ import * as http from 'http';
 import * as tls from 'tls';
 import * as https from 'https';
 import * as fs from 'fs/promises';
+import * as tmp from 'tmp-promise';
+import * as WebSocket from 'isomorphic-ws';
 
-import { getLocal } from "../..";
+import { getLocal, Mockttp } from "../..";
 import {
     expect,
     fetch,
@@ -11,8 +13,7 @@ import {
     delay,
     openRawSocket,
     openRawTlsSocket,
-    http2ProxyRequest,
-    nodeSatisfies
+    http2ProxyRequest
 } from "../test-utils";
 import { streamToBuffer } from '../../src/util/buffer-utils';
 
@@ -482,6 +483,83 @@ describe("When configured for HTTPS", () => {
                 expect(tlsSocket.getProtocol()).to.equal('TLSv1.3');
                 tlsSocket.destroy();
             });
+        });
+
+        describe("with a keylog file configured", () => {
+
+            const remoteNonLoggingServer = getLocal({
+                https: {
+                    keyPath: './test/fixtures/test-ca.key',
+                    certPath: './test/fixtures/test-ca.pem',
+                }
+            });
+
+            let server: Mockttp;
+            let keyLogFile!: string;
+
+            beforeEach(async () => {
+                keyLogFile = await tmp.tmpName();
+                server = getLocal({
+                    https: {
+                        keyPath: './test/fixtures/test-ca.key',
+                        certPath: './test/fixtures/test-ca.pem',
+                        keyLogFile
+                    }
+                });
+                await server.start();
+                await remoteNonLoggingServer.start();
+            });
+
+            afterEach(async () => {
+                await server.stop().catch(() => {});
+                await remoteNonLoggingServer.stop().catch(() => {});
+                await fs.unlink(keyLogFile).catch(() => {});
+            });
+
+            it("should log downstream TLS keys to the file", async () => {
+                await server.forGet('/').thenReply(200);
+                await fetch(server.url);
+
+                const keyLogContents = await fs.readFile(keyLogFile, 'utf8');
+
+                expect(keyLogContents).to.include('CLIENT_HANDSHAKE_TRAFFIC_SECRET');
+                expect(keyLogContents).to.include('SERVER_HANDSHAKE_TRAFFIC_SECRET');
+                expect(keyLogContents).to.include('CLIENT_TRAFFIC_SECRET_0');
+                expect(keyLogContents).to.include('SERVER_TRAFFIC_SECRET_0');
+            });
+
+            it("should log upstream TLS keys to the file", async () => {
+                // Make an HTTP request, but proxy to an HTTPS server:
+                await server.forGet('/').thenForwardTo(remoteNonLoggingServer.url);
+                await fetch(`http://localhost:${server.port}/`);
+
+                const keyLogContents = await fs.readFile(keyLogFile, 'utf8');
+
+                expect(keyLogContents).to.include('CLIENT_HANDSHAKE_TRAFFIC_SECRET');
+                expect(keyLogContents).to.include('SERVER_HANDSHAKE_TRAFFIC_SECRET');
+                expect(keyLogContents).to.include('CLIENT_TRAFFIC_SECRET_0');
+                expect(keyLogContents).to.include('SERVER_TRAFFIC_SECRET_0');
+            });
+
+            it("should log upstream WebSocket TLS keys to the file", async () => {
+                await server.forAnyWebSocket().thenForwardTo(remoteNonLoggingServer.url);
+                await remoteNonLoggingServer.forAnyWebSocket().thenEcho();
+
+                const ws = new WebSocket(`ws://localhost:${server.port}/`);
+                await new Promise((resolve, reject) => {
+                    ws.addEventListener('open', resolve);
+                    ws.addEventListener('error', reject);
+                });
+                ws.close(1000);
+
+                const keyLogContents = await fs.readFile(keyLogFile, 'utf8');
+
+                expect(keyLogContents).to.include('CLIENT_HANDSHAKE_TRAFFIC_SECRET');
+                expect(keyLogContents).to.include('SERVER_HANDSHAKE_TRAFFIC_SECRET');
+                expect(keyLogContents).to.include('CLIENT_TRAFFIC_SECRET_0');
+                expect(keyLogContents).to.include('SERVER_TRAFFIC_SECRET_0');
+            });
+
         });
     });
 });

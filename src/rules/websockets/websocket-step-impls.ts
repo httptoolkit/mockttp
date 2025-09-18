@@ -377,8 +377,9 @@ export class PassThroughWebSocketStepImpl extends PassThroughWebSocketStep {
             })
         } as WebSocket.ClientOptions & { lookup: any, maxPayload: number });
 
+        const upstreamReq = (upstreamWebSocket as any as { _req: http.ClientRequest })._req;
+
         if (options.emitEventCallback) {
-            const upstreamReq = (upstreamWebSocket as any as { _req: http.ClientRequest })._req;
             // This is slower than req.getHeaders(), but gives us (roughly) the correct casing
             // of the headers as sent. Still not perfect (loses dupe ordering) but at least it
             // generally matches what's actually sent on the wire.
@@ -406,6 +407,12 @@ export class PassThroughWebSocketStepImpl extends PassThroughWebSocketStep {
                 path: upstreamReq.path,
                 rawHeaders: rawHeaders,
                 subprotocols: filteredSubprotocols
+            });
+        }
+
+        if (options.keyLogStream) {
+            upstreamReq.on('socket', (socket) => {
+                socket.on('keylog', (line) => options.keyLogStream!.write(line));
             });
         }
 

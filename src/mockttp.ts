@@ -787,6 +787,17 @@ export type MockttpHttpsOptions = CAOptions & {
     tlsServerOptions?: {
         minVersion?: 'TLSv1.3' | 'TLSv1.2' | 'TLSv1.1' | 'TLSv1';
     };
+
+    /**
+     * The path to a file where TLS session keys should be logged. This allows you to combine
+     * Mockttp with Wireshark and similar, allowing to you inspect the decrypted raw bytes
+     * and full TLS handshake details, while also using Mockttp for high-level capture
+     * & traffic modification.
+     *
+     * When set, the keys for both client & server sessions will be logged, allowing you
+     * to examine both sides of the proxied connection.
+     */
+    keyLogFile?: string;
 };
 
 export interface MockttpOptions {

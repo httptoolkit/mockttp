@@ -1,4 +1,5 @@
 import { Buffer } from 'buffer';
+import { Writable } from 'stream';
 
 import * as _ from 'lodash';
 
@@ -22,6 +23,7 @@ export interface RequestRule extends Explainable {
     handle(request: OngoingRequest, response: OngoingResponse, options: {
         record: boolean,
         debug: boolean,
+        keyLogStream?: Writable,
         emitEventCallback?: (type: string, event: unknown) => void
     }): Promise<void>;
     isComplete(): boolean | null;
@@ -78,12 +80,14 @@ export class RequestRule implements RequestRule {
     handle(req: OngoingRequest, res: OngoingResponse, options: {
         record?: boolean,
         debug: boolean,
+        keyLogStream?: Writable,
         emitEventCallback?: (type: string, event: unknown) => void
     }): Promise<void> {
         let stepsPromise = (async () => {
             for (let step of this.steps) {
                 const result = await step.handle(req, res, {
                     emitEventCallback: options.emitEventCallback,
+                    keyLogStream: options.keyLogStream,
                     debug: options.debug
                 });
 

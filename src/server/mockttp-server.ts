@@ -1,4 +1,6 @@
 import { Buffer } from 'buffer';
+import * as stream from 'stream';
+import * as fs from 'fs';
 import * as net from "net";
 import * as tls from "tls";
 import * as http from "http";
@@ -122,6 +124,8 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     private socksOptions: boolean | SocksServerOptions;
     private passthroughUnknownProtocols: boolean;
     private maxBodySize: number;
+    private keyLogFilePath: string | undefined;
+    private keyLogStream: fs.WriteStream | undefined;
 
     private app: connect.Server;
     private server: DestroyableServer<net.Server> | undefined;
@@ -140,6 +144,8 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         this.socksOptions = options.socks ?? false;
         this.passthroughUnknownProtocols = options.passthrough?.includes('unknown-protocol') ?? false;
         this.maxBodySize = options.maxBodySize ?? Infinity;
+        this.keyLogFilePath = options.https?.keyLogFile;
+
         this.eventEmitter = new EventEmitter();
 
         this.app = connect();
@@ -158,12 +164,20 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     }
 
     async start(portParam: number | PortRange = { startPort: 8000, endPort: 65535 }): Promise<void> {
+        if (this.keyLogFilePath) {
+            this.keyLogStream = fs.createWriteStream(this.keyLogFilePath, { flags: 'a' });
+            this.keyLogStream.on('error', (err) => {
+                console.warn(`Error writing TLS key log file ${this.keyLogFilePath}:`, err);
+            });
+        }
+
         this.server = await createComboServer({
             debug: this.debug,
             https: this.httpsOptions,
             http2: this.isHttp2Enabled,
             socks: this.socksOptions,
             passthroughUnknownProtocols: this.passthroughUnknownProtocols,
+            keyLogStream: this.keyLogStream,
 
             requestListener: this.app,
             tlsClientErrorListener: this.announceTlsErrorAsync.bind(this),
@@ -221,6 +235,8 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         if (this.debug) console.log(`Stopping server at ${this.url}`);
 
         if (this.server) await this.server.destroy();
+
+        if (this.keyLogStream) this.keyLogStream.end();
 
         this.reset();
     }
@@ -837,6 +853,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
                 await nextRule.handle(request, response, {
                     record: this.recordTraffic,
                     debug: this.debug,
+                    keyLogStream: this.keyLogStream,
                     emitEventCallback: (this.eventEmitter.listenerCount('rule-event') !== 0)
                         ? (type, event) => this.announceRuleEventAsync(request.id, nextRule!.id, type, event)
                         : undefined
@@ -912,6 +929,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
                 await nextRule.handle(request, socket, head, {
                     record: this.recordTraffic,
                     debug: this.debug,
+                    keyLogStream: this.keyLogStream,
                     emitEventCallback: (this.eventEmitter.listenerCount('rule-event') !== 0)
                         ? (type, event) => this.announceRuleEventAsync(request.id, nextRule!.id, type, event)
                         : undefined

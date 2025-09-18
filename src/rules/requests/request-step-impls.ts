@@ -1,9 +1,10 @@
 import { Buffer } from 'buffer';
-import type dns = require('dns');
-import url = require('url');
-import net = require('net');
-import http = require('http');
-import https = require('https');
+import { Writable } from 'stream';
+import * as url from 'url';
+import type * as dns from 'dns';
+import * as net from 'net';
+import * as http from 'http';
+import * as https from 'https';
 
 import * as _ from 'lodash';
 import * as fs from 'fs/promises';
@@ -165,6 +166,7 @@ export interface RequestStepImpl extends RequestStepDefinition {
 
 export interface RequestStepOptions {
     emitEventCallback?: (type: string, event: unknown) => void;
+    keyLogStream?: Writable;
     debug: boolean;
 }
 
@@ -1063,6 +1065,12 @@ export class PassThroughStepImpl extends PassThroughStep {
                 // This event can fire multiple times for keep-alive sockets, which are used to
                 // make multiple requests. If/when that happens, we don't need more event listeners.
                 if (this.outgoingSockets.has(socket)) return;
+
+                if (options.keyLogStream) {
+                    socket.on('keylog', (line) => {
+                        options.keyLogStream!.write(line);
+                    });
+                }
 
                 // Add this port to our list of active ports, once it's connected (before then it has no port)
                 if (socket.connecting) {

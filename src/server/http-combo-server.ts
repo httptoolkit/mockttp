@@ -1,9 +1,10 @@
 import _ = require('lodash');
 import now = require('performance-now');
-import net = require('net');
-import tls = require('tls');
-import http = require('http');
-import http2 = require('http2');
+import { Writable } from 'stream';
+import * as net from 'net';
+import * as tls from 'tls';
+import * as http from 'http';
+import * as http2 from 'http2';
 
 import * as semver from 'semver';
 import { makeDestroyable, DestroyableServer } from 'destroyable-server';
@@ -151,6 +152,7 @@ export interface ComboServerOptions {
     http2: boolean | 'fallback';
     socks: boolean | SocksServerOptions;
     passthroughUnknownProtocols: boolean;
+    keyLogStream: Writable | undefined,
 
     requestListener: (req: http.IncomingMessage, res: http.ServerResponse) => void;
     tlsClientErrorListener: (socket: tls.TLSSocket, req: TlsHandshakeFailure) => void;
@@ -219,6 +221,12 @@ export async function createComboServer(options: ComboServerOptions): Promise<De
                 }
             }
         });
+
+        if (options.keyLogStream) {
+            tlsServer.on('keylog', (line: string) => {
+                options.keyLogStream?.write(line);
+            });
+        }
 
         analyzeAndMaybePassThroughTls(
             tlsServer,
