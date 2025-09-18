@@ -1,6 +1,5 @@
 import * as _ from 'lodash';
-import * as url from 'url';
-import { stripIndent } from 'common-tags';
+import { joinAnd } from '@httptoolkit/util';
 
 import {
     ClientServerChannel,
@@ -24,10 +23,12 @@ import {
     CloseConnectionStep,
     DelayStep,
     ResetConnectionStep,
-    TimeoutStep
+    TimeoutStep,
+    WaitForRequestBodyStep,
 } from '../requests/request-step-definitions';
 import { Replace } from '../../util/type-utils';
 import { SerializedMatchReplacePairs, serializeMatchReplaceConfiguration } from '../match-replace';
+import { isAbsoluteUrl } from '../../util/url';
 
 /*
 This file defines websocket step *definitions*, which includes everything necessary to define
@@ -54,9 +55,7 @@ export interface WebSocketStepDefinition extends Explainable, Serializable {
 }
 
 export interface PassThroughWebSocketStepOptions extends PassThroughStepConnectionOptions {
-
     transformRequest?: WebSocketRequestTransform;
-
 }
 
 export interface WebSocketRequestTransform extends PassThroughInitialTransforms {
@@ -259,7 +258,8 @@ export {
     CloseConnectionStep,
     ResetConnectionStep,
     TimeoutStep,
-    DelayStep
+    DelayStep,
+    WaitForRequestBodyStep
 };
 
 export const WsStepDefinitionLookup = {
@@ -270,5 +270,6 @@ export const WsStepDefinitionLookup = {
     'close-connection': CloseConnectionStep,
     'reset-connection': ResetConnectionStep,
     'timeout': TimeoutStep,
-    'delay': DelayStep
+    'delay': DelayStep,
+    'wait-for-request-body': WaitForRequestBodyStep,
 };

@@ -22,7 +22,8 @@ import {
     CloseConnectionStepImpl,
     DelayStepImpl,
     ResetConnectionStepImpl,
-    TimeoutStepImpl
+    TimeoutStepImpl,
+    WaitForRequestBodyStepImpl
 } from '../requests/request-step-impls';
 import { getDefaultPort, getEffectivePort } from '../../util/url';
 import { resetOrDestroy } from '../../util/socket-util';
@@ -582,5 +583,6 @@ export const WsStepLookup: typeof WsStepDefinitionLookup = {
     'close-connection': CloseConnectionStepImpl,
     'reset-connection': ResetConnectionStepImpl,
     'timeout': TimeoutStepImpl,
-    'delay': DelayStepImpl
+    'delay': DelayStepImpl,
+    'wait-for-request-body': WaitForRequestBodyStepImpl
 };

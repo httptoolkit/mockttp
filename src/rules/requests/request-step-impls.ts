@@ -1411,7 +1411,7 @@ export class DelayStepImpl extends DelayStep {
     }
 }
 
-export class WaitForRequestBodyImpl extends WaitForRequestBodyStep {
+export class WaitForRequestBodyStepImpl extends WaitForRequestBodyStep {
     async handle(request: OngoingRequest): Promise<{ continue: true }> {
         await request.body.asBuffer();
         return { continue: true };
@@ -1510,6 +1510,6 @@ export const StepLookup: typeof StepDefinitionLookup = {
     'timeout': TimeoutStepImpl,
     'json-rpc-response': JsonRpcResponseStepImpl,
     'delay': DelayStepImpl,
-    'wait-for-request-body': WaitForRequestBodyImpl,
+    'wait-for-request-body': WaitForRequestBodyStepImpl,
     'webhook': WebhookStepImpl
 }
