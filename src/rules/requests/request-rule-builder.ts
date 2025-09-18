@@ -425,7 +425,9 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
             ...options,
             transformRequest: {
                 ...options.transformRequest,
-                setProtocol: protocol as 'http' | 'https' | undefined,
+                ...(protocol ? {
+                    setProtocol: protocol as 'http' | 'https' | undefined
+                } : {}),
                 replaceHost: { targetHost: host }
             }
         }));
