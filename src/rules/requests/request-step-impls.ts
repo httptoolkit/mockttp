@@ -1018,6 +1018,20 @@ export class PassThroughStepImpl extends PassThroughStep {
                     // onward directly:
                     clientRes.end(originalBody);
                     resolve();
+                } else if (isH2Downstream && (
+                    serverRes.statusCode === 204 ||
+                    serverRes.statusCode === 205 ||
+                    serverRes.statusCode === 304 ||
+                    method === 'HEAD'
+                )) {
+                    // Here, Node's HTTP/2 implementation auto-ends the downstream request knowing
+                    // that it can't have a body. We need to mirror this, or we end up with a confusing
+                    // race condition where the client is done (and can even close the connection) while
+                    // the server response is still technically pending.
+                    // https://github.com/nodejs/node/blob/f6f8eb7c/lib/internal/http2/core.js#L2976-L2985
+                    clientRes.end();
+                    serverRes.destroy();
+                    resolve();
                 } else {
                     // Otherwise the body hasn't been read - stream it live:
                     serverRes.pipe(clientRes);
