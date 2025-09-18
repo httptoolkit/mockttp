@@ -330,11 +330,15 @@ export interface Mockttp {
     forJsonRpcRequest(match?: { method?: string, params?: any }): RequestRuleBuilder;
 
     /**
-     * Get a builder for a mock rule that will match all websocket connections.
+     * Get a builder for a mock rule that will match websocket connections.
+     *
+     * This can optionally include a path to match: either a string, or a regular
+     * expression. Path matching always ignores query parameters. To match query
+     * parameters, use .withQuery({ a: 'b' }) or withExactQuery('?a=b').
      *
      * @category Mock websockets
      */
-    forAnyWebSocket(): WebSocketRuleBuilder;
+    forAnyWebSocket(url?: string | RegExp): WebSocketRuleBuilder;
 
     /**
      * Subscribe to hear about request details as soon as the initial request details
@@ -1033,8 +1037,8 @@ export abstract class AbstractMockttp {
             });
     }
 
-    forAnyWebSocket(): WebSocketRuleBuilder {
-        return new WebSocketRuleBuilder(this.addWebSocketRule);
+    forAnyWebSocket(url?: string | RegExp): WebSocketRuleBuilder {
+        return new WebSocketRuleBuilder(url, this.addWebSocketRule);
     }
 
 }

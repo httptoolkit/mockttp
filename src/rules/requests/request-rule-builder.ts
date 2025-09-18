@@ -81,6 +81,10 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
                 this.matchers.push(new RegexPathMatcher(path));
             } else if (typeof path === 'string') {
                 this.matchers.push(new FlexiblePathMatcher(path));
+            } else if (path === undefined) {
+                this.matchers.push(new WildcardMatcher());
+            } else {
+                throw new Error('Invalid path argument');
             }
         }
 

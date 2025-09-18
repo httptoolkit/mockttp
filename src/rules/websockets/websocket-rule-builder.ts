@@ -16,7 +16,7 @@ import {
 } from './websocket-step-definitions';
 
 import { BaseRuleBuilder } from "../base-rule-builder";
-import { WildcardMatcher } from "../matchers";
+import { FlexiblePathMatcher, RegexPathMatcher, WildcardMatcher } from "../matchers";
 
 /**
  * @class WebSocketRuleBuilder
@@ -43,12 +43,25 @@ export class WebSocketRuleBuilder extends BaseRuleBuilder {
      * using, not directly. You shouldn't ever need to call this constructor.
      */
     constructor(
+        path: string | RegExp | undefined,
         private addRule: (rule: WebSocketRuleData) => Promise<MockedEndpoint>
     ) {
         super();
 
-        // By default, websockets just match everything:
-        this.matchers.push(new WildcardMatcher());
+        if (path) {
+            if (path instanceof RegExp) {
+                this.matchers.push(new RegexPathMatcher(path));
+            } else if (typeof path === 'string') {
+                this.matchers.push(new FlexiblePathMatcher(path));
+            } else if (path === undefined) {
+                this.matchers.push(new WildcardMatcher());
+            } else {
+                throw new Error('Invalid path argument');
+            }
+        } else {
+            // By default, websockets just match everything:
+            this.matchers.push(new WildcardMatcher());
+        }
     }
 
     private steps: Array<WebSocketStepDefinition> = [];
