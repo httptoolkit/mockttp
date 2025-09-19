@@ -1,6 +1,7 @@
-import * as http from 'http';
 import * as tls from 'tls';
+import * as http from 'http';
 import * as https from 'https';
+import * as http2 from 'http2';
 import * as fs from 'fs/promises';
 import * as tmp from 'tmp-promise';
 import * as WebSocket from 'isomorphic-ws';
@@ -13,7 +14,8 @@ import {
     delay,
     openRawSocket,
     openRawTlsSocket,
-    http2ProxyRequest
+    http2ProxyRequest,
+    getHttp2Response
 } from "../test-utils";
 import { streamToBuffer } from '../../src/util/buffer-utils';
 
@@ -541,7 +543,23 @@ describe("When configured for HTTPS", () => {
                 expect(keyLogContents).to.include('SERVER_TRAFFIC_SECRET_0');
             });
 
-            it("should log upstream WebSocket TLS keys to the file", async () => {
+            it("should log upstream HTTP/2 TLS keys to the file", async () => {
+                // Make an HTTP request, but proxy to an HTTP2-only HTTPS server:
+                await server.forGet('/').thenForwardTo('https://http2.testserver.host');
+
+                const client = http2.connect(`http://localhost:${server.port}`);
+                const req = client.request();
+                await getHttp2Response(req);
+
+                const keyLogContents = await fs.readFile(keyLogFile, 'utf8');
+
+                expect(keyLogContents).to.include('CLIENT_HANDSHAKE_TRAFFIC_SECRET');
+                expect(keyLogContents).to.include('SERVER_HANDSHAKE_TRAFFIC_SECRET');
+                expect(keyLogContents).to.include('CLIENT_TRAFFIC_SECRET_0');
+                expect(keyLogContents).to.include('SERVER_TRAFFIC_SECRET_0');
+            });
+
+            it("should log upstream WebSocket HTTP/2 TLS keys to the file", async () => {
                 await server.forAnyWebSocket().thenForwardTo(remoteNonLoggingServer.url);
                 await remoteNonLoggingServer.forAnyWebSocket().thenEcho();
 

@@ -3,6 +3,7 @@ import { Writable } from 'stream';
 import * as url from 'url';
 import type * as dns from 'dns';
 import * as net from 'net';
+import * as tls from 'tls';
 import * as http from 'http';
 import * as https from 'https';
 
@@ -401,6 +402,9 @@ const mapOmitToUndefined = <T extends { [key: string]: any }>(
             : v
     );
 
+// Only used if key logging is enabled, meaning we need to hook into http2-wrapper's TLS setup:
+const h2ProtocolQueue = new Map();
+
 export class PassThroughStepImpl extends PassThroughStep {
 
     private _trustedCACertificates: MaybePromise<Array<string> | undefined>;
@@ -697,8 +701,21 @@ export class PassThroughStepImpl extends PassThroughStep {
 
         let makeRequest = (
             shouldTryH2Upstream
-                ? (options: any, cb: any) =>
-                    h2Client.auto(options, cb).catch((e) => {
+                ? (reqOpts: any, cb: any) =>
+                    h2Client.auto({
+                        ...reqOpts,
+                        resolveProtocol: options.keyLogStream
+                            // Wrap TLS setup in key logging:
+                            ? h2Client.auto.createResolveProtocol(
+                                h2Client.auto.protocolCache as any,
+                                h2ProtocolQueue,
+                                function (...args) {
+                                    const socket = tls.connect(...args);
+                                    socket.on('keylog', (line) => options.keyLogStream!.write(line));
+                                    return socket;
+                                }
+                            ) : undefined,
+                    }, cb).catch((e) => {
                         // If an error occurs during auto detection via ALPN, that's an
                         // TypeError implies it's an invalid HTTP/2 request that was rejected.
                         // Anything else implies an upstream HTTP/2 issue.
@@ -1067,9 +1084,7 @@ export class PassThroughStepImpl extends PassThroughStep {
                 if (this.outgoingSockets.has(socket)) return;
 
                 if (options.keyLogStream) {
-                    socket.on('keylog', (line) => {
-                        options.keyLogStream!.write(line);
-                    });
+                    socket.on('keylog', (line) => options.keyLogStream!.write(line));
                 }
 
                 // Add this port to our list of active ports, once it's connected (before then it has no port)
