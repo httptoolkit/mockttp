@@ -455,7 +455,7 @@ describe("Abort subscriptions", () => {
         await server.on('abort', (r) => seenAbortPromise.resolve(r));
 
         await server.forGet('/mocked-endpoint').thenPassThrough({
-            transformRequest: { replaceHost: { targetHost: 'example.com' } },
+            transformRequest: { replaceHost: { targetHost: 'example.testserver.host' } },
             beforeResponse: () => 'close'
         });
 
