@@ -35,7 +35,8 @@ import {
     RawPassthroughEvent,
     RawPassthroughDataEvent,
     RawHeaders,
-    InitiatedResponse
+    InitiatedResponse,
+    BodyData
 } from "../types";
 import { DestroyableServer } from "destroyable-server";
 import {
@@ -86,7 +87,9 @@ import {
     tryToParseHttpRequest,
     buildBodyReader,
     parseRawHttpResponse,
-    buildInitiatedResponse
+    buildInitiatedResponse,
+    preprocessRequest,
+    ExtendedRawRequest
 } from "../util/request-utils";
 import { asBuffer } from "../util/buffer-utils";
 import {
@@ -97,14 +100,6 @@ import {
 import { AbortError } from "../rules/requests/request-step-impls";
 import { WebSocketRuleData, WebSocketRule } from "../rules/websockets/websocket-rule";
 import { SocksServerOptions } from "./socks-server";
-
-type ExtendedRawRequest = (http.IncomingMessage | http2.Http2ServerRequest) & {
-    protocol?: string;
-    body?: OngoingBody;
-    path?: string;
-    destination?: Destination;
-    [SocketMetadata]?: SocketMetadata;
-};
 
 const serverPortCheckMutex = new Mutex();
 
@@ -344,8 +339,10 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     }
 
     public on(event: 'request-initiated', callback: (req: InitiatedRequest) => void): Promise<void>;
+    public on(event: 'request-body-data', callback: (req: BodyData) => void): Promise<void>;
     public on(event: 'request', callback: (req: CompletedRequest) => void): Promise<void>;
     public on(event: 'response-initiated', callback: (req: InitiatedResponse) => void): Promise<void>;
+    public on(event: 'response-body-data', callback: (req: BodyData) => void): Promise<void>;
     public on(event: 'response', callback: (req: CompletedResponse) => void): Promise<void>;
     public on(event: 'abort', callback: (req: InitiatedRequest) => void): Promise<void>;
     public on(event: 'websocket-request', callback: (req: CompletedRequest) => void): Promise<void>;
@@ -364,6 +361,23 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     public on(event: string, callback: (...args: any[]) => void): Promise<void> {
         this.eventEmitter.on(event, callback);
         return Promise.resolve();
+    }
+
+    private announceBodyDataAsync(
+        type: 'request' | 'response',
+        id: string,
+        eventTimestamp: number,
+        content: Uint8Array,
+        isEnded: boolean
+    ) {
+        setImmediate(() => {
+            this.eventEmitter.emit(`${type}-body-data`, {
+                id,
+                content,
+                isEnded,
+                eventTimestamp
+            });
+        });
     }
 
     private announceInitialRequestAsync(request: OngoingRequest) {
@@ -628,156 +642,17 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         });
     }
 
-    /**
-     * For both normal requests & websockets, we do some standard preprocessing to ensure we have the absolute
-     * URL destination in place, and timing, tags & id metadata all ready for an OngoingRequest.
-     */
     private preprocessRequest(req: ExtendedRawRequest, type: 'request' | 'websocket'): OngoingRequest | null {
         try {
-            parseRequestBody(req, { maxSize: this.maxBodySize });
+            return preprocessRequest(req, {
+                type,
+                maxBodySize: this.maxBodySize,
+                serverPort: this.port,
+                onBodyData: this.eventEmitter.listenerCount('request-body-data') > 0
+                    ? this.announceBodyDataAsync.bind(this, 'request')
+                    : undefined
 
-            let rawHeaders = pairFlatRawHeaders(req.rawHeaders);
-            let socketMetadata: SocketMetadata | undefined = req.socket[SocketMetadata];
-
-            // Make req.url always absolute, if it isn't already, using the host header.
-            // It might not be if this is a direct request, or if it's being transparently proxied.
-            if (!isAbsoluteUrl(req.url!)) {
-                req.protocol = getHeaderValue(rawHeaders, ':scheme') ||
-                    (req.socket[LastHopEncrypted] ? 'https' : 'http');
-                req.path = req.url;
-
-                const tunnelDestination = req.socket[LastTunnelAddress]
-                    ? getDestination(req.protocol, req.socket[LastTunnelAddress])
-                    : undefined;
-
-                const isTunnelToIp = !!tunnelDestination && isIP(tunnelDestination.hostname);
-
-                const urlDestination = getDestination(req.protocol,
-                    (!isTunnelToIp
-                    ? (
-                        req.socket[LastTunnelAddress] ?? // Tunnel domain name is preferred if available
-                        getHeaderValue(rawHeaders, ':authority') ??
-                        getHeaderValue(rawHeaders, 'host') ??
-                        req.socket[TlsMetadata]?.sniHostname
-                    )
-                    : (
-                        getHeaderValue(rawHeaders, ':authority') ??
-                        getHeaderValue(rawHeaders, 'host') ??
-                        req.socket[TlsMetadata]?.sniHostname ??
-                        req.socket[LastTunnelAddress] // We use the IP iff we have no hostname available at all
-                    ))
-                    ?? `localhost:${this.port}` // If you specify literally nothing, it's a direct request
-                );
-
-                // Actual destination always follows the tunnel - even if it's an IP
-                req.destination = tunnelDestination
-                    ?? urlDestination;
-
-                // URL port should always match the real port - even if (e.g) the Host header is lying.
-                urlDestination.port = req.destination.port;
-
-                const absoluteUrl = `${req.protocol}://${
-                    normalizeHost(req.protocol, `${urlDestination.hostname}:${urlDestination.port}`)
-                }${req.path}`;
-
-                let effectiveUrl: string;
-                try {
-                    effectiveUrl = new URL(absoluteUrl).toString();
-                } catch (e: any) {
-                    req.url = absoluteUrl;
-                    throw e;
-                }
-
-                if (!getHeaderValue(rawHeaders, ':path')) {
-                    (req as Mutable<ExtendedRawRequest>).url = effectiveUrl;
-                } else {
-                    // Node's HTTP/2 compat logic maps .url to headers[':path']. We want them to
-                    // diverge: .url should always be absolute, while :path may stay relative,
-                    // so we override the built-in getter & setter:
-                    Object.defineProperty(req, 'url', {
-                        value: effectiveUrl
-                    });
-                }
-            } else {
-                // We have an absolute request. This is effectively a combined tunnel + end-server request,
-                // so we need to handle both of those, and hide the proxy-specific bits from later logic.
-                req.protocol = req.url!.split('://', 1)[0];
-                req.path = getPathFromAbsoluteUrl(req.url!);
-                req.destination = getDestination(
-                    req.protocol,
-                    req.socket[LastTunnelAddress] ?? getHostFromAbsoluteUrl(req.url!)
-                );
-
-                const proxyAuthHeader = getHeaderValue(rawHeaders, 'proxy-authorization');
-                if (proxyAuthHeader) {
-                    // Use this metadata for this request, but _only_ this request - it's not relevant
-                    // to other requests on the same socket so we don't add it to req.socket.
-                    socketMetadata = getSocketMetadataFromProxyAuth(req.socket, proxyAuthHeader);
-                }
-
-                rawHeaders = rawHeaders.filter(([key]) => {
-                    const lcKey = key.toLowerCase();
-                    return lcKey !== 'proxy-connection' &&
-                        lcKey !== 'proxy-authorization';
-                })
-            }
-
-            if (type === 'websocket') {
-                req.protocol = req.protocol === 'https'
-                    ? 'wss'
-                    : 'ws';
-
-                // Transform the protocol in req.url too:
-                Object.defineProperty(req, 'url', {
-                    value: req.url!.replace(/^http/, 'ws')
-                });
-            }
-
-            const id = crypto.randomUUID();
-
-            const tags: string[] = getSocketMetadataTags(socketMetadata);
-
-            const timingEvents: TimingEvents = {
-                startTime: Date.now(),
-                startTimestamp: now()
-            };
-
-            // Set/update the last request time on the socket
-            let socketTimingInfo = req.socket[SocketTimingInfo];
-            if (socketTimingInfo) {
-                socketTimingInfo.lastRequestTimestamp = timingEvents.startTimestamp;
-            }
-
-            req.on('end', () => {
-                timingEvents.bodyReceivedTimestamp ||= now();
-            });
-
-            const headers = rawHeadersToObject(rawHeaders);
-
-            // Not writable for HTTP/2:
-            makePropertyWritable(req, 'headers');
-            makePropertyWritable(req, 'rawHeaders');
-
-            let rawTrailers: RawTrailers | undefined;
-            Object.defineProperty(req, 'rawTrailers', {
-                get: () => rawTrailers,
-                set: (flatRawTrailers) => {
-                    rawTrailers = flatRawTrailers
-                        ? pairFlatRawHeaders(flatRawTrailers)
-                        : undefined;
-                }
-            });
-
-            return Object.assign(req, {
-                id,
-                headers,
-                rawHeaders,
-                rawTrailers, // Just makes the type happy - really managed by property above
-                remoteIpAddress: req.socket.remoteAddress,
-                remotePort: req.socket.remotePort,
-                timingEvents,
-                tags
-            }) as OngoingRequest;
+            })
         } catch (e: any) {
             const error: Error = Object.assign(e, {
                 code: e.code ?? 'PREPROCESSING_FAILED',
@@ -795,7 +670,6 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
 
             return null; // Null -> preprocessing failed, error already handled here
         }
-
     }
 
     private async handleRequest(rawRequest: ExtendedRawRequest, rawResponse: http.ServerResponse) {
@@ -826,9 +700,19 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             request.tags,
             {
                 maxSize: this.maxBodySize,
-                onWriteHead: () => this.announceInitialResponseAsync(response)
+                onWriteHead: () => this.announceInitialResponseAsync(response),
+                onBodyData: this.eventEmitter.listenerCount('response-body-data') > 0
+                    ? this.announceBodyDataAsync.bind(this, 'response')
+                    : undefined
             }
         );
+        const hasResponseListener = this.eventEmitter.listenerCount('response') > 0;
+        if (hasResponseListener) {
+            // Start buffering response body if there's somebody who
+            // might want to hear about it later
+            response.body.asBuffer().catch(() => {});
+        }
+
         response.id = request.id;
         response.on('error', (error) => {
             console.log('Response error:', this.debug ? error : error.message);
@@ -893,7 +777,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             }
         }
 
-        if (result === 'responded') {
+        if (result === 'responded' && hasResponseListener) {
             this.announceResponseAsync(response);
         }
     }

@@ -23,7 +23,8 @@ import {
     RuleEvent,
     RawPassthroughEvent,
     RawPassthroughDataEvent,
-    InitiatedResponse
+    InitiatedResponse,
+    BodyData
 } from "./types";
 import type { RequestRuleData } from "./rules/requests/request-rule";
 import type { WebSocketRuleData } from "./rules/websockets/websocket-rule";
@@ -356,6 +357,22 @@ export interface Mockttp {
     on(event: 'request-initiated', callback: (req: InitiatedRequest) => void): Promise<void>;
 
     /**
+     * Subscribe to hear about request body data live, streaming in progressive
+     * chunks as it's received (listen for `request` if you just want to receive
+     * the complete body once it's done).
+     *
+     * This is only useful in some niche use cases, such as logging all requests seen
+     * by the server independently of the rules defined.
+     *
+     * The callback will be called asynchronously from request handling. This function
+     * returns a promise, and the callback is not guaranteed to be registered until
+     * the promise is resolved.
+     *
+     * @category Events
+     */
+    on(event: 'request-body-data', callback: (req: BodyData) => void): Promise<void>;
+
+    /**
      * Subscribe to hear about request details once the request is fully received.
      *
      * This is only useful in some niche use cases, such as logging all requests seen
@@ -383,6 +400,22 @@ export interface Mockttp {
      * @category Events
      */
     on(event: 'response-initiated', callback: (req: InitiatedResponse) => void): Promise<void>;
+
+    /**
+     * Subscribe to hear about response body data live, streaming in progressive
+     * chunks as it's received (listen for `response` if you just want to receive
+     * the complete body once it's done).
+     *
+     * This is only useful in some niche use cases, such as logging all requests seen
+     * by the server independently of the rules defined.
+     *
+     * The callback will be called asynchronously from request handling. This function
+     * returns a promise, and the callback is not guaranteed to be registered until
+     * the promise is resolved.
+     *
+     * @category Events
+     */
+    on(event: 'response-body-data', callback: (req: BodyData) => void): Promise<void>;
 
     /**
      * Subscribe to hear about response details when the response is completed.
@@ -915,8 +948,10 @@ export interface MockttpOptions {
 
 export type SubscribableEvent =
     | 'request-initiated'
+    | 'request-body-data'
     | 'request'
     | 'response-initiated'
+    | 'response-body-data'
     | 'response'
     | 'websocket-request'
     | 'websocket-accepted'

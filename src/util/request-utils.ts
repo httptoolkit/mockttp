@@ -25,9 +25,12 @@ import {
     InitiatedRequest,
     RawHeaders,
     Destination,
-    InitiatedResponse
+    InitiatedResponse,
+    RawTrailers
 } from "../types";
 
+import { makePropertyWritable } from './util';
+import { Mutable } from './type-utils';
 import {
     bufferThenStream,
     bufferToStream,
@@ -44,8 +47,25 @@ import {
     pairFlatRawHeaders,
     rawHeadersToObject
 } from './header-utils';
-import { LastHopEncrypted, LastTunnelAddress } from './socket-extensions';
-import { getDestination, normalizeHost } from './url';
+import { isIP } from './ip-utils';
+import {
+    getDestination,
+    getHostFromAbsoluteUrl,
+    getPathFromAbsoluteUrl,
+    isAbsoluteUrl,
+    normalizeHost
+} from './url';
+import {
+    LastHopEncrypted,
+    LastTunnelAddress,
+    SocketMetadata,
+    SocketTimingInfo,
+    TlsMetadata
+} from './socket-extensions';
+import {
+    getSocketMetadataFromProxyAuth,
+    getSocketMetadataTags
+} from './socket-metadata';
 
 export const shouldKeepAlive = (req: OngoingRequest): boolean =>
     req.httpVersion !== '1.0' &&
@@ -291,6 +311,176 @@ export const parseRequestBody = (
     transformedRequest.body = parseBodyStream(req, options.maxSize, () => req.headers);
 };
 
+export type ExtendedRawRequest = (http.IncomingMessage | http2.Http2ServerRequest) & {
+    protocol?: string;
+    body?: OngoingBody;
+    path?: string;
+    destination?: Destination;
+    [SocketMetadata]?: SocketMetadata;
+};
+
+/**
+ * For both normal requests & websockets, we do some standard preprocessing to ensure we have the absolute
+ * URL destination in place, and timing, tags & id metadata all ready for an OngoingRequest.
+ */
+export function preprocessRequest(req: ExtendedRawRequest, options: {
+    type: 'request' | 'websocket',
+    serverPort: number,
+    maxBodySize: number,
+    onBodyData?: (id: string, timestamp: number, content: Uint8Array, isEnded: boolean) => void
+}): OngoingRequest | null {
+    parseRequestBody(req, { maxSize: options.maxBodySize });
+
+    let rawHeaders = pairFlatRawHeaders(req.rawHeaders);
+    let socketMetadata: SocketMetadata | undefined = req.socket[SocketMetadata];
+
+    // Make req.url always absolute, if it isn't already, using the host header.
+    // It might not be if this is a direct request, or if it's being transparently proxied.
+    if (!isAbsoluteUrl(req.url!)) {
+        req.protocol = getHeaderValue(rawHeaders, ':scheme') ||
+            (req.socket[LastHopEncrypted] ? 'https' : 'http');
+        req.path = req.url;
+
+        const tunnelDestination = req.socket[LastTunnelAddress]
+            ? getDestination(req.protocol, req.socket[LastTunnelAddress])
+            : undefined;
+
+        const isTunnelToIp = !!tunnelDestination && isIP(tunnelDestination.hostname);
+
+        const urlDestination = getDestination(req.protocol,
+            (!isTunnelToIp
+            ? (
+                req.socket[LastTunnelAddress] ?? // Tunnel domain name is preferred if available
+                getHeaderValue(rawHeaders, ':authority') ??
+                getHeaderValue(rawHeaders, 'host') ??
+                req.socket[TlsMetadata]?.sniHostname
+            )
+            : (
+                getHeaderValue(rawHeaders, ':authority') ??
+                getHeaderValue(rawHeaders, 'host') ??
+                req.socket[TlsMetadata]?.sniHostname ??
+                req.socket[LastTunnelAddress] // We use the IP iff we have no hostname available at all
+            ))
+            ?? `localhost:${options.serverPort}` // If you specify literally nothing, it's a direct request
+        );
+
+        // Actual destination always follows the tunnel - even if it's an IP
+        req.destination = tunnelDestination
+            ?? urlDestination;
+
+        // URL port should always match the real port - even if (e.g) the Host header is lying.
+        urlDestination.port = req.destination.port;
+
+        const absoluteUrl = `${req.protocol}://${
+            normalizeHost(req.protocol, `${urlDestination.hostname}:${urlDestination.port}`)
+        }${req.path}`;
+
+        let effectiveUrl: string;
+        try {
+            effectiveUrl = new URL(absoluteUrl).toString();
+        } catch (e: any) {
+            req.url = absoluteUrl;
+            throw e;
+        }
+
+        if (!getHeaderValue(rawHeaders, ':path')) {
+            (req as Mutable<ExtendedRawRequest>).url = effectiveUrl;
+        } else {
+            // Node's HTTP/2 compat logic maps .url to headers[':path']. We want them to
+            // diverge: .url should always be absolute, while :path may stay relative,
+            // so we override the built-in getter & setter:
+            Object.defineProperty(req, 'url', {
+                value: effectiveUrl
+            });
+        }
+    } else {
+        // We have an absolute request. This is effectively a combined tunnel + end-server request,
+        // so we need to handle both of those, and hide the proxy-specific bits from later logic.
+        req.protocol = req.url!.split('://', 1)[0];
+        req.path = getPathFromAbsoluteUrl(req.url!);
+        req.destination = getDestination(
+            req.protocol,
+            req.socket[LastTunnelAddress] ?? getHostFromAbsoluteUrl(req.url!)
+        );
+
+        const proxyAuthHeader = getHeaderValue(rawHeaders, 'proxy-authorization');
+        if (proxyAuthHeader) {
+            // Use this metadata for this request, but _only_ this request - it's not relevant
+            // to other requests on the same socket so we don't add it to req.socket.
+            socketMetadata = getSocketMetadataFromProxyAuth(req.socket, proxyAuthHeader);
+        }
+
+        rawHeaders = rawHeaders.filter(([key]) => {
+            const lcKey = key.toLowerCase();
+            return lcKey !== 'proxy-connection' &&
+                lcKey !== 'proxy-authorization';
+        })
+    }
+
+    if (options.type === 'websocket') {
+        req.protocol = req.protocol === 'https'
+            ? 'wss'
+            : 'ws';
+
+        // Transform the protocol in req.url too:
+        Object.defineProperty(req, 'url', {
+            value: req.url!.replace(/^http/, 'ws')
+        });
+    }
+
+    const id = crypto.randomUUID();
+
+    const tags: string[] = getSocketMetadataTags(socketMetadata);
+
+    const timingEvents: TimingEvents = {
+        startTime: Date.now(),
+        startTimestamp: now()
+    };
+
+    // Set/update the last request time on the socket
+    let socketTimingInfo = req.socket[SocketTimingInfo];
+    if (socketTimingInfo) {
+        socketTimingInfo.lastRequestTimestamp = timingEvents.startTimestamp;
+    }
+
+    req.on('end', () => {
+        timingEvents.bodyReceivedTimestamp ||= now();
+    });
+
+    const headers = rawHeadersToObject(rawHeaders);
+
+    // Not writable for HTTP/2:
+    makePropertyWritable(req, 'headers');
+    makePropertyWritable(req, 'rawHeaders');
+
+    let rawTrailers: RawTrailers | undefined;
+    Object.defineProperty(req, 'rawTrailers', {
+        get: () => rawTrailers,
+        set: (flatRawTrailers) => {
+            rawTrailers = flatRawTrailers
+                ? pairFlatRawHeaders(flatRawTrailers)
+                : undefined;
+        }
+    });
+
+    const ongoingReq = Object.assign(req, {
+        id,
+        headers,
+        rawHeaders,
+        rawTrailers, // Just makes the type happy - really managed by property above
+        remoteIpAddress: req.socket.remoteAddress,
+        remotePort: req.socket.remotePort,
+        timingEvents,
+        tags
+    }) as OngoingRequest;
+
+    if (options.onBodyData) {
+        emitBodyDataEvents(ongoingReq, ongoingReq.body!.asStream(), options.onBodyData);
+    }
+
+    return ongoingReq;
+}
+
 /**
  * Build an initiated request: the external representation of a request
  * that's just started.
@@ -357,7 +547,8 @@ export function trackResponse(
     tags: string[],
     options: {
         maxSize: number,
-        onWriteHead: () => void
+        onWriteHead: () => void,
+        onBodyData?: (id: string, timestamp: number, content: Uint8Array, isEnded: boolean) => void
     }
 ): OngoingResponse {
     let trackedResponse = <OngoingResponse> response;
@@ -365,9 +556,11 @@ export function trackResponse(
     trackedResponse.timingEvents = timingEvents;
     trackedResponse.tags = tags;
 
-    // Headers are sent when .writeHead or .write() are first called
-
     const trackingStream = new stream.PassThrough();
+
+    if (options.onBodyData) {
+        emitBodyDataEvents(trackedResponse, trackingStream, options.onBodyData);
+    }
 
     const originalWriteHeader = trackedResponse.writeHead;
     const originalWrite = trackedResponse.write;
@@ -469,6 +662,69 @@ export function trackResponse(
     trackingStream.on('error', (e) => trackedResponse.emit('error', e));
 
     return trackedResponse;
+}
+
+// We emit a body data events at most this often, to try to more efficiently
+// batch up chunks while keeping things nice & responsive.
+const CHUNK_BUFFER_INTERVAL_MS = 20;
+
+function emitBodyDataEvents(
+    message: OngoingRequest | OngoingResponse,
+    bodyStream: stream.Readable,
+    callback: (id: string, timestamp: number, content: Uint8Array, isEnded: boolean) => void
+) {
+    let timestamp: number | undefined = undefined;
+    let pendingContent: Uint8Array | undefined = undefined;
+    let pendingContentTimer: NodeJS.Timeout | undefined = undefined;
+    let endEmitted = false;
+
+    function flushPendingContent() {
+        if (endEmitted) return; // Should never happen, but just in case
+
+        endEmitted = 'writableEnded' in message
+            ? message.writableEnded
+            : message.readableEnded;
+
+        callback(
+            message.id,
+            // We use the exact end timestamp where possible, but the first 'data'
+            // event timestamp for every preceeding chunk.
+            endEmitted
+                ? now()
+                : (timestamp || now()),
+            pendingContent || Buffer.alloc(0),
+            endEmitted
+        );
+
+        timestamp = undefined;
+        pendingContent = undefined;
+
+        if (pendingContentTimer) {
+            clearTimeout(pendingContentTimer);
+            pendingContentTimer = undefined;
+        }
+    }
+
+    bodyStream.on('data', (d) => {
+        if (pendingContent) {
+            pendingContent = Buffer.concat([pendingContent, d]);
+        } else {
+            pendingContent = d;
+        }
+
+        // Don't emit immediately - queue up a flush, to batch & emit at intervals:
+        if (!pendingContentTimer) {
+            // We use the timing of the first chunk in the batch as the timestamp
+            // (or the exact time of the last flush, for the final part).
+            timestamp = now();
+            pendingContentTimer = setTimeout(
+                flushPendingContent,
+                CHUNK_BUFFER_INTERVAL_MS
+            );
+        }
+    });
+
+    bodyStream.on('end', flushPendingContent);
 }
 
 /**

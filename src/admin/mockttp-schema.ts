@@ -19,8 +19,10 @@ export const MockttpSchema = gql`
 
     extend type Subscription {
         requestInitiated: InitiatedRequest!
+        requestBodyData: BodyData!
         requestReceived: Request!
         responseInitiated: InitiatedResponse!
+        responseBodyData: BodyData!
         responseCompleted: Response!
         webSocketRequest: Request!
         webSocketAccepted: Response!
@@ -135,6 +137,13 @@ export const MockttpSchema = gql`
         ruleId: ID!
         eventType: String!
         eventData: Raw!
+    }
+
+    type BodyData {
+        id: String!
+        content: Buffer!
+        eventTimestamp: Float!
+        isEnded: Boolean!
     }
 
     type InitiatedRequest {

@@ -215,6 +215,14 @@ export class MockttpAdminRequestBuilder {
                     tags
                 }
             }`,
+            'request-body-data': gql`subscription OnRequestBodyData {
+                requestBodyData {
+                    id
+                    content
+                    eventTimestamp
+                    isEnded
+                }
+            }`,
             request: gql`subscription OnRequest {
                 requestReceived {
                     id
@@ -252,6 +260,14 @@ export class MockttpAdminRequestBuilder {
                     rawHeaders
                     timingEvents
                     tags
+                }
+            }`,
+            'response-body-data': gql`subscription OnResponseBodyData {
+                responseBodyData {
+                    id
+                    content
+                    eventTimestamp
+                    isEnded
                 }
             }`,
             response: gql`subscription OnResponse {
@@ -528,7 +544,11 @@ export class MockttpAdminRequestBuilder {
                     }
                 } else if (event === 'websocket-message-received' || event === 'websocket-message-sent') {
                     normalizeWebSocketMessage(data);
-                } else if (event === 'raw-passthrough-data') {
+                } else if (
+                    event === 'raw-passthrough-data' ||
+                    event === 'request-body-data' ||
+                    event === 'response-body-data'
+                ) {
                     data.content = Buffer.from(data.content, 'base64');
                 } else if (event === 'abort') {
                     normalizeHttpMessage(data, event);

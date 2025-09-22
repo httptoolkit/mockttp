@@ -205,7 +205,7 @@ export interface TlsFailureTimingEvents extends TlsTimingEvents {
 }
 
 // Internal representation of an ongoing HTTP request whilst it's being processed
-export interface OngoingRequest extends Request, EventEmitter {
+export interface OngoingRequest extends Request, stream.Readable {
     body: OngoingBody;
     rawTrailers?: RawHeaders;
 }
@@ -329,6 +329,36 @@ export interface InitiatedResponse {
     rawHeaders: RawHeaders;
     timingEvents: TimingEvents;
     tags: string[];
+}
+
+export interface BodyData {
+    /**
+     * The id of the request or response this data belongs to.
+     */
+    id: string;
+
+    /**
+     * The contents of the chunk as a raw buffer. Note that this may be empty,
+     * when the body is finishing, if it wasn't known to be finished at the
+     * preceeding chunk of data.
+     */
+    content: Uint8Array;
+
+    /**
+     * Indicates whether the body has completed or whether there's more coming.
+     * This will not be set if the body is aborted incomplete - listen for abort
+     * events separately to check for this.
+     */
+    isEnded: boolean;
+
+    /**
+     * A high-precision floating-point monotonically increasing timestamp.
+     * Comparable and precise, but not related to specific current time.
+     *
+     * To link this to the current time, compare it to `timingEvents.startTime`.
+     */
+    eventTimestamp: number;
+
 }
 
 export interface CompletedResponse extends InitiatedResponse {

@@ -9,7 +9,8 @@ import {
     CompletedResponse,
     TimingEvents,
     AbortedRequest,
-    InitiatedResponse
+    InitiatedResponse,
+    BodyData
 } from "../../..";
 import {
     expect,
@@ -606,4 +607,116 @@ describe("Abort subscriptions", () => {
         expect(timingEvents.headersSentTimestamp).to.equal(undefined);
         expect(timingEvents.responseSentTimestamp).to.equal(undefined);
     });
+});
+
+describe("Response body chunk subscriptions", () => {
+
+    const server = getLocal();
+
+    beforeEach(() => server.start());
+    afterEach(() => server.stop());
+
+    it("should stream body chunks as they are received", async () => {
+        const dataEvents: BodyData[] = [];
+        await server.on('response-body-data', (event) => dataEvents.push(event));
+
+        const stream = new PassThrough();
+        await server.forGet('/mocked-endpoint').thenStream(200, stream);
+
+        fetch(server.urlFor("/mocked-endpoint"));
+
+        await delay(25);
+        expect(dataEvents).to.deep.equal([]);
+
+        stream.write('hello');
+        await delay(25);
+        expect(dataEvents).to.have.length(1);
+        expect(dataEvents[0].content).to.deep.equal(Buffer.from('hello'));
+        expect(dataEvents[0].isEnded).to.equal(false);
+        expect(dataEvents[0].eventTimestamp).to.be.a('number');
+
+        stream.write('world');
+        await delay(25);
+        expect(dataEvents).to.have.length(2);
+        expect(dataEvents[1].content).to.deep.equal(Buffer.from('world'));
+        expect(dataEvents[1].isEnded).to.equal(false);
+        expect(dataEvents[1].eventTimestamp).to.be.greaterThan(dataEvents[0].eventTimestamp);
+
+        stream.end();
+        await delay(25);
+        expect(dataEvents).to.have.length(3);
+        expect(dataEvents[2].content.byteLength).to.equal(0);
+        expect(dataEvents[2].isEnded).to.equal(true);
+        expect(dataEvents[2].eventTimestamp).to.be.greaterThan(dataEvents[1].eventTimestamp);
+    });
+
+    it("should batch streamed body chunks", async () => {
+        const dataEvents: BodyData[] = [];
+        await server.on('response-body-data', (event) => dataEvents.push(event));
+
+        const stream = new PassThrough();
+        await server.forGet('/mocked-endpoint').thenStream(200, stream);
+
+        fetch(server.urlFor("/mocked-endpoint")).catch(() => {});
+
+        await delay(25);
+        expect(dataEvents).to.deep.equal([]);
+
+        stream.write('hello');
+        await delay(5);
+        stream.write('world');
+        await delay(25);
+
+        expect(dataEvents).to.have.length(1);
+        expect(dataEvents[0].content).to.deep.equal(Buffer.from('helloworld'));
+        expect(dataEvents[0].isEnded).to.equal(false);
+        expect(dataEvents[0].eventTimestamp).to.be.a('number');
+
+        stream.end();
+        await delay(25);
+        expect(dataEvents).to.have.length(2);
+        expect(dataEvents[1].content.byteLength).to.equal(0);
+        expect(dataEvents[1].isEnded).to.equal(true);
+        expect(dataEvents[1].eventTimestamp).to.be.greaterThan(dataEvents[0].eventTimestamp);
+    });
+
+    it("should batch streamed body chunks but emit immediately on end", async () => {
+        const dataEvents: BodyData[] = [];
+        await server.on('response-body-data', (event) => dataEvents.push(event));
+
+        const stream = new PassThrough();
+        await server.forGet('/mocked-endpoint').thenStream(200, stream);
+
+        fetch(server.urlFor("/mocked-endpoint")).catch(() => {});
+
+        await delay(25);
+        expect(dataEvents).to.deep.equal([]);
+
+        stream.write('hello');
+        await delay(5);
+        stream.end('world');
+        await delay(25);
+
+        expect(dataEvents).to.have.length(1);
+        expect(dataEvents[0].content).to.deep.equal(Buffer.from('helloworld'));
+        expect(dataEvents[0].isEnded).to.equal(true);
+        expect(dataEvents[0].eventTimestamp).to.be.a('number');
+    });
+
+    it("should fire immediate-empty ended chunks for empty bodies", async () => {
+        const dataEvents: BodyData[] = [];
+        await server.on('response-body-data', (event) => dataEvents.push(event));
+
+        await server.forGet('/mocked-endpoint').thenReply(204);
+
+        fetch(server.urlFor("/mocked-endpoint"));
+
+        await delay(10);
+
+        expect(dataEvents).to.have.length(1);
+        expect(dataEvents[0].content.byteLength).to.equal(0);
+        expect(dataEvents[0].isEnded).to.equal(true);
+        expect(dataEvents[0].eventTimestamp).to.be.a('number');
+    });
+
 });
