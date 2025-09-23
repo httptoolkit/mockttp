@@ -285,17 +285,33 @@ export class CallbackStepImpl extends CallbackStep {
 
 export class StreamStepImpl extends StreamStep {
 
-    async handle(_request: OngoingRequest, response: OngoingResponse) {
+    async handle(request: OngoingRequest, response: OngoingResponse) {
         if (!this.stream.done) {
             if (this.headers) dropDefaultHeaders(response);
 
             writeHead(response, this.status, undefined, this.headers);
             response.flushHeaders();
 
-            this.stream.pipe(response);
+            if (this.stream.readableEnded || this.stream.destroyed) {
+                response.end();
+            } else {
+                this.stream.pipe(response);
+            }
             this.stream.done = true;
 
-            this.stream.on('error', (e) => response.destroy(e));
+            return new Promise<void>((resolve, reject) => {
+                if (this.stream.readableEnded || this.stream.destroyed) {
+                    resolve();
+                } else {
+                    this.stream.on('end', () => resolve());
+                    this.stream.on('error', (e: ErrorLike) => {
+                        reject(new AbortError(
+                            `Stream rule error: ${e.message}`,
+                            e.code ?? 'STREAM_RULE_ERROR'
+                        ));
+                    });
+                }
+            });
         } else {
             throw new Error(stripIndent`
                 Stream request step called more than once - this is not supported.

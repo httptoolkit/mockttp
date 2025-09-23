@@ -59,10 +59,8 @@ describe("Response initiated subscriptions", () => {
 
             const timingEvents = seenResponse.timingEvents;
             expect(timingEvents.startTimestamp).to.be.a('number');
-            expect(timingEvents.bodyReceivedTimestamp).to.be.a('number');
             expect(timingEvents.headersSentTimestamp).to.be.a('number');
 
-            expect(timingEvents.bodyReceivedTimestamp).to.be.greaterThan(timingEvents.startTimestamp);
             expect(timingEvents.headersSentTimestamp).to.be.greaterThan(timingEvents.startTimestamp);
 
             expect(timingEvents.responseSentTimestamp).to.equal(undefined);

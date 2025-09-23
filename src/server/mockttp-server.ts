@@ -745,10 +745,16 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             } else {
                 await this.sendUnmatchedRequestError(request, response);
             }
-            result = result || 'responded';
+
+            if (!response.writableEnded && !response.destroyed) {
+                throw new Error("Request handler finished successfully without ending the response");
+            }
+
+            result ||= 'responded';
         } catch (e) {
             if (e instanceof AbortError) {
                 abort(e);
+                response.destroy(e);
 
                 if (this.debug) {
                     console.error("Failed to handle request due to abort:", e);
@@ -770,7 +776,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
 
                 try {
                     response.end((isErrorLike(e) && e.toString()) || e);
-                    result = result || 'responded';
+                    result ||= 'responded';
                 } catch (e) {
                     abort(e as Error);
                 }
