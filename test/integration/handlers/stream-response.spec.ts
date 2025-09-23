@@ -1,10 +1,9 @@
 import { Buffer } from 'buffer';
-import { PassThrough } from 'stream';
-
-import * as semver from 'semver';
+import { PassThrough, Readable } from 'stream';
+import { delay, getDeferred, ErrorLike } from '@httptoolkit/util';
 
 import { getLocal } from "../../..";
-import { expect, fetch, isNode, delay } from "../../test-utils";
+import { expect, fetch, isNode, nodeOnly } from "../../test-utils";
 
 describe("Streaming response handler", function () {
 
@@ -28,15 +27,9 @@ describe("Streaming response handler", function () {
         await delay(100);
         stream.write(Buffer.from('world'));
 
-        if (!process.version || semver.major(process.version) >= 8) {
-            let arrayBuffer = new Uint8Array(1);
-            arrayBuffer[0] = '!'.charCodeAt(0);
-            stream.write(arrayBuffer);
-        } else {
-            // Node < 8 doesn't support streaming array buffers
-            stream.write('!');
-        }
-        stream.end();
+        let arrayBuffer = new Uint8Array(1);
+        arrayBuffer[0] = '!'.charCodeAt(0);
+        stream.end(arrayBuffer);
 
         await expect(responsePromise).to.have.status(200);
         await expect(responsePromise).to.have.responseText('Hello\nworld!');
@@ -80,6 +73,29 @@ describe("Streaming response handler", function () {
         await expect(response1).to.have.responseText('Hello');
         await expect(response2).to.have.status(200);
         await expect(response2).to.have.responseText('World');
+    });
+
+    nodeOnly(() => {
+        it("should abort the response if the stream throws an error", async () => {
+            const serverResponseStream = new PassThrough();
+            await server.forGet('/stream').thenStream(200, serverResponseStream);
+
+            serverResponseStream.write('Hello\n');
+
+            const response = await fetch(server.urlFor('/stream'));
+
+            expect(response.status).to.equal(200);
+
+            const clientResponseStream = response.body as any as Readable;
+            expect(clientResponseStream.read().toString()).to.equal('Hello\n');
+
+            const errorPromise = getDeferred<Error>();
+            clientResponseStream.on('error', (err) => errorPromise.resolve(err));
+
+            serverResponseStream.destroy(new Error("Stream error"));
+            const error: ErrorLike = await errorPromise;
+            expect(error.code).to.equal('ERR_STREAM_PREMATURE_CLOSE');
+        });
     });
 
 });
