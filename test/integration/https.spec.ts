@@ -545,11 +545,12 @@ describe("When configured for HTTPS", () => {
 
             it("should log upstream HTTP/2 TLS keys to the file", async () => {
                 // Make an HTTP request, but proxy to an HTTP2-only HTTPS server:
-                await server.forGet('/').thenForwardTo('https://http2.testserver.host');
+                await server.forAnyRequest().thenForwardTo('https://http2.testserver.host');
 
-                const client = http2.connect(`http://localhost:${server.port}`);
-                const req = client.request();
-                await getHttp2Response(req);
+                const client = http2.connect(`http://localhost:${server.port}/`);
+                const req = client.request({ ':path': '/status/200' });
+                const res = await getHttp2Response(req);
+                expect(res[':status']).to.equal(200);
 
                 const keyLogContents = await fs.readFile(keyLogFile, 'utf8');
 
