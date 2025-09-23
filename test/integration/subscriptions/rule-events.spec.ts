@@ -234,7 +234,7 @@ describe("Rule event subscriptions", () => {
     });
 
 
-    it("should fire abort event if upstream body response fails", async () => {
+    it("should fire abort event if upstream request fails", async () => {
         await remoteServer.forAnyRequest().thenCloseConnection();
         const forwardingRule = await server.forAnyRequest().thenForwardTo(remoteServer.url);
 
@@ -265,7 +265,7 @@ describe("Rule event subscriptions", () => {
     });
 
     nodeOnly(() => {
-        it("should fire abort event if upstream body response fails", async () => {
+        it("should fire abort event if upstream body streaming fails", async () => {
             const stream = new PassThrough();
             await remoteServer.forAnyRequest().thenStream(200, stream);
             const forwardingRule = await server.forAnyRequest().thenForwardTo(remoteServer.url, {

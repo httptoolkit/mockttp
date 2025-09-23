@@ -563,6 +563,9 @@ describe("Abort subscriptions", () => {
         let seenRequestPromise = getDeferred<CompletedRequest>();
         await server.on('request', (r) => seenRequestPromise.resolve(r));
 
+        let seenResponseInitiatedPromise = getDeferred<InitiatedResponse>();
+        await server.on('response-initiated', (r) => seenResponseInitiatedPromise.resolve(r));
+
         let seenResponsePromise = getDeferred<CompletedResponse>();
         await server.on('response', (r) => seenResponsePromise.resolve(r));
 
@@ -575,7 +578,29 @@ describe("Abort subscriptions", () => {
         abortable.abort();
 
         await expect(Promise.race([
+            seenResponseInitiatedPromise,
             seenResponsePromise,
+            delay(100).then(() => { throw new Error('timeout') })
+        ])).to.be.rejectedWith('timeout');
+    });
+
+    it("should not trigger an ended response body event", async () => {
+        let seenRequestPromise = getDeferred<CompletedRequest>();
+        await server.on('request', (r) => seenRequestPromise.resolve(r));
+
+        let seenResponseDataPromise = getDeferred<BodyData>();
+        await server.on('response-body-data', (r) => seenResponseDataPromise.resolve(r));
+
+        await server.forPost('/mocked-endpoint').thenCallback((req) => delay(500).then(() => ({})));
+
+        let abortable = makeAbortableRequest(server, '/mocked-endpoint');
+        nodeOnly(() => (abortable as http.ClientRequest).end('request body'));
+
+        await seenRequestPromise;
+        abortable.abort();
+
+        await expect(Promise.race([
+            seenResponseDataPromise,
             delay(100).then(() => { throw new Error('timeout') })
         ])).to.be.rejectedWith('timeout');
     });
@@ -614,91 +639,22 @@ describe("Response body chunk subscriptions", () => {
     beforeEach(() => server.start());
     afterEach(() => server.stop());
 
-    it("should stream body chunks as they are received", async () => {
+    it("should fire a single ended chunk for small non-streamed bodies", async () => {
         const dataEvents: BodyData[] = [];
         await server.on('response-body-data', (event) => dataEvents.push(event));
 
-        const stream = new PassThrough();
-        await server.forGet('/mocked-endpoint').thenStream(200, stream);
+        await server.forGet('/mocked-endpoint').thenReply(200, "A small non-streamed body");
 
-        fetch(server.urlFor("/mocked-endpoint"));
-
-        await delay(25);
-        expect(dataEvents).to.deep.equal([]);
-
-        stream.write('hello');
-        await delay(25);
-        expect(dataEvents).to.have.length(1);
-        expect(dataEvents[0].content).to.deep.equal(Buffer.from('hello'));
-        expect(dataEvents[0].isEnded).to.equal(false);
-        expect(dataEvents[0].eventTimestamp).to.be.a('number');
-
-        stream.write('world');
-        await delay(25);
-        expect(dataEvents).to.have.length(2);
-        expect(dataEvents[1].content).to.deep.equal(Buffer.from('world'));
-        expect(dataEvents[1].isEnded).to.equal(false);
-        expect(dataEvents[1].eventTimestamp).to.be.greaterThan(dataEvents[0].eventTimestamp);
-
-        stream.end();
-        await delay(25);
-        expect(dataEvents).to.have.length(3);
-        expect(dataEvents[2].content.byteLength).to.equal(0);
-        expect(dataEvents[2].isEnded).to.equal(true);
-        expect(dataEvents[2].eventTimestamp).to.be.greaterThan(dataEvents[1].eventTimestamp);
-    });
-
-    it("should batch streamed body chunks", async () => {
-        const dataEvents: BodyData[] = [];
-        await server.on('response-body-data', (event) => dataEvents.push(event));
-
-        const stream = new PassThrough();
-        await server.forGet('/mocked-endpoint').thenStream(200, stream);
-
-        fetch(server.urlFor("/mocked-endpoint")).catch(() => {});
-
-        await delay(25);
-        expect(dataEvents).to.deep.equal([]);
-
-        stream.write('hello');
-        await delay(5);
-        stream.write('world');
-        await delay(25);
+        await fetch(server.urlFor("/mocked-endpoint"));
+        await delay(5); // Delay for events to be received
 
         expect(dataEvents).to.have.length(1);
-        expect(dataEvents[0].content).to.deep.equal(Buffer.from('helloworld'));
-        expect(dataEvents[0].isEnded).to.equal(false);
-        expect(dataEvents[0].eventTimestamp).to.be.a('number');
-
-        stream.end();
-        await delay(25);
-        expect(dataEvents).to.have.length(2);
-        expect(dataEvents[1].content.byteLength).to.equal(0);
-        expect(dataEvents[1].isEnded).to.equal(true);
-        expect(dataEvents[1].eventTimestamp).to.be.greaterThan(dataEvents[0].eventTimestamp);
-    });
-
-    it("should batch streamed body chunks but emit immediately on end", async () => {
-        const dataEvents: BodyData[] = [];
-        await server.on('response-body-data', (event) => dataEvents.push(event));
-
-        const stream = new PassThrough();
-        await server.forGet('/mocked-endpoint').thenStream(200, stream);
-
-        fetch(server.urlFor("/mocked-endpoint")).catch(() => {});
-
-        await delay(25);
-        expect(dataEvents).to.deep.equal([]);
-
-        stream.write('hello');
-        await delay(5);
-        stream.end('world');
-        await delay(25);
-
-        expect(dataEvents).to.have.length(1);
-        expect(dataEvents[0].content).to.deep.equal(Buffer.from('helloworld'));
+        expect(dataEvents[0].content.toString()).to.equal(
+            "A small non-streamed body"
+        );
         expect(dataEvents[0].isEnded).to.equal(true);
         expect(dataEvents[0].eventTimestamp).to.be.a('number');
+        expect(dataEvents[0].id).to.be.a('string');
     });
 
     it("should fire immediate-empty ended chunks for empty bodies", async () => {
@@ -708,13 +664,191 @@ describe("Response body chunk subscriptions", () => {
         await server.forGet('/mocked-endpoint').thenReply(204);
 
         fetch(server.urlFor("/mocked-endpoint"));
-
-        await delay(10);
+        await delay(5); // Delay for events to be received
 
         expect(dataEvents).to.have.length(1);
         expect(dataEvents[0].content.byteLength).to.equal(0);
         expect(dataEvents[0].isEnded).to.equal(true);
         expect(dataEvents[0].eventTimestamp).to.be.a('number');
+        expect(dataEvents[0].id).to.be.a('string');
+    });
+
+    nodeOnly(() => {
+
+        // Mildly difficult to do streaming well in browsers, and the above covers the basic
+        // functionality, so we just test this node only:
+
+        it("should stream body chunks as they are received", async () => {
+            const dataEvents: BodyData[] = [];
+            await server.on('response-body-data', (event) => dataEvents.push(event));
+
+            const stream = new PassThrough();
+            await server.forGet('/mocked-endpoint').thenStream(200, stream);
+
+            fetch(server.urlFor("/mocked-endpoint"));
+
+            await delay(25);
+            expect(dataEvents).to.deep.equal([]);
+
+            stream.write('hello');
+            await delay(25);
+            expect(dataEvents).to.have.length(1);
+            expect(dataEvents[0].content).to.deep.equal(Buffer.from('hello'));
+            expect(dataEvents[0].isEnded).to.equal(false);
+            expect(dataEvents[0].eventTimestamp).to.be.a('number');
+            expect(dataEvents[0].id).to.be.a('string');
+
+            stream.write('world');
+            await delay(25);
+            expect(dataEvents).to.have.length(2);
+            expect(dataEvents[1].content).to.deep.equal(Buffer.from('world'));
+            expect(dataEvents[1].isEnded).to.equal(false);
+            expect(dataEvents[1].eventTimestamp).to.be.greaterThan(dataEvents[0].eventTimestamp);
+            expect(dataEvents[1].id).to.equal(dataEvents[0].id);
+
+            stream.end();
+            await delay(25);
+            expect(dataEvents).to.have.length(3);
+            expect(dataEvents[2].content.byteLength).to.equal(0);
+            expect(dataEvents[2].isEnded).to.equal(true);
+            expect(dataEvents[2].eventTimestamp).to.be.greaterThan(dataEvents[1].eventTimestamp);
+            expect(dataEvents[2].id).to.equal(dataEvents[0].id);
+        });
+
+        it("should batch streamed body chunks", async () => {
+            const dataEvents: BodyData[] = [];
+            await server.on('response-body-data', (event) => dataEvents.push(event));
+
+            const stream = new PassThrough();
+            await server.forGet('/mocked-endpoint').thenStream(200, stream);
+
+            fetch(server.urlFor("/mocked-endpoint")).catch(() => {});
+
+            await delay(25);
+            expect(dataEvents).to.deep.equal([]);
+
+            stream.write('hello');
+            await delay(5);
+            stream.write('world');
+            await delay(25);
+
+            expect(dataEvents).to.have.length(1);
+            expect(dataEvents[0].content).to.deep.equal(Buffer.from('helloworld'));
+            expect(dataEvents[0].isEnded).to.equal(false);
+            expect(dataEvents[0].eventTimestamp).to.be.a('number');
+            expect(dataEvents[0].id).to.be.a('string');
+
+            stream.end();
+            await delay(25);
+            expect(dataEvents).to.have.length(2);
+            expect(dataEvents[1].content.byteLength).to.equal(0);
+            expect(dataEvents[1].isEnded).to.equal(true);
+            expect(dataEvents[1].eventTimestamp).to.be.greaterThan(dataEvents[0].eventTimestamp);
+            expect(dataEvents[1].id).to.equal(dataEvents[0].id);
+        });
+
+        it("should batch streamed body chunks but emit immediately on end", async () => {
+            const dataEvents: BodyData[] = [];
+            await server.on('response-body-data', (event) => dataEvents.push(event));
+
+            const stream = new PassThrough();
+            await server.forGet('/mocked-endpoint').thenStream(200, stream);
+
+            fetch(server.urlFor("/mocked-endpoint")).catch(() => {});
+
+            await delay(25);
+            expect(dataEvents).to.deep.equal([]);
+
+            stream.write('hello');
+            await delay(5);
+            expect(dataEvents).to.have.length(0);
+            stream.end('world');
+            await delay(5);
+
+            expect(dataEvents).to.have.length(1);
+            expect(dataEvents[0].content).to.deep.equal(Buffer.from('helloworld'));
+            expect(dataEvents[0].isEnded).to.equal(true);
+            expect(dataEvents[0].eventTimestamp).to.be.a('number');
+            expect(dataEvents[0].id).to.be.a('string');
+        });
+
+        it("should just stop (without ended) if aborted server-side mid-stream", async () => {
+            const dataEvents: BodyData[] = [];
+            await server.on('response-body-data', (event) => dataEvents.push(event));
+
+            let responseEvent: CompletedResponse | undefined;
+            await server.on('response', (r) => { responseEvent = r });
+
+            const abortEvent = getDeferred<AbortedRequest>();
+            await server.on('abort', (r) => abortEvent.resolve(r));
+
+            const stream = new PassThrough();
+            await server.forAnyRequest().thenStream(200, stream);
+
+            fetch(server.urlFor("/mocked-endpoint")).catch(() => {});
+
+            await delay(25);
+            expect(dataEvents).to.deep.equal([]);
+
+            stream.write('hello');
+            await delay(1);
+            stream.destroy(new Error('OH NO'));
+
+            const abort = await abortEvent;
+            expect(abort.error?.code).to.equal('STREAM_RULE_ERROR');
+
+            await delay(25);
+            expect(dataEvents).to.have.length(1);
+            expect(dataEvents[0].content.toString()).to.deep.equal('hello');
+            expect(dataEvents[0].isEnded).to.equal(false); // Not ended
+            expect(dataEvents[0].eventTimestamp).to.be.a('number');
+            expect(dataEvents[0].id).to.be.a('string');
+
+            expect(responseEvent).to.equal(undefined); // No response event fired
+        });
+
+        it("should just stop (without ended) if aborted client-side mid-stream", async () => {
+            const dataEvents: BodyData[] = [];
+            await server.on('response-body-data', (event) => dataEvents.push(event));
+
+            let responseEvent: CompletedResponse | undefined;
+            await server.on('response', (r) => { responseEvent = r });
+
+            const abortEvent = getDeferred<AbortedRequest>();
+            await server.on('abort', (r) => abortEvent.resolve(r));
+
+            const stream = new PassThrough();
+            await server.forAnyRequest().thenStream(200, stream);
+
+            let abortable = makeAbortableRequest(server, '/mocked-endpoint');
+            nodeOnly(() => {
+                (abortable as http.ClientRequest)
+                    .end('request body')
+                    // .on('error', () => {});
+            });
+
+            await delay(25);
+            expect(dataEvents).to.deep.equal([]);
+
+            stream.write('hello');
+            await delay(5);
+            abortable.abort();
+            await delay(25);
+
+            expect(dataEvents).to.have.length(1);
+            expect(dataEvents[0].content.toString()).to.equal('hello');
+            expect(dataEvents[0].isEnded).to.equal(false);
+            expect(dataEvents[0].eventTimestamp).to.be.a('number');
+            expect(dataEvents[0].id).to.be.a('string');
+
+            await delay(25);
+            expect(dataEvents).to.have.length(1); // No end event
+            expect(responseEvent).to.equal(undefined); // No response event
+
+            const abort = await abortEvent; // Abort even _is_ fired however.
+            expect(abort.error).to.equal(undefined); // Client close - not server error
+        });
+
     });
 
 });

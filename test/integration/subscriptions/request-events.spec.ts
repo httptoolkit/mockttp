@@ -1,4 +1,5 @@
 import * as _ from 'lodash';
+import { PassThrough } from 'stream';
 import * as http from 'http';
 
 import {
@@ -7,7 +8,9 @@ import {
     getRemote,
     InitiatedRequest,
     CompletedRequest,
-    TimingEvents
+    TimingEvents,
+    BodyData,
+    AbortedRequest
 } from "../../..";
 import {
     expect,
@@ -15,7 +18,8 @@ import {
     nodeOnly,
     getDeferred,
     sendRawRequest,
-    defaultNodeConnectionHeader
+    defaultNodeConnectionHeader,
+    delay
 } from "../../test-utils";
 
 // Headers we ignore when checking the received values, because they can vary depending
@@ -429,3 +433,230 @@ describe("Request subscriptions", () => {
         });
     });
 });
+
+describe("Request body data subscriptions", () => {
+
+    const server = getLocal();
+
+    beforeEach(() => server.start());
+    afterEach(() => server.stop());
+
+    it("should fire a single ended chunk for small non-streamed bodies", async () => {
+        const dataEvents: BodyData[] = [];
+        await server.on('request-body-data', (event) => dataEvents.push(event));
+
+        await server.forPost('/mocked-endpoint').thenReply(200, "hello world");
+
+        await fetch(server.urlFor("/mocked-endpoint"), {
+            method: 'POST',
+            body: 'small POST body'
+        });
+        await delay(5); // Delay for events to be received
+
+        expect(dataEvents).to.have.length(1);
+        expect(dataEvents[0].content.toString()).to.equal('small POST body');
+        expect(dataEvents[0].isEnded).to.equal(true);
+        expect(dataEvents[0].eventTimestamp).to.be.a('number');
+        expect(dataEvents[0].id).to.be.a('string');
+    });
+
+    it("should fire immediate-empty ended chunks for empty bodies", async () => {
+        const dataEvents: BodyData[] = [];
+        await server.on('request-body-data', (event) => dataEvents.push(event));
+
+        await server.forPost('/mocked-endpoint').thenReply(200, "hello world");
+
+        await fetch(server.urlFor("/mocked-endpoint"), {
+            method: 'POST'
+            // No body
+        });
+        await delay(5); // Delay for events to be received
+
+        expect(dataEvents).to.have.length(1);
+        expect(dataEvents[0].content.byteLength).to.equal(0);
+        expect(dataEvents[0].isEnded).to.equal(true);
+        expect(dataEvents[0].eventTimestamp).to.be.a('number');
+        expect(dataEvents[0].id).to.be.a('string');
+    });
+
+    nodeOnly(() => {
+
+        // Mildly difficult to do streaming well in browsers, and the above covers the basic
+        // functionality, so we just test this node only:
+
+        it("should stream body chunks as they are received", async () => {
+            const dataEvents: BodyData[] = [];
+            await server.on('request-body-data', (event) => dataEvents.push(event));
+
+            await server.forAnyRequest().waitForRequestBody().thenReply(200);
+
+            const req = http.request(server.url, {
+                method: 'POST',
+            });
+            req.flushHeaders();
+
+            await delay(20);
+            expect(dataEvents.length).to.equal(0);
+
+            req.write('hello');
+            await delay(25);
+            expect(dataEvents.length).to.equal(1);
+            expect(dataEvents[0].content.toString()).to.equal('hello');
+            expect(dataEvents[0].isEnded).to.equal(false);
+            expect(dataEvents[0].eventTimestamp).to.be.a('number');
+            expect(dataEvents[0].id).to.be.a('string');
+
+            req.write('world');
+            await delay(25);
+            expect(dataEvents.length).to.equal(2);
+            expect(dataEvents[1].content.toString()).to.equal('world');
+            expect(dataEvents[1].isEnded).to.equal(false);
+            expect(dataEvents[1].eventTimestamp).to.be.greaterThan(dataEvents[0].eventTimestamp);
+            expect(dataEvents[1].id).to.be.a('string');
+
+            req.end();
+            await delay(25);
+            expect(dataEvents.length).to.equal(3);
+            expect(dataEvents[2].content.byteLength).to.equal(0);
+            expect(dataEvents[2].isEnded).to.equal(true);
+            expect(dataEvents[2].eventTimestamp).to.be.greaterThan(dataEvents[1].eventTimestamp);
+            expect(dataEvents[2].id).to.be.a('string');
+        });
+
+        it("should batch streamed body chunks", async () => {
+            const dataEvents: BodyData[] = [];
+            await server.on('request-body-data', (event) => dataEvents.push(event));
+
+            await server.forAnyRequest().waitForRequestBody().thenReply(200);
+
+            const req = http.request(server.url, {
+                method: 'POST',
+            });
+            req.flushHeaders();
+
+            req.write('hello');
+            await delay(5);
+            req.write('world');
+            await delay(25);
+            expect(dataEvents.length).to.equal(1);
+            expect(dataEvents[0].content.toString()).to.equal('helloworld');
+            expect(dataEvents[0].isEnded).to.equal(false);
+            expect(dataEvents[0].eventTimestamp).to.be.a('number');
+            expect(dataEvents[0].id).to.be.a('string');
+
+            req.end();
+            await delay(25);
+            expect(dataEvents).to.have.length(2);
+            expect(dataEvents[1].content.byteLength).to.equal(0);
+            expect(dataEvents[1].isEnded).to.equal(true);
+            expect(dataEvents[1].eventTimestamp).to.be.greaterThan(dataEvents[0].eventTimestamp);
+            expect(dataEvents[1].id).to.equal(dataEvents[0].id);
+        });
+
+        it("should batch streamed body chunks but emit immediately on end", async () => {
+            const dataEvents: BodyData[] = [];
+            await server.on('request-body-data', (event) => dataEvents.push(event));
+
+            await server.forAnyRequest().waitForRequestBody().thenReply(200);
+
+            const req = http.request(server.url, {
+                method: 'POST',
+            });
+            req.flushHeaders();
+
+            await delay(25);
+            expect(dataEvents).to.deep.equal([]);
+
+            req.write('hello');
+            await delay(5);
+            expect(dataEvents).to.have.length(0);
+            req.end('world');
+            await delay(5);
+
+            expect(dataEvents).to.have.length(1);
+            expect(dataEvents[0].content).to.deep.equal(Buffer.from('helloworld'));
+            expect(dataEvents[0].isEnded).to.equal(true);
+            expect(dataEvents[0].eventTimestamp).to.be.a('number');
+            expect(dataEvents[0].id).to.be.a('string');
+        });
+
+        it("should just stop (without ended) if aborted server-side while still streaming", async () => {
+            const dataEvents: BodyData[] = [];
+            await server.on('request-body-data', (event) => dataEvents.push(event));
+
+            let requestEvent: CompletedRequest | undefined;
+            await server.on('request', (r) => { requestEvent = r });
+
+            const abortEvent = getDeferred<AbortedRequest>();
+            await server.on('abort', (r) => abortEvent.resolve(r));
+
+            const stream = new PassThrough();
+            await server.forAnyRequest().thenStream(200, stream);
+
+            const req = http.request(server.url, {
+                method: 'POST',
+            });
+            req.flushHeaders();
+
+            await delay(25);
+            expect(dataEvents).to.deep.equal([]);
+
+            req.write('hello'); // Start writing request stream
+            await delay(1);
+            stream.destroy(new Error('OH NO')); // Kill server response stream
+
+            const abort = await abortEvent; // Abort event does fire
+            expect(abort.error?.code).to.equal('STREAM_RULE_ERROR'); // Server error
+
+            await delay(25);
+            expect(dataEvents).to.have.length(1);
+            expect(dataEvents[0].content.toString()).to.deep.equal('hello');
+            expect(dataEvents[0].isEnded).to.equal(false); // Not ended
+            expect(dataEvents[0].eventTimestamp).to.be.a('number');
+            expect(dataEvents[0].id).to.be.a('string');
+
+            expect(requestEvent).to.equal(undefined); // No request event fired
+        });
+
+        it("should just stop (without ended) if aborted client-side mid-stream", async () => {
+            const dataEvents: BodyData[] = [];
+            await server.on('request-body-data', (event) => dataEvents.push(event));
+
+            let requestEvent: CompletedRequest | undefined;
+            await server.on('request', (r) => { requestEvent = r });
+
+            const abortEvent = getDeferred<AbortedRequest>();
+            await server.on('abort', (r) => abortEvent.resolve(r));
+
+            await server.forAnyRequest().waitForRequestBody().thenReply(200);
+
+            const req = http.request(server.url, {
+                method: 'POST',
+            });
+            req.flushHeaders();
+            req.on('error', () => {});
+
+            await delay(25);
+            expect(dataEvents).to.deep.equal([]);
+
+            req.write('hello');
+            await delay(5);
+            req.destroy();
+            await delay(25);
+
+            expect(dataEvents).to.have.length(1);
+            expect(dataEvents[0].content.toString()).to.equal('hello');
+            expect(dataEvents[0].isEnded).to.equal(false);
+            expect(dataEvents[0].eventTimestamp).to.be.a('number');
+            expect(dataEvents[0].id).to.be.a('string');
+
+            await delay(25);
+            expect(dataEvents).to.have.length(1); // No end event
+            expect(requestEvent).to.equal(undefined); // No response event
+
+            const abort = await abortEvent; // Abort even _is_ fired however.
+            expect(abort.error).to.equal(undefined); // Client close - not server error
+        });
+    });
+});
+

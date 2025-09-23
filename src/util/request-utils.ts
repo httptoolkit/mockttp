@@ -676,24 +676,26 @@ function emitBodyDataEvents(
     let timestamp: number | undefined = undefined;
     let pendingContent: Uint8Array | undefined = undefined;
     let pendingContentTimer: NodeJS.Timeout | undefined = undefined;
-    let endEmitted = false;
+    let finished = false;
 
     function flushPendingContent() {
-        if (endEmitted) return; // Should never happen, but just in case
+        if (finished) return; // Should never happen, but just in case
 
-        endEmitted = 'writableEnded' in message
+        const hasEnded = 'writableEnded' in message
             ? message.writableEnded
             : message.readableEnded;
 
+        finished = hasEnded || !!message.errored || message.destroyed;
+
         callback(
             message.id,
-            // We use the exact end timestamp where possible, but the first 'data'
+            // We use the exact final timestamp where possible, but the first 'data'
             // event timestamp for every preceeding chunk.
-            endEmitted
+            finished
                 ? now()
                 : (timestamp || now()),
             pendingContent || Buffer.alloc(0),
-            endEmitted
+            hasEnded
         );
 
         timestamp = undefined;
@@ -724,6 +726,7 @@ function emitBodyDataEvents(
         }
     });
 
+    bodyStream.on('error', flushPendingContent);
     bodyStream.on('end', flushPendingContent);
 }
 
