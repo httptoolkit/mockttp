@@ -93,7 +93,7 @@ export const streamToBuffer = (input: stream.Readable, maxSize = MAX_BUFFER_SIZE
 
             // If stream has already finished/aborted, resolve accordingly immediately:
             if (input.readableEnded) return resolve(Buffer.from([]));
-            if (input.readableAborted) return failWithAbortError();
+            if (input.readableAborted) return setImmediate(failWithAbortError);
 
             let currentSize = 0;
             const onData = (d: Buffer) => {
