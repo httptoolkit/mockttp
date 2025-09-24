@@ -111,15 +111,27 @@ export function buildAdminServerModel(
         ruleParams
     };
 
-    for (let [gqlName, eventName] of graphqlSubscriptionPairs) {
-        mockServer.on(eventName as any, (evt) => {
-            pubsub.publish(eventName, { [gqlName]: evt });
-        });
-    }
+    // Build a set of event publishing callbacks (but don't subscribe them yet - we only
+    // want to subscribe on demand, to allow the server to opt-out unused event processing).
+    const eventListeners = graphqlSubscriptionPairs.reduce((acc, [, eventName]) => {
+        acc[eventName] = (evt: any) => {
+            pubsub.publish(eventName, { [eventName]: evt });
+        };
+        return acc;
+    }, {} as { [eventName: string]: (...args: any[]) => void });
 
     const subscriptionResolvers = Object.fromEntries(graphqlSubscriptionPairs.map(([gqlName, eventName]) => ([
         gqlName, {
-            subscribe: () => pubsub.asyncIterator(eventName)
+            subscribe: () => {
+                // Subscribe to the underlying server event, if we haven't already. Needs to actively check
+                // currently listeners because reset() clears all listeners, so they may disappear any time.
+                if (mockServer.listenerCount(eventName, eventListeners[eventName]) === 0) {
+                    mockServer.on(eventName as any, (evt) => {
+                        pubsub.publish(eventName, { [gqlName]: evt });
+                    });
+                }
+                return pubsub.asyncIterator(eventName);
+            }
         }
     ])));
 

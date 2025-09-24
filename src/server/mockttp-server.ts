@@ -363,6 +363,10 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         return Promise.resolve();
     }
 
+    public listenerCount(event: string, listener?: Function): number {
+        return this.eventEmitter.listenerCount(event, listener);
+    }
+
     private announceBodyDataAsync(
         type: 'request' | 'response',
         id: string,
