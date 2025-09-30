@@ -446,7 +446,11 @@ export class PassThroughStepImpl extends PassThroughStep {
         if (!this.extraCACertificates.length) return undefined;
 
         if (!this._trustedCACertificates) {
-            this._trustedCACertificates = getTrustedCAs(undefined, this.extraCACertificates);
+            this._trustedCACertificates = getTrustedCAs(undefined, this.extraCACertificates)
+                .then((certs) => {
+                    this._trustedCACertificates = certs; // Unwrap the promise
+                    return certs;
+                });
         }
 
         return this._trustedCACertificates;
