@@ -55,21 +55,21 @@ export class RequestRule implements RequestRule {
         this.matchers = data.matchers;
         this.completionChecker = data.completionChecker;
 
-        this.steps = data.steps.map((stepDefinition, i) => {
-            const step = Object.assign(
-                Object.create(StepLookup[stepDefinition.type].prototype),
-                stepDefinition
-            ) as RequestStepImpl;
+        this.steps = data.steps.map(<S extends RequestStepDefinition>(stepDefinition: S, i: number) => {
+            const StepImplClass = StepLookup[stepDefinition.type];
 
-            if (StepLookup[step.type].isFinal && i !== data.steps.length - 1) {
+            if (StepImplClass.isFinal && i !== data.steps.length - 1) {
                 throw new Error(
                     `Cannot create a rule with a final step before the last position ("${
-                        step.explain()
+                        stepDefinition.explain()
                     }" in position ${i + 1} of ${data.steps.length})`
                 );
             }
 
-            return step;
+            // All step impls have a fromDefinition static method that turns a definition into a
+            // full impl (copying data and initializing any impl-only fields). Note that for remote clients,
+            // the definition itself has already been deserialized by impl.deserialize(data) beforehand.
+            return StepImplClass.fromDefinition(stepDefinition as any) as RequestStepImpl;
         });
     }
 

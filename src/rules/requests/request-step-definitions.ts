@@ -755,11 +755,6 @@ export class PassThroughStep extends Serializable implements RequestStepDefiniti
 
     public readonly simulateConnectionErrors: boolean;
 
-    // Used in subclass - awkwardly needs to be initialized here to ensure that its set when using a
-    // step built from a definition. In future, we could improve this (compose instead of inheritance
-    // to better control step construction?) but this will do for now.
-    protected outgoingSockets = new Set<net.Socket>();
-
     constructor(options: PassThroughStepOptions = {}) {
         super();
 

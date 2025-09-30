@@ -165,6 +165,9 @@ export interface RequestStepImpl extends RequestStepDefinition {
     >;
 }
 
+const copyDefinitionToImpl = (defn: RequestStepDefinition): RequestStepImpl =>
+    Object.assign(Object.create(StepLookup[defn.type].prototype), defn);
+
 export interface RequestStepOptions {
     emitEventCallback?: (type: string, event: unknown) => void;
     keyLogStream?: Writable;
@@ -172,6 +175,9 @@ export interface RequestStepOptions {
 }
 
 export class FixedResponseStepImpl extends FixedResponseStep {
+
+    static readonly fromDefinition = copyDefinitionToImpl;
+
     async handle(_request: OngoingRequest, response: OngoingResponse) {
         if (this.headers) dropDefaultHeaders(response);
         writeHead(response, this.status, this.statusMessage, this.headers);
@@ -231,6 +237,8 @@ async function writeResponseFromCallback(
 
 export class CallbackStepImpl extends CallbackStep {
 
+    static readonly fromDefinition = copyDefinitionToImpl;
+
     async handle(request: OngoingRequest, response: OngoingResponse) {
         let req = await waitForCompletedRequest(request);
 
@@ -284,6 +292,8 @@ export class CallbackStepImpl extends CallbackStep {
 }
 
 export class StreamStepImpl extends StreamStep {
+
+    static readonly fromDefinition = copyDefinitionToImpl;
 
     async handle(request: OngoingRequest, response: OngoingResponse) {
         if (!this.stream.done) {
@@ -366,6 +376,9 @@ export class StreamStepImpl extends StreamStep {
 }
 
 export class FileStepImpl extends FileStep {
+
+    static readonly fromDefinition = copyDefinitionToImpl;
+
     async handle(_request: OngoingRequest, response: OngoingResponse) {
         // Read the file first, to ensure we error cleanly if it's unavailable
         const fileContents = await fs.readFile(this.filePath);
@@ -422,6 +435,11 @@ const mapOmitToUndefined = <T extends { [key: string]: any }>(
 const h2ProtocolQueue = new Map();
 
 export class PassThroughStepImpl extends PassThroughStep {
+
+    // In this case, we actually use the constructor, to ensure we initialize fields as normal:
+    static readonly fromDefinition = (defn: PassThroughStep) => Object.assign(new PassThroughStepImpl(), defn);
+
+    protected outgoingSockets = new Set<net.Socket>();
 
     private _trustedCACertificates: MaybePromise<Array<string> | undefined>;
     private async trustedCACertificates(): Promise<Array<string> | undefined> {
@@ -1379,6 +1397,9 @@ export class PassThroughStepImpl extends PassThroughStep {
 }
 
 export class CloseConnectionStepImpl extends CloseConnectionStep {
+
+    static readonly fromDefinition = () => new CloseConnectionStepImpl();
+
     async handle(request: OngoingRequest) {
         const socket: net.Socket = (request as any).socket;
         socket.end();
@@ -1387,6 +1408,9 @@ export class CloseConnectionStepImpl extends CloseConnectionStep {
 }
 
 export class ResetConnectionStepImpl extends ResetConnectionStep {
+
+    static readonly fromDefinition = () => new ResetConnectionStepImpl();
+
     constructor() {
         super();
         requireSocketResetSupport();
@@ -1408,6 +1432,9 @@ export class ResetConnectionStepImpl extends ResetConnectionStep {
 }
 
 export class TimeoutStepImpl extends TimeoutStep {
+
+    static readonly fromDefinition = () => new TimeoutStepImpl();
+
     async handle() {
         // Do nothing, leaving the socket open but never sending a response.
         return new Promise<void>(() => {});
@@ -1415,6 +1442,9 @@ export class TimeoutStepImpl extends TimeoutStep {
 }
 
 export class JsonRpcResponseStepImpl extends JsonRpcResponseStep {
+
+    static readonly fromDefinition = copyDefinitionToImpl;
+
     async handle(request: OngoingRequest, response: OngoingResponse) {
         const data: any = await request.body.asJson()
             .catch(() => {}); // Handle parsing errors with the check below
@@ -1436,6 +1466,9 @@ export class JsonRpcResponseStepImpl extends JsonRpcResponseStep {
 }
 
 export class DelayStepImpl extends DelayStep {
+
+    static readonly fromDefinition = copyDefinitionToImpl;
+
     async handle(): Promise<{ continue: true }> {
         await delay(this.delayMs);
         return { continue: true };
@@ -1443,6 +1476,9 @@ export class DelayStepImpl extends DelayStep {
 }
 
 export class WaitForRequestBodyStepImpl extends WaitForRequestBodyStep {
+
+    static readonly fromDefinition = () => new WaitForRequestBodyStepImpl();
+
     async handle(request: OngoingRequest): Promise<{ continue: true }> {
         await request.body.asBuffer();
         return { continue: true };
@@ -1457,6 +1493,8 @@ const encodeWebhookBody = (body: Buffer) => {
 };
 
 export class WebhookStepImpl extends WebhookStep {
+
+   static readonly fromDefinition = copyDefinitionToImpl;
 
     private sendEvent(data: {
         eventType: string;
@@ -1530,7 +1568,7 @@ export class WebhookStepImpl extends WebhookStep {
     }
 }
 
-export const StepLookup: typeof StepDefinitionLookup = {
+export const StepLookup = {
     'simple': FixedResponseStepImpl,
     'callback': CallbackStepImpl,
     'stream': StreamStepImpl,
