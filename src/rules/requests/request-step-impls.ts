@@ -1498,7 +1498,9 @@ const encodeWebhookBody = (body: Buffer) => {
 
 export class WebhookStepImpl extends WebhookStep {
 
-   static readonly fromDefinition = copyDefinitionToImpl;
+    // Actually run the constructor, to ensure we initialize fields:
+    static readonly fromDefinition = (defn: WebhookStep) => new WebhookStepImpl(defn.url, defn.events);
+    protected outgoingSockets = new Set<net.Socket>();
 
     private sendEvent(data: {
         eventType: string;
@@ -1512,6 +1514,23 @@ export class WebhookStepImpl extends WebhookStep {
                 'Content-Length': Buffer.byteLength(content)
             }
         }).end(content);
+
+        req.on('socket', (socket) => {
+            if (this.outgoingSockets.has(socket)) return;
+
+            // Add this port to our list of active ports, once it's connected (before then it has no port)
+            if (socket.connecting) {
+                socket.once('connect', () => {
+                    this.outgoingSockets.add(socket)
+                });
+            } else if (socket.localPort !== undefined) {
+                this.outgoingSockets.add(socket);
+            }
+
+            // Remove this port from our list of active ports when it's closed
+            // This is called for both clean closes & errors.
+            socket.once('close', () => this.outgoingSockets.delete(socket));
+        });
 
         req.on('error', (e) => {
             console.warn(`Error sending webhook to ${this.url}:`, e);
@@ -1528,6 +1547,19 @@ export class WebhookStepImpl extends WebhookStep {
     }
 
     async handle(request: OngoingRequest, response: OngoingResponse) {
+        if (isSocketLoop(this.outgoingSockets, (request as any).socket)) {
+            // We refuse to fire webhooks for incoming webhook requests, to avoid infinite loops in the (quite reasonable)
+            // case where you send webhooks to Mockttp/HTTP Toolkit to debug their behaviour. Better to just return
+            // an error - you can still see the data, but the request isn't going anywhere (including via later steps).
+            throw new Error(oneLine`
+                Webhook loop detected. This probably means you're triggering a webhook to be sent directly back
+                to the server, which is matching the same rule and triggering another webhook, which is...` +
+                '\n\n' + oneLine`
+                You should either add a separate higher priority rule to match & handle requests for this URL
+                (${request.url}) or change the webhook URL.
+            `);
+        }
+
         if (this.events.includes('request')) {
             waitForCompletedRequest(request).then((completedReq) => {
                 const eventData = {
