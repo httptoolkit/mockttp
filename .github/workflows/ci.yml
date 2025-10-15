@@ -23,10 +23,9 @@ jobs:
 
       - run: npm run ci-tests
         env:
-          # Node v18 needs webcrypto, Node v22+ needs no strip-types (because we use ts-node for full TS instead)
+          # Node v22+ needs no strip-types (because we use ts-node for full TS instead)
           NODE_OPTIONS: >-
-            ${{ startsWith(matrix.node-version, '18') && '--experimental-global-webcrypto' ||
-                (!startsWith(matrix.node-version, '20') && !startsWith(matrix.node-version, '18') && '--no-experimental-strip-types') || '' }}
+            ${{ (!startsWith(matrix.node-version, '20') && '--no-experimental-strip-types') || '' }}
 
       - name: Deploy docs
         if: github.ref == 'refs/heads/main' && matrix.node-version == 'v22.14.0'
