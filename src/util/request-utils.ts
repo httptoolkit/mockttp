@@ -98,9 +98,9 @@ export const writeHead = (
 
     if (statusMessage === undefined) {
         // Cast is required as Node H2 types don't know about raw headers:
-        response.writeHead(status, flatHeaders as http.OutgoingHttpHeaders);
+        (response as http.ServerResponse).writeHead(status, flatHeaders);
     } else {
-        response.writeHead(status, statusMessage, flatHeaders as http.OutgoingHttpHeaders);
+        (response as http.ServerResponse).writeHead(status, statusMessage, flatHeaders);
     }
 };
 

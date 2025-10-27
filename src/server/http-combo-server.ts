@@ -296,9 +296,9 @@ export async function createComboServer(options: ComboServerOptions): Promise<De
     server.on('connection', (socket: net.Socket | http2.ServerHttp2Stream) => {
         socket[SocketTimingInfo] ||= buildSocketTimingInfo();
 
-        // All sockets are initially marked as using unencrypted upstream connections.
-        // If TLS is used, this is upgraded to 'true' by secureConnection below.
-        socket[LastHopEncrypted] = false;
+        // All sockets are initially marked as using unencrypted upstream connections,
+        // if not set elsewhere (TLS) or downgraded by intended hop (CONNECT):
+        socket[LastHopEncrypted] ||= false;
 
         // For actual sockets, set NODELAY to avoid any buffering whilst streaming. This is
         // off by default in Node HTTP, but likely to be enabled soon & is default in curl.
@@ -371,6 +371,7 @@ export async function createComboServer(options: ComboServerOptions): Promise<De
         socket.write('HTTP/' + req.httpVersion + ' 200 OK\r\n\r\n', 'utf-8', () => {
             socket[SocketTimingInfo]!.tunnelSetupTimestamp = now();
             socket[LastTunnelAddress] = connectUrl;
+            socket[LastHopEncrypted] = false; // Will be updated if TLS is added later
             if (req.headers['proxy-authorization']) {
                 socket[SocketMetadata] = getSocketMetadataFromProxyAuth(socket, req.headers['proxy-authorization']);
             }
@@ -394,6 +395,8 @@ export async function createComboServer(options: ComboServerOptions): Promise<De
         res.writeHead(200, {});
 
         inheritSocketDetails(res.socket, res.stream);
+
+        res.stream[LastHopEncrypted] = false; // Will be updated if TLS is added later
         res.stream[LastTunnelAddress] = connectUrl;
         if (req.headers['proxy-authorization']) {
             res.stream[SocketMetadata] = getSocketMetadataFromProxyAuth(res.stream, req.headers['proxy-authorization']);

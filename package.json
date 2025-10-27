@@ -161,7 +161,7 @@
   "dependencies": {
     "@graphql-tools/schema": "^8.5.0",
     "@graphql-tools/utils": "^8.8.0",
-    "@httptoolkit/httpolyglot": "^3.0.0",
+    "@httptoolkit/httpolyglot": "^3.0.1",
     "@httptoolkit/subscriptions-transport-ws": "^0.11.2",
     "@httptoolkit/util": "^0.1.7",
     "@httptoolkit/websocket-stream": "^6.0.1",
