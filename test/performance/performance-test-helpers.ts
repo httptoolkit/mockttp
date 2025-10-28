@@ -124,4 +124,46 @@ export function assertPerformance(
             `Errors ${result.errors} exceeds threshold ${thresholds.maxErrors}`
         );
     }
+
+    testResults = result;
 }
+
+const PERF_LOGGING_API_KEY = process.env.POSTHOG_PERF_API_KEY;
+let testResults: PerformanceResult | undefined = undefined;
+beforeEach(() => {
+    testResults = undefined;
+});
+
+afterEach(async function () {
+    if (PERF_LOGGING_API_KEY) {
+        if (!this.currentTest) throw new Error("Can't log perf results without a test context");
+        if (this.currentTest.state !== 'passed') return;
+        if (!testResults) throw new Error("Can't log perf results without test results");
+
+        const testTitle = this.currentTest.fullTitle();
+
+        const result = await fetch("https://eu.i.posthog.com/capture/", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                api_key: PERF_LOGGING_API_KEY,
+                event: "performance_test_result",
+                distinct_id: `mockttp-${process.env.ImageOS || 'local'}`,
+                properties: {
+                    $process_person_profile: false,
+                    sha: process.env.GITHUB_SHA || 'local',
+                    test_name: "Mockttp - " + testTitle,
+                    throughput: testResults.throughput,
+                    mean_latency: testResults.latency.mean,
+                    p99_latency: testResults.latency.p99,
+                    errors: testResults.errors,
+
+                },
+            }),
+        });
+
+        expect(result.ok).to.equal(true, `Failed to log performance results: ${await result.text()}`);
+    }
+});

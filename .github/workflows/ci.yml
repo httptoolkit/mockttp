@@ -26,6 +26,8 @@ jobs:
           # Node v22+ needs no strip-types (because we use ts-node for full TS instead)
           NODE_OPTIONS: >-
             ${{ (!startsWith(matrix.node-version, '20') && '--no-experimental-strip-types') || '' }}
+          # We log performance test results to Posthog to track trends:
+          POSTHOG_PERF_API_KEY: ${{ secrets.POSTHOG_PERF_API_KEY }}
 
       - name: Deploy docs
         if: github.ref == 'refs/heads/main' && matrix.node-version == 'v22.14.0'

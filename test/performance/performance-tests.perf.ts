@@ -7,7 +7,7 @@ import {
 } from "./performance-test-helpers";
 
 nodeOnly(() => {
-    describe("Performance tests", function() {
+    describe("Performance Tests:", function() {
         this.timeout(120000);
 
         describe("Static HTTP mocking", () => {
