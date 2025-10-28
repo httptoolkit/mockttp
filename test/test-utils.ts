@@ -132,8 +132,10 @@ export async function ignoreNetworkError<T extends RequestPromise | Promise<Resp
         }
     });
 
-    if ((result as any).status === 502) {
-        console.warn('Skipping test due to remote 502 response');
+    const status = (result as any).status;
+
+    if (status === 502 || status === 503) {
+        console.warn(`Skipping test due to remote ${status} response`);
         throw options.context.skip();
     }
 
