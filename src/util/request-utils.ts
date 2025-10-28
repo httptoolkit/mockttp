@@ -400,7 +400,7 @@ export function preprocessRequest(req: ExtendedRawRequest, options: {
         req.path = getPathFromAbsoluteUrl(req.url!);
         req.destination = getDestination(
             req.protocol,
-            req.socket[LastTunnelAddress] ?? getHostFromAbsoluteUrl(req.url!)
+            getHostFromAbsoluteUrl(req.url!) // We ignore LastTunnelAddress - this *is* a tunnel
         );
 
         const proxyAuthHeader = getHeaderValue(rawHeaders, 'proxy-authorization');
