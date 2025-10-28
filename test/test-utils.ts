@@ -10,7 +10,6 @@ import * as http from 'http';
 import * as https from 'https';
 import * as http2 from 'http2';
 
-
 import * as _ from 'lodash';
 import * as http2Wrapper from 'http2-wrapper';
 import * as CrossFetch from "cross-fetch";
@@ -65,8 +64,6 @@ process.on('unhandledRejection', (reason, promise) => {
 chai.use(chaiAsPromised);
 chai.use(chaiFetch);
 
-export const AssertionError = chai.AssertionError;
-
 function getGlobalFetch() {
     return {
         fetch: globalThis.fetch.bind(globalThis),
@@ -83,11 +80,7 @@ export const fetch = fetchImplementation.fetch;
 // All a bit convoluted, so we don't shadow the global vars,
 // and we can still use those to define these in the browser
 const headersImplementation = fetchImplementation.Headers;
-const requestImplementation = fetchImplementation.Request;
-const responseImplementation = fetchImplementation.Response;
 export { headersImplementation as Headers };
-export { requestImplementation as Request };
-export { responseImplementation as Response };
 
 export const FormData = globalThis.FormData ?? FormDataPolyfill;
 export const File = globalThis.File ?? FilePolyfill;
@@ -298,11 +291,10 @@ export const nodeSatisfies = (range: string) =>
     isNode && semver.satisfies(process.version, range);
 
 export const BROKEN_H1_OVER_H2_TUNNELLING = "^18.8";
-export const DEFAULT_KEEP_ALIVE = ">=19";
-export const FIXED_KEEP_ALIVE_BEHAVIOUR = ">=20";
 export const BROKEN_H2_OVER_H2_TUNNELLING = "~20.12"; // https://github.com/nodejs/node/issues/52344
 export const DEFAULT_REQ_HEADERS_DISABLED = "^22.13.0 || >=23.5.0";
 
+const DEFAULT_KEEP_ALIVE = ">=19";
 export const defaultNodeConnectionHeader = nodeSatisfies(DEFAULT_KEEP_ALIVE)
     ? 'keep-alive'
     : 'close';
@@ -348,7 +340,7 @@ export function getHttp2ResponseTrailers(req: http2.ClientHttp2Stream) {
     });
 }
 
-export async function http2Request(
+async function http2Request(
     url: string,
     headers: {},
     requestBody = '',
