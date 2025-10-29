@@ -88,8 +88,10 @@ jobs:
       - name: Publish to npm
         run: |
           if [ "${{ steps.version-check.outputs.is_prerelease }}" == "true" ]; then
-            echo "Publishing prerelease without a tag"
-            npm publish --provenance --no-tag
+            echo "Publishing untagged prerelease"
+            npm publish --provenance --tag test
+            # We have to publish with a tag (so we use 'test') but we can clean it up:
+            npm dist-tag rm mockttp test --silent
           else
             echo "Publishing stable release with 'latest' tag"
             npm publish --provenance
