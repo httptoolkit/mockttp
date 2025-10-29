@@ -63,6 +63,7 @@ jobs:
       - run: npm run build
 
       - name: Verify tag matches package.json version
+        id: version-check
         run: |
           TAG_VERSION=${GITHUB_REF#refs/tags/v}
           PACKAGE_VERSION=$(node -p "require('./package.json').version")
@@ -72,5 +73,25 @@ jobs:
           fi
           echo "✓ Tag version matches package.json version: $PACKAGE_VERSION"
 
-      - run: npm publish
+          # Check if version matches strict X.Y.Z format (stable release)
+          if echo "$PACKAGE_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "Stable release version detected: $PACKAGE_VERSION"
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+          else
+            echo "Prerelease version detected: $PACKAGE_VERSION"
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+          fi
+
+      # Make sure we have the latest npm for publishing:
+      - run: npm install -g npm@latest
+
+      - name: Publish to npm
+        run: |
+          if [ "${{ steps.version-check.outputs.is_prerelease }}" == "true" ]; then
+            echo "Publishing prerelease without a tag"
+            npm publish --provenance --no-tag
+          else
+            echo "Publishing stable release with 'latest' tag"
+            npm publish --provenance
+          fi
 
