@@ -104,6 +104,12 @@ export function assertPerformance(
         maxErrors?: number;
     }
 ): void {
+    if (process.env.CI) {
+        // CI can be slow, so we relax the throughput requirements plenty - we'll still spot this locally
+        // or spot enormous CI regressions (and we can still monitor trends regardless).
+        thresholds.minThroughput = thresholds.minThroughput ? thresholds.minThroughput * 0.6 : undefined;
+    }
+
     if (thresholds.minThroughput !== undefined) {
         expect(result.throughput).to.be.greaterThan(
             thresholds.minThroughput,
