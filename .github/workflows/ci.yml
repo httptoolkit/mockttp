@@ -57,8 +57,10 @@ jobs:
           node-version: 'v22.20.0'
           registry-url: 'https://registry.npmjs.org'
           cache: 'npm'
+          cache-dependency-path: 'package.json'
 
-      - run: npm ci
+      - run: npm install
+      - run: npm run build
 
       - name: Verify tag matches package.json version
         run: |
