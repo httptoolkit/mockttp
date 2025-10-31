@@ -9,7 +9,7 @@ import * as http2 from 'http2';
 import * as semver from 'semver';
 import { makeDestroyable, DestroyableServer } from 'destroyable-server';
 import * as httpolyglot from '@httptoolkit/httpolyglot';
-import { delay, unreachableCheck } from '@httptoolkit/util';
+import { CustomError, delay, unreachableCheck } from '@httptoolkit/util';
 import {
     calculateJa3FromFingerprintData,
     calculateJa4FromHelloData,
@@ -263,18 +263,26 @@ export async function createComboServer(options: ComboServerOptions): Promise<De
             const tunnelAddress = socket[LastTunnelAddress];
 
             try {
+                let error: Error | undefined;
                 if (!tunnelAddress) {
-                    server.emit('clientError', new Error('Unknown protocol without destination'), socket);
-                    return;
-                }
-
-                if (!tunnelAddress.includes(':')) {
+                    error = new CustomError('Unknown protocol without destination', {
+                        code: 'UNKNOWN_PROTOCOL_NO_DESTINATION'
+                    });
+                } else if (!tunnelAddress.includes(':')) {
                     // Both CONNECT & SOCKS require a port, so this shouldn't happen
-                    server.emit('clientError', new Error('Unknown protocol without destination port'), socket);
+                    error = new CustomError('Unknown protocol without destination port', {
+                        code: 'UNKNOWN_PROTOCOL_NO_DESTINATION_PORT'
+                    });
+                }
+
+                if (error) {
+                    // Attach what data we have for debugging later:
+                    (error as any).rawPacket = socket.read();
+                    server.emit('clientError', error, socket);
                     return;
                 }
 
-                const { hostname, port } = getDestination('unknown', tunnelAddress); // Has port, so no protocol required
+                const { hostname, port } = getDestination('unknown', tunnelAddress!); // Has port, so no protocol required
                 options.rawPassthroughListener(socket, hostname, port);
             } catch (e) {
                 console.error('Unknown protocol server error', e);
