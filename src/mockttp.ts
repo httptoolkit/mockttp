@@ -33,7 +33,7 @@ import type { SocksServerOptions } from "./server/socks-server";
 export type PortRange = { startPort: number, endPort: number };
 
 /**
- * A mockttp instance allow you to start and stop mock servers and control their behaviour.
+ * A mockttp instance allows you to start and stop mock servers and control their behaviour.
  *
  * This should be created using the exported {@link getLocal} or {@link getRemote} methods, like
  * so:
