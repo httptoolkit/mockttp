@@ -193,7 +193,7 @@ export async function createComboServer(options: ComboServerOptions): Promise<De
                     if (preferredProtocol) return preferredProtocol;
 
                     // If the client only offers protocols that we don't understand, shrug and accept:
-                    else return clientProtocols[1];
+                    else return clientProtocols[0];
                 }
             } : {
                 // In Node versions without ALPNCallback, we just set preferences directly:
