@@ -14,7 +14,7 @@ import cors = require("cors");
 import now = require("performance-now");
 import WebSocket = require("ws");
 import { Mutex } from 'async-mutex';
-import { ErrorLike, isErrorLike } from '@httptoolkit/util';
+import { ErrorLike, isErrorLike, UnreachableCheck } from '@httptoolkit/util';
 
 import {
     Destination,
@@ -1186,7 +1186,31 @@ ${await this.suggestRule(request)}`
 
         setImmediate(() => this.eventEmitter.emit(`${type}-passthrough-opened`, eventData));
 
-        const upstreamSocket = net.connect({ host: hostname, port: targetPort });
+        let upstreamSocket;
+        if (type === 'raw' && socket[LastHopEncrypted]) {
+            // Awkward edge case. If we are passing through raw data, but we've already unwrapped TLS beforehand,
+            // we need to recreate the TLS for the passthrough. This is more art than science but we can
+            // get pretty close to simulating the original incoming configuration:
+            upstreamSocket = tls.connect({
+                host: hostname,
+                port: targetPort,
+                servername: socket[TlsMetadata]?.sniHostname,
+                // We have to mirror the ALPN protocols, which might be messy since we've actually already
+                // negotiated one. Here we blindly hope (!) that we end up on the same page:
+                ALPNProtocols: socket[TlsMetadata]?.clientAlpn,
+
+                // We have no way to know what certs the client trusts and no config options for this yet, so
+                // we just make do with default trust settings here in all cases.
+            });
+        } else if (type === 'tls' || type === 'raw') {
+            // For raw traffic we pass through raw - not surprising. For TLS traffic this might be surprising,
+            // but it's because a TLS tunnel is when we _don't_ terminate TLS ourselves, so we can't get inside
+            // the tunnel at all here.
+            upstreamSocket = net.connect({ host: hostname, port: targetPort });
+        } else {
+            throw new UnreachableCheck(type);
+        }
+
         upstreamSocket.setNoDelay(true);
 
         socket.pipe(upstreamSocket);
