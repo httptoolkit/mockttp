@@ -7,7 +7,12 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [20.x, 22.x, v22.20.0, '*']
+        include:
+          - node-version: 20.x
+          - node-version: 22.x
+          - node-version: 'v22.20.0'
+            deploys-docs: true
+          - node-version: '*'
 
     steps:
       - uses: actions/checkout@v4
@@ -29,9 +34,35 @@ jobs:
           # We log performance test results to Posthog to track trends:
           POSTHOG_PERF_API_KEY: ${{ secrets.POSTHOG_PERF_API_KEY }}
 
-      - name: Deploy docs
-        if: github.ref == 'refs/heads/main' && matrix.node-version == 'v22.20.0'
-        uses: JamesIves/github-pages-deploy-action@v4
+      - name: Upload docs artifact
+        uses: actions/upload-artifact@v4
+        if: matrix.deploys-docs == true
+        with:
+          name: typedoc
+          path: typedoc
+          retention-days: 1
+
+  deploy-docs:
+    name: Deploy docs
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: typedoc
+          path: typedoc
+      - name: Check for generated docs
+        run: |
+          # Fails if directory doesn't exist or is empty
+          if [ ! -d "typedoc" ] || [ -z "$(ls -A typedoc)" ]; then
+            echo "Error: 'typedoc' directory is missing or empty."
+            exit 1
+          fi
+      - uses: JamesIves/github-pages-deploy-action@v4
         with:
           single-commit: true
           branch: gh-pages
