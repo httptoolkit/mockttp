@@ -1241,8 +1241,18 @@ ${await this.suggestRule(request)}`
             });
         }
 
-        socket.on('error', () => upstreamSocket.destroy());
-        upstreamSocket.on('error', () => socket.destroy());
+        socket.on('error', (e: any) => {
+            if (this.debug) console.warn(`Downstream ${type} passthrough error to ${hostname}:${targetPort}:`, e);
+            eventData.tags.push(`${type}-passthrough-error:${e.code || 'UNKNOWN'}`);
+            upstreamSocket.destroy();
+        });
+
+        upstreamSocket.on('error', (e) => {
+            if (this.debug) console.warn(`Upstream ${type} passthrough error to ${hostname}:${targetPort}:`, e);
+            eventData.tags.push(`${type}-passthrough-error:${e.code || 'UNKNOWN'}`);
+            socket.destroy()
+        });
+
         upstreamSocket.on('close', () => socket.destroy());
         socket.on('close', () => {
             upstreamSocket.destroy();
