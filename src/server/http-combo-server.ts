@@ -177,8 +177,9 @@ export async function createComboServer(options: ComboServerOptions): Promise<De
             ? ['h2', 'http/1.1', 'http 1.1'] // 'http 1.1' is non-standard, but used by https-proxy-agent
                 : options.http2 === 'fallback'
             ? ['http/1.1', 'http 1.1', 'h2']
-                // options.http2 === false:
-            : ['http/1.1', 'http 1.1'];
+                : options.http2 === false
+            ? ['http/1.1', 'http 1.1']
+                : unreachableCheck(options.http2);
 
         const ALPNOption: tls.TlsOptions = semver.satisfies(process.version, '>=20.4.0')
             ? {
