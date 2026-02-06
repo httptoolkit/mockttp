@@ -201,7 +201,7 @@ describe("When configured for HTTPS", () => {
 
                 const cert = tlsSocket.getPeerCertificate();
                 expect(cert.subject.CN).to.equal('example.testserver.host');
-                expect(cert.issuer.CN).to.include('ZeroSSL RSA Domain Secure Site CA'); // <-- This is the real issuer, right now at least
+                expect(cert.issuer.O).to.include('Google Trust Services');
             });
 
             it("bypasses Mockttp for TLS connections inside matching HTTP/1 CONNECT tunnel", async () => {
@@ -221,7 +221,7 @@ describe("When configured for HTTPS", () => {
 
                 const cert = tlsSocket.getPeerCertificate();
                 expect(cert.subject.CN).to.equal('*.ip-api.com');
-                expect(cert.issuer.CN).to.include('Sectigo RSA Domain Validation Secure');
+                expect(cert.issuer.O).to.include('Sectigo Limited');
             });
 
             it("still handles matching CONNECT-tunnelled plain-HTTP requests", async () => {
