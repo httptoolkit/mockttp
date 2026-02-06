@@ -200,6 +200,9 @@ export async function createComboServer(options: ComboServerOptions): Promise<De
                 ALPNProtocols: serverProtocolPreferences
             }
 
+        // Cache secure contexts by domain to avoid expensive re-creation on every connection
+        const secureContextCache = new Map<string, tls.SecureContext>();
+
         tlsServer = tls.createServer({
             key: defaultCert.key,
             cert: defaultCert.cert,
@@ -210,12 +213,17 @@ export async function createComboServer(options: ComboServerOptions): Promise<De
                 if (options.debug) console.log(`Generating certificate for ${domain}`);
 
                 try {
-                    const generatedCert = await ca.generateCertificate(domain);
-                    cb(null, tls.createSecureContext({
-                        key: generatedCert.key,
-                        cert: generatedCert.cert,
-                        ca: generatedCert.ca
-                    }));
+                    let secureContext = secureContextCache.get(domain);
+                    if (!secureContext) {
+                        const generatedCert = await ca.generateCertificate(domain);
+                        secureContext = tls.createSecureContext({
+                            key: generatedCert.key,
+                            cert: generatedCert.cert,
+                            ca: generatedCert.ca
+                        });
+                        secureContextCache.set(domain, secureContext);
+                    }
+                    cb(null, secureContext);
                 } catch (e) {
                     console.error('Cert generation error', e);
                     cb(e);
