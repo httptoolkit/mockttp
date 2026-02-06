@@ -363,7 +363,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         return Promise.resolve();
     }
 
-    public listenerCount(event: string, listener?: Function): number {
+    public listenerCount(event: string, listener?: ((...args: any[]) => void)): number {
         return this.eventEmitter.listenerCount(event, listener);
     }
 
@@ -1217,7 +1217,7 @@ ${await this.suggestRule(request)}`
         upstreamSocket.pipe(socket);
 
         if (type === 'raw') {
-            socket.on('data', (data) => {
+            socket.on('data', (data: Buffer) => {
                 const eventTimestamp = now();
                 setImmediate(() => {
                     this.eventEmitter.emit('raw-passthrough-data', {
@@ -1228,7 +1228,7 @@ ${await this.suggestRule(request)}`
                     } satisfies RawPassthroughDataEvent);
                 });
             });
-            upstreamSocket.on('data', (data) => {
+            upstreamSocket.on('data', (data: Buffer) => {
                 const eventTimestamp = now();
                 setImmediate(() => {
                     this.eventEmitter.emit('raw-passthrough-data', {
@@ -1247,7 +1247,7 @@ ${await this.suggestRule(request)}`
             upstreamSocket.destroy();
         });
 
-        upstreamSocket.on('error', (e) => {
+        upstreamSocket.on('error', (e: ErrorLike) => {
             if (this.debug) console.warn(`Upstream ${type} passthrough error to ${hostname}:${targetPort}:`, e);
             eventData.tags.push(`${type}-passthrough-error:${e.code || 'UNKNOWN'}`);
             socket.destroy()

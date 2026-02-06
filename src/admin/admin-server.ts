@@ -301,7 +301,7 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
 
             this.server.on('error', reject);
 
-            this.server.on('upgrade', async (req: http.IncomingMessage, socket: net.Socket, head: Buffer) => {
+            this.server.on('upgrade', async (req, socket, head) => {
                 const reqOrigin = req.headers['origin'] as string | undefined;
                 if (this.requiredOrigin && !await strictOriginMatch(reqOrigin, this.requiredOrigin)) {
                     console.warn(`Websocket request from invalid origin: ${req.headers['origin']}`);

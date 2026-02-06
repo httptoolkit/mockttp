@@ -20,6 +20,16 @@ export interface SocketMetadata {
     [key: string]: any;
 }
 
+export interface SocketTimingData {
+    initialSocket: number; // Initial raw socket time, since unix epoch
+
+    // High-precision timestamps:
+    initialSocketTimestamp: number;
+    tunnelSetupTimestamp?: number; // Latest CONNECT completion, if any
+    tlsConnectedTimestamp?: number; // Latest TLS handshake completion, if any
+    lastRequestTimestamp?: number; // Latest request or websocket request time, if any
+}
+
 declare module 'net' {
     interface Socket {
         /**
@@ -47,15 +57,7 @@ declare module 'net' {
          * Our recordings of various timestamps, used for monitoring &
          * performance analysis later on
          */
-        [SocketTimingInfo]?: {
-            initialSocket: number; // Initial raw socket time, since unix epoch
-
-            // High-precision timestamps:
-            initialSocketTimestamp: number;
-            tunnelSetupTimestamp?: number; // Latest CONNECT completion, if any
-            tlsConnectedTimestamp?: number; // Latest TLS handshake completion, if any
-            lastRequestTimestamp?: number; // Latest request or websocket request time, if any
-        }
+        [SocketTimingInfo]?: SocketTimingData;
 
         // Set on TLSSocket, defined here for convenient access on _all_ sockets
         [TlsMetadata]?: TlsSocketMetadata;
@@ -101,17 +103,17 @@ declare module 'tls' {
 }
 
 declare module 'http2' {
-    class Http2Session {
+    interface Http2Session {
         // session.socket is cleared before error handling kicks in. That's annoying,
         // so we manually preserve the socket elsewhere to work around it.
         initialSocket?: net.Socket;
     }
 
-    class ServerHttp2Stream {
+    interface ServerHttp2Stream {
         // Treated the same as net.Socket, when we unwrap them in our combo server:
-        [LastHopEncrypted]?: net.Socket[typeof LastHopEncrypted];
-        [LastTunnelAddress]?: net.Socket[typeof LastTunnelAddress];
-        [SocketTimingInfo]?: net.Socket[typeof SocketTimingInfo];
+        [LastHopEncrypted]?: boolean;
+        [LastTunnelAddress]?: string;
+        [SocketTimingInfo]?: SocketTimingData;
         [SocketMetadata]?: SocketMetadata;
     }
 }

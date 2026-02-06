@@ -1,6 +1,6 @@
 {
     "compilerOptions": {
-        "target": "ES2020",
+        "target": "ES2022",
         "module": "commonjs",
         "outDir": "./dist",
         "declaration": true,
@@ -8,7 +8,7 @@
         "declarationMap": true,
         "strict": true,
         "lib": [
-            "ES2020",
+            "ES2022"
         ],
         "paths": {
             "https-proxy-agent": ["./custom-typings/proxy-agent-modules.d.ts"],
