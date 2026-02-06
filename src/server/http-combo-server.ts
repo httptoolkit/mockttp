@@ -200,8 +200,28 @@ export async function createComboServer(options: ComboServerOptions): Promise<De
                 ALPNProtocols: serverProtocolPreferences
             }
 
-        // Cache secure contexts by domain to avoid expensive re-creation on every connection
-        const secureContextCache = new Map<string, tls.SecureContext>();
+        // Cache secure contexts by domain with expiry tracking, with 1h buffer
+        const EXPIRY_BUFFER_MS = 60 * 60 * 1000;
+        const secureContextCache = new Map<string, { context: tls.SecureContext, expiresAt: Date }>();
+
+        const getSecureContext = async (domain: string): Promise<tls.SecureContext> => {
+            const cached = secureContextCache.get(domain);
+            const now = Date.now();
+
+            if (cached && cached.expiresAt.getTime() - now > EXPIRY_BUFFER_MS) {
+                return cached.context;
+            }
+
+            // Generate new cert (either not cached or expiring soon)
+            const generatedCert = await ca.generateCertificate(domain);
+            const context = tls.createSecureContext({
+                key: generatedCert.key,
+                cert: generatedCert.cert,
+                ca: generatedCert.ca
+            });
+            secureContextCache.set(domain, { context, expiresAt: generatedCert.expiresAt });
+            return context;
+        };
 
         tlsServer = tls.createServer({
             key: defaultCert.key,
@@ -213,17 +233,7 @@ export async function createComboServer(options: ComboServerOptions): Promise<De
                 if (options.debug) console.log(`Generating certificate for ${domain}`);
 
                 try {
-                    let secureContext = secureContextCache.get(domain);
-                    if (!secureContext) {
-                        const generatedCert = await ca.generateCertificate(domain);
-                        secureContext = tls.createSecureContext({
-                            key: generatedCert.key,
-                            cert: generatedCert.cert,
-                            ca: generatedCert.ca
-                        });
-                        secureContextCache.set(domain, secureContext);
-                    }
-                    cb(null, secureContext);
+                    cb(null, await getSecureContext(domain));
                 } catch (e) {
                     console.error('Cert generation error', e);
                     cb(e);

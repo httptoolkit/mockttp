@@ -54,7 +54,8 @@ export type PEM = string | string[] | Buffer | Buffer[];
 export type GeneratedCertificate = {
     key: string,
     cert: string,
-    ca: string
+    ca: string,
+    expiresAt: Date
 };
 
 const SUBJECT_NAME_MAP: { [key: string]: string } = {
@@ -311,14 +312,11 @@ export type { CA };
 class CA {
     private options: BaseCAOptions;
 
-    private certCache: { [domain: string]: GeneratedCertificate };
-
     constructor(
         private caCert: x509.X509Certificate,
         private caKey: CryptoKey,
         options?: BaseCAOptions
     ) {
-        this.certCache = {};
         this.options = options ?? {};
 
         const keyLength = this.options.keyLength || 2048;
@@ -337,9 +335,6 @@ class CA {
     }
 
     async generateCertificate(domain: string): Promise<GeneratedCertificate> {
-        // TODO: Expire domains from the cache? Based on their actual expiry?
-        if (this.certCache[domain]) return this.certCache[domain];
-
         const leafKeyPair = await KEY_PAIR!.value;
 
         if (domain.includes('_')) {
@@ -427,16 +422,16 @@ class CA {
             extensions
         });
 
-        const generatedCertificate = {
+        const generatedCertificate: GeneratedCertificate = {
             key: arrayBufferToPem(
                 await crypto.subtle.exportKey("pkcs8", leafKeyPair.privateKey as CryptoKey),
                 "PRIVATE KEY"
             ),
             cert: certificate.toString("pem"),
-            ca: this.caCert.toString("pem")
+            ca: this.caCert.toString("pem"),
+            expiresAt: notAfter
         };
 
-        this.certCache[domain] = generatedCertificate;
         return generatedCertificate;
     }
 }
