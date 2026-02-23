@@ -2,7 +2,7 @@ import { Buffer } from 'buffer';
 import * as http from 'http';
 
 import { getLocal } from "../../..";
-import { expect, fetch, isNode, nodeOnly } from "../../test-utils";
+import { expect, isNode, nodeOnly } from "../../test-utils";
 
 describe("Simple fixed response handler", function () {
 

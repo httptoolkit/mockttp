@@ -21,7 +21,6 @@ import {
 } from "../..";
 import {
     expect,
-    fetch,
     nodeOnly,
     browserOnly,
     delay,

@@ -1,6 +1,6 @@
 import * as path from 'path';
 import { getLocal } from "../../..";
-import { expect, fetch, isNode } from "../../test-utils";
+import { expect, isNode } from "../../test-utils";
 
 describe("HTTP mock rule handling", function () {
 

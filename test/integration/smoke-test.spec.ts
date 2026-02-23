@@ -1,6 +1,5 @@
-import HttpProxyAgent = require('http-proxy-agent');
 import { getLocal } from "../..";
-import { expect, fetch, nodeOnly } from "../test-utils";
+import { expect, nodeOnly, undiciFetch, ProxyAgent } from "../test-utils";
 
 describe("Basic HTTP mocking", function () {
     let server = getLocal();
@@ -42,8 +41,8 @@ describe("Basic HTTP mocking", function () {
         it("can proxy requests to made to any other hosts", async () => {
             await server.forGet("http://google.com").thenReply(200, "Not really google");
 
-            let response = fetch("http://google.com", <{}> {
-                agent: new HttpProxyAgent(server.url)
+            let response = undiciFetch("http://google.com", {
+                dispatcher: new ProxyAgent(server.url)
             });
 
             await expect(response).to.have.responseText("Not really google");

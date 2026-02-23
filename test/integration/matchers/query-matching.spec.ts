@@ -1,5 +1,5 @@
 import { getLocal } from "../../..";
-import { expect, fetch } from "../../test-utils";
+import { expect, isNode, httpGet } from "../../test-utils";
 
 describe("Request query matching", function () {
     let server = getLocal();
@@ -109,7 +109,12 @@ describe("Request query matching", function () {
         it("should be able to explicitly match an empty query", async () => {
             await server.forGet('/').withExactQuery('?').thenReply(200);
 
-            let result = await fetch(server.urlFor('/?'));
+            // Native fetch normalizes '/?' to '/', stripping the empty query.
+            // Use httpGet to preserve the exact URL on the wire.
+            let result = await (isNode
+                ? httpGet(server.urlFor('/?'))
+                : fetch(server.urlFor('/?'))
+            );
 
             await expect(result).to.have.status(200);
         });

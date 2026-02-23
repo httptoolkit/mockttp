@@ -1,5 +1,5 @@
 import { getLocal } from "../..";
-import { expect, fetch, URLSearchParams, Headers, isNode } from "../test-utils";
+import { expect, URLSearchParams, isNode } from "../test-utils";
 import * as _ from "lodash";
 import { Readable } from 'stream';
 

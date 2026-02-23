@@ -1,5 +1,5 @@
 import { getLocal } from "../..";
-import { expect, fetch } from "../test-utils";
+import { expect } from "../test-utils";
 import * as _ from "lodash";
 
 describe("HTTP mock rule completion", function () {

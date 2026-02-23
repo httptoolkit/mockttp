@@ -1,7 +1,7 @@
 import * as _ from "lodash";
 
 import { getLocal } from "../../..";
-import { expect, fetch } from "../../test-utils";
+import { expect } from "../../test-utils";
 
 describe("Fallback rules", () => {
     const server = getLocal();

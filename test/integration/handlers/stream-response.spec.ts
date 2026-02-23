@@ -1,9 +1,9 @@
 import { Buffer } from 'buffer';
 import { PassThrough, Readable } from 'stream';
-import { delay, getDeferred, ErrorLike } from '@httptoolkit/util';
+import { delay, getDeferred } from '@httptoolkit/util';
 
 import { getLocal } from "../../..";
-import { expect, fetch, isNode, nodeOnly } from "../../test-utils";
+import { expect, isNode, nodeOnly } from "../../test-utils";
 
 describe("Streaming response handler", function () {
 
@@ -86,15 +86,22 @@ describe("Streaming response handler", function () {
 
             expect(response.status).to.equal(200);
 
-            const clientResponseStream = response.body as any as Readable;
+            // Native fetch returns a Web ReadableStream, convert to Node Readable.
+            // We cast fromWeb to accept the global ReadableStream type directly,
+            // avoiding an import from 'stream/web' which triggers ESM resolution in ts-node.
+            const readableFromWeb = Readable.fromWeb as (stream: ReadableStream) => Readable;
+            const clientResponseStream = readableFromWeb(response.body!);
+
+            // Wait for the first chunk to be available in the buffer
+            await new Promise<void>(resolve => clientResponseStream.once('readable', resolve));
             expect(clientResponseStream.read().toString()).to.equal('Hello\n');
 
             const errorPromise = getDeferred<Error>();
             clientResponseStream.on('error', (err) => errorPromise.resolve(err));
 
             serverResponseStream.destroy(new Error("Stream error"));
-            const error: ErrorLike = await errorPromise;
-            expect(error.code).to.equal('ERR_STREAM_PREMATURE_CLOSE');
+            const error = await errorPromise;
+            expect(error.message).to.equal('terminated');
         });
     });
 

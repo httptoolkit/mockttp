@@ -7,7 +7,6 @@ import {
     DestroyableServer,
     makeDestroyable,
     expect,
-    fetch,
     ignoreNetworkError,
     nodeOnly
 } from "./test-utils";

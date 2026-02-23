@@ -2,7 +2,7 @@ import * as _ from "lodash";
 import * as WebSocket from 'isomorphic-ws';
 
 import { getLocal, matchers, requestSteps, webSocketSteps } from "../..";
-import { expect, fetch } from "../test-utils";
+import { expect } from "../test-utils";
 
 describe("Mockttp rule building", function () {
     let server = getLocal();

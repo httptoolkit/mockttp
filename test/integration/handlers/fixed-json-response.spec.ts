@@ -1,6 +1,6 @@
 import * as http from 'http';
 import { getLocal } from "../../..";
-import { expect, fetch, isNode, nodeOnly } from "../../test-utils";
+import { expect, isNode, nodeOnly } from "../../test-utils";
 
 describe("Fixed JSON response handler", function () {
 

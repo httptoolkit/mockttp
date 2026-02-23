@@ -3,11 +3,8 @@ import { Buffer } from 'buffer';
 import { getLocal } from "../..";
 import {
     expect,
-    File,
-    fetch as fetchPolyfill
+    File
 } from "../test-utils";
-
-const fetch = globalThis.fetch ?? fetchPolyfill;
 
 describe("Body getXFormData methods", () => {
     let server = getLocal();

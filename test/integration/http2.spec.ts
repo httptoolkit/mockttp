@@ -16,7 +16,6 @@ import {
     getHttp2Body,
     makeDestroyable,
     cleanup,
-    fetch,
     BROKEN_H2_OVER_H2_TUNNELLING,
     getDeferred,
     nodeSatisfies

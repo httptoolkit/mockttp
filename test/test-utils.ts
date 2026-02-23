@@ -12,7 +12,6 @@ import * as http2 from 'http2';
 
 import * as _ from 'lodash';
 import * as http2Wrapper from 'http2-wrapper';
-import * as CrossFetch from "cross-fetch";
 import {
     FormData as FormDataPolyfill,
     File as FilePolyfill
@@ -48,6 +47,17 @@ export {
     Deferred
 };
 
+export async function pollUntil(
+    condition: () => boolean,
+    { minDelay = 10, timeout = 500 } = {}
+) {
+    const deadline = Date.now() + timeout;
+    await delay(minDelay);
+    while (!condition() && Date.now() < deadline) {
+        await delay(5);
+    }
+}
+
 if (isNode) {
     // Run a target websocket server in the background. In browsers, this is
     // launched by from the Karma script. Eventually this should be replaced
@@ -64,24 +74,6 @@ process.on('unhandledRejection', (reason, promise) => {
 chai.use(chaiAsPromised);
 chai.use(chaiFetch);
 
-function getGlobalFetch() {
-    return {
-        fetch: globalThis.fetch.bind(globalThis),
-        Headers: globalThis.Headers,
-        Request: globalThis.Request,
-        Response: globalThis.Response
-    };
-}
-
-let fetchImplementation = isNode ? CrossFetch : getGlobalFetch();
-
-export const fetch = fetchImplementation.fetch;
-
-// All a bit convoluted, so we don't shadow the global vars,
-// and we can still use those to define these in the browser
-const headersImplementation = fetchImplementation.Headers;
-export { headersImplementation as Headers };
-
 export const FormData = globalThis.FormData ?? FormDataPolyfill;
 export const File = globalThis.File ?? FilePolyfill;
 
@@ -97,6 +89,42 @@ export function headersToObject(fetchHeaders: Headers) {
 
 export const URLSearchParams: typeof window.URLSearchParams = (isNode || !window.URLSearchParams) ?
     require('url').URLSearchParams : window.URLSearchParams;
+
+// Node's native fetch silently ignores the `agent` option so proxy-based tests
+// can't use it. This re-exports undici's fetch + ProxyAgent which properly support
+// the `dispatcher` option for routing requests through a proxy.
+export { fetch as undiciFetch, ProxyAgent } from 'undici';
+
+// Node's native fetch (and undici's) normalize URLs via the URL constructor, which
+// strips a bare trailing `?`. This helper uses http.request with an explicit path
+// to preserve the exact URL on the wire. This is fixed in undici by
+// https://github.com/nodejs/undici/pull/4837 — once that lands in Node, this
+// helper can be dropped in favour of plain fetch.
+export function httpGet(url: string): Promise<Response> {
+    return new Promise((resolve, reject) => {
+        const parsedUrl = new globalThis.URL(url);
+
+        // Extract the raw path+query from the original URL string to avoid
+        // normalization (e.g. the URL class strips a trailing `?` from `/?`).
+        const authorityEnd = url.indexOf('/', url.indexOf('//') + 2);
+        const rawPath = authorityEnd >= 0 ? url.substring(authorityEnd) : '/';
+
+        http.get({
+            hostname: parsedUrl.hostname,
+            port: parsedUrl.port,
+            path: rawPath,
+        }, (res) => {
+            const chunks: Buffer[] = [];
+            res.on('data', (chunk: Buffer) => chunks.push(chunk));
+            res.on('end', () => {
+                resolve(new Response(Buffer.concat(chunks), {
+                    status: res.statusCode!,
+                    statusText: res.statusMessage,
+                }));
+            });
+        }).on('error', reject);
+    });
+}
 
 export const expect = chai.expect;
 

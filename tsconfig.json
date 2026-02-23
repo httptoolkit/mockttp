@@ -8,7 +8,8 @@
         "declarationMap": true,
         "strict": true,
         "lib": [
-            "ES2022"
+            "ES2022",
+            "dom"
         ],
         "paths": {
             "https-proxy-agent": ["./custom-typings/proxy-agent-modules.d.ts"],

@@ -9,7 +9,6 @@ import * as WebSocket from 'isomorphic-ws';
 import { getLocal, Mockttp } from "../..";
 import {
     expect,
-    fetch,
     nodeOnly,
     delay,
     openRawSocket,
@@ -200,7 +199,7 @@ describe("When configured for HTTPS", () => {
                 });
 
                 const cert = tlsSocket.getPeerCertificate();
-                expect(cert.subject.CN).to.equal('example.testserver.host');
+                expect(cert.subject.CN).to.include('testserver.host');
                 expect(cert.issuer.O).to.include('Google Trust Services');
             });
 

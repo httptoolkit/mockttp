@@ -4,7 +4,7 @@ import { Readable } from 'stream';
 import { FormDataEncoder, FormDataLike } from "form-data-encoder"
 
 import { getLocal } from "../../..";
-import { expect, fetch, Headers, FormData, File, isNode } from "../../test-utils";
+import { expect, FormData, File, isNode } from "../../test-utils";
 
 const fetchWithMultipartForm = (url: string, form: FormData) => {
     const formEncoder = new FormDataEncoder(form as any as FormDataLike);
@@ -14,13 +14,14 @@ const fetchWithMultipartForm = (url: string, form: FormData) => {
         ...(isNode
             ? {
                 headers: formEncoder.headers,
-                body: Readable.from(formEncoder) as any
+                body: Readable.from(formEncoder) as any,
+                duplex: 'half'
             }
             : {
                 body: form
             }
         )
-    });
+    } as RequestInit);
 }
 
 describe("Multipart form data matching", function () {

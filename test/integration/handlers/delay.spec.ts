@@ -3,7 +3,6 @@ import * as WebSocket from 'ws';
 import { getLocal } from "../../..";
 import {
     expect,
-    fetch,
     nodeOnly
 } from "../../test-utils";
 

@@ -1,9 +1,8 @@
 import { getLocal } from "../..";
 import {
     expect,
-    fetch,
+    isNode,
     URLSearchParams,
-    Headers,
     delay
 } from "../test-utils";
 
@@ -42,8 +41,8 @@ describe("HTTP request spying", function () {
 
             expect(seenRequests[0].headers['host']).to.equal(`localhost:${server.port}`); // Parser headers are lowercase
 
-            const hostHeader = seenRequests[0].rawHeaders?.find(([key]) => key === 'Host');
-            expect(hostHeader).to.deep.equal(['Host', `localhost:${server.port}`]); // Raw headers are not
+            const hostHeader = seenRequests[0].rawHeaders?.find(([key]) => key.toLowerCase() === 'host');
+            expect(hostHeader).to.deep.equal([isNode ? 'host' : 'Host', `localhost:${server.port}`]); // Raw header casing depends on the client
         });
 
         it("should let you spy on the bodies of requests that happened", async () => {

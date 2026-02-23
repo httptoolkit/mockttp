@@ -1,7 +1,7 @@
 import * as WebSocket from 'isomorphic-ws';
 
 import { getLocal } from "../../..";
-import { expect, fetch, nodeOnly } from "../../test-utils";
+import { expect, nodeOnly } from "../../test-utils";
 
 describe('Protocol matching', () => {
     let server = getLocal({

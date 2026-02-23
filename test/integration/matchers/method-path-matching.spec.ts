@@ -1,7 +1,7 @@
 import { stripIndent } from "common-tags";
 
 import { getLocal } from "../../..";
-import { expect, fetch, browserOnly } from "../../test-utils";
+import { expect, browserOnly } from "../../test-utils";
 
 describe("Method & path request matching", function () {
     let server = getLocal();

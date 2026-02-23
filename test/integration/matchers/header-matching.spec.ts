@@ -1,5 +1,5 @@
 import { getLocal } from "../../..";
-import { expect, fetch, Headers } from "../../test-utils";
+import { expect } from "../../test-utils";
 
 describe("Header matching", function () {
     let server = getLocal();

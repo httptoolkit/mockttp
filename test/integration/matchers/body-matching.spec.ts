@@ -2,7 +2,7 @@ import * as zlib from 'zlib';
 import { PassThrough } from 'stream';
 
 import { getLocal } from "../../..";
-import { expect, fetch, Headers, delay, nodeOnly } from "../../test-utils";
+import { expect, delay, nodeOnly } from "../../test-utils";
 
 describe("Body matching", function () {
     let server = getLocal();
@@ -237,8 +237,9 @@ describe("Body matching", function () {
 
                 const neverEndingFetch = fetch(server.url, {
                     method: 'PUT', // Matches the PUT rule, not the POST
-                    body: neverEndingStream as any
-                });
+                    body: neverEndingStream as any,
+                    duplex: 'half'
+                } as RequestInit);
 
                 const fetchResult = await neverEndingFetch;
 
@@ -255,8 +256,9 @@ describe("Body matching", function () {
 
                 const neverEndingFetch = fetch(server.urlFor('/specific-endpoint'), {
                     method: 'POST', // Matches the PUT rule, not the POST
-                    body: neverEndingStream as any
-                });
+                    body: neverEndingStream as any,
+                    duplex: 'half'
+                } as RequestInit);
 
                 const fetchResult = await neverEndingFetch;
 
@@ -273,8 +275,9 @@ describe("Body matching", function () {
 
                 const neverEndingFetch = fetch(server.url, {
                     method: 'POST',
-                    body: neverEndingStream as any
-                });
+                    body: neverEndingStream as any,
+                    duplex: 'half'
+                } as RequestInit);
 
                 const result = await Promise.race([
                     neverEndingFetch,

@@ -4,7 +4,6 @@ import * as http from 'http';
 import { getLocal } from "../../..";
 import {
     expect,
-    fetch,
     isNode,
     isWeb,
     headersToObject,
@@ -167,7 +166,7 @@ describe("Callback response handlers", function () {
 
         expect(response).to.be.instanceOf(Error);
         if (isNode) {
-            expect((response as any).code).to.equal('ECONNRESET');
+            expect((response as any).cause?.code).to.equal('UND_ERR_SOCKET');
         } else {
             expect((response as Error).message).to.include('Failed to fetch');
         }

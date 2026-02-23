@@ -1,11 +1,12 @@
 import * as _ from 'lodash';
-import HttpsProxyAgent = require('https-proxy-agent');
 
 import { getLocal, CompletedResponse, ClientError } from "../../..";
 import {
     expect,
-    fetch,
+    isNode,
     nodeOnly,
+    undiciFetch,
+    ProxyAgent,
     getDeferred,
     delay,
     sendRawRequest,
@@ -50,13 +51,13 @@ describe("Client error subscription", () => {
             });
 
             const rawHeaders = clientError.request.rawHeaders;
-            expect(rawHeaders.find(([key]) => key === 'Host')).to.deep.equal(
-                ['Host', `localhost:${server.port}`] // Uppercase name!
+            expect(rawHeaders.find(([key]) => key.toLowerCase() === 'host')).to.deep.equal(
+                [isNode ? 'host' : 'Host', `localhost:${server.port}`]
             );
 
             // We match the long-value slightly flexibly - this can be flaky in browser tests due to flaky send
             // order (I think?) and so sometimes it's cut off.
-            expect(rawHeaders.find(([key]) => key === 'long-value')![1]).to.match(/XXXXX+/);
+            expect(rawHeaders.find(([key]) => key.toLowerCase() === 'long-value')![1]).to.match(/XXXXX+/);
 
             expect(clientError.request.remoteIpAddress).to.be.oneOf([
                 '::ffff:127.0.0.1', // IPv4 localhost
@@ -348,16 +349,12 @@ describe("Client error subscription", () => {
                     await server.on('client-error', (e) => errorPromise.resolve(e));
                     await server.forGet("http://example.com/endpoint").thenReply(200, "Mock data");
 
-                    const response = await fetch("http://example.com/endpoint", {
-                        agent: new HttpsProxyAgent({
-                            protocol: 'http',
-                            host: 'localhost',
-                            port: server.port
-                        }),
+                    const response = await undiciFetch("http://example.com/endpoint", {
+                        dispatcher: new ProxyAgent(`http://localhost:${server.port}`),
                         headers: {
                             "long-value": TOO_LONG_HEADER_VALUE
                         }
-                    } as any);
+                    });
 
                     expect(response.status).to.equal(431);
 
@@ -382,19 +379,15 @@ describe("Client error subscription", () => {
                     await server.on('client-error', (e) => errorPromise.resolve(e));
                     await server.forGet("https://example.com/endpoint").thenReply(200, "Mock data");
 
-                    const response = await fetch("https://example.com/endpoint", {
-                        agent: new HttpsProxyAgent({
-                            protocol: 'https',
-                            host: 'localhost',
-                            port: server.port
-                        }),
+                    const response = await undiciFetch("https://example.com/endpoint", {
+                        dispatcher: new ProxyAgent(server.url),
                         headers: {
                             // Order here matters - if the host header appears after long-value, then we miss it
                             // in the packet buffer, and request.url is relative, not absolute
                             'host': 'example.com',
                             "long-value": TOO_LONG_HEADER_VALUE
                         }
-                    } as any);
+                    });
 
                     expect(response.status).to.equal(431);
 

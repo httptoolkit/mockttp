@@ -3,7 +3,6 @@ import * as http from 'http';
 import { getLocal } from "../../..";
 import {
     expect,
-    fetch,
     isNode,
     nodeOnly,
     delay,
@@ -28,7 +27,7 @@ describe("Broken response handlers", function () {
             let result = await fetch(server.urlFor('/mocked-endpoint')).catch(e => e);
 
             expect(result).to.be.instanceof(Error);
-            expect(result.message).to.contain(isNode ? 'socket hang up' : 'Failed to fetch');
+            expect(result.message).to.contain(isNode ? 'fetch failed' : 'Failed to fetch');
         });
 
         it("should allow forcibly resetting the connection", async function () {
@@ -37,7 +36,7 @@ describe("Broken response handlers", function () {
             let result = await fetch(server.urlFor('/mocked-endpoint')).catch(e => e);
 
             expect(result).to.be.instanceof(Error);
-            expect(result.message).to.contain(isNode ? 'read ECONNRESET' : 'Failed to fetch');
+            expect(result.message).to.contain(isNode ? 'fetch failed' : 'Failed to fetch');
         });
 
 

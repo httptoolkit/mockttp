@@ -1,5 +1,5 @@
 import { getLocal } from "../../..";
-import { expect, fetch, Headers, URLSearchParams } from "../../test-utils";
+import { expect, URLSearchParams } from "../../test-utils";
 
 describe("Form data matching", function () {
     let server = getLocal();

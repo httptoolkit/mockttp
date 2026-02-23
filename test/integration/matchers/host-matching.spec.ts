@@ -1,7 +1,5 @@
-import HttpProxyAgent = require("http-proxy-agent");
-
 import { getLocal } from "../../..";
-import { expect, fetch, nodeOnly } from "../../test-utils";
+import { expect, nodeOnly, undiciFetch, ProxyAgent } from "../../test-utils";
 
 describe("Hostname matching", function () {
     let server = getLocal();
@@ -62,7 +60,7 @@ describe("Hostname matching", function () {
                     .thenReply(200, "matched");
 
                 await expect(
-                    fetch(`http://localhost`, { agent: new HttpProxyAgent(server.url) } as any)
+                    undiciFetch(`http://localhost`, { dispatcher: new ProxyAgent(server.url) })
                 ).to.have.responseText("matched");
             });
 
@@ -72,7 +70,7 @@ describe("Hostname matching", function () {
                     .thenReply(200, "matched");
 
                 await expect(
-                    fetch(`http://localhost:80`, { agent: new HttpProxyAgent(server.url) } as any)
+                    undiciFetch(`http://localhost:80`, { dispatcher: new ProxyAgent(server.url) })
                 ).to.have.responseText("matched");
             });
 
@@ -82,7 +80,7 @@ describe("Hostname matching", function () {
                     .thenReply(200, "matched");
 
                 await expect(
-                    fetch(`http://localhost`, { agent: new HttpProxyAgent(server.url) } as any)
+                    undiciFetch(`http://localhost`, { dispatcher: new ProxyAgent(server.url) })
                 ).to.have.responseText("matched");
             });
 
@@ -92,7 +90,7 @@ describe("Hostname matching", function () {
                     .thenReply(200, "matched");
 
                 await expect(
-                    fetch(`http://localhost:80`, { agent: new HttpProxyAgent(server.url) } as any)
+                    undiciFetch(`http://localhost:80`, { dispatcher: new ProxyAgent(server.url) })
                 ).to.have.responseText("matched");
             });
         });
@@ -152,7 +150,7 @@ describe("Hostname matching", function () {
                     .thenReply(200, "matched");
 
                 await expect(
-                    fetch(`http://localhost:80`, { agent: new HttpProxyAgent(server.url) } as any)
+                    undiciFetch(`http://localhost:80`, { dispatcher: new ProxyAgent(server.url) })
                 ).to.have.responseText("matched");
             });
 
@@ -162,7 +160,7 @@ describe("Hostname matching", function () {
                     .thenReply(200, "matched");
 
                 await expect(
-                    fetch(`http://localhost`, { agent: new HttpProxyAgent(server.url) } as any)
+                    undiciFetch(`http://localhost`, { dispatcher: new ProxyAgent(server.url) })
                 ).to.have.responseText("matched");
             });
         });

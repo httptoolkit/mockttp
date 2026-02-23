@@ -10,7 +10,6 @@ import {
 import {
     delay,
     expect,
-    fetch,
     isNode,
     nodeOnly
 } from "../../test-utils";
@@ -68,7 +67,7 @@ describe("Rule event subscriptions", () => {
         });
         expect(requestHeadEvent.rawHeaders).to.deep.include([
             // This reports the *modified* header, not the original:
-            'Host', `localhost:${remoteServer.port}`
+            isNode ? 'host' : 'Host', `localhost:${remoteServer.port}`
         ]);
 
         const requestBodyEvent = ruleEvents[1].eventData;
@@ -146,7 +145,7 @@ describe("Rule event subscriptions", () => {
 
         const response = await fetch(server.url).catch((e) => e);
         expect(response).to.be.instanceOf(Error);
-        expect(response).to.match(isNode ? /socket hang up/ : /Failed to fetch/);
+        expect(response).to.match(isNode ? /fetch failed/ : /Failed to fetch/);
 
         await delay(100);
 
@@ -206,7 +205,7 @@ describe("Rule event subscriptions", () => {
 
         const response = await fetch(server.url).catch((e) => e);
         expect(response).to.be.instanceOf(Error);
-        expect(response).to.match(isNode ? /socket hang up/ : /Failed to fetch/);
+        expect(response).to.match(isNode ? /fetch failed/ : /Failed to fetch/);
 
         await delay(100);
 

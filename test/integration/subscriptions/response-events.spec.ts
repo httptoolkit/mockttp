@@ -14,12 +14,12 @@ import {
 } from "../../..";
 import {
     expect,
-    fetch,
     nodeOnly,
     isNode,
     getDeferred,
     delay,
-    makeAbortableRequest
+    makeAbortableRequest,
+    pollUntil
 } from "../../test-utils";
 
 describe("Response initiated subscriptions", () => {
@@ -646,7 +646,8 @@ describe("Response body chunk subscriptions", () => {
         await server.forGet('/mocked-endpoint').thenReply(200, "A small non-streamed body");
 
         await fetch(server.urlFor("/mocked-endpoint"));
-        await delay(5); // Delay for events to be received
+        await pollUntil(() => dataEvents.length >= 1);
+        await delay(5);
 
         expect(dataEvents).to.have.length(1);
         expect(dataEvents[0].content.toString()).to.equal(
@@ -664,7 +665,8 @@ describe("Response body chunk subscriptions", () => {
         await server.forGet('/mocked-endpoint').thenReply(204);
 
         fetch(server.urlFor("/mocked-endpoint"));
-        await delay(5); // Delay for events to be received
+        await pollUntil(() => dataEvents.length >= 1);
+        await delay(5);
 
         expect(dataEvents).to.have.length(1);
         expect(dataEvents[0].content.byteLength).to.equal(0);
@@ -691,7 +693,8 @@ describe("Response body chunk subscriptions", () => {
             expect(dataEvents).to.deep.equal([]);
 
             stream.write('hello');
-            await delay(25);
+            await pollUntil(() => dataEvents.length >= 1);
+            await delay(5);
             expect(dataEvents).to.have.length(1);
             expect(dataEvents[0].content).to.deep.equal(Buffer.from('hello'));
             expect(dataEvents[0].isEnded).to.equal(false);
@@ -699,7 +702,8 @@ describe("Response body chunk subscriptions", () => {
             expect(dataEvents[0].id).to.be.a('string');
 
             stream.write('world');
-            await delay(25);
+            await pollUntil(() => dataEvents.length >= 2);
+            await delay(5);
             expect(dataEvents).to.have.length(2);
             expect(dataEvents[1].content).to.deep.equal(Buffer.from('world'));
             expect(dataEvents[1].isEnded).to.equal(false);
@@ -707,7 +711,8 @@ describe("Response body chunk subscriptions", () => {
             expect(dataEvents[1].id).to.equal(dataEvents[0].id);
 
             stream.end();
-            await delay(25);
+            await pollUntil(() => dataEvents.length >= 3);
+            await delay(5);
             expect(dataEvents).to.have.length(3);
             expect(dataEvents[2].content.byteLength).to.equal(0);
             expect(dataEvents[2].isEnded).to.equal(true);
@@ -730,7 +735,8 @@ describe("Response body chunk subscriptions", () => {
             stream.write('hello');
             await delay(5);
             stream.write('world');
-            await delay(25);
+            await pollUntil(() => dataEvents.length >= 1);
+            await delay(5);
 
             expect(dataEvents).to.have.length(1);
             expect(dataEvents[0].content).to.deep.equal(Buffer.from('helloworld'));
@@ -739,7 +745,8 @@ describe("Response body chunk subscriptions", () => {
             expect(dataEvents[0].id).to.be.a('string');
 
             stream.end();
-            await delay(25);
+            await pollUntil(() => dataEvents.length >= 2);
+            await delay(5);
             expect(dataEvents).to.have.length(2);
             expect(dataEvents[1].content.byteLength).to.equal(0);
             expect(dataEvents[1].isEnded).to.equal(true);
@@ -763,6 +770,7 @@ describe("Response body chunk subscriptions", () => {
             await delay(5);
             expect(dataEvents).to.have.length(0);
             stream.end('world');
+            await pollUntil(() => dataEvents.length >= 1);
             await delay(5);
 
             expect(dataEvents).to.have.length(1);

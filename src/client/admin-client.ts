@@ -3,17 +3,15 @@ import { EventEmitter } from 'events';
 import { Duplex } from 'stream';
 import DuplexPair = require('native-duplexpair');
 import { TypedError } from 'typed-error';
-import * as CrossFetch from 'cross-fetch';
 import * as WebSocket from 'isomorphic-ws';
 import connectWebSocketStream = require('@httptoolkit/websocket-stream');
 import { SubscriptionClient } from '@httptoolkit/subscriptions-transport-ws';
-import { MaybePromise, getDeferred } from '@httptoolkit/util';
+import { ErrorLike, MaybePromise, getDeferred } from '@httptoolkit/util';
 import { print } from 'graphql';
 
 import { DEFAULT_ADMIN_SERVER_PORT } from "../types";
 
 import { RequireProps } from '../util/type-utils';
-import { isNode } from '../util/util';
 import { delay, isErrorLike } from '@httptoolkit/util';
 
 import { introspectionQuery } from './schema-introspection';
@@ -21,10 +19,6 @@ import { MockttpPluginOptions } from '../admin/mockttp-admin-plugin';
 import { AdminPlugin, PluginClientResponsesMap, PluginStartParamsMap } from '../admin/admin-plugin-types';
 import { SchemaIntrospector } from './schema-introspection';
 import { AdminQuery, getSingleSelectedFieldName } from './admin-query';
-
-const { fetch, Headers } = isNode || typeof globalThis.fetch === 'undefined'
-    ? CrossFetch
-    : globalThis;
 
 export class ConnectionError extends TypedError { }
 
@@ -135,9 +129,14 @@ async function requestFromAdminServer<T>(serverUrl: string, path: string, option
     try {
         response = await fetch(url, options);
     } catch (e) {
-        if (isErrorLike(e) && e.code === 'ECONNREFUSED') {
+        if (isErrorLike(e) && (
+            e.code === 'ECONNREFUSED' ||
+            (e.cause as ErrorLike)?.code === 'ECONNREFUSED')
+        ) {
             throw new ConnectionError(`Failed to connect to admin server at ${serverUrl}`);
-        } else throw e;
+        } else {
+            throw e;
+        }
     }
 
     if (response.status >= 400) {
@@ -160,7 +159,7 @@ async function requestFromAdminServer<T>(serverUrl: string, path: string, option
             );
         }
     } else {
-        return response.json();
+        return response.json() as Promise<T>;
     }
 }
 
@@ -397,7 +396,7 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
                 body: JSON.stringify({ query, variables })
             }));
 
-            const { data, errors }: { data?: T, errors?: Error[] } = await response.json();
+            const { data, errors } = await response.json() as { data?: T, errors?: Error[] };
 
             if (errors && errors.length) {
                 throw new GraphQLError(response, errors);
@@ -411,7 +410,7 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
 
             let graphQLErrors: Error[] | undefined = undefined;
             try {
-                graphQLErrors = (await e.response.json()).errors;
+                graphQLErrors = (await e.response.json() as { errors?: Error[] }).errors;
             } catch (e2) {}
 
             if (graphQLErrors) {

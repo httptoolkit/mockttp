@@ -1,5 +1,4 @@
 import * as _ from 'lodash';
-import HttpsProxyAgent = require('https-proxy-agent');
 
 import {
     getLocal,
@@ -8,9 +7,10 @@ import {
 } from "../../..";
 import {
     expect,
-    fetch,
     nodeOnly,
     isNode,
+    undiciFetch,
+    ProxyAgent,
     getDeferred,
     delay,
     openRawSocket,
@@ -82,7 +82,7 @@ describe("TLS error subscriptions", () => {
 
         await expect(
             fetch(badServer.urlFor("/"))
-        ).to.be.rejectedWith(isNode ? /certificate/ : 'Failed to fetch');
+        ).to.be.rejectedWith(isNode ? /fetch failed/ : 'Failed to fetch');
 
         const tlsError = await seenTlsErrorPromise;
 
@@ -117,15 +117,11 @@ describe("TLS error subscriptions", () => {
             await badServer.forAnyRequest().thenPassThrough();
 
             await expect(
-                fetch(goodServer.urlFor("/"), {
+                undiciFetch(goodServer.urlFor("/"), {
                     // Ignores proxy cert issues by using the proxy via plain HTTP
-                    agent: new HttpsProxyAgent({
-                        protocol: 'http',
-                        host: 'localhost',
-                        port: badServer.port
-                    })
-                } as any)
-            ).to.be.rejectedWith(/certificate/);
+                    dispatcher: new ProxyAgent(`http://localhost:${badServer.port}`)
+                })
+            ).to.be.rejectedWith(/fetch failed/);
 
             const tlsError = await seenTlsErrorPromise;
 

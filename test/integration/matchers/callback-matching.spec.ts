@@ -1,5 +1,5 @@
 import { CompletedRequest, getLocal } from "../../..";
-import { expect, fetch } from "../../test-utils";
+import { expect } from "../../test-utils";
 
 describe("Request callback matching", function () {
     let server = getLocal();

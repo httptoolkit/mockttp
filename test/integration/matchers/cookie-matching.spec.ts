@@ -1,6 +1,6 @@
 import * as _ from 'lodash';
 import { getLocal } from "../../..";
-import { expect, fetch, isNode } from "../../test-utils";
+import { expect, isNode } from "../../test-utils";
 import * as request from 'request-promise-native';
 
 const requestWithCookies = async (url: string, ...cookies: string[]) => {

@@ -14,12 +14,12 @@ import {
 } from "../../..";
 import {
     expect,
-    fetch,
     nodeOnly,
     getDeferred,
     sendRawRequest,
     defaultNodeConnectionHeader,
-    delay
+    delay,
+    pollUntil
 } from "../../test-utils";
 
 // Headers we ignore when checking the received values, because they can vary depending
@@ -451,7 +451,8 @@ describe("Request body data subscriptions", () => {
             method: 'POST',
             body: 'small POST body'
         });
-        await delay(5); // Delay for events to be received
+        await pollUntil(() => dataEvents.length >= 1);
+        await delay(5);
 
         expect(dataEvents).to.have.length(1);
         expect(dataEvents[0].content.toString()).to.equal('small POST body');
@@ -470,7 +471,8 @@ describe("Request body data subscriptions", () => {
             method: 'POST'
             // No body
         });
-        await delay(5); // Delay for events to be received
+        await pollUntil(() => dataEvents.length >= 1);
+        await delay(5);
 
         expect(dataEvents).to.have.length(1);
         expect(dataEvents[0].content.byteLength).to.equal(0);
@@ -499,7 +501,8 @@ describe("Request body data subscriptions", () => {
             expect(dataEvents.length).to.equal(0);
 
             req.write('hello');
-            await delay(25);
+            await pollUntil(() => dataEvents.length >= 1);
+            await delay(5);
             expect(dataEvents.length).to.equal(1);
             expect(dataEvents[0].content.toString()).to.equal('hello');
             expect(dataEvents[0].isEnded).to.equal(false);
@@ -507,7 +510,8 @@ describe("Request body data subscriptions", () => {
             expect(dataEvents[0].id).to.be.a('string');
 
             req.write('world');
-            await delay(25);
+            await pollUntil(() => dataEvents.length >= 2);
+            await delay(5);
             expect(dataEvents.length).to.equal(2);
             expect(dataEvents[1].content.toString()).to.equal('world');
             expect(dataEvents[1].isEnded).to.equal(false);
@@ -515,7 +519,8 @@ describe("Request body data subscriptions", () => {
             expect(dataEvents[1].id).to.be.a('string');
 
             req.end();
-            await delay(25);
+            await pollUntil(() => dataEvents.length >= 3);
+            await delay(5);
             expect(dataEvents.length).to.equal(3);
             expect(dataEvents[2].content.byteLength).to.equal(0);
             expect(dataEvents[2].isEnded).to.equal(true);
@@ -537,7 +542,8 @@ describe("Request body data subscriptions", () => {
             req.write('hello');
             await delay(5);
             req.write('world');
-            await delay(25);
+            await pollUntil(() => dataEvents.length >= 1);
+            await delay(5);
             expect(dataEvents.length).to.equal(1);
             expect(dataEvents[0].content.toString()).to.equal('helloworld');
             expect(dataEvents[0].isEnded).to.equal(false);
@@ -545,7 +551,8 @@ describe("Request body data subscriptions", () => {
             expect(dataEvents[0].id).to.be.a('string');
 
             req.end();
-            await delay(25);
+            await pollUntil(() => dataEvents.length >= 2);
+            await delay(5);
             expect(dataEvents).to.have.length(2);
             expect(dataEvents[1].content.byteLength).to.equal(0);
             expect(dataEvents[1].isEnded).to.equal(true);
@@ -571,6 +578,7 @@ describe("Request body data subscriptions", () => {
             await delay(5);
             expect(dataEvents).to.have.length(0);
             req.end('world');
+            await pollUntil(() => dataEvents.length >= 1);
             await delay(5);
 
             expect(dataEvents).to.have.length(1);
