@@ -604,6 +604,47 @@ nodeOnly(() => {
                     await cleanup(proxiedClient, client);
                 });
 
+                it("can pass through HTTP/2 with duplicate single-value request headers", async function () {
+                    if (!nodeSatisfies(">=25.7.0")) this.skip();
+
+                    await server.forGet(`https://localhost:${targetPort}/`)
+                        .thenPassThrough({ ignoreHostHttpsErrors: ['localhost'] });
+
+                    const client = http2.connect(server.url);
+
+                    const req = client.request({
+                        ':method': 'CONNECT',
+                        ':authority': `localhost:${targetPort}`
+                    });
+
+                    // Initial response, the proxy has set up our tunnel:
+                    const responseHeaders = await getHttp2Response(req);
+                    expect(responseHeaders[':status']).to.equal(200);
+
+                    // We can now read/write to req as a raw TCP socket to our target server
+                    const proxiedClient = http2.connect(`https://localhost:${targetPort}`, {
+                         // Tunnel this request through the proxy stream
+                        createConnection: () => tls.connect({
+                            socket: req as any,
+                            ALPNProtocols: ['h2']
+                        }),
+                        // Allow the test client to send duplicate single-value headers:
+                        strictSingleValueFields: false
+                    } as any);
+
+                    const proxiedRequest = proxiedClient.request({
+                        ':path': '/',
+                        'user-agent': ['agent-1', 'agent-2'] as any
+                    });
+                    const proxiedResponse = await getHttp2Response(proxiedRequest);
+                    expect(proxiedResponse[':status']).to.equal(200);
+
+                    const responseBody = await getHttp2Body(proxiedRequest);
+                    expect(responseBody.toString('utf8')).to.equal("Real HTTP/2 response");
+
+                    await cleanup(proxiedClient, client);
+                });
+
             });
 
         });

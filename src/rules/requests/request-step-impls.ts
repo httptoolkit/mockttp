@@ -790,6 +790,12 @@ export class PassThroughStepImpl extends PassThroughStep {
                     ? rawHeadersToObjectPreservingCase(rawHeaders)
                     : flattenPairedRawHeaders(rawHeaders) as any,
                 setDefaultHeaders: shouldTryH2Upstream, // For now, we need this for unexpected H2->H1 header fallback
+                ...({
+                    // Disable strict HTTP/2 single-value field validation, extracted here
+                    // due to types. Needed for compatibility with weird servers, Node 25.7+
+                    strictSingleValueFields: false,
+                }),
+
                 lookup: getDnsLookupFunction(this.lookupOptions) as typeof dns.lookup,
                 // ^ Cast required to handle __promisify__ type hack in the official Node types
                 agent,
