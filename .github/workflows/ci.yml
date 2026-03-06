@@ -12,6 +12,7 @@ jobs:
           - node-version: 22.x
           - node-version: 'v22.20.0'
             deploys-docs: true
+          - node-version: 24.x
           - node-version: '*'
 
     steps:
