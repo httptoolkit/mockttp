@@ -378,8 +378,8 @@ class CA {
         const notBefore = new Date();
         notBefore.setDate(notBefore.getDate() - 1); // Valid from 24 hours ago
 
-        const notAfter = new Date();
-        notAfter.setFullYear(notAfter.getFullYear() + 1); // Valid for 1 year
+        // As of March 2026, public certs are limited to 200 days
+        const notAfter = new Date(notBefore.getTime() + 200 * 24 * 60 * 60 * 1000);
 
         const extensions: x509.Extension[] = [];
         extensions.push(new x509.BasicConstraintsExtension(false, undefined, true));

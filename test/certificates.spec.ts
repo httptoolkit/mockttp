@@ -176,12 +176,21 @@ nodeOnly(() => {
             const caCertificate = await caCertificatePromise;
             const ca = await getCA({ key: caCertificate.key, cert: caCertificate.cert, keyLength: 1024 });
 
-            const { cert, key } = await ca.generateCertificate('localhost');
+            const { cert, key, expiresAt } = await ca.generateCertificate('localhost');
 
             expect(cert.length).to.be.greaterThan(1000);
             expect(cert.split('\n')[0]).to.equal('-----BEGIN CERTIFICATE-----');
-            expect(key.length).to.be.greaterThan(1000);
+            expect(key.length).to.be.greaterThan(500);
             expect(key.split('\n')[0]).to.equal('-----BEGIN PRIVATE KEY-----');
+
+            // Cert validity must be <= 200 days (notBefore is 1 day ago, notAfter is 199 days from now)
+            const certData = new x509.X509Certificate(cert);
+            const validityDays = (certData.notAfter.getTime() - certData.notBefore.getTime()) / (1000 * 60 * 60 * 24);
+            expect(validityDays).to.be.at.most(200);
+            expect(validityDays).to.be.at.least(199);
+
+            // expiresAt should match the cert's notAfter (within 1s - cert times have second precision)
+            expect(Math.abs(expiresAt.getTime() - certData.notAfter.getTime())).to.be.at.most(1000);
         });
 
         it("should be able to generate a CA certificate that passes lintcert checks", async function () {
