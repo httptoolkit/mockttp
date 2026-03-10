@@ -569,6 +569,7 @@ describe("When configured for HTTPS", () => {
                     ws.addEventListener('error', reject);
                 });
                 ws.close(1000);
+                await new Promise((resolve) => ws.addEventListener('close', resolve));
 
                 const keyLogContents = await fs.readFile(keyLogFile, 'utf8');
 
