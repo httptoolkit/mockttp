@@ -157,8 +157,8 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
-    "@graphql-tools/schema": "^8.5.0",
-    "@graphql-tools/utils": "^8.8.0",
+    "@graphql-tools/schema": "^10.0.31",
+    "@graphql-tools/utils": "^11.0.0",
     "@httptoolkit/httpolyglot": "^3.0.1",
     "@httptoolkit/subscriptions-transport-ws": "^0.11.2",
     "@httptoolkit/util": "^0.1.7",
