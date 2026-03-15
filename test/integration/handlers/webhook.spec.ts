@@ -32,6 +32,7 @@ describe("Webhook handlers", () => {
             const realEndpoint = await server.forAnyRequest()
                 .addWebhook(webhookTarget.url)
                 .waitForRequestBody()
+                .delay(1)
                 .thenReply(
                     404,
                     'Not found I think?',
