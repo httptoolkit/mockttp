@@ -12,6 +12,11 @@ import { PrivateKeyInfo } from '@peculiar/asn1-pkcs8';
 
 const crypto = globalThis.crypto;
 
+// SC-081v3 final phase (2029-03-15) limits leaf cert validity to 47 days (46 recommended).
+// We use 45 days now for comfortable margin, since there's no real downside for a mock server.
+// See: https://cabforum.org/2025/04/11/ballot-sc081v3-introduce-schedule-of-reducing-validity-and-data-reuse-periods/
+const MAX_CERT_LIFESPAN_DAYS = 45;
+
 export type CAOptions = (CertDataOptions | CertPathOptions);
 
 export interface CertDataOptions extends BaseCAOptions {
@@ -378,8 +383,7 @@ class CA {
         const notBefore = new Date();
         notBefore.setDate(notBefore.getDate() - 1); // Valid from 24 hours ago
 
-        // As of March 2026, public certs are limited to 200 days
-        const notAfter = new Date(notBefore.getTime() + 200 * 24 * 60 * 60 * 1000);
+        const notAfter = new Date(notBefore.getTime() + MAX_CERT_LIFESPAN_DAYS * 24 * 60 * 60 * 1000);
 
         const extensions: x509.Extension[] = [];
         extensions.push(new x509.BasicConstraintsExtension(false, undefined, true));
