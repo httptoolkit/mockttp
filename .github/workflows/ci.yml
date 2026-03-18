@@ -16,9 +16,9 @@ jobs:
           - node-version: '*'
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node-version }}
           check-latest: true
@@ -36,7 +36,7 @@ jobs:
           POSTHOG_PERF_API_KEY: ${{ secrets.POSTHOG_PERF_API_KEY }}
 
       - name: Upload docs artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: matrix.deploys-docs == true
         with:
           name: typedoc
@@ -51,8 +51,8 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v7
         with:
           name: typedoc
           path: typedoc
@@ -82,9 +82,9 @@ jobs:
       id-token: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 'v22.20.0'
           registry-url: 'https://registry.npmjs.org'
