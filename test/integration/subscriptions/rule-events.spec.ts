@@ -359,11 +359,11 @@ describe("Rule event subscriptions", () => {
         expect(connectEvent.rawHeaders).to.deep.include(['Sec-WebSocket-Extensions', 'permessage-deflate; client_max_window_bits']);
         expect(connectEvent.rawHeaders).to.deep.include(['Connection', 'Upgrade']);
         expect(connectEvent.rawHeaders).to.deep.include(['Upgrade', 'websocket']);
-
-        // Make sure we want to see the upstream WS key, not the downstream one
-        const upstreamWsKey = (connectEvent.rawHeaders as RawHeaders)
-            .find(([key]) => key.toLowerCase() === 'sec-websocket-key')!;
-        expect(upstreamWsKey[1]).to.not.equal(downstreamWsKey);
+        // Key should be perfectly mirrored as well (only checkable in Node,
+        // where we can capture the client's key from ws internals):
+        if (isNode) {
+            expect(connectEvent.rawHeaders).to.deep.include(['Sec-WebSocket-Key', downstreamWsKey]);
+        }
     });
 
     // For now, we only support transformation of websocket URLs in forwarding, and nothing

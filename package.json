@@ -200,6 +200,6 @@
     "socks-proxy-agent": "^7.0.0",
     "typed-error": "^3.0.2",
     "urlpattern-polyfill": "^8.0.0",
-    "ws": "^8.8.0"
+    "ws": "^8.20.0"
   }
 }

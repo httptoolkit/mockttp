@@ -2,9 +2,27 @@ import { Buffer } from 'buffer';
 import * as net from 'net';
 import * as url from 'url';
 import * as http from 'http';
+import * as https from 'https';
+import { Duplex } from 'stream';
 
 import * as _ from 'lodash';
 import * as WebSocket from 'ws';
+
+// These were internal ws modules before 8.20.0, now officially exported.
+// @types/ws doesn't include types for these yet, so we type them manually:
+const { PerMessageDeflate, extension: wsExtension } = WebSocket as any as {
+    PerMessageDeflate: {
+        extensionName: string;
+        new(options?: object, isServer?: boolean, maxPayload?: number): {
+            accept(offers: object[]): void;
+            params: object | null;
+        };
+    };
+    extension: {
+        parse(header: string): Record<string, object[]>;
+        format(extensions: Record<string, object[]>): string;
+    };
+};
 
 import {
     ClientServerChannel,
@@ -30,9 +48,9 @@ import { resetOrDestroy } from '../../util/socket-util';
 import { isHttp2 } from '../../util/request-utils';
 import {
     findRawHeaders,
+    flattenPairedRawHeaders,
     objectHeadersToRaw,
-    pairFlatRawHeaders,
-    rawHeadersToObjectPreservingCase
+    pairFlatRawHeaders
 } from '../../util/header-utils';
 import { MaybePromise } from '@httptoolkit/util';
 
@@ -75,10 +93,6 @@ export interface WebSocketStepImpl extends WebSocketStepDefinition {
         | undefined // Implicitly finished - equivalent to { continue: false }
         | { continue: boolean } // Should the request continue to later steps?
     >;
-}
-
-interface InterceptedWebSocketRequest extends http.IncomingMessage {
-    upstreamWebSocketProtocol?: string | false;
 }
 
 interface InterceptedWebSocket extends WebSocket {
@@ -214,6 +228,38 @@ const rawResponse = (
     ).join('\r\n') +
     '\r\n\r\n';
 
+/**
+ * Create a client-mode WebSocket on an existing stream, bypassing the normal
+ * HTTP handshake. This is used when we've already performed the upgrade
+ * handshake ourselves via http.request. We do this with custom APIs so that
+ * we can fully control the handshake and mirror exact configurations.
+ */
+function createWebSocketFromStream(
+    socket: Duplex,
+    head: Buffer,
+    options: {
+        maxPayload?: number;
+        extensions?: Record<string, object>;
+    } = {}
+): WebSocket {
+    const maxPayload = options.maxPayload ?? 0;
+
+    const ws = new (WebSocket as any)(null, undefined, { maxPayload });
+    ws._isServer = false; // Client mode: mask frames per RFC 6455
+
+    if (options.extensions) {
+        ws._extensions = options.extensions;
+    }
+
+    ws.setSocket(socket, head, {
+        allowSynchronousEvents: true,
+        maxPayload,
+        skipUTF8Validation: true // Preserve even invalid weird stuff
+    });
+
+    return ws;
+}
+
 export { PassThroughWebSocketStepOptions };
 
 export class PassThroughWebSocketStepImpl extends PassThroughWebSocketStep {
@@ -225,14 +271,8 @@ export class PassThroughWebSocketStepImpl extends PassThroughWebSocketStep {
 
         this.wsServer = new WebSocket.Server({
             noServer: true,
-            // Mirror subprotocols back to the client:
-            handleProtocols(protocols, request: InterceptedWebSocketRequest) {
-                return request.upstreamWebSocketProtocol
-                    // If there's no upstream socket, default to mirroring the first protocol. This matches
-                    // WS's default behaviour - we could be stricter, but it'd be a breaking change.
-                    ?? protocols.values().next().value
-                    ?? false; // If there were no protocols specific and this is called for some reason
-            },
+            perMessageDeflate: true,
+            skipUTF8Validation: true // Preserve even invalid weird stuff
         });
         this.wsServer.on('connection', (ws: InterceptedWebSocket) => {
             pipeWebSocket(ws, ws.upstreamWebSocket);
@@ -331,126 +371,145 @@ export class PassThroughWebSocketStepImpl extends PassThroughWebSocketStep {
             keepAlive: false // Not a thing for websockets: they take over the whole connection
         });
 
-        // We have to flatten the headers, as WS doesn't support raw headers - it builds its own
-        // header object internally.
-        const headers = rawHeadersToObjectPreservingCase(rawHeaders);
+        // Strip any extension offers we can't handle (i.e. anything other than
+        // permessage-deflate) to prevent the upstream from accepting them and causing trouble:
+        const extensionHeaderValues = findRawHeaders(rawHeaders, 'sec-websocket-extensions');
+        if (extensionHeaderValues.length > 0) {
+            try {
+                const parsed = wsExtension.parse(
+                    extensionHeaderValues.map(([_k, v]) => v).join(', ')
+                );
 
-        // Subprotocols have to be handled explicitly. WS takes control of the headers itself,
-        // and checks the response, so we need to parse the client headers and use them manually:
-        const originalSubprotocols = findRawHeaders(rawHeaders, 'sec-websocket-protocol')
-            .flatMap(([_k, value]) => value.split(',').map(p => p.trim()));
-
-        // Drop empty subprotocols, to better handle mildly badly behaved clients
-        const filteredSubprotocols = originalSubprotocols.filter(p => !!p);
-
-        // If the subprotocols are invalid (there are some empty strings, or an entirely empty value) then
-        // WS will reject the upgrade. With this, we reset the header to the 'equivalent' valid version, to
-        // avoid unnecessarily rejecting clients who send mildly wrong headers (empty protocol values).
-        if (originalSubprotocols.length !== filteredSubprotocols.length) {
-            if (filteredSubprotocols.length) {
-                 // Note that req.headers is auto-lowercased by Node, so we can ignore case
-                req.headers['sec-websocket-protocol'] = filteredSubprotocols.join(',')
-            } else {
-                delete req.headers['sec-websocket-protocol'];
+                // This is very unlikely - approximately zero other extensions exist in any form.
+                const hasUnsupported = Object.keys(parsed)
+                    .some(name => name !== PerMessageDeflate.extensionName);
+                if (hasUnsupported) {
+                    rawHeaders = rawHeaders.filter(([key]) =>
+                        key.toLowerCase() !== 'sec-websocket-extensions'
+                    );
+                    if (parsed[PerMessageDeflate.extensionName]) {
+                        rawHeaders.push(['Sec-WebSocket-Extensions', wsExtension.format({
+                            [PerMessageDeflate.extensionName]: parsed[PerMessageDeflate.extensionName]
+                        })]);
+                    }
+                }
+            } catch {
+                // If we can't parse the client's offer, forward it as-is and let
+                // the upstream handle/reject it:
             }
         }
 
-        const upstreamWebSocket = new WebSocket(wsUrl, filteredSubprotocols, {
-            host: destination.hostname,
+        // Build the upstream request manually, mirroring the input as closely as possible:
+        const isSecure = parsedUrl.protocol === 'wss:';
+        const httpModule = isSecure ? https : http;
+
+        const upstreamReqOptions: http.RequestOptions & https.RequestOptions = {
+            hostname: destination.hostname,
             port: destination.port,
-
-            maxPayload: 0,
+            path: parsedUrl.path,
+            headers: flattenPairedRawHeaders(rawHeaders),
+            setDefaultHeaders: false, // No auto-headers - we exactly mirror the client
+            method: req.method!,
             agent,
-            lookup: getDnsLookupFunction(this.lookupOptions),
-            headers: _.omitBy(headers, (_v, headerName) =>
-                headerName.toLowerCase().startsWith('sec-websocket') ||
-                headerName.toLowerCase() === 'connection' ||
-                headerName.toLowerCase() === 'upgrade'
-            ) as { [key: string]: string }, // Simplify to string - doesn't matter though, only used by http module anyway
-
-            // TLS options:
-            ...getUpstreamTlsOptions({
+            lookup: getDnsLookupFunction(this.lookupOptions) as any,
+            ...(isSecure ? getUpstreamTlsOptions({
                 hostname: effectiveHostname,
                 port: effectivePort,
                 ignoreHostHttpsErrors: this.ignoreHostHttpsErrors,
                 clientCertificateHostMap: this.clientCertificateHostMap,
                 trustedCAs,
-            })
-        } as WebSocket.ClientOptions & { lookup: any, maxPayload: number });
+            }) : {})
+        };
 
-        const upstreamReq = (upstreamWebSocket as any as { _req: http.ClientRequest })._req;
+        const upstreamReq = httpModule.request(upstreamReqOptions);
+
+        // Track the upstream WebSocket so the incomingSocket error handler can close it:
+        let upstreamWebSocket: WebSocket | undefined;
 
         if (options.emitEventCallback) {
-            // This is slower than req.getHeaders(), but gives us (roughly) the correct casing
-            // of the headers as sent. Still not perfect (loses dupe ordering) but at least it
-            // generally matches what's actually sent on the wire.
-            const rawHeaders = upstreamReq.getRawHeaderNames().map((headerName) => {
-                const value = upstreamReq.getHeader(headerName);
-                if (!value) return [];
-                if (Array.isArray(value)) {
-                    return value.map(v => [headerName, v]);
-                } else {
-                    return [[headerName, value.toString()]];
-                }
-            }).flat() as RawHeaders;
-
             // This effectively matches the URL preprocessing logic in MockttpServer.preprocessRequest,
             // so that the resulting event matches the req.url property elsewhere.
-            const urlHost = getEffectiveHostname(upstreamReq.host, req.socket, rawHeaders);
+            const urlHost = getEffectiveHostname(effectiveHostname, req.socket, rawHeaders);
+
+            const wsProtocol = parsedUrl.protocol!.replace(/^http/, 'ws').replace(/:$/, '');
+
+            const subprotocols = findRawHeaders(rawHeaders, 'sec-websocket-protocol')
+                .flatMap(([_k, v]) => v.split(',').map(s => s.trim()).filter(s => !!s));
 
             options.emitEventCallback('passthrough-websocket-connect', {
-                method: upstreamReq.method,
-                protocol: upstreamReq.protocol
-                    .replace(/:$/, '')
-                    .replace(/^http/, 'ws'),
+                method: req.method!,
+                protocol: wsProtocol,
                 hostname: urlHost,
                 port: effectivePort.toString(),
-                path: upstreamReq.path,
-                rawHeaders: rawHeaders,
-                subprotocols: filteredSubprotocols
+                path: parsedUrl.path || '/',
+                rawHeaders,
+                subprotocols
             });
         }
 
         if (options.keyLogStream) {
             upstreamReq.on('socket', (socket) => {
-                socket.on('keylog', (line) => options.keyLogStream!.write(line));
+                socket.on('keylog', (line: Buffer) => options.keyLogStream!.write(line));
             });
         }
 
-        upstreamWebSocket.once('open', () => {
-            // Used in the subprotocol selection handler during the upgrade:
-            (req as InterceptedWebSocketRequest).upstreamWebSocketProtocol = upstreamWebSocket.protocol || false;
+        upstreamReq.on('upgrade', (upstreamRes, upstreamSocket, upgradeHead) => {
+            // Handle permessage-deflate extension negotiation. If the upstream server
+            // committed to extensions we can't set up, we must kill the connection rather
+            // than silently mishandling compressed frames:
+            const responseExtensionHeader = upstreamRes.headers['sec-websocket-extensions'];
+
+            let extensions: Record<string, object> | undefined;
+            try {
+                if (responseExtensionHeader) {
+                    const parsed = wsExtension.parse(responseExtensionHeader);
+                    if (parsed[PerMessageDeflate.extensionName]) {
+                        const pmd = new PerMessageDeflate({}, false); // false = client mode
+                        pmd.accept(parsed[PerMessageDeflate.extensionName]);
+                        extensions = { [PerMessageDeflate.extensionName]: pmd };
+                    }
+                }
+            } catch (e) {
+                console.warn('Failed to negotiate WebSocket extensions:', e);
+                upstreamSocket.destroy();
+                incomingSocket.end();
+                return;
+            }
+
+            upstreamWebSocket = createWebSocketFromStream(upstreamSocket, upgradeHead, {
+                maxPayload: 0,
+                extensions
+            });
+
+            // Set req.headers to match exactly what the upstream confirmed, so ws's
+            // handleUpgrade negotiates the same values downstream without any issues
+            // from malformed original headers:
+            if (!extensions) {
+                delete req.headers['sec-websocket-extensions'];
+            }
+
+            // For WS's sake, we simplify the subprotocol header to only the upstream-selected value so
+            // that it can just accept as is, and ignore any other badly behaved client's headers.
+            const serverProtocol = upstreamRes.headers['sec-websocket-protocol'];
+            if (serverProtocol?.trim()) {
+                req.headers['sec-websocket-protocol'] = serverProtocol;
+            } else {
+                delete req.headers['sec-websocket-protocol'];
+            }
 
             this.wsServer!.handleUpgrade(req, incomingSocket, head, (ws) => {
-                (<InterceptedWebSocket> ws).upstreamWebSocket = upstreamWebSocket;
+                (<InterceptedWebSocket> ws).upstreamWebSocket = upstreamWebSocket!;
                 incomingSocket.emit('ws-upgrade', ws);
-                this.wsServer!.emit('connection', ws); // This pipes the connections together
+                this.wsServer!.emit('connection', ws);
             });
         });
 
-        // If the upstream says no, we say no too.
-        let unexpectedResponse = false;
-        upstreamWebSocket.on('unexpected-response', (req, res) => {
-            console.log(`Unexpected websocket response from ${wsUrl}: ${res.statusCode}`);
-
-            // Clean up the downstream connection
-            mirrorRejection(incomingSocket, res, this.simulateConnectionErrors).then(() => {
-                // Clean up the upstream connection (WS would do this automatically, but doesn't if you listen to this event)
-                // See https://github.com/websockets/ws/blob/45e17acea791d865df6b255a55182e9c42e5877a/lib/websocket.js#L1050
-                // We don't match that perfectly, but this should be effectively equivalent:
-                req.destroy();
-                if (res.socket?.destroyed === false) {
-                    res.socket.destroy();
-                }
-                unexpectedResponse = true; // So that we ignore this in the error handler
-                upstreamWebSocket.terminate();
-            });
+        upstreamReq.on('response', (upstreamRes) => {
+            console.log(`Unexpected websocket response from ${wsUrl}: ${upstreamRes.statusCode}`);
+            mirrorRejection(incomingSocket, upstreamRes, this.simulateConnectionErrors);
         });
 
-        // If there's some other error, we just kill the socket:
-        upstreamWebSocket.on('error', (e) => {
-            if (unexpectedResponse) return; // Handled separately above
-
+        upstreamReq.on('error', (e) => {
             console.warn(e);
             if (this.simulateConnectionErrors) {
                 resetOrDestroy(incomingSocket);
@@ -459,7 +518,15 @@ export class PassThroughWebSocketStepImpl extends PassThroughWebSocketStep {
             }
         });
 
-        incomingSocket.on('error', () => upstreamWebSocket.close(1011)); // Internal error
+        incomingSocket.on('error', () => {
+            if (upstreamWebSocket) {
+                upstreamWebSocket.close(1011);
+            } else {
+                upstreamReq.destroy();
+            }
+        });
+
+        upstreamReq.end();
     }
 
     /**
@@ -516,7 +583,11 @@ export class EchoWebSocketStepImpl extends EchoWebSocketStep {
     private initializeWsServer() {
         if (this.wsServer) return;
 
-        this.wsServer = new WebSocket.Server({ noServer: true });
+        this.wsServer = new WebSocket.Server({
+            noServer: true,
+            perMessageDeflate: true,
+            skipUTF8Validation: true // Preserve even invalid weird stuff
+        });
         this.wsServer.on('connection', (ws: WebSocket) => {
             pipeWebSocket(ws, ws);
         });
@@ -539,7 +610,11 @@ export class ListenWebSocketStepImpl extends ListenWebSocketStep {
     private initializeWsServer() {
         if (this.wsServer) return;
 
-        this.wsServer = new WebSocket.Server({ noServer: true });
+        this.wsServer = new WebSocket.Server({
+            noServer: true,
+            perMessageDeflate: true,
+            skipUTF8Validation: true // Accept even invalid weird stuff
+        });
         this.wsServer.on('connection', (ws: WebSocket) => {
             // Accept but ignore the incoming websocket data
             ws.resume();

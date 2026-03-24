@@ -22,6 +22,15 @@ import {
 import { getCA } from '../../src/util/certificates';
 import { pairFlatRawHeaders } from '../../src/util/header-utils';
 
+async function waitForMessageThenClose(ws: WebSocket): Promise<Buffer> {
+    const result = await new Promise<Buffer>((resolve, reject) => {
+        ws.on('message', resolve);
+        ws.on('error', reject);
+    });
+    ws.close(1000);
+    return result;
+}
+
 browserOnly(() => {
     describe('Websocket requests', function() {
 
@@ -108,6 +117,22 @@ nodeOnly(() => {
             });
 
             wsServer.on('error', (e) => wsErrors.push(e));
+
+            // Handle ws client errors ourselves so we can include the error details
+            // and received headers in the response body (ws's default handler just
+            // sends a bare 400):
+            wsServer.on('wsClientError', (err, socket, req) => {
+                const body = JSON.stringify({
+                    message: err.message,
+                    rawHeaders: pairFlatRawHeaders(req.rawHeaders)
+                });
+                socket.end(
+                    `HTTP/1.1 400 Bad Request\r\n` +
+                    `Content-Type: application/json\r\n` +
+                    `\r\n` +
+                    body
+                );
+            });
         });
 
         afterEach(async () => {
@@ -149,16 +174,12 @@ nodeOnly(() => {
 
                 ws.on('open', () => ws.send('test echo'));
 
-                const response = await new Promise<Buffer>((resolve, reject) => {
-                    ws.on('message', resolve);
-                    ws.on('error', reject);
-                });
-                ws.close(1000);
+                const response = await waitForMessageThenClose(ws);
 
                 expect(response.toString()).to.equal('test echo');
             });
 
-            it("forwards the incoming requests's headers", async () => {
+            it("forwards the incoming requests's headers as-is", async () => {
                 mockServer.forAnyWebSocket().thenPassThrough();
 
                 const ws = new WebSocket(`ws://localhost:${wsPort}`, {
@@ -169,25 +190,26 @@ nodeOnly(() => {
                     }
                 });
 
-                const response = await new Promise<Buffer>((resolve, reject) => {
-                    ws.on('message', resolve);
-                    ws.on('error', reject);
+                // Capture the client's key before ws clears _req on connection:
+                let clientKey: string | undefined;
+                ws.on('upgrade', () => {
+                    clientKey = (ws as any)._req?.getHeader('sec-websocket-key');
                 });
-                ws.close(1000);
 
-                const headers = JSON.parse(response.toString()).filter(([key]: [key: string]) =>
-                    // The key is random, so we don't check it here.
-                    key !== 'Sec-WebSocket-Key'
-                );
+                const response = await waitForMessageThenClose(ws);
 
+                const headers = JSON.parse(response.toString()) as [string, string][];
+
+                // All headers (including Sec-WebSocket-Key) are forwarded as-is:
                 expect(headers).to.deep.equal([
                     [ 'echo-headers', 'true' ],
                     [ 'Funky-HEADER-casing', 'Header-Value' ],
-                    [ 'Host', `localhost:${wsPort}` ],
                     [ 'Sec-WebSocket-Version', '13' ],
+                    [ 'Sec-WebSocket-Key', clientKey ],
                     [ 'Connection', 'Upgrade' ],
                     [ 'Upgrade', 'websocket' ],
-                    [ 'Sec-WebSocket-Extensions', 'permessage-deflate; client_max_window_bits' ]
+                    [ 'Sec-WebSocket-Extensions', 'permessage-deflate; client_max_window_bits' ],
+                    [ 'Host', `localhost:${wsPort}` ]
                 ]);
             });
 
@@ -206,15 +228,10 @@ nodeOnly(() => {
                     }
                 );
 
-                const response = await new Promise<Buffer>((resolve, reject) => {
-                    ws.on('message', resolve);
-                    ws.on('error', reject);
-                });
+                const response = await waitForMessageThenClose(ws);
 
                 // The server's selected subprotocol should be mirrored back to the client:
                 expect(ws.protocol).to.equal('subprotocol-b');
-
-                ws.close(1000);
 
                 const protocolHeaders = JSON.parse(response.toString()).filter(([key]: [key: string]) =>
                     // The key is random, so we don't check it here.
@@ -227,8 +244,12 @@ nodeOnly(() => {
                 ]);
             });
 
-            it("ignores mildly invalid blank (empty string) subprotocol headers in incoming requests", async () => {
+            it("forwards invalid subprotocol headers to the upstream as-is", async () => {
+                // Malformed subprotocol headers are forwarded raw to the upstream.
+                // The upstream's ws server rejects them, and the proxy mirrors that rejection
+                // including the error details and the raw headers it received.
                 await mockServer.forAnyWebSocket().thenPassThrough();
+
                 const request = https.request(`https://localhost:${wsPort}`, {
                     agent: new HttpProxyAgent(`http://localhost:${mockServer.port}`),
                     headers: {
@@ -236,7 +257,49 @@ nodeOnly(() => {
                         'Upgrade': 'websocket',
                         'Sec-WebSocket-Version': 13,
                         'Sec-WebSocket-Key': 'DxfWc2xtQqmWYmU/n8WUWg==',
-                        'Sec-WebSocket-Protocol': ' ' // Empty headers are invalid
+                        'Sec-WebSocket-Protocol': ',a,,b' // Leading & double commas - invalid
+                    }
+                }).end();
+
+                const response = await new Promise<http.IncomingMessage>((resolve, reject) => {
+                    request.on('response', resolve);
+                    request.on('upgrade', resolve);
+                    request.on('error', reject);
+                });
+
+                expect(response.statusCode).to.equal(400);
+
+                // Confirm the upstream received and rejected the malformed header
+                // (not filtered out by the proxy). The wsClientError handler on the
+                // test fixture server returns JSON with the error and raw headers:
+                const body = JSON.parse(await new Promise<string>((resolve) => {
+                    let data = '';
+                    response.on('data', (chunk: Buffer) => data += chunk);
+                    response.on('end', () => resolve(data));
+                }));
+                expect(body.message).to.equal('Invalid Sec-WebSocket-Protocol header');
+                const protocolHeaders = body.rawHeaders.filter(
+                    ([key]: [string, string]) => key === 'Sec-WebSocket-Protocol'
+                );
+                expect(protocolHeaders).to.deep.equal([
+                    ['Sec-WebSocket-Protocol', ',a,,b']
+                ]);
+            });
+
+            it("does not error when upstream server doesn't select a subprotocol", async () => {
+                // The upstream test server returns false from handleProtocols when
+                // no echo-ws-protocol-index is set, meaning no subprotocol is selected.
+                // Our proxy should handle this gracefully and complete the handshake.
+                await mockServer.forAnyWebSocket().thenPassThrough();
+
+                const request = https.request(`https://localhost:${wsPort}`, {
+                    agent: new HttpProxyAgent(`http://localhost:${mockServer.port}`),
+                    headers: {
+                        'Connection': 'Upgrade',
+                        'Upgrade': 'websocket',
+                        'Sec-WebSocket-Version': 13,
+                        'Sec-WebSocket-Key': 'DxfWc2xtQqmWYmU/n8WUWg==',
+                        'Sec-WebSocket-Protocol': 'some-protocol'
                     }
                 }).end();
 
@@ -248,31 +311,6 @@ nodeOnly(() => {
 
                 expect(response.statusCode).to.equal(101);
                 expect(response.headers['sec-websocket-protocol']).to.equal(undefined);
-            });
-
-            it("handles mildly invalid non-empty subprotocol headers in incoming requests", async () => {
-                await mockServer.forAnyWebSocket().thenPassThrough();
-                const request = https.request(`https://localhost:${wsPort}`, {
-                    agent: new HttpProxyAgent(`http://localhost:${mockServer.port}`),
-                    headers: {
-                        'Connection': 'Upgrade',
-                        'Upgrade': 'websocket',
-                        'Sec-WebSocket-Version': 13,
-                        'Sec-WebSocket-Key': 'DxfWc2xtQqmWYmU/n8WUWg==',
-                        'Sec-WebSocket-Protocol': ' ', // Empty headers are invalid
-                        'sec-webSocket-protocol': 'a,,b', // Badly formatted other protocols
-                        'echo-ws-protocol-index': '0'
-                    }
-                }).end();
-
-                const response = await new Promise<http.IncomingMessage>((resolve, reject) => {
-                    request.on('response', resolve);
-                    request.on('upgrade', resolve);
-                    request.on('error', reject);
-                });
-
-                expect(response.statusCode).to.equal(101);
-                expect(response.headers['sec-websocket-protocol']).to.equal('a');
             });
 
             it("can handle & proxy invalid client frames upstream", async () => {
@@ -319,11 +357,7 @@ nodeOnly(() => {
 
                 ws.on('open', () => ws.send('test echo'));
 
-                const response = await new Promise<Buffer>((resolve, reject) => {
-                    ws.on('message', resolve);
-                    ws.on('error', reject);
-                });
-                ws.close(1000);
+                const response = await waitForMessageThenClose(ws);
 
                 expect(response.toString()).to.equal('test echo');
             });
@@ -369,11 +403,7 @@ nodeOnly(() => {
 
                     ws.on('open', () => ws.send('test echo'));
 
-                    const response = await new Promise<Buffer>((resolve, reject) => {
-                        ws.on('message', resolve);
-                        ws.on('error', reject);
-                    });
-                    ws.close(1000);
+                    const response = await waitForMessageThenClose(ws);
 
                     expect(response.toString()).to.equal('test echo');
                 });
@@ -387,11 +417,7 @@ nodeOnly(() => {
 
                     ws.on('open', () => ws.send('test echo'));
 
-                    const response = await new Promise<Buffer>((resolve, reject) => {
-                        ws.on('message', resolve);
-                        ws.on('error', reject);
-                    });
-                    ws.close(1000);
+                    const response = await waitForMessageThenClose(ws);
 
                     expect(response.toString()).to.equal('test echo');
                 });
@@ -456,11 +482,7 @@ nodeOnly(() => {
 
                     ws.on('open', () => ws.send('test echo'));
 
-                    const response = await new Promise<Buffer>((resolve, reject) => {
-                        ws.on('message', resolve);
-                        ws.on('error', reject);
-                    });
-                    ws.close(1000);
+                    const response = await waitForMessageThenClose(ws);
 
                     expect(response.toString()).to.equal('test echo');
                 });
@@ -597,11 +619,7 @@ nodeOnly(() => {
 
                     ws.on('open', () => ws.send('test echo'));
 
-                    const response = await new Promise<Buffer>((resolve, reject) => {
-                        ws.on('message', resolve);
-                        ws.on('error', reject);
-                    });
-                    ws.close(1000);
+                    const response = await waitForMessageThenClose(ws);
 
                     // We get our echoed responses:
                     expect(response.toString()).to.equal('test echo');
@@ -623,11 +641,7 @@ nodeOnly(() => {
 
                     ws.on('open', () => ws.send('test echo'));
 
-                    const response = await new Promise<Buffer>((resolve, reject) => {
-                        ws.on('message', resolve);
-                        ws.on('error', reject);
-                    });
-                    ws.close(1000);
+                    const response = await waitForMessageThenClose(ws);
 
                     // We get our echoed responses:
                     expect(response.toString()).to.equal('test echo');
@@ -667,14 +681,159 @@ nodeOnly(() => {
 
                     ws.on('open', () => ws.send('test echo'));
 
-                    const response = await new Promise<Buffer>((resolve, reject) => {
-                        ws.on('message', resolve);
-                        ws.on('error', reject);
-                    });
-                    ws.close(1000);
+                    const response = await waitForMessageThenClose(ws);
 
                     expect(response.toString()).to.equal('test echo');
                 });
+            });
+
+            describe("with permessage-deflate", () => {
+
+                describe("when upstream supports deflate", () => {
+
+                    let deflateWsServer: WebSocket.Server;
+                    let deflateWsPort: number;
+
+                    beforeEach(async () => {
+                        deflateWsPort = await portfinder.getPortPromise();
+                        deflateWsServer = new WebSocket.Server({
+                            port: deflateWsPort,
+                            perMessageDeflate: true,
+                            handleProtocols: () => false
+                        });
+
+                        deflateWsServer.on('connection', (ws, request) => {
+                            if (request.headers['echo-headers']) {
+                                ws.send(JSON.stringify(pairFlatRawHeaders(request.rawHeaders)));
+                            }
+
+                            ws.on('message', (message, isBinary) => {
+                                ws.send(message, { binary: isBinary });
+                                ws.close();
+                            });
+                        });
+                    });
+
+                    afterEach(async () => {
+                        await new Promise((resolve) => deflateWsServer.close(resolve));
+                    });
+
+                    it("negotiates deflate on both legs when upstream supports it", async () => {
+                        mockServer.forAnyWebSocket().thenPassThrough();
+
+                        const ws = new WebSocket(`ws://localhost:${deflateWsPort}`, {
+                            agent: new HttpProxyAgent(`http://localhost:${mockServer.port}`),
+                            headers: { 'echo-headers': 'true' }
+                        });
+
+                        const response = await waitForMessageThenClose(ws);
+
+                        // The client should have negotiated deflate with the proxy (downstream):
+                        expect(ws.extensions).to.equal('permessage-deflate');
+
+                        // The upstream server should have received the client's extension offer:
+                        const upstreamHeaders = JSON.parse(response.toString()) as [string, string][];
+                        const extensionHeader = upstreamHeaders.find(
+                            ([key]) => key === 'Sec-WebSocket-Extensions'
+                        );
+                        expect(extensionHeader).to.not.be.undefined;
+                        expect(extensionHeader![1]).to.include('permessage-deflate');
+                    });
+
+                    it("proxies messages correctly with deflate on both legs", async () => {
+                        mockServer.forAnyWebSocket().thenPassThrough();
+
+                        const ws = new WebSocket(`ws://localhost:${deflateWsPort}`, {
+                            agent: new HttpProxyAgent(`http://localhost:${mockServer.port}`)
+                        });
+
+                        ws.on('open', () => ws.send('compressed echo test'));
+
+                        const response = await waitForMessageThenClose(ws);
+
+                        expect(response.toString()).to.equal('compressed echo test');
+                    });
+
+                    it("does not negotiate deflate when the client disables it", async () => {
+                        mockServer.forAnyWebSocket().thenPassThrough();
+
+                        const ws = new WebSocket(`ws://localhost:${deflateWsPort}`, {
+                            agent: new HttpProxyAgent(`http://localhost:${mockServer.port}`),
+                            perMessageDeflate: false
+                        });
+
+                        ws.on('open', () => ws.send('no deflate test'));
+
+                        const response = await waitForMessageThenClose(ws);
+
+                        // No extensions negotiated, even though upstream supports it:
+                        expect(ws.extensions).to.equal('');
+                        expect(response.toString()).to.equal('no deflate test');
+                    });
+                });
+
+                describe("when upstream does not support deflate", () => {
+
+                    it("does not negotiate deflate downstream either", async () => {
+                        // The default wsServer has perMessageDeflate: false (ws.Server default).
+                        // The proxy should mirror this: no deflate downstream if no deflate upstream.
+                        mockServer.forAnyWebSocket().thenPassThrough();
+
+                        const ws = new WebSocket(`ws://localhost:${wsPort}`, {
+                            agent: new HttpProxyAgent(`http://localhost:${mockServer.port}`)
+                        });
+
+                        ws.on('open', () => ws.send('test echo'));
+
+                        const response = await waitForMessageThenClose(ws);
+
+                        // No deflate on either leg:
+                        expect(ws.extensions).to.equal('');
+                        expect(response.toString()).to.equal('test echo');
+                    });
+                });
+            });
+
+            it("proxies invalid UTF-8 text frames faithfully", async () => {
+                // Create an upstream that also tolerates invalid UTF-8:
+                const utf8WsPort = await portfinder.getPortPromise();
+                const utf8WsServer = new WebSocket.Server({
+                    port: utf8WsPort,
+                    skipUTF8Validation: true,
+                    handleProtocols: () => false
+                });
+                utf8WsServer.on('connection', (ws) => {
+                    ws.on('message', (msg, isBinary) => {
+                        ws.send(msg, { binary: isBinary });
+                        ws.close();
+                    });
+                });
+
+                try {
+                    mockServer.forAnyWebSocket().thenPassThrough();
+
+                    const ws = new WebSocket(`ws://localhost:${utf8WsPort}`, {
+                        agent: new HttpProxyAgent(`http://localhost:${mockServer.port}`),
+                        skipUTF8Validation: true
+                    });
+
+                    await new Promise<void>((resolve) => ws.on('open', resolve));
+
+                    // 0xFF/0xFE are never valid in UTF-8:
+                    const invalidUtf8 = Buffer.from([0x48, 0x65, 0x6c, 0x6c, 0x6f, 0xFF, 0xFE]);
+                    ws.send(invalidUtf8, { binary: false }); // Send as text frame
+
+                    const response = await new Promise<{ data: Buffer, isBinary: boolean }>((resolve, reject) => {
+                        ws.on('message', (data: Buffer, isBinary: boolean) => resolve({ data, isBinary }));
+                        ws.on('error', reject);
+                    });
+
+                    expect(response.isBinary).to.equal(false);
+                    expect(Buffer.compare(response.data, invalidUtf8)).to.equal(0);
+                    ws.close(1000);
+                } finally {
+                    await new Promise((resolve) => utf8WsServer.close(resolve));
+                }
             });
         });
 
@@ -689,11 +848,7 @@ nodeOnly(() => {
 
             ws.on('open', () => ws.send('test echo'));
 
-            const response = await new Promise<Buffer>((resolve, reject) => {
-                ws.on('message', resolve);
-                ws.on('error', reject);
-            });
-            ws.close(1000);
+            const response = await waitForMessageThenClose(ws);
 
             expect(response.toString()).to.equal('test echo');
         });
@@ -705,13 +860,46 @@ nodeOnly(() => {
 
             ws.on('open', () => ws.send('test message'));
 
-            const response = await new Promise<Buffer>((resolve, reject) => {
-                ws.on('message', resolve);
-                ws.on('error', reject);
-            });
-            ws.close(1000);
+            const response = await waitForMessageThenClose(ws);
 
             expect(response.toString()).to.equal('test message');
+        });
+
+        it("can echo data with permessage-deflate", async () => {
+            mockServer.forAnyWebSocket().thenEcho();
+
+            const ws = new WebSocket(`ws://localhost:${mockServer.port}`, {
+                perMessageDeflate: true
+            });
+
+            ws.on('open', () => ws.send('compressed echo'));
+
+            const response = await waitForMessageThenClose(ws);
+
+            expect(ws.extensions).to.equal('permessage-deflate');
+            expect(response.toString()).to.equal('compressed echo');
+        });
+
+        it("can echo invalid UTF-8 text frames", async () => {
+            mockServer.forAnyWebSocket().thenEcho();
+
+            const ws = new WebSocket(`ws://localhost:${mockServer.port}`, {
+                skipUTF8Validation: true
+            });
+
+            await new Promise<void>((resolve) => ws.on('open', resolve));
+
+            const invalidUtf8 = Buffer.from([0x48, 0x65, 0x6c, 0x6c, 0x6f, 0xFF, 0xFE]);
+            ws.send(invalidUtf8, { binary: false });
+
+            const response = await new Promise<{ data: Buffer, isBinary: boolean }>((resolve, reject) => {
+                ws.on('message', (data: Buffer, isBinary: boolean) => resolve({ data, isBinary }));
+                ws.on('error', reject);
+            });
+
+            expect(response.isBinary).to.equal(false);
+            expect(Buffer.compare(response.data, invalidUtf8)).to.equal(0);
+            ws.close(1000);
         });
 
         it("can passively listen to data", async () => {
