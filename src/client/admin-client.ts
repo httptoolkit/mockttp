@@ -622,10 +622,10 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
         this.subscriptionClient!.request(query).subscribe({
             next: async (value) => {
                 if (value.data) {
-                    const response = value.data[fieldName];
+                    const response = value.data[fieldName] as Response;
                     const result = query.transformResponse
                         ? await query.transformResponse(response, { adminClient: this })
-                        : response as Result;
+                        : response as unknown as Result;
                     callback(result);
                 } else if (value.errors) {
                     console.error('Error in subscription', value.errors);

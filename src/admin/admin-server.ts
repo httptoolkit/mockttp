@@ -514,15 +514,15 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
             },
 
             Mutation: {
-                reset: () => this.resetPluginsForSession(sessionId),
-                enableDebug: () => this.enableDebugForSession(sessionId)
+                reset: async () => { await this.resetPluginsForSession(sessionId); return null; },
+                enableDebug: async () => { await this.enableDebugForSession(sessionId); return null; }
             },
 
             Raw: new GraphQLScalarType({
                 name: 'Raw',
                 description: 'A raw entity, serialized directly (must be JSON-compatible)',
-                serialize: (value: any) => value,
-                parseValue: (input: string): any => input,
+                serialize: (value) => value,
+                parseValue: (input): any => input,
                 parseLiteral: parseAnyAst
             }),
 
@@ -532,26 +532,26 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
                 name: 'Json',
                 description: 'A JSON entity, serialized as a simple JSON string',
                 serialize: (value: any) => JSON.stringify(value),
-                parseValue: (input: string): any => JSON.parse(input),
+                parseValue: (input): any => JSON.parse(input as string),
                 parseLiteral: parseAnyAst
             }),
 
             Void: new GraphQLScalarType({
                 name: 'Void',
                 description: 'Nothing at all',
-                serialize: (value: any) => null,
-                parseValue: (input: string): any => null,
+                serialize: () => null,
+                parseValue: () => null as any,
                 parseLiteral: (): any => { throw new Error('Void literals are not supported') }
             }),
 
             Buffer: new GraphQLScalarType({
                 name: 'Buffer',
                 description: 'A buffer',
-                serialize: (value: Buffer) => {
-                    return value.toString('base64');
+                serialize: (value) => {
+                    return (value as Buffer).toString('base64');
                 },
-                parseValue: (input: string) => {
-                    return Buffer.from(input, 'base64');
+                parseValue: (input) => {
+                    return Buffer.from(input as string, 'base64');
                 },
                 parseLiteral: parseAnyAst
             })
