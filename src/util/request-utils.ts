@@ -9,9 +9,10 @@ import * as http2 from 'http2';
 
 import * as _ from 'lodash';
 import * as multipart from 'parse-multipart-data';
-import now = require("performance-now");
 import type { SUPPORTED_ENCODING } from 'http-encoding';
 import { MaybePromise } from '@httptoolkit/util';
+
+const now = () => performance.now();
 
 import {
     Headers,

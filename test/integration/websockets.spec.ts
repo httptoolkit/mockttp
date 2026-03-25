@@ -5,8 +5,8 @@ import * as https from 'https';
 
 import * as WebSocket from 'isomorphic-ws';
 import HttpProxyAgent = require('http-proxy-agent');
-import HttpsProxyAgent = require('https-proxy-agent');
-import * as portfinder from 'portfinder';
+import { HttpsProxyAgent } from 'https-proxy-agent';
+import getPort from 'get-port';
 
 import { getLocal, generateCACertificate, MockedEndpoint } from '../..';
 
@@ -86,7 +86,7 @@ nodeOnly(() => {
             wsErrors = [];
 
             // Real server that echoes every message
-            wsPort = await portfinder.getPortPromise();
+            wsPort = await getPort();
             wsServer = new WebSocket.Server({
                 port: wsPort,
                 handleProtocols: (protocols, request) => {
@@ -387,7 +387,7 @@ nodeOnly(() => {
                         });
                     });
 
-                    wsPort = await portfinder.getPortPromise();
+                    wsPort = await getPort();
 
                     await new Promise<void>((resolve) => wsHttpsServer.listen(wsPort, resolve));
                 });
@@ -447,7 +447,7 @@ nodeOnly(() => {
                         });
                     });
 
-                    wsPort = await portfinder.getPortPromise();
+                    wsPort = await getPort();
                     await new Promise<void>((resolve) => wsHttpsServer.listen(wsPort, resolve));
                 });
 
@@ -695,7 +695,7 @@ nodeOnly(() => {
                     let deflateWsPort: number;
 
                     beforeEach(async () => {
-                        deflateWsPort = await portfinder.getPortPromise();
+                        deflateWsPort = await getPort();
                         deflateWsServer = new WebSocket.Server({
                             port: deflateWsPort,
                             perMessageDeflate: true,
@@ -796,7 +796,7 @@ nodeOnly(() => {
 
             it("proxies invalid UTF-8 text frames faithfully", async () => {
                 // Create an upstream that also tolerates invalid UTF-8:
-                const utf8WsPort = await portfinder.getPortPromise();
+                const utf8WsPort = await getPort();
                 const utf8WsServer = new WebSocket.Server({
                     port: utf8WsPort,
                     skipUTF8Validation: true,

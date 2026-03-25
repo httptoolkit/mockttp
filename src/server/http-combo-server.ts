@@ -1,5 +1,4 @@
 import _ = require('lodash');
-import now = require('performance-now');
 import { Writable } from 'stream';
 import * as net from 'net';
 import * as tls from 'tls';
@@ -7,6 +6,8 @@ import * as http from 'http';
 import * as http2 from 'http2';
 
 import * as semver from 'semver';
+
+const now = () => performance.now();
 import { makeDestroyable, DestroyableServer } from 'destroyable-server';
 import * as httpolyglot from '@httptoolkit/httpolyglot';
 import { CustomError, delay, unreachableCheck } from '@httptoolkit/util';

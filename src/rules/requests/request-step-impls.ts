@@ -13,7 +13,6 @@ import * as h2Client from 'http2-wrapper';
 import { decode as decodeBase64 } from 'base64-arraybuffer';
 import { Transform } from 'stream';
 import { stripIndent, oneLine } from 'common-tags';
-import { TypedError } from 'typed-error';
 import { applyPatch as applyJsonPatch } from 'fast-json-patch';
 
 import {
@@ -23,7 +22,7 @@ import {
     OngoingResponse
 } from "../../types";
 
-import { MaybePromise, ErrorLike, isErrorLike, delay } from '@httptoolkit/util';
+import { CustomError, MaybePromise, ErrorLike, isErrorLike, delay } from '@httptoolkit/util';
 import { isAbsoluteUrl, getEffectivePort } from '../../util/url';
 import {
     waitForCompletedRequest,
@@ -139,7 +138,7 @@ export {
 
 // An error that indicates that the step is aborting the request.
 // This could be intentional, or an upstream server aborting the request.
-export class AbortError extends TypedError {
+export class AbortError extends CustomError {
 
     constructor(
         message: string,
