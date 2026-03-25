@@ -3,7 +3,7 @@ import * as net from 'net';
 import * as tls from 'tls';
 import * as http from 'http';
 import * as https from 'https';
-import { readTlsClientHello, TlsHelloData } from 'read-tls-client-hello';
+import { readTlsClientHello, TlsClientHelloMessage, getExtensionData } from 'read-tls-client-hello';
 
 import {
     CompletedResponse,
@@ -269,7 +269,7 @@ nodeOnly(() => {
             describe("given a target TLS server", () => {
 
                 let netServer!: DestroyableServer<net.Server>;
-                let clientHelloDeferred!: Deferred<TlsHelloData>;
+                let clientHelloDeferred!: Deferred<TlsClientHelloMessage>;
 
                 beforeEach(async () => {
                     netServer = makeDestroyable(net.createServer());
@@ -297,7 +297,7 @@ nodeOnly(() => {
                     }).catch(() => {});
 
                     const clientHello = await clientHelloDeferred;
-                    expect(clientHello.serverName).to.equal('invalid.example'); // SNI should be set to the hostname
+                    expect(getExtensionData(clientHello, 'sni')?.serverName).to.equal('invalid.example'); // SNI should be set to the hostname
                 });
 
                 it("should use the SOCKS destination IP, but fall back to SNI in URL & passthrough events", async function () {
@@ -334,7 +334,7 @@ nodeOnly(() => {
                     expect((await passthroughEvent).port).to.equal(tlsServerPort.toString());
 
                     const clientHello = await clientHelloDeferred;
-                    expect(clientHello.serverName).to.equal('sni-hostname.localhost'); // SNI should be proxied through
+                    expect(getExtensionData(clientHello, 'sni')?.serverName).to.equal('sni-hostname.localhost'); // SNI should be proxied through
                 });
 
                 it("should use the SOCKS destination IP if that's all we have", async function () {
@@ -370,7 +370,7 @@ nodeOnly(() => {
                     expect((await passthroughEvent).port).to.equal(tlsServerPort.toString());
 
                     const clientHello = await clientHelloDeferred;
-                    expect(clientHello.serverName).to.equal(undefined); // Can't send IP in SNI
+                    expect(getExtensionData(clientHello, 'sni')?.serverName).to.equal(undefined); // Can't send IP in SNI
                 });
 
             });

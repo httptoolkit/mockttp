@@ -11,8 +11,9 @@ import { makeDestroyable, DestroyableServer } from 'destroyable-server';
 import * as httpolyglot from '@httptoolkit/httpolyglot';
 import { CustomError, delay, unreachableCheck } from '@httptoolkit/util';
 import {
-    calculateJa3FromFingerprintData,
-    calculateJa4FromHelloData,
+    calculateJa3,
+    calculateJa4,
+    getExtensionData,
     NonTlsError,
     readTlsClientHello
 } from 'read-tls-client-hello';
@@ -501,7 +502,7 @@ function analyzeAndMaybePassThroughTls(
         try {
             const helloData = await readTlsClientHello(socket);
 
-            const sniHostname = helloData.serverName;
+            const sniHostname = getExtensionData(helloData, 'sni')?.serverName;
 
             // SNI is a good clue for where the request is headed, but an explicit proxy address (via
             // CONNECT or SOCKS) is even better. Note that this may be a hostname or IPv4/6 address:
@@ -512,9 +513,9 @@ function analyzeAndMaybePassThroughTls(
 
             socket[TlsMetadata] = {
                 sniHostname,
-                clientAlpn: helloData.alpnProtocols,
-                ja3Fingerprint: calculateJa3FromFingerprintData(helloData.fingerprintData),
-                ja4Fingerprint: calculateJa4FromHelloData(helloData)
+                clientAlpn: getExtensionData(helloData, 'alpn')?.protocols,
+                ja3Fingerprint: calculateJa3(helloData),
+                ja4Fingerprint: calculateJa4(helloData)
             };
 
             if (shouldPassThrough(upstreamDestination?.hostname, passThroughPatterns, interceptOnlyPatterns)) {

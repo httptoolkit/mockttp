@@ -2,7 +2,7 @@ import * as net from 'net';
 import * as tls from 'tls';
 import * as http2 from 'http2';
 import { expect } from "chai";
-import { TlsHelloData, trackClientHellos } from 'read-tls-client-hello';
+import { TlsClientHelloMessage, trackClientHellos, getExtensionData } from 'read-tls-client-hello';
 
 import { getLocal } from "../../..";
 import {
@@ -158,7 +158,7 @@ nodeOnly(() => {
                 });
 
                 // Store the client hellos for reference
-                let hellos: Array<TlsHelloData | undefined> = [];
+                let hellos: Array<TlsClientHelloMessage | undefined> = [];
 
                 beforeEach(async () => {
                     remoteServer.listen();
@@ -191,8 +191,8 @@ nodeOnly(() => {
                     expect(hellos.length).to.equal(1);
                     const destinationTlsHello = hellos[0]!;
 
-                    expect(destinationTlsHello.alpnProtocols).to.deep.equal(['echo']);
-                    expect(destinationTlsHello.serverName).to.equal('server.test');
+                    expect(getExtensionData(destinationTlsHello, 'alpn')?.protocols).to.deep.equal(['echo']);
+                    expect(getExtensionData(destinationTlsHello, 'sni')?.serverName).to.equal('server.test');
                 });
 
             });
