@@ -240,7 +240,7 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
         // Dynamically route to mock sessions ourselves, so we can easily add/remove
         // sessions as we see fit later on.
         const sessionRequest = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-            const sessionId = req.params.id;
+            const sessionId = req.params.id as string;
             const sessionRouter = this.sessions[sessionId]?.router;
 
             if (!sessionRouter) {
@@ -297,7 +297,7 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
         if (this.server) throw new Error('Admin server already running');
 
         await new Promise<void>((resolve, reject) => {
-            this.server = makeDestroyable(this.app.listen(listenOptions, resolve));
+            this.server = makeDestroyable(this.app.listen(listenOptions, () => resolve()));
 
             this.server.on('error', reject);
 
