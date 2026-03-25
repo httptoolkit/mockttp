@@ -1,11 +1,12 @@
 import * as _ from 'lodash';
-import now = require("performance-now");
 import * as os from 'os';
 import * as net from 'net';
 import * as tls from 'tls';
 import * as http2 from 'http2';
 
 import { isNode } from './util';
+
+const now = () => performance.now();
 import {
     OngoingRequest,
     RawPassthroughEvent,

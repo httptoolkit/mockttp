@@ -5,7 +5,7 @@ import * as fs from 'fs/promises';
 import * as zlib from 'zlib';
 
 import _ = require("lodash");
-import portfinder = require('portfinder');
+import getPort from 'get-port';
 import request = require("request-promise-native");
 
 import { getLocal, Mockttp, CompletedResponse } from "../../..";
@@ -335,7 +335,7 @@ nodeOnly(() => {
                         res.end('OK');
                     }));
 
-                    oldServerPort = await portfinder.getPortPromise();
+                    oldServerPort = await getPort();
                     return new Promise<void>(async (resolve, reject) => {
                         oldServer.listen(oldServerPort, resolve);
                         oldServer.on('error', reject);
@@ -434,7 +434,7 @@ nodeOnly(() => {
                         res.end('OK');
                     }));
 
-                    authenticatingServerPort = await portfinder.getPortPromise();
+                    authenticatingServerPort = await getPort();
                     return new Promise<void>(async (resolve, reject) => {
                         authenticatingServer.listen(authenticatingServerPort, resolve);
                         authenticatingServer.on('error', reject);
@@ -520,7 +520,7 @@ nodeOnly(() => {
                     res.end("Real HTTP/2 response");
                 }));
 
-                targetPort = await portfinder.getPortPromise();
+                targetPort = await getPort();
 
                 await new Promise<void>(async (resolve, reject) => {
                     http2Server.on('error', reject);

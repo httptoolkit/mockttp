@@ -5,7 +5,6 @@ import * as net from 'net';
 import * as _ from 'lodash';
 import * as express from 'express';
 import * as cors from 'cors';
-import corsGate = require('cors-gate');
 import { json as jsonParser } from 'milliparsec';
 import * as Ws from 'ws';
 
@@ -167,11 +166,18 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
             options.corsOptions.origin;
 
         if (this.requiredOrigin) {
-            this.app.use(corsGate({
-                strict: true, // MUST send an allowed origin
-                allowSafe: false, // Even for HEAD/GET requests (should be none anyway)
-                origin: '' // No base origin - we accept *no* same-origin requests
-            }));
+            // Reject requests without a valid CORS origin. The upstream cors middleware
+            // sets access-control-allow-origin for allowed origins, so we just check that.
+            this.app.use((req, res, next) => {
+                const origin = req.headers.origin?.toLowerCase().trim();
+                if (!origin) { res.statusCode = 403; res.end(); return; }
+
+                const allowed = res.getHeader('access-control-allow-origin')?.toString().toLowerCase().trim();
+                if (allowed === '*' || origin === allowed) return next();
+
+                res.statusCode = 403;
+                res.end();
+            });
         }
 
         this.app.use(jsonParser({ payloadLimit: 50 * 1024 * 1024 }));

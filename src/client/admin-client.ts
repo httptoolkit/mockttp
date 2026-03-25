@@ -2,11 +2,10 @@ import _ = require('lodash');
 import { EventEmitter } from 'events';
 import { Duplex } from 'stream';
 import DuplexPair = require('native-duplexpair');
-import { TypedError } from 'typed-error';
 import * as WebSocket from 'isomorphic-ws';
 import connectWebSocketStream = require('@httptoolkit/websocket-stream');
 import { SubscriptionClient } from '@httptoolkit/subscriptions-transport-ws';
-import { ErrorLike, MaybePromise, getDeferred } from '@httptoolkit/util';
+import { CustomError, ErrorLike, MaybePromise, getDeferred } from '@httptoolkit/util';
 import { print } from 'graphql';
 
 import { DEFAULT_ADMIN_SERVER_PORT } from "../types";
@@ -20,7 +19,7 @@ import { AdminPlugin, PluginClientResponsesMap, PluginStartParamsMap } from '../
 import { SchemaIntrospector } from './schema-introspection';
 import { AdminQuery, getSingleSelectedFieldName } from './admin-query';
 
-export class ConnectionError extends TypedError { }
+export class ConnectionError extends CustomError { }
 
 // The Response type requires lib.dom. We include an empty placeholder here to
 // avoid the types breaking if you don't have that available. Once day TS will
@@ -29,7 +28,7 @@ declare global {
     interface Response {}
 }
 
-export class RequestError extends TypedError {
+export class RequestError extends CustomError {
     constructor(
         message: string,
         public response: Response

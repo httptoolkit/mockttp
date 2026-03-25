@@ -5,7 +5,7 @@ import * as http from 'http';
 import * as https from 'https';
 import * as http2 from 'http2';
 import * as fs from 'fs';
-import * as portfinder from 'portfinder';
+import getPort from 'get-port';
 
 import { CompletedRequest, CompletedResponse, getLocal } from "../..";
 import {
@@ -558,7 +558,7 @@ nodeOnly(() => {
                 let targetPort: number;
 
                 beforeEach(async () => {
-                    targetPort = await portfinder.getPortPromise();
+                    targetPort = await getPort();
 
                     await new Promise<void>(async (resolve, reject) => {
                         http2Server.on('error', reject);

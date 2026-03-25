@@ -8,11 +8,12 @@ import * as http2 from "http2";
 
 import * as _ from "lodash";
 import { EventEmitter } from 'events';
-import portfinder = require("portfinder");
+import getPort, { portNumbers } from 'get-port';
 import connect = require("connect");
 import cors = require("cors");
-import now = require("performance-now");
 import WebSocket = require("ws");
+
+const now = () => performance.now();
 import { Mutex } from 'async-mutex';
 import { ErrorLike, isErrorLike, UnreachableCheck } from '@httptoolkit/util';
 
@@ -182,11 +183,10 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
 
         // We use a mutex here to avoid contention on ports with parallel setup
         await serverPortCheckMutex.runExclusive(async () => {
-            const port = _.isNumber(portParam)
+            const port = typeof portParam === 'number'
                 ? portParam
-                : await portfinder.getPortPromise({
-                    port: portParam.startPort,
-                    stopPort: portParam.endPort
+                : await getPort({
+                    port: portNumbers(portParam.startPort, portParam.endPort)
                 });
 
             if (this.debug) console.log(`Starting mock server on port ${port}`);
@@ -212,7 +212,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
                 // Although we try to pick a free port, we may have race conditions, if something else
                 // takes the same port at the same time. If you haven't explicitly picked a port, and
                 // we do have a collision, simply try again.
-                if (e.code === 'EADDRINUSE' && !_.isNumber(portParam)) {
+                if (e.code === 'EADDRINUSE' && typeof portParam !== 'number') {
                     if (this.debug) console.log('Address in use, retrying...');
 
                     // Destroy just in case there is something that needs cleanup here. Catch because most

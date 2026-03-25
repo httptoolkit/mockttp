@@ -3,12 +3,11 @@ import * as url from 'url';
 import * as http from 'http';
 import * as https from 'https';
 
-import * as LRU from 'lru-cache';
+import { LRUCache } from 'lru-cache';
 
-import getHttpsProxyAgent = require('https-proxy-agent');
+import { HttpsProxyAgent } from 'https-proxy-agent';
 import { PacProxyAgent } from 'pac-proxy-agent';
 import { SocksProxyAgent } from 'socks-proxy-agent';
-const getSocksProxyAgent = (opts: any) => new SocksProxyAgent(opts);
 
 import { isNode } from "../util/util";
 import { getProxySetting, matchesNoProxy, ProxySettingSource } from './proxy-config';
@@ -24,25 +23,27 @@ const KeepAliveAgents = isNode
         })
     } : {};
 
+const buildHttpsProxyAgent = (href: string, opts?: any) => new HttpsProxyAgent(href, opts);
+const buildSocksProxyAgent = (href: string, opts?: any) => new SocksProxyAgent(href, opts);
+
 const ProxyAgentFactoryMap = {
-    'http:': getHttpsProxyAgent, // HTTPS here really means 'CONNECT-tunnelled' - it can do either
-    'https:': getHttpsProxyAgent,
+    'http:': buildHttpsProxyAgent, // HTTPS here really means 'CONNECT-tunnelled' - it can do either
+    'https:': buildHttpsProxyAgent,
 
     'pac+http:': (...args: any) => new PacProxyAgent(...args),
     'pac+https:': (...args: any) => new PacProxyAgent(...args),
 
-    'socks:': getSocksProxyAgent,
-    'socks4:': getSocksProxyAgent,
-    'socks4a:': getSocksProxyAgent,
-    'socks5:': getSocksProxyAgent,
-    'socks5h:': getSocksProxyAgent
+    'socks:': buildSocksProxyAgent,
+    'socks4:': buildSocksProxyAgent,
+    'socks4a:': buildSocksProxyAgent,
+    'socks5:': buildSocksProxyAgent,
+    'socks5h:': buildSocksProxyAgent
 } as const;
 
-const proxyAgentCache = new LRU<string, http.Agent>({
+const proxyAgentCache = new LRUCache<string, http.Agent>({
     max: 20,
 
     ttl: 1000 * 60 * 5, // Drop refs to unused agents after 5 minutes
-    ttlResolution: 1000 * 60, // Check for expiry once every minute maximum
     ttlAutopurge: true, // Actively drop expired agents
     updateAgeOnGet: true // Don't drop agents while they're in use
 });
@@ -87,18 +88,10 @@ export async function getAgent({
                     proxySetting.additionalTrustedCAs
                 );
 
-                proxyAgentCache.set(cacheKey, buildProxyAgent({
-                    href,
-                    protocol,
-                    auth,
-                    hostname,
-                    port,
-
-                    ...(trustedCerts
-                        ? { ca: trustedCerts }
-                        : {}
-                    )
-                }));
+                proxyAgentCache.set(cacheKey, buildProxyAgent(
+                    href!,
+                    trustedCerts ? { ca: trustedCerts } : {}
+                ));
             }
 
             return proxyAgentCache.get(cacheKey);
