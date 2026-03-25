@@ -6,7 +6,7 @@ import * as _ from 'lodash';
 import * as express from 'express';
 import * as cors from 'cors';
 import corsGate = require('cors-gate');
-import * as bodyParser from 'body-parser';
+import { json as jsonParser } from 'milliparsec';
 import * as Ws from 'ws';
 
 import { createHandler as createGraphQLHandler } from 'graphql-http/lib/use/express';
@@ -174,7 +174,7 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
             }));
         }
 
-        this.app.use(bodyParser.json({ limit: '50mb' }));
+        this.app.use(jsonParser({ payloadLimit: 50 * 1024 * 1024 }));
 
         const defaultPluginStartParams: PluginStartDefaults<Plugins> = options.pluginDefaults ?? {};
 
