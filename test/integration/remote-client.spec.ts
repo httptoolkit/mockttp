@@ -3,7 +3,7 @@ import { PassThrough } from 'stream';
 import * as net from 'net';
 import * as zlib from 'zlib';
 
-import getPort from 'get-port';
+import { getFreePort } from '../test-utils';
 import request = require("request-promise-native");
 
 import * as WebSocket from 'isomorphic-ws';
@@ -553,7 +553,7 @@ nodeOnly(() => {
 
                 beforeEach(async () => {
                     server = net.createServer(() => {});
-                    port = await getPort();
+                    port = await getFreePort();
                     return new Promise<void>(resolve => server.listen(port, resolve));
                 });
 

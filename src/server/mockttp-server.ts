@@ -8,7 +8,6 @@ import * as http2 from "http2";
 
 import * as _ from "lodash";
 import { EventEmitter } from 'events';
-import getPort, { portNumbers } from 'get-port';
 import connect = require("connect");
 import cors = require("cors");
 import WebSocket = require("ws");
@@ -104,6 +103,24 @@ import { SocksServerOptions } from "./socks-server";
 
 const serverPortCheckMutex = new Mutex();
 
+async function findFreePort(startPort: number, endPort: number): Promise<number> {
+    for (let port = startPort; port <= endPort; port++) {
+        try {
+            await new Promise<void>((resolve, reject) => {
+                const server = net.createServer();
+                server.unref();
+                server.once('error', reject);
+                server.once('listening', () => server.close(() => resolve()));
+                server.listen(port);
+            });
+            return port;
+        } catch (e: any) {
+            if (e.code !== 'EADDRINUSE' && e.code !== 'EACCES') throw e;
+        }
+    }
+    throw new Error(`No open ports between ${startPort} and ${endPort}`);
+}
+
 /**
  * A in-process Mockttp implementation. This starts servers on the local machine in the
  * current process, and exposes methods to directly manage them.
@@ -185,9 +202,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         await serverPortCheckMutex.runExclusive(async () => {
             const port = typeof portParam === 'number'
                 ? portParam
-                : await getPort({
-                    port: portNumbers(portParam.startPort, portParam.endPort)
-                });
+                : await findFreePort(portParam.startPort, portParam.endPort);
 
             if (this.debug) console.log(`Starting mock server on port ${port}`);
             this.server!.listen(port);

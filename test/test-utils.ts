@@ -47,6 +47,19 @@ export {
     Deferred
 };
 
+export function getFreePort(): Promise<number> {
+    return new Promise((resolve, reject) => {
+        const server = net.createServer();
+        server.unref();
+        server.once('error', reject);
+        server.once('listening', () => {
+            const port = (server.address() as net.AddressInfo).port;
+            server.close(() => resolve(port));
+        });
+        server.listen(0);
+    });
+}
+
 export async function pollUntil(
     condition: () => boolean,
     { minDelay = 10, timeout = 500 } = {}

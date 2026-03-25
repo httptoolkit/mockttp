@@ -3,7 +3,7 @@ import * as http from 'http';
 import * as zlib from 'zlib';
 
 import _ = require("lodash");
-import getPort from 'get-port';
+import { getFreePort } from '../../test-utils';
 import request = require("request-promise-native");
 
 import {
@@ -1151,7 +1151,7 @@ nodeOnly(() => {
 
                 beforeEach(async () => {
                     requestReceived = getDeferred<void>()
-                    ipV6Port = await getPort();
+                    ipV6Port = await getFreePort();
                     ipV6Server = http.createServer((_req, res) => {
                         requestReceived.resolve();
                         res.writeHead(200);
