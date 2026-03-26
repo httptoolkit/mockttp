@@ -141,22 +141,26 @@ async function findFreePort(startPort: number, endPort: number): Promise<number>
     for (let port = startPort; port <= endPort; port++) {
         try {
             for (const host of hosts) {
-                await new Promise<void>((resolve, reject) => {
-                    const server = net.createServer();
-                    server.unref();
-                    server.once('error', reject);
-                    server.once('listening', () => server.close(() => resolve()));
-                    if (host !== undefined) {
-                        server.listen(port, host);
-                    } else {
-                        server.listen(port);
-                    }
-                });
+                try {
+                    await new Promise<void>((resolve, reject) => {
+                        const server = net.createServer();
+                        server.unref();
+                        server.once('error', reject);
+                        server.once('listening', () => server.close(() => resolve()));
+                        if (host !== undefined) {
+                            server.listen(port, host);
+                        } else {
+                            server.listen(port);
+                        }
+                    });
+                } catch (e: any) {
+                    if (e.code === 'EADDRNOTAVAIL' || e.code === 'EINVAL') continue;
+                    throw e; // EADDRINUSE/EACCES or other → port unavailable
+                }
             }
             return port;
         } catch (e: any) {
-            if (e.code !== 'EADDRINUSE' && e.code !== 'EACCES' &&
-                e.code !== 'EADDRNOTAVAIL' && e.code !== 'EINVAL') throw e;
+            if (e.code !== 'EADDRINUSE' && e.code !== 'EACCES') throw e;
         }
     }
     throw new Error(`No open ports between ${startPort} and ${endPort}`);
@@ -750,6 +754,10 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         const request = this.preprocessRequest(rawRequest, 'request');
         if (request === null) return; // Preprocessing failed - don't handle this
 
+        // Capture the emitter at the start of request handling, so that all events for this
+        // request are emitted to the same emitter, even if the server is reset mid-request.
+        const emitter = this.eventEmitter;
+
         if (this.debug) console.log(`Handling request for ${rawRequest.url}`);
 
         let result: 'responded' | 'aborted' | null = null;
@@ -774,13 +782,29 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             request.tags,
             {
                 maxSize: this.maxBodySize,
-                onWriteHead: () => this.announceInitialResponseAsync(response),
-                onBodyData: this.eventEmitter.listenerCount('response-body-data') > 0
-                    ? this.announceBodyDataAsync.bind(this, 'response')
+                onWriteHead: () => {
+                    if (emitter.listenerCount('response-initiated') === 0) return;
+                    setImmediate(() => {
+                        const initiatedRes = buildInitiatedResponse(response);
+                        emitter.emit('response-initiated', Object.assign(
+                            initiatedRes,
+                            {
+                                timingEvents: _.clone(initiatedRes.timingEvents),
+                                tags: _.clone(initiatedRes.tags)
+                            }
+                        ));
+                    });
+                },
+                onBodyData: emitter.listenerCount('response-body-data') > 0
+                    ? (id: string, eventTimestamp: number, content: Uint8Array, isEnded: boolean) => {
+                        setImmediate(() => {
+                            emitter.emit('response-body-data', { id, content, isEnded, eventTimestamp });
+                        });
+                    }
                     : undefined
             }
         );
-        const hasResponseListener = this.eventEmitter.listenerCount('response') > 0;
+        const hasResponseListener = emitter.listenerCount('response') > 0;
         if (hasResponseListener) {
             // Start buffering response body if there's somebody who
             // might want to hear about it later
@@ -812,7 +836,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
                     record: this.recordTraffic,
                     debug: this.debug,
                     keyLogStream: this.keyLogStream,
-                    emitEventCallback: (this.eventEmitter.listenerCount('rule-event') !== 0)
+                    emitEventCallback: (emitter.listenerCount('rule-event') !== 0)
                         ? (type, event) => this.announceRuleEventAsync(request.id, nextRule!.id, type, event)
                         : undefined
                 });
@@ -858,7 +882,17 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         }
 
         if (result === 'responded' && hasResponseListener) {
-            this.announceResponseAsync(response);
+            // Use captured emitter for response announcement too
+            waitForCompletedResponse(response)
+            .then((res: CompletedResponse) => {
+                setImmediate(() => {
+                    emitter.emit('response', Object.assign(res, {
+                        timingEvents: _.clone(res.timingEvents),
+                        tags: _.clone(res.tags)
+                    }));
+                });
+            })
+            .catch(console.error);
         }
     }
 
