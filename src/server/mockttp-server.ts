@@ -389,13 +389,9 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
 
         setImmediate(() => {
             const initiatedReq = buildInitiatedRequest(request);
-            this.eventEmitter.emit('request-initiated', Object.assign(
-                initiatedReq,
-                {
-                    timingEvents: _.clone(initiatedReq.timingEvents),
-                    tags: _.clone(initiatedReq.tags)
-                }
-            ));
+            initiatedReq.timingEvents = { ...initiatedReq.timingEvents };
+            initiatedReq.tags = initiatedReq.tags.slice();
+            this.eventEmitter.emit('request-initiated', initiatedReq);
         });
     }
 
@@ -405,13 +401,9 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         waitForCompletedRequest(request)
         .then((completedReq: CompletedRequest) => {
             setImmediate(() => {
-                this.eventEmitter.emit('request', Object.assign(
-                    completedReq,
-                    {
-                        timingEvents: _.clone(completedReq.timingEvents),
-                        tags: _.clone(completedReq.tags)
-                    }
-                ));
+                completedReq.timingEvents = { ...completedReq.timingEvents };
+                completedReq.tags = completedReq.tags.slice();
+                this.eventEmitter.emit('request', completedReq);
             });
         })
         .catch(console.error);
@@ -422,13 +414,9 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
 
         setImmediate(() => {
             const initiatedRes = buildInitiatedResponse(response);
-            this.eventEmitter.emit('response-initiated', Object.assign(
-                initiatedRes,
-                {
-                    timingEvents: _.clone(initiatedRes.timingEvents),
-                    tags: _.clone(initiatedRes.tags)
-                }
-            ));
+            initiatedRes.timingEvents = { ...initiatedRes.timingEvents };
+            initiatedRes.tags = initiatedRes.tags.slice();
+            this.eventEmitter.emit('response-initiated', initiatedRes);
         });
     }
 
@@ -438,10 +426,9 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         waitForCompletedResponse(response)
         .then((res: CompletedResponse) => {
             setImmediate(() => {
-                this.eventEmitter.emit('response', Object.assign(res, {
-                    timingEvents: _.clone(res.timingEvents),
-                    tags: _.clone(res.tags)
-                }));
+                res.timingEvents = { ...res.timingEvents };
+                res.tags = res.tags.slice();
+                this.eventEmitter.emit('response', res);
             });
         })
         .catch(console.error);
@@ -453,10 +440,9 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         waitForCompletedRequest(request)
         .then((completedReq: CompletedRequest) => {
             setImmediate(() => {
-                this.eventEmitter.emit('websocket-request', Object.assign(completedReq, {
-                    timingEvents: _.clone(completedReq.timingEvents),
-                    tags: _.clone(completedReq.tags)
-                }));
+                completedReq.timingEvents = { ...completedReq.timingEvents };
+                completedReq.tags = completedReq.tags.slice();
+                this.eventEmitter.emit('websocket-request', completedReq);
             });
         })
         .catch(console.error);
@@ -468,8 +454,8 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         setImmediate(() => {
             this.eventEmitter.emit('websocket-accepted', {
                 ...response,
-                timingEvents: _.clone(response.timingEvents),
-                tags: _.clone(response.tags)
+                timingEvents: { ...response.timingEvents },
+                tags: response.tags.slice()
             });
         });
     }
@@ -598,9 +584,9 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     private async announceAbortAsync(request: OngoingRequest, abortError?: ErrorLike) {
         setImmediate(() => {
             const req = buildInitiatedRequest(request);
+            req.timingEvents = { ...req.timingEvents };
+            req.tags = req.tags.slice();
             this.eventEmitter.emit('abort', Object.assign(req, {
-                timingEvents: _.clone(req.timingEvents),
-                tags: _.clone(req.tags),
                 error: abortError ? {
                     name: abortError.name,
                     code: abortError.code,
@@ -876,7 +862,8 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             // There are no incomplete & matching rules! One last option: if the last matching rule is
             // maybe-incomplete (i.e. default completion status but has seen >0 requests) then it should
             // match anyway. This allows us to add rules and have the last repeat indefinitely.
-            const lastMatchingRule = _.last(await filter(rulesMatches, m => m.match))?.rule;
+            const matchingRules = await filter(rulesMatches, m => m.match);
+            const lastMatchingRule = matchingRules[matchingRules.length - 1]?.rule;
             if (!lastMatchingRule || lastMatchingRule.isComplete()) continue; // On to lower priority matches
             // Otherwise, must be a rule with isComplete === null, i.e. no specific completion check:
             else return lastMatchingRule;

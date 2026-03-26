@@ -638,23 +638,31 @@ export const MatcherLookup = {
     'callback': CallbackMatcher,
 };
 
-export async function matchesAll(req: OngoingRequest, matchers: RequestMatcher[]): Promise<boolean> {
+export function matchesAll(req: OngoingRequest, matchers: RequestMatcher[]): MaybePromise<boolean> {
+    // Fast path: if all matchers return synchronously, avoid Promise overhead entirely.
+    // This is the common case (e.g. WildcardMatcher returns true synchronously).
+    const asyncResults: Array<Promise<boolean>> = [];
+
+    for (const matcher of matchers) {
+        const result = matcher.matches(req);
+        if (result === false) return false; // Sync mismatch — bail immediately
+        if (result !== true) asyncResults.push(result); // Got a Promise
+    }
+
+    if (asyncResults.length === 0) return true; // All sync true
+
+    // Async path: at least one matcher returned a Promise
     return new Promise<boolean>((resolve, reject) => {
-        const resultsPromises = matchers.map((matcher) => matcher.matches(req));
+        for (const promise of asyncResults) {
+            promise.then(
+                (result) => { if (!result) resolve(false); },
+                (e) => reject(e)
+            );
+        }
 
-        resultsPromises.forEach(async (maybePromiseResult) => {
-            try {
-                const result = await maybePromiseResult;
-                if (!result) resolve(false); // Resolve mismatches immediately
-            } catch (e) {
-                reject(e); // Resolve matcher failures immediately
-            }
-        });
-
-        // Otherwise resolve as normal: all true matches, exceptions reject.
-        Promise.all(resultsPromises)
-            .then((result) => resolve(_.every(result)))
-            .catch((e) => reject(e));
+        Promise.all(asyncResults)
+            .then((resolved) => resolve(resolved.every(Boolean)))
+            .catch(reject);
     });
 }
 

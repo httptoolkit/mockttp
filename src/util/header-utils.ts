@@ -60,7 +60,12 @@ export function pairFlatRawHeaders(flatRawHeaders: string[]): RawHeaders {
 }
 
 export function flattenPairedRawHeaders(rawHeaders: RawHeaders): string[] {
-    return rawHeaders.flat();
+    const result = new Array(rawHeaders.length * 2);
+    for (let i = 0; i < rawHeaders.length; i++) {
+        result[i * 2] = rawHeaders[i][0];
+        result[i * 2 + 1] = rawHeaders[i][1];
+    }
+    return result;
 }
 
 /**
