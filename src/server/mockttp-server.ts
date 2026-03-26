@@ -744,7 +744,12 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
                     keyLogStream: this.keyLogStream,
                     emitEventCallback: (this.eventEmitter.listenerCount('rule-event') !== 0)
                         ? (type, event) => this.announceRuleEventAsync(request.id, nextRule!.id, type, event)
-                        : undefined
+                        : undefined,
+                    // When something will inspect the request body (traffic recording,
+                    // request event listeners) it must be buffered in memory. Otherwise
+                    // it can be streamed directly to the upstream target.
+                    reqBodyObserved: this.recordTraffic
+                        || this.eventEmitter.listenerCount('request') > 0
                 });
             } else {
                 await this.sendUnmatchedRequestError(request, response);
