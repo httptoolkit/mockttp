@@ -250,6 +250,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         this.debug = this.initialDebugSetting;
 
         this.eventEmitter.removeAllListeners();
+        this.eventEmitter = new EventEmitter();
     }
 
     private get address() {
@@ -368,6 +369,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     }
 
     private announceBodyDataAsync(
+        emitter: EventEmitter,
         type: 'request' | 'response',
         id: string,
         eventTimestamp: number,
@@ -375,7 +377,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         isEnded: boolean
     ) {
         setImmediate(() => {
-            this.eventEmitter.emit(`${type}-body-data`, {
+            emitter.emit(`${type}-body-data`, {
                 id,
                 content,
                 isEnded,
@@ -384,12 +386,12 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         });
     }
 
-    private announceInitialRequestAsync(request: OngoingRequest) {
-        if (this.eventEmitter.listenerCount('request-initiated') === 0) return;
+    private announceInitialRequestAsync(emitter: EventEmitter, request: OngoingRequest) {
+        if (emitter.listenerCount('request-initiated') === 0) return;
 
         setImmediate(() => {
             const initiatedReq = buildInitiatedRequest(request);
-            this.eventEmitter.emit('request-initiated', Object.assign(
+            emitter.emit('request-initiated', Object.assign(
                 initiatedReq,
                 {
                     timingEvents: _.clone(initiatedReq.timingEvents),
@@ -399,13 +401,13 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         });
     }
 
-    private announceCompletedRequestAsync(request: OngoingRequest) {
-        if (this.eventEmitter.listenerCount('request') === 0) return;
+    private announceCompletedRequestAsync(emitter: EventEmitter, request: OngoingRequest) {
+        if (emitter.listenerCount('request') === 0) return;
 
         waitForCompletedRequest(request)
         .then((completedReq: CompletedRequest) => {
             setImmediate(() => {
-                this.eventEmitter.emit('request', Object.assign(
+                emitter.emit('request', Object.assign(
                     completedReq,
                     {
                         timingEvents: _.clone(completedReq.timingEvents),
@@ -417,12 +419,12 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         .catch(console.error);
     }
 
-    private announceInitialResponseAsync(response: OngoingResponse) {
-        if (this.eventEmitter.listenerCount('response-initiated') === 0) return;
+    private announceInitialResponseAsync(emitter: EventEmitter, response: OngoingResponse) {
+        if (emitter.listenerCount('response-initiated') === 0) return;
 
         setImmediate(() => {
             const initiatedRes = buildInitiatedResponse(response);
-            this.eventEmitter.emit('response-initiated', Object.assign(
+            emitter.emit('response-initiated', Object.assign(
                 initiatedRes,
                 {
                     timingEvents: _.clone(initiatedRes.timingEvents),
@@ -432,13 +434,13 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         });
     }
 
-    private announceResponseAsync(response: OngoingResponse | CompletedResponse) {
-        if (this.eventEmitter.listenerCount('response') === 0) return;
+    private announceResponseAsync(emitter: EventEmitter, response: OngoingResponse | CompletedResponse) {
+        if (emitter.listenerCount('response') === 0) return;
 
         waitForCompletedResponse(response)
         .then((res: CompletedResponse) => {
             setImmediate(() => {
-                this.eventEmitter.emit('response', Object.assign(res, {
+                emitter.emit('response', Object.assign(res, {
                     timingEvents: _.clone(res.timingEvents),
                     tags: _.clone(res.tags)
                 }));
@@ -447,13 +449,13 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         .catch(console.error);
     }
 
-    private announceWebSocketRequestAsync(request: OngoingRequest) {
-        if (this.eventEmitter.listenerCount('websocket-request') === 0) return;
+    private announceWebSocketRequestAsync(emitter: EventEmitter, request: OngoingRequest) {
+        if (emitter.listenerCount('websocket-request') === 0) return;
 
         waitForCompletedRequest(request)
         .then((completedReq: CompletedRequest) => {
             setImmediate(() => {
-                this.eventEmitter.emit('websocket-request', Object.assign(completedReq, {
+                emitter.emit('websocket-request', Object.assign(completedReq, {
                     timingEvents: _.clone(completedReq.timingEvents),
                     tags: _.clone(completedReq.tags)
                 }));
@@ -462,11 +464,11 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         .catch(console.error);
     }
 
-    private announceWebSocketUpgradeAsync(response: CompletedResponse) {
-        if (this.eventEmitter.listenerCount('websocket-accepted') === 0) return;
+    private announceWebSocketUpgradeAsync(emitter: EventEmitter, response: CompletedResponse) {
+        if (emitter.listenerCount('websocket-accepted') === 0) return;
 
         setImmediate(() => {
-            this.eventEmitter.emit('websocket-accepted', {
+            emitter.emit('websocket-accepted', {
                 ...response,
                 timingEvents: _.clone(response.timingEvents),
                 tags: _.clone(response.tags)
@@ -475,16 +477,17 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     }
 
     private announceWebSocketMessageAsync(
+        emitter: EventEmitter,
         request: OngoingRequest,
         direction: 'sent' | 'received',
         content: Buffer,
         isBinary: boolean
     ) {
         const eventName = `websocket-message-${direction}`;
-        if (this.eventEmitter.listenerCount(eventName) === 0) return;
+        if (emitter.listenerCount(eventName) === 0) return;
 
         setImmediate(() => {
-            this.eventEmitter.emit(eventName, {
+            emitter.emit(eventName, {
                 streamId: request.id,
 
                 direction,
@@ -499,14 +502,15 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     }
 
     private announceWebSocketCloseAsync(
+        emitter: EventEmitter,
         request: OngoingRequest,
         closeCode: number | undefined,
         closeReason?: string
     ) {
-        if (this.eventEmitter.listenerCount('websocket-close') === 0) return;
+        if (emitter.listenerCount('websocket-close') === 0) return;
 
         setImmediate(() => {
-            this.eventEmitter.emit('websocket-close', {
+            emitter.emit('websocket-close', {
                 streamId: request.id,
 
                 closeCode,
@@ -519,7 +523,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     }
 
     // Hook the request and socket to announce all WebSocket events after the initial request:
-    private trackWebSocketEvents(request: OngoingRequest, socket: net.Socket) {
+    private trackWebSocketEvents(emitter: EventEmitter, request: OngoingRequest, socket: net.Socket) {
         const originalWrite = socket._write;
         const originalWriteV = socket._writev;
 
@@ -540,11 +544,11 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
                 request.timingEvents.responseSentTimestamp = now();
 
                 const httpResponse = parseRawHttpResponse(data, request);
-                this.announceResponseAsync(httpResponse);
+                this.announceResponseAsync(emitter, httpResponse);
             } else {
                 // Connect closed during upgrade, before we responded:
                 request.timingEvents.abortedTimestamp = now();
-                this.announceAbortAsync(request);
+                this.announceAbortAsync(emitter, request);
             }
         });
 
@@ -558,10 +562,10 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             request.timingEvents.wsAcceptedTimestamp = now();
 
             const httpResponse = parseRawHttpResponse(data, request);
-            this.announceWebSocketUpgradeAsync(httpResponse);
+            this.announceWebSocketUpgradeAsync(emitter, httpResponse);
 
             ws.on('message', (data: Buffer, isBinary) => {
-                this.announceWebSocketMessageAsync(request, 'received', data, isBinary);
+                this.announceWebSocketMessageAsync(emitter, request, 'received', data, isBinary);
             });
 
             // Wrap ws.send() to report all sent data:
@@ -572,18 +576,19 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
                     ?? typeof data !== 'string';
 
                 _send.apply(this, arguments as any);
-                self.announceWebSocketMessageAsync(request, 'sent', asBuffer(data), isBinary);
+                self.announceWebSocketMessageAsync(emitter, request, 'sent', asBuffer(data), isBinary);
             };
 
             ws.on('close', (closeCode, closeReason) => {
                 if (closeCode === 1006) {
                     // Not a clean close!
                     request.timingEvents.abortedTimestamp = now();
-                    this.announceAbortAsync(request);
+                    this.announceAbortAsync(emitter, request);
                 } else {
                     request.timingEvents.wsClosedTimestamp = now();
 
                     this.announceWebSocketCloseAsync(
+                        emitter,
                         request,
                         closeCode === 1005
                             ? undefined // Clean close, but with a close frame with no status
@@ -595,10 +600,10 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         });
     }
 
-    private async announceAbortAsync(request: OngoingRequest, abortError?: ErrorLike) {
+    private async announceAbortAsync(emitter: EventEmitter, request: OngoingRequest, abortError?: ErrorLike) {
         setImmediate(() => {
             const req = buildInitiatedRequest(request);
-            this.eventEmitter.emit('abort', Object.assign(req, {
+            emitter.emit('abort', Object.assign(req, {
                 timingEvents: _.clone(req.timingEvents),
                 tags: _.clone(req.tags),
                 error: abortError ? {
@@ -635,9 +640,9 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         });
     }
 
-    private async announceRuleEventAsync(requestId: string, ruleId: string, eventType: string, eventData: unknown) {
+    private async announceRuleEventAsync(emitter: EventEmitter, requestId: string, ruleId: string, eventType: string, eventData: unknown) {
         setImmediate(() => {
-            this.eventEmitter.emit('rule-event', {
+            emitter.emit('rule-event', {
                 requestId,
                 ruleId,
                 eventType,
@@ -646,14 +651,14 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         });
     }
 
-    private preprocessRequest(req: ExtendedRawRequest, type: 'request' | 'websocket'): OngoingRequest | null {
+    private preprocessRequest(req: ExtendedRawRequest, type: 'request' | 'websocket', emitter: EventEmitter): OngoingRequest | null {
         try {
             return preprocessRequest(req, {
                 type,
                 maxBodySize: this.maxBodySize,
                 serverPort: this.port,
-                onBodyData: this.eventEmitter.listenerCount('request-body-data') > 0
-                    ? this.announceBodyDataAsync.bind(this, 'request')
+                onBodyData: emitter.listenerCount('request-body-data') > 0
+                    ? this.announceBodyDataAsync.bind(this, emitter, 'request')
                     : undefined
 
             })
@@ -677,7 +682,11 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     }
 
     private async handleRequest(rawRequest: ExtendedRawRequest, rawResponse: http.ServerResponse) {
-        const request = this.preprocessRequest(rawRequest, 'request');
+        // Capture the event emitter for this request's lifecycle to avoid races where events
+        // fire on servers after they're closed/reset and the emitter has been changed.
+        const requestEmitter = this.eventEmitter;
+
+        const request = this.preprocessRequest(rawRequest, 'request', requestEmitter);
         if (request === null) return; // Preprocessing failed - don't handle this
 
         if (this.debug) console.log(`Handling request for ${rawRequest.url}`);
@@ -687,7 +696,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             if (result === null) {
                 result = 'aborted';
                 request.timingEvents.abortedTimestamp = now();
-                this.announceAbortAsync(request, error);
+                this.announceAbortAsync(requestEmitter, request, error);
             }
         }
         request.once('aborted', abort);
@@ -696,7 +705,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         rawResponse.once('close', () => setImmediate(abort));
         request.once('error', (error) => setImmediate(() => abort(error)));
 
-        this.announceInitialRequestAsync(request);
+        this.announceInitialRequestAsync(requestEmitter, request);
 
         const response = trackResponse(
             rawResponse,
@@ -704,13 +713,13 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             request.tags,
             {
                 maxSize: this.maxBodySize,
-                onWriteHead: () => this.announceInitialResponseAsync(response),
-                onBodyData: this.eventEmitter.listenerCount('response-body-data') > 0
-                    ? this.announceBodyDataAsync.bind(this, 'response')
+                onWriteHead: () => this.announceInitialResponseAsync(requestEmitter, response),
+                onBodyData: requestEmitter.listenerCount('response-body-data') > 0
+                    ? this.announceBodyDataAsync.bind(this, requestEmitter, 'response')
                     : undefined
             }
         );
-        const hasResponseListener = this.eventEmitter.listenerCount('response') > 0;
+        const hasResponseListener = requestEmitter.listenerCount('response') > 0;
         if (hasResponseListener) {
             // Start buffering response body if there's somebody who
             // might want to hear about it later
@@ -732,7 +741,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
                 .catch(() => undefined)
                 .then((ruleId) => {
                     request.matchedRuleId = ruleId;
-                    this.announceCompletedRequestAsync(request);
+                    this.announceCompletedRequestAsync(requestEmitter, request);
                 });
 
             let nextRule = await nextRulePromise;
@@ -742,8 +751,8 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
                     record: this.recordTraffic,
                     debug: this.debug,
                     keyLogStream: this.keyLogStream,
-                    emitEventCallback: (this.eventEmitter.listenerCount('rule-event') !== 0)
-                        ? (type, event) => this.announceRuleEventAsync(request.id, nextRule!.id, type, event)
+                    emitEventCallback: (requestEmitter.listenerCount('rule-event') !== 0)
+                        ? (type, event) => this.announceRuleEventAsync(requestEmitter, request.id, nextRule!.id, type, event)
                         : undefined
                 });
             } else {
@@ -788,12 +797,14 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         }
 
         if (result === 'responded' && hasResponseListener) {
-            this.announceResponseAsync(response);
+            this.announceResponseAsync(requestEmitter, response);
         }
     }
 
     private async handleWebSocket(rawRequest: ExtendedRawRequest, socket: net.Socket, head: Buffer) {
-        const request = this.preprocessRequest(rawRequest, 'websocket');
+        const requestEmitter = this.eventEmitter;
+
+        const request = this.preprocessRequest(rawRequest, 'websocket', requestEmitter);
         if (request === null) return; // Preprocessing failed - don't handle this
 
         if (this.debug) console.log(`Handling websocket for ${rawRequest.url}`);
@@ -812,10 +823,10 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
                 .catch(() => undefined)
                 .then((ruleId) => {
                     request.matchedRuleId = ruleId;
-                    this.announceWebSocketRequestAsync(request);
+                    this.announceWebSocketRequestAsync(requestEmitter, request);
                 });
 
-            this.trackWebSocketEvents(request, socket);
+            this.trackWebSocketEvents(requestEmitter, request, socket);
 
             let nextRule = await nextRulePromise;
             if (nextRule) {
@@ -824,8 +835,8 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
                     record: this.recordTraffic,
                     debug: this.debug,
                     keyLogStream: this.keyLogStream,
-                    emitEventCallback: (this.eventEmitter.listenerCount('rule-event') !== 0)
-                        ? (type, event) => this.announceRuleEventAsync(request.id, nextRule!.id, type, event)
+                    emitEventCallback: (requestEmitter.listenerCount('rule-event') !== 0)
+                        ? (type, event) => this.announceRuleEventAsync(requestEmitter, request.id, nextRule!.id, type, event)
                         : undefined
                 });
             } else {
