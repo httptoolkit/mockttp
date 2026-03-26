@@ -1,3 +1,4 @@
+const path = require('path');
 const tmp = require('tmp');
 tmp.setGracefulCleanup();
 
@@ -32,7 +33,10 @@ module.exports = function(config) {
                     "dns2": require.resolve('./test/empty-stub.js'),
                     "ws": require.resolve('./test/empty-stub.js'),
                     "tmp-promise": require.resolve('./test/empty-stub.js'),
-                    "undici": require.resolve('./test/empty-stub.js')
+                    "undici": require.resolve('./test/empty-stub.js'),
+                    // socket-util has module-level Node-only code (net.createServer),
+                    // but is imported by some tests for isLocalIPv6Available:
+                    [path.resolve(__dirname, './src/util/socket-util')]: require.resolve('./test/empty-stub.js')
                 },
                 fallback: {
                     // With Webpack 5, we need explicit mocks for all node modules. Because the
