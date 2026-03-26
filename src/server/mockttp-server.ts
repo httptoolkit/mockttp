@@ -176,7 +176,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             keyLogStream: this.keyLogStream,
 
             requestListener: this.app,
-            tlsClientErrorListener: this.announceTlsErrorAsync.bind(this),
+            tlsClientErrorListener: this.announceTlsErrorAsync.bind(this, this.eventEmitter),
             tlsPassthroughListener: this.passthroughSocket.bind(this, 'tls'),
             rawPassthroughListener: this.passthroughSocket.bind(this, 'raw')
         });
@@ -616,17 +616,17 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         });
     }
 
-    private async announceTlsErrorAsync(socket: net.Socket, request: TlsHandshakeFailure) {
+    private async announceTlsErrorAsync(emitter: EventEmitter, socket: net.Socket, request: TlsHandshakeFailure) {
         // Ignore errors after TLS is setup, those are client errors
         if (socket instanceof tls.TLSSocket && socket[TlsSetupCompleted]) return;
 
         setImmediate(() => {
             if (this.debug) console.warn(`TLS client error: ${JSON.stringify(request)}`);
-            this.eventEmitter.emit('tls-client-error', request);
+            emitter.emit('tls-client-error', request);
         });
     }
 
-    private async announceClientErrorAsync(socket: net.Socket | undefined, error: ClientError) {
+    private async announceClientErrorAsync(emitter: EventEmitter, socket: net.Socket | undefined, error: ClientError) {
         // Ignore errors before TLS is setup, those are TLS errors
         if (
             socket instanceof tls.TLSSocket &&
@@ -636,7 +636,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
 
         setImmediate(() => {
             if (this.debug) console.warn(`Client error: ${JSON.stringify(error)}`);
-            this.eventEmitter.emit('client-error', error);
+            emitter.emit('client-error', error);
         });
     }
 
@@ -684,9 +684,9 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     private async handleRequest(rawRequest: ExtendedRawRequest, rawResponse: http.ServerResponse) {
         // Capture the event emitter for this request's lifecycle to avoid races where events
         // fire on servers after they're closed/reset and the emitter has been changed.
-        const requestEmitter = this.eventEmitter;
+        const emitter = this.eventEmitter;
 
-        const request = this.preprocessRequest(rawRequest, 'request', requestEmitter);
+        const request = this.preprocessRequest(rawRequest, 'request', emitter);
         if (request === null) return; // Preprocessing failed - don't handle this
 
         if (this.debug) console.log(`Handling request for ${rawRequest.url}`);
@@ -696,7 +696,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             if (result === null) {
                 result = 'aborted';
                 request.timingEvents.abortedTimestamp = now();
-                this.announceAbortAsync(requestEmitter, request, error);
+                this.announceAbortAsync(emitter, request, error);
             }
         }
         request.once('aborted', abort);
@@ -705,7 +705,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         rawResponse.once('close', () => setImmediate(abort));
         request.once('error', (error) => setImmediate(() => abort(error)));
 
-        this.announceInitialRequestAsync(requestEmitter, request);
+        this.announceInitialRequestAsync(emitter, request);
 
         const response = trackResponse(
             rawResponse,
@@ -713,13 +713,13 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             request.tags,
             {
                 maxSize: this.maxBodySize,
-                onWriteHead: () => this.announceInitialResponseAsync(requestEmitter, response),
-                onBodyData: requestEmitter.listenerCount('response-body-data') > 0
-                    ? this.announceBodyDataAsync.bind(this, requestEmitter, 'response')
+                onWriteHead: () => this.announceInitialResponseAsync(emitter, response),
+                onBodyData: emitter.listenerCount('response-body-data') > 0
+                    ? this.announceBodyDataAsync.bind(this, emitter, 'response')
                     : undefined
             }
         );
-        const hasResponseListener = requestEmitter.listenerCount('response') > 0;
+        const hasResponseListener = emitter.listenerCount('response') > 0;
         if (hasResponseListener) {
             // Start buffering response body if there's somebody who
             // might want to hear about it later
@@ -741,7 +741,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
                 .catch(() => undefined)
                 .then((ruleId) => {
                     request.matchedRuleId = ruleId;
-                    this.announceCompletedRequestAsync(requestEmitter, request);
+                    this.announceCompletedRequestAsync(emitter, request);
                 });
 
             let nextRule = await nextRulePromise;
@@ -751,13 +751,13 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
                     record: this.recordTraffic,
                     debug: this.debug,
                     keyLogStream: this.keyLogStream,
-                    emitEventCallback: (requestEmitter.listenerCount('rule-event') !== 0)
-                        ? (type, event) => this.announceRuleEventAsync(requestEmitter, request.id, nextRule!.id, type, event)
+                    emitEventCallback: (emitter.listenerCount('rule-event') !== 0)
+                        ? (type, event) => this.announceRuleEventAsync(emitter, request.id, nextRule!.id, type, event)
                         : undefined,
                     // When something will inspect the request body (traffic recording,
                     // request event listeners) it must be buffered in memory. Otherwise
                     // it can be streamed directly to the upstream target.
-                    reqBodyObserved: this.recordTraffic || requestEmitter.listenerCount('request') > 0
+                    reqBodyObserved: this.recordTraffic || emitter.listenerCount('request') > 0
                 });
             } else {
                 await this.sendUnmatchedRequestError(request, response);
@@ -801,14 +801,14 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         }
 
         if (result === 'responded' && hasResponseListener) {
-            this.announceResponseAsync(requestEmitter, response);
+            this.announceResponseAsync(emitter, response);
         }
     }
 
     private async handleWebSocket(rawRequest: ExtendedRawRequest, socket: net.Socket, head: Buffer) {
-        const requestEmitter = this.eventEmitter;
+        const emitter = this.eventEmitter;
 
-        const request = this.preprocessRequest(rawRequest, 'websocket', requestEmitter);
+        const request = this.preprocessRequest(rawRequest, 'websocket', emitter);
         if (request === null) return; // Preprocessing failed - don't handle this
 
         if (this.debug) console.log(`Handling websocket for ${rawRequest.url}`);
@@ -827,10 +827,10 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
                 .catch(() => undefined)
                 .then((ruleId) => {
                     request.matchedRuleId = ruleId;
-                    this.announceWebSocketRequestAsync(requestEmitter, request);
+                    this.announceWebSocketRequestAsync(emitter, request);
                 });
 
-            this.trackWebSocketEvents(requestEmitter, request, socket);
+            this.trackWebSocketEvents(emitter, request, socket);
 
             let nextRule = await nextRulePromise;
             if (nextRule) {
@@ -839,8 +839,8 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
                     record: this.recordTraffic,
                     debug: this.debug,
                     keyLogStream: this.keyLogStream,
-                    emitEventCallback: (requestEmitter.listenerCount('rule-event') !== 0)
-                        ? (type, event) => this.announceRuleEventAsync(requestEmitter, request.id, nextRule!.id, type, event)
+                    emitEventCallback: (emitter.listenerCount('rule-event') !== 0)
+                        ? (type, event) => this.announceRuleEventAsync(emitter, request.id, nextRule!.id, type, event)
                         : undefined
                 });
             } else {
@@ -997,6 +997,7 @@ ${await this.suggestRule(request)}`
         error: Error & { code?: string, rawPacket?: Buffer, badRequest?: ExtendedRawRequest },
         socket: net.Socket
     ) {
+        const emitter = this.eventEmitter;
         if (socket[ClientErrorInProgress]) {
             // For subsequent errors on the same socket, accumulate packet data (linked to the socket)
             // so that the error (probably delayed until next tick) has it all to work with
@@ -1113,7 +1114,7 @@ ${await this.suggestRule(request)}`
                 commonParams.timingEvents.abortedTimestamp = now();
             }
 
-            this.announceClientErrorAsync(socket, { errorCode, request, response });
+            this.announceClientErrorAsync(emitter, socket, { errorCode, request, response });
 
             socket.on('error', () => {}); // Just announce the error to listeners, don't actually die from it
             socket.destroy(error);
@@ -1141,7 +1142,7 @@ ${await this.suggestRule(request)}`
         const timingEvents = buildSocketErrorRequestTimings(socket);
         timingEvents.abortedTimestamp = now();
 
-        this.announceClientErrorAsync(session.initialSocket, {
+        this.announceClientErrorAsync(this.eventEmitter, session.initialSocket, {
             errorCode: error.code,
             request: {
                 id: crypto.randomUUID(),
@@ -1175,6 +1176,7 @@ ${await this.suggestRule(request)}`
         hostname: string,
         port?: number
     ) {
+        const emitter = this.eventEmitter;
         const targetPort = port ?? 443; // Should only be undefined on SNI-only TLS passthrough
 
         if (isSocketLoop(this.outgoingPassthroughSockets, socket)) {
@@ -1199,7 +1201,7 @@ ${await this.suggestRule(request)}`
             }
         );
 
-        setImmediate(() => this.eventEmitter.emit(`${type}-passthrough-opened`, eventData));
+        setImmediate(() => emitter.emit(`${type}-passthrough-opened`, eventData));
 
         let upstreamSocket;
         if (type === 'raw' && socket[LastHopEncrypted]) {
@@ -1235,7 +1237,7 @@ ${await this.suggestRule(request)}`
             socket.on('data', (data: Buffer) => {
                 const eventTimestamp = now();
                 setImmediate(() => {
-                    this.eventEmitter.emit('raw-passthrough-data', {
+                    emitter.emit('raw-passthrough-data', {
                         id: eventData.id,
                         direction: 'received',
                         content: data,
@@ -1246,7 +1248,7 @@ ${await this.suggestRule(request)}`
             upstreamSocket.on('data', (data: Buffer) => {
                 const eventTimestamp = now();
                 setImmediate(() => {
-                    this.eventEmitter.emit('raw-passthrough-data', {
+                    emitter.emit('raw-passthrough-data', {
                         id: eventData.id,
                         direction: 'sent',
                         content: data,
@@ -1272,7 +1274,7 @@ ${await this.suggestRule(request)}`
         socket.on('close', () => {
             upstreamSocket.destroy();
             setImmediate(() => {
-                this.eventEmitter.emit(`${type}-passthrough-closed`, {
+                emitter.emit(`${type}-passthrough-closed`, {
                     ...eventData,
                     timingEvents: {
                         ...eventData.timingEvents,
