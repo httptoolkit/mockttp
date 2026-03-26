@@ -1,5 +1,5 @@
 import { Buffer } from 'buffer';
-import { Writable } from 'stream';
+import { Readable, Writable } from 'stream';
 import * as url from 'url';
 import type * as dns from 'dns';
 import * as net from 'net';
@@ -171,6 +171,7 @@ export interface RequestStepOptions {
     emitEventCallback?: (type: string, event: unknown) => void;
     keyLogStream?: Writable;
     debug: boolean;
+    reqBodyObserved?: boolean; // True if the request body will be buffered for inspection (e.g. recordTraffic)
 }
 
 export class FixedResponseStepImpl extends FixedResponseStep {
@@ -488,9 +489,13 @@ export class PassThroughStepImpl extends PassThroughStep {
             `);
         }
 
-        // We have to capture the request stream immediately, to make sure nothing is lost if it
-        // goes past its max length (truncating the data) before we start sending upstream.
-        const clientReqBody = clientReq.body.asStream();
+        // When transforms or callbacks need the body, we capture it immediately via asStream()
+        // (which buffers data and provides replay). When no transforms are configured, we defer
+        // to pipe the raw request stream directly, avoiding the intermediate PassThrough.
+        const needsBufferedBody = !!(this.transformRequest || this.beforeRequest);
+        const clientReqBody: Readable = needsBufferedBody
+            ? clientReq.body.asStream()
+            : clientReq as any as Readable;
 
         const isH2Downstream = isHttp2(clientReq);
 
@@ -1170,6 +1175,12 @@ export class PassThroughStepImpl extends PassThroughStep {
                 if (reqBodyOverride.length > 0) serverReq.end(reqBodyOverride);
                 else serverReq.end(); // http2-wrapper fails given an empty buffer for methods that aren't allowed a body
             } else {
+                if (!needsBufferedBody && options.reqBodyObserved) {
+                    // Start body buffering now (same tick as pipe) so both the buffer
+                    // and the pipe receive all data via Node's multi-listener support.
+                    // This is needed for recordTraffic and async event emission.
+                    clientReq.body.asBuffer().catch(() => {});
+                }
                 // asStream includes all content, including the body before this call
                 clientReqBody.pipe(serverReq);
                 clientReqBody.on('error', () => serverReq.abort());

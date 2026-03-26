@@ -11,7 +11,7 @@ nodeOnly(() => {
         this.timeout(120000);
 
         describe("Static HTTP mocking", () => {
-            const server = getLocal();
+            const server = getLocal({ recordTraffic: false });
 
             before(async () => {
                 await server.start();
@@ -90,6 +90,7 @@ nodeOnly(() => {
         describe("HTTPS traffic", () => {
 
             const server = getLocal({
+                recordTraffic: false,
                 https: {
                     keyPath: './test/fixtures/test-ca.key',
                     certPath: './test/fixtures/test-ca.pem'
@@ -125,8 +126,8 @@ nodeOnly(() => {
         });
 
         describe("HTTP proxying", () => {
-            const proxyServer = getLocal();
-            const targetServer = getLocal();
+            const proxyServer = getLocal({ recordTraffic: false });
+            const targetServer = getLocal({ recordTraffic: false });
 
             before(async () => {
                 await targetServer.start();
@@ -150,7 +151,7 @@ nodeOnly(() => {
 
                 printResults("HTTP proxy passthrough", result);
 
-                // Seeing ~2500k req/sec locally for proxy + static server
+                // Seeing ~2500 req/sec locally for proxy + static server
                 assertPerformance(result, {
                     minThroughput: 500,
                     maxP99Latency: 50,
@@ -196,6 +197,7 @@ nodeOnly(() => {
         describe("HTTPS proxying", () => {
 
             const proxyServer = getLocal({
+                recordTraffic: false,
                 https: {
                     keyPath: './test/fixtures/test-ca.key',
                     certPath: './test/fixtures/test-ca.pem'
@@ -203,6 +205,7 @@ nodeOnly(() => {
             });
 
             const targetServer = getLocal({
+                recordTraffic: false,
                 https: {
                     keyPath: './test/fixtures/test-ca.key',
                     certPath: './test/fixtures/test-ca.pem'
@@ -232,6 +235,40 @@ nodeOnly(() => {
                 printResults("HTTPS proxy passthrough", result);
 
                 // Seeing ~2k req/sec locally for HTTPS proxy + HTTPS static server
+                assertPerformance(result, {
+                    minThroughput: 500,
+                    maxP99Latency: 50,
+                    maxErrors: 0
+                });
+            });
+        });
+
+        describe("HTTP proxying with traffic recording", () => {
+            const proxyServer = getLocal({ recordTraffic: true });
+            const targetServer = getLocal({ recordTraffic: false });
+
+            before(async () => {
+                await targetServer.start();
+                await proxyServer.start();
+            });
+
+            after(async () => {
+                await proxyServer.stop();
+                await targetServer.stop();
+            });
+
+            it("for Mockttp proxy with recordTraffic enabled", async () => {
+                await targetServer.forGet("/target").thenReply(200, "Target response");
+                await proxyServer.forGet("/proxy").thenForwardTo(targetServer.url);
+
+                const result = await runPerformanceTest({
+                    url: proxyServer.urlFor("/proxy"),
+                    duration: 10,
+                    connections: 10
+                });
+
+                printResults("HTTP proxy passthrough (recordTraffic)", result);
+
                 assertPerformance(result, {
                     minThroughput: 500,
                     maxP99Latency: 50,
