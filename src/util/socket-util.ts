@@ -22,25 +22,64 @@ import {
 import { getSocketMetadataTags } from './socket-metadata';
 import { normalizeIP } from './ip-utils';
 
-// Test if a local port for a given interface (IPv4/6) is currently in use
+// Test if a local port for a given interface (IPv4/6) is currently in use, by attempting
+// to bind to it. We reuse a single server instance and cache results to avoid creating
+// a new server on every request. Concurrent checks for the same port share one probe.
+const probeServer = net.createServer();
+const portActiveCache = new Map<string, { result: boolean, expires: number }>();
+const portActiveInFlight = new Map<string, Promise<boolean>>();
+const PORT_ACTIVE_CACHE_TTL = 5000; // 5 seconds
+
 export async function isLocalPortActive(interfaceIp: '::1' | '127.0.0.1', port: number) {
     if (interfaceIp === '::1' && !isLocalIPv6Available) return false;
 
-    return new Promise((resolve) => {
-        const server = net.createServer();
-        server.listen({
-            host: interfaceIp,
-            port,
-            ipv6Only: interfaceIp === '::1'
+    const cacheKey = `${interfaceIp}:${port}`;
+
+    const cached = portActiveCache.get(cacheKey);
+    if (cached && cached.expires > Date.now()) {
+        return cached.result;
+    }
+
+    // Deduplicate concurrent checks for the same address:port
+    let probe = portActiveInFlight.get(cacheKey);
+    if (!probe) {
+        probe = probePort(interfaceIp, port);
+        portActiveInFlight.set(cacheKey, probe);
+        probe.then((result) => {
+            portActiveCache.set(cacheKey, { result, expires: Date.now() + PORT_ACTIVE_CACHE_TTL });
+            portActiveInFlight.delete(cacheKey);
         });
-        server.once('listening', () => {
-            resolve(false);
-            server.close(() => {});
-        });
-        server.once('error', (e) => {
-            resolve(true);
-        });
-    });
+    }
+
+    return probe;
+}
+
+// Serialized via the in-flight map above — only one probe runs at a time per key,
+// and different keys won't collide because they share the single probeServer sequentially
+// via the listen/close cycle.
+let probeServerReady = Promise.resolve();
+
+function probePort(interfaceIp: string, port: number): Promise<boolean> {
+    const result = probeServerReady.then(() =>
+        new Promise<boolean>((resolve) => {
+            probeServer.listen({
+                host: interfaceIp,
+                port,
+                ipv6Only: interfaceIp === '::1'
+            });
+            probeServer.once('listening', () => {
+                probeServer.close(() => resolve(false));
+            });
+            probeServer.once('error', () => {
+                resolve(true);
+            });
+        })
+    );
+
+    // Chain so the next probe waits for this one to fully complete
+    probeServerReady = result.then(() => {});
+
+    return result;
 }
 
 // This file imported in browsers etc as it's used in handlers, but none of these methods are used
