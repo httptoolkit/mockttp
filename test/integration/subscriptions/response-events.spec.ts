@@ -327,15 +327,6 @@ describe("Response subscriptions", () => {
 describe("Abort subscriptions", () => {
     let server = getLocal();
 
-    // DEBUG: Test whether get-port's presence causes flaky abort test
-    before(async function () {
-        this.timeout(30000);
-        const { default: getPort } = await import('get-port');
-        console.log('[DEBUG] Calling getPort() 50 times to simulate full suite usage...');
-        for (let i = 0; i < 50; i++) await getPort();
-        console.log('[DEBUG] Done. lockedPorts should now have 50 entries.');
-    });
-
     beforeEach(() => server.start());
     afterEach(() => server.stop());
 

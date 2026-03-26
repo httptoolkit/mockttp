@@ -1,6 +1,45 @@
 name: CI
 on: [push, pull_request]
 jobs:
+  # Temporary: bisect which port-finding mode causes flaky abort test
+  bisect-port-finding:
+    name: "Bisect: ${{ matrix.port-mode }}"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        port-mode: [simple, multi-host, get-port, get-port-preloaded]
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22.x'
+          check-latest: true
+          cache: 'npm'
+          cache-dependency-path: 'package.json'
+
+      - run: npm install
+      - run: npm run build
+
+      # Run the node tests 3 times to catch flakes
+      - name: "Run 1"
+        run: npm run test:node
+        env:
+          PORT_FIND_MODE: ${{ matrix.port-mode }}
+          NODE_OPTIONS: '--no-experimental-strip-types'
+      - name: "Run 2"
+        run: npm run test:node
+        env:
+          PORT_FIND_MODE: ${{ matrix.port-mode }}
+          NODE_OPTIONS: '--no-experimental-strip-types'
+      - name: "Run 3"
+        run: npm run test:node
+        env:
+          PORT_FIND_MODE: ${{ matrix.port-mode }}
+          NODE_OPTIONS: '--no-experimental-strip-types'
+
   build:
     name: Build & test
     runs-on: ubuntu-latest

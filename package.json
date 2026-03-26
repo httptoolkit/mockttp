@@ -66,6 +66,7 @@
     "postbuild:doc": "touch ./typedoc/.nojekyll",
     "test": "npm run build && npm run test:node",
     "test:node": "NODE_EXTRA_CA_CERTS=./test/fixtures/test-ca.pem TS_NODE_FILES=true mocha -r ts-node/register 'test/**/*.spec.ts'",
+    "test:node:bisect": "npm run build && echo '=== simple ===' && PORT_FIND_MODE=simple npm run test:node && echo '=== multi-host ===' && PORT_FIND_MODE=multi-host npm run test:node && echo '=== get-port ===' && PORT_FIND_MODE=get-port npm run test:node && echo '=== get-port-preloaded ===' && PORT_FIND_MODE=get-port-preloaded npm run test:node",
     "test:browser": "npm run with-admin -- karma start",
     "test:browser:debug": "npm run with-admin -- karma start --single-run=false --browsers ChromeWithCert",
     "test:perf": "NODE_EXTRA_CA_CERTS=./test/fixtures/test-ca.pem TS_NODE_FILES=true mocha -r ts-node/register 'test/performance/*.perf.ts'",

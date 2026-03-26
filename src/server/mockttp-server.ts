@@ -2,6 +2,7 @@ import { Buffer } from 'buffer';
 import * as stream from 'stream';
 import * as fs from 'fs';
 import * as net from "net";
+import * as os from "os";
 import * as tls from "tls";
 import * as http from "http";
 import * as http2 from "http2";
@@ -103,19 +104,59 @@ import { SocksServerOptions } from "./socks-server";
 
 const serverPortCheckMutex = new Mutex();
 
+// Toggle this to test different port-finding strategies:
+// Toggle this to test different port-finding strategies:
+// - 'simple': single-host check (default, no deps)
+// - 'multi-host': check all local interfaces (like get-port does)
+// - 'get-port': use actual get-port package (dynamic import)
+// - 'get-port-preloaded': pre-import get-port at module load time (matches c59e07d)
+const PORT_FIND_MODE = (process.env.PORT_FIND_MODE || 'simple') as
+    'simple' | 'multi-host' | 'get-port' | 'get-port-preloaded';
+
+// Pre-load get-port at module load time (like the static import in c59e07d)
+const preloadedGetPort = PORT_FIND_MODE === 'get-port-preloaded'
+    ? require('get-port') as { default: Function, portNumbers: Function }
+    : null;
+
 async function findFreePort(startPort: number, endPort: number): Promise<number> {
+    if (PORT_FIND_MODE === 'get-port') {
+        const { default: getPort, portNumbers } = await import('get-port');
+        return getPort({ port: portNumbers(startPort, endPort) });
+    }
+
+    if (PORT_FIND_MODE === 'get-port-preloaded') {
+        return preloadedGetPort!.default({ port: preloadedGetPort!.portNumbers(startPort, endPort) });
+    }
+
+    const hosts: Array<string | undefined> = PORT_FIND_MODE === 'multi-host'
+        ? (() => {
+            const results: Array<string | undefined> = [undefined, '0.0.0.0'];
+            for (const iface of Object.values(os.networkInterfaces())) {
+                for (const config of iface!) results.push(config.address);
+            }
+            return results;
+        })()
+        : [undefined]; // 'simple' mode: just default host
+
     for (let port = startPort; port <= endPort; port++) {
         try {
-            await new Promise<void>((resolve, reject) => {
-                const server = net.createServer();
-                server.unref();
-                server.once('error', reject);
-                server.once('listening', () => server.close(() => resolve()));
-                server.listen(port);
-            });
+            for (const host of hosts) {
+                await new Promise<void>((resolve, reject) => {
+                    const server = net.createServer();
+                    server.unref();
+                    server.once('error', reject);
+                    server.once('listening', () => server.close(() => resolve()));
+                    if (host !== undefined) {
+                        server.listen(port, host);
+                    } else {
+                        server.listen(port);
+                    }
+                });
+            }
             return port;
         } catch (e: any) {
-            if (e.code !== 'EADDRINUSE' && e.code !== 'EACCES') throw e;
+            if (e.code !== 'EADDRINUSE' && e.code !== 'EACCES' &&
+                e.code !== 'EADDRNOTAVAIL' && e.code !== 'EINVAL') throw e;
         }
     }
     throw new Error(`No open ports between ${startPort} and ${endPort}`);
