@@ -1,6 +1,8 @@
 import * as _ from 'lodash';
 import { PassThrough } from 'stream';
+import * as net from 'net';
 import * as http from 'http';
+import * as os from 'os';
 import * as zlib from 'zlib';
 
 import {
@@ -325,6 +327,15 @@ describe("Response subscriptions", () => {
 describe("Abort subscriptions", () => {
     let server = getLocal();
 
+    // DEBUG: Test whether get-port's presence causes flaky abort test
+    before(async function () {
+        this.timeout(30000);
+        const { default: getPort } = await import('get-port');
+        console.log('[DEBUG] Calling getPort() 50 times to simulate full suite usage...');
+        for (let i = 0; i < 50; i++) await getPort();
+        console.log('[DEBUG] Done. lockedPorts should now have 50 entries.');
+    });
+
     beforeEach(() => server.start());
     afterEach(() => server.stop());
 
@@ -560,28 +571,40 @@ describe("Abort subscriptions", () => {
     });
 
     it("should be sent in place of response notifications, not in addition", async () => {
+        const t0 = performance.now();
+        const ts = (label: string) => console.log(`  [ABORT-DEBUG] ${label}: +${(performance.now() - t0).toFixed(1)}ms`);
+
         let seenRequestPromise = getDeferred<CompletedRequest>();
-        await server.on('request', (r) => seenRequestPromise.resolve(r));
+        await server.on('request', (r) => { ts('request event received'); seenRequestPromise.resolve(r); });
 
         let seenResponseInitiatedPromise = getDeferred<InitiatedResponse>();
-        await server.on('response-initiated', (r) => seenResponseInitiatedPromise.resolve(r));
+        await server.on('response-initiated', (r) => { ts('UNEXPECTED response-initiated event!'); seenResponseInitiatedPromise.resolve(r); });
 
         let seenResponsePromise = getDeferred<CompletedResponse>();
-        await server.on('response', (r) => seenResponsePromise.resolve(r));
+        await server.on('response', (r) => { ts('UNEXPECTED response event!'); seenResponsePromise.resolve(r); });
 
-        await server.forPost('/mocked-endpoint').thenCallback((req) => delay(500).then(() => ({})));
+        await server.forPost('/mocked-endpoint').thenCallback((req) => {
+            ts('callback started');
+            return delay(500).then(() => {
+                ts('callback 500ms delay completed');
+                return {};
+            });
+        });
 
         let abortable = makeAbortableRequest(server, '/mocked-endpoint');
         nodeOnly(() => (abortable as http.ClientRequest).end('request body'));
 
         await seenRequestPromise;
+        ts('seenRequestPromise resolved, calling abort()');
         abortable.abort();
+        ts('abort() called');
 
         await expect(Promise.race([
             seenResponseInitiatedPromise,
             seenResponsePromise,
             delay(100).then(() => { throw new Error('timeout') })
         ])).to.be.rejectedWith('timeout');
+        ts('test passed (timeout won)');
     });
 
     it("should not trigger an ended response body event", async () => {
