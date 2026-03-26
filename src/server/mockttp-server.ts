@@ -113,6 +113,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
 
     private requestRuleSets: { [priority: number]: RequestRule[] } = {};
     private webSocketRuleSets: { [priority: number]: WebSocketRule[] } = {};
+    private rulesNeedResponseTracking: boolean = false;
 
     private httpsOptions: MockttpHttpsOptions | undefined;
     private isHttp2Enabled: boolean | 'fallback';
@@ -287,6 +288,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
 
         const rules = ruleData.map((ruleDatum) => new RequestRule(ruleDatum));
         this.requestRuleSets = _.groupBy(rules, r => r.priority);
+        this.rulesNeedResponseTracking = rules.some(r => r.needsResponseTracking);
 
         return Promise.resolve(rules.map(r => new ServerMockedEndpoint(r)));
     }
@@ -295,6 +297,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         return Promise.resolve(ruleData.map((ruleDatum) => {
             const rule = new RequestRule(ruleDatum);
             this.addToRuleSets(this.requestRuleSets, rule);
+            if (rule.needsResponseTracking) this.rulesNeedResponseTracking = true;
             return new ServerMockedEndpoint(rule);
         }));
     }
@@ -382,6 +385,47 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
                 eventTimestamp
             });
         });
+    }
+
+    private prepareResponse(
+        rawResponse: http.ServerResponse,
+        request: OngoingRequest
+    ): { response: OngoingResponse, hasResponseListener: boolean } {
+        const hasResponseListener = this.eventEmitter.listenerCount('response') > 0;
+        const needsResponseTracking = hasResponseListener
+            || this.eventEmitter.listenerCount('response-initiated') > 0
+            || this.eventEmitter.listenerCount('response-body-data') > 0
+            || this.eventEmitter.listenerCount('abort') > 0 // Abort events include response timing data
+            || this.rulesNeedResponseTracking;
+
+        let response: OngoingResponse;
+        if (needsResponseTracking) {
+            response = trackResponse(
+                rawResponse,
+                request.timingEvents,
+                request.tags,
+                {
+                    maxSize: this.maxBodySize,
+                    onWriteHead: () => this.announceInitialResponseAsync(response),
+                    onBodyData: this.eventEmitter.listenerCount('response-body-data') > 0
+                        ? this.announceBodyDataAsync.bind(this, 'response')
+                        : undefined
+                }
+            );
+            if (hasResponseListener) {
+                // Start buffering response body if there's somebody who
+                // might want to hear about it later
+                response.body.asBuffer().catch(() => {});
+            }
+        } else {
+            // When no response-related events are registered, skip the tracking overhead
+            // (PassThrough stream creation, write/writeHead/end interception)
+            response = rawResponse as OngoingResponse;
+            response.timingEvents = request.timingEvents;
+            response.tags = request.tags;
+        }
+
+        return { response, hasResponseListener };
     }
 
     private announceInitialRequestAsync(request: OngoingRequest) {
@@ -698,24 +742,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
 
         this.announceInitialRequestAsync(request);
 
-        const response = trackResponse(
-            rawResponse,
-            request.timingEvents,
-            request.tags,
-            {
-                maxSize: this.maxBodySize,
-                onWriteHead: () => this.announceInitialResponseAsync(response),
-                onBodyData: this.eventEmitter.listenerCount('response-body-data') > 0
-                    ? this.announceBodyDataAsync.bind(this, 'response')
-                    : undefined
-            }
-        );
-        const hasResponseListener = this.eventEmitter.listenerCount('response') > 0;
-        if (hasResponseListener) {
-            // Start buffering response body if there's somebody who
-            // might want to hear about it later
-            response.body.asBuffer().catch(() => {});
-        }
+        const { response, hasResponseListener } = this.prepareResponse(rawResponse, request);
 
         response.id = request.id;
         response.on('error', (error) => {

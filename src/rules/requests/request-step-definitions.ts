@@ -68,6 +68,7 @@ the serialized output from the serialize() methods defined here and creates a wo
  */
 export interface RequestStepDefinition extends Explainable, Serializable {
     type: keyof typeof StepDefinitionLookup;
+    readonly needsResponseTracking?: boolean;
 }
 
 export type SerializedBuffer = { type: 'Buffer', data: number[] };
@@ -1092,6 +1093,10 @@ export class WebhookStep extends Serializable implements RequestStepDefinition {
 
     readonly type = 'webhook';
     static readonly isFinal = false;
+
+    get needsResponseTracking() {
+        return this.events.includes('response');
+    }
 
     constructor(
         public readonly url: string,

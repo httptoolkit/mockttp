@@ -44,6 +44,7 @@ export class RequestRule implements RequestRule {
 
     public id: string;
     public readonly priority: number;
+    public readonly needsResponseTracking: boolean;
     public requests: Promise<CompletedRequest>[] = [];
     public requestCount = 0;
 
@@ -54,6 +55,7 @@ export class RequestRule implements RequestRule {
         this.priority = data.priority ?? RulePriority.DEFAULT;
         this.matchers = data.matchers;
         this.completionChecker = data.completionChecker;
+        this.needsResponseTracking = data.steps.some(s => s.needsResponseTracking);
 
         this.steps = data.steps.map(<S extends RequestStepDefinition>(stepDefinition: S, i: number) => {
             const StepImplClass = StepLookup[stepDefinition.type];
