@@ -488,21 +488,19 @@ export function preprocessRequest(req: ExtendedRawRequest, options: {
  */
 export function buildInitiatedRequest(request: OngoingRequest): InitiatedRequest {
     return {
-        ..._.pick(request,
-            'id',
-            'matchedRuleId',
-            'protocol',
-            'httpVersion',
-            'method',
-            'url',
-            'path',
-            'remoteIpAddress',
-            'remotePort',
-            'destination',
-            'headers',
-            'rawHeaders',
-            'tags'
-        ),
+        id: request.id,
+        matchedRuleId: request.matchedRuleId,
+        protocol: request.protocol,
+        httpVersion: request.httpVersion,
+        method: request.method,
+        url: request.url!,
+        path: request.path!,
+        remoteIpAddress: request.remoteIpAddress,
+        remotePort: request.remotePort,
+        destination: request.destination,
+        headers: request.headers,
+        rawHeaders: request.rawHeaders,
+        tags: request.tags,
         timingEvents: request.timingEvents
     };
 }
@@ -736,23 +734,17 @@ function emitBodyDataEvents(
  * that's just started.
  */
 export function buildInitiatedResponse(response: OngoingResponse): InitiatedResponse {
-    const initiatedResponse: InitiatedResponse = _(response).pick([
-        'id',
-        'statusCode',
-        'timingEvents',
-        'tags'
-    ]).assign({
-        statusMessage: '',
+    return {
+        id: response.id,
+        statusCode: response.statusCode,
+        statusMessage: (response instanceof http2.Http2ServerResponse)
+            ? '' // H2 has no status messages, and generates a warning if you look for one
+            : response.statusMessage,
         headers: response.getHeaders(),
         rawHeaders: response.getRawHeaders(),
-    }).valueOf();
-
-    if (!(response instanceof http2.Http2ServerResponse)) {
-        // H2 has no status messages, and generates a warning if you look for one
-        initiatedResponse.statusMessage = response.statusMessage;
-    }
-
-    return initiatedResponse;
+        timingEvents: response.timingEvents,
+        tags: response.tags
+    };
 }
 
 /**

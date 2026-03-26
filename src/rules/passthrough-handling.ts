@@ -525,8 +525,8 @@ function shouldUseStrictHttps(
         skipHttpsErrors = true;
     } else if (Array.isArray(ignoreHostHttpsErrors) && (
         // if the whole hostname or host+port is whitelisted
-        _.includes(ignoreHostHttpsErrors, hostname) ||
-        _.includes(ignoreHostHttpsErrors, `${hostname}:${port}`)
+        ignoreHostHttpsErrors.includes(hostname) ||
+        ignoreHostHttpsErrors.includes(`${hostname}:${port}`)
     )) {
         skipHttpsErrors = true;
     }
