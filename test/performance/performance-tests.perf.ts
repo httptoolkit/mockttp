@@ -277,5 +277,50 @@ nodeOnly(() => {
             });
         });
 
+        describe("HTTP proxying with event listeners", () => {
+            const proxyServer = getLocal({ recordTraffic: false });
+            const targetServer = getLocal({ recordTraffic: false });
+
+            before(async () => {
+                await targetServer.start();
+                await proxyServer.start();
+
+                // Subscribe to key events
+                await proxyServer.on('request-initiated', () => {});
+                await proxyServer.on('request-body-data', () => {});
+                await proxyServer.on('request', () => {});
+                await proxyServer.on('response-initiated', () => {});
+                await proxyServer.on('response-body-data', () => {});
+                await proxyServer.on('response', () => {});
+                await proxyServer.on('abort', () => {});
+                await proxyServer.on('rule-event', () => {});
+            });
+
+            after(async () => {
+                await proxyServer.stop();
+                await targetServer.stop();
+            });
+
+            it("for Mockttp proxy with all event listeners", async () => {
+                await targetServer.forGet("/target").thenReply(200, "Target response");
+                await proxyServer.forGet("/proxy").thenForwardTo(targetServer.url);
+
+                const result = await runPerformanceTest({
+                    url: proxyServer.urlFor("/proxy"),
+                    duration: 10,
+                    connections: 10
+                });
+
+                printResults("HTTP proxy passthrough (with event listeners)", result);
+
+                assertPerformance(result, {
+                    minThroughput: 500,
+                    maxP99Latency: 50,
+                    maxErrors: 0
+                });
+            });
+        });
+
     });
 });
+
