@@ -19,10 +19,15 @@ import {
     getDeferred,
     delay,
     makeAbortableRequest,
-    pollUntil
+    pollUntil,
+    isBackwardCompatTest
 } from "../../test-utils";
 
-describe("Response initiated subscriptions", () => {
+describe("Response initiated subscriptions", function () {
+
+    // response-initiated subscription not available in older server versions
+    beforeEach(function () { if (isBackwardCompatTest()) this.skip(); });
+
     describe("with a local HTTP server", () => {
         let server = getLocal();
 
@@ -632,7 +637,10 @@ describe("Abort subscriptions", () => {
     });
 });
 
-describe("Response body chunk subscriptions", () => {
+describe("Response body chunk subscriptions", function () {
+
+    // response-body-data subscription not available in older server versions
+    beforeEach(function () { if (isBackwardCompatTest()) this.skip(); });
 
     const server = getLocal();
 

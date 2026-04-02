@@ -1,5 +1,5 @@
-import { updateRawHeaders } from "../src/util/header-utils";
-import { expect } from "./test-utils";
+import { updateRawHeaders } from "../../src/util/header-utils";
+import { expect } from "../test-utils";
 
 describe("Header utils", () => {
 

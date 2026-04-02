@@ -19,7 +19,8 @@ import {
     sendRawRequest,
     defaultNodeConnectionHeader,
     delay,
-    pollUntil
+    pollUntil,
+    isBackwardCompatTest
 } from "../../test-utils";
 
 // Headers we ignore when checking the received values, because they can vary depending
@@ -434,7 +435,10 @@ describe("Request subscriptions", () => {
     });
 });
 
-describe("Request body data subscriptions", () => {
+describe("Request body data subscriptions", function () {
+
+    // request-body-data subscription not available in older server versions
+    beforeEach(function () { if (isBackwardCompatTest()) this.skip(); });
 
     const server = getLocal();
 

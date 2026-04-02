@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { areFFDHECurvesSupported } from '../src/util/openssl-compat';
+import { areFFDHECurvesSupported } from '../../src/util/openssl-compat';
 
 describe('areFFDHECurvesSupported', () => {
     it('True only for 3+ versions', () => {

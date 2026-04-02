@@ -1,0 +1,8 @@
+{
+  "name": "mockttp-old-admin-server",
+  "private": true,
+  "description": "Isolated install of an old mockttp version, used to test backward compat",
+  "dependencies": {
+    "mockttp": "4.1.0"
+  }
+}

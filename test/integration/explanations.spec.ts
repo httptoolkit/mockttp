@@ -1,11 +1,15 @@
 import { getLocal } from "../..";
-import { expect, URLSearchParams, isNode } from "../test-utils";
+import { expect, URLSearchParams, isNode, isBackwardCompatTest } from "../test-utils";
 import * as _ from "lodash";
 import { Readable } from 'stream';
 
 describe("Mockttp explanation messages", function () {
 
     this.timeout(5000);
+
+    // Explanation text changed between server versions, so these are skipped
+    // when testing backward compat against an old admin server.
+    beforeEach(function () { if (isBackwardCompatTest()) this.skip(); });
 
     let server = getLocal();
 

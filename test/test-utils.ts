@@ -136,6 +136,15 @@ export function nodeOnly(body: Function) {
     if (isNode) body();
 }
 
+/**
+ * Returns true when tests are running against an old admin server to test backward
+ * compatibility. Tests for features not present in the old server version should call
+ * `if (isBackwardCompatTest()) this.skip()` in their body.
+ */
+export function isBackwardCompatTest() {
+    return !!(typeof process !== 'undefined' && process.env?.MOCKTTP_BACKWARD_COMPAT_TEST);
+}
+
 // Wrap a test promise that might fail due to irrelevant remote network issues, and it'll skip the test
 // if there's a timeout, connection error or 502 response (but still throw any other errors). This allows
 // us to write tests that will fail if a remote server explicitly rejects something, but make them

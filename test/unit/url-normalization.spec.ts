@@ -1,6 +1,6 @@
-import { normalizeUrl } from '../src/util/url';
+import { normalizeUrl } from '../../src/util/url';
 
-import { expect } from "./test-utils";
+import { expect } from "../test-utils";
 
 describe("URL normalization for matching", () => {
     it("should do nothing to fully specified URLs", () => {

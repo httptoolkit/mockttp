@@ -12,7 +12,7 @@ module.exports = function(config) {
     config.set({
         frameworks: ['mocha', 'chai', 'webpack'],
         files: [
-            'test/**/*.spec.ts',
+            'test/{unit,integration}/**/*.spec.ts',
             // Required for wasm due to https://github.com/ryanclark/karma-webpack/issues/498. Results
             // in an annoying warning before the webpack build, but then it works fine.
             { pattern: `${outputDir}/**/*`, included: false, served: true }
@@ -76,6 +76,11 @@ module.exports = function(config) {
                 new webpack.ProvidePlugin({
                     process: 'process/browser',
                     Buffer: ['buffer', 'Buffer'],
+                }),
+                new webpack.DefinePlugin({
+                    'process.env.MOCKTTP_BACKWARD_COMPAT_TEST': JSON.stringify(
+                        process.env.MOCKTTP_BACKWARD_COMPAT_TEST || ''
+                    )
                 })
             ],
             output: {

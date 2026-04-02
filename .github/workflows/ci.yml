@@ -23,9 +23,12 @@ jobs:
           node-version: ${{ matrix.node-version }}
           check-latest: true
           cache: 'npm'
-          cache-dependency-path: 'package.json'
+          cache-dependency-path: |
+            package.json
+            test/backward-compat-fixtures/package.json
 
       - run: npm install
+      - run: npm install --prefix test/backward-compat-fixtures
 
       - run: npm run ci-tests
         env:

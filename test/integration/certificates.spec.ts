@@ -9,9 +9,9 @@ import {
     expect,
     ignoreNetworkError,
     nodeOnly
-} from "./test-utils";
+} from "../test-utils";
 
-import { getCA, CA, generateCACertificate, generateSPKIFingerprint } from '../src/util/certificates';
+import { getCA, CA, generateCACertificate, generateSPKIFingerprint } from '../../src/util/certificates';
 
 const validateLintSiteCertResults = (cert: string, results: any[]) => {
     // We don't worry about warnings
@@ -38,8 +38,8 @@ const validateLintSiteCertResults = (cert: string, results: any[]) => {
 
 nodeOnly(() => {
     describe("Certificate generation", () => {
-        const caKey = fs.readFile(path.join(__dirname, 'fixtures', 'test-ca.key'), 'utf8');
-        const caCert = fs.readFile(path.join(__dirname, 'fixtures', 'test-ca.pem'), 'utf8');
+        const caKey = fs.readFile(path.join(__dirname, '..', 'fixtures', 'test-ca.key'), 'utf8');
+        const caCert = fs.readFile(path.join(__dirname, '..', 'fixtures', 'test-ca.pem'), 'utf8');
 
         let server: DestroyableServer<https.Server> | undefined;
 
@@ -78,8 +78,8 @@ nodeOnly(() => {
             // We only need these for backward compatibility, but it is generally good practice to
             // be able to handle this properly, and very convenient if you currently have one.
             await getCA({
-                keyPath: path.join(__dirname, 'fixtures', 'ca-pkcs1.key'),
-                certPath: path.join(__dirname, 'fixtures', 'ca-pkcs1.pem'),
+                keyPath: path.join(__dirname, '..', 'fixtures', 'ca-pkcs1.key'),
+                certPath: path.join(__dirname, '..', 'fixtures', 'ca-pkcs1.pem'),
             });
         });
 

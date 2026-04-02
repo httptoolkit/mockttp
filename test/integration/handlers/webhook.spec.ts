@@ -1,7 +1,10 @@
 import { getLocal } from "../../..";
-import { delay, expect, getDeferred, isWeb, nodeOnly } from "../../test-utils";
+import { delay, expect, getDeferred, isWeb, nodeOnly, isBackwardCompatTest } from "../../test-utils";
 
-describe("Webhook handlers", () => {
+describe("Webhook handlers", function () {
+
+    // Webhook step type not available in older server versions
+    beforeEach(function () { if (isBackwardCompatTest()) this.skip(); });
 
     const server = getLocal();
     const webhookTarget = getLocal();
