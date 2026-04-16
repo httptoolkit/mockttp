@@ -81,16 +81,14 @@ export class RequestRule implements RequestRule {
         record?: boolean,
         debug: boolean,
         keyLogStream?: Writable,
-        emitEventCallback?: (type: string, event: unknown) => void,
-        reqBodyObserved?: boolean
+        emitEventCallback?: (type: string, event: unknown) => void
     }): Promise<void> {
         let stepsPromise = (async () => {
             for (let step of this.steps) {
                 const result = await step.handle(req, res, {
                     emitEventCallback: options.emitEventCallback,
                     keyLogStream: options.keyLogStream,
-                    debug: options.debug,
-                    reqBodyObserved: options.reqBodyObserved
+                    debug: options.debug
                 });
 
                 if (!result || result.continue === false) break;

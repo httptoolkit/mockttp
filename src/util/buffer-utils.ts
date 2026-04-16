@@ -1,4 +1,5 @@
 import { Buffer } from 'buffer';
+import { EventEmitter } from 'events';
 import * as stream from 'stream';
 
 import { isNode } from './util';
@@ -18,7 +19,7 @@ export const asBuffer = (input: Buffer | Uint8Array | string) =>
 export type BufferInProgress = Promise<Buffer> & {
     currentChunks: Buffer[]; // Stores the body chunks as they arrive
     failedWith?: Error; // Stores the error that killed the stream, if one did
-    onTruncate?: (chunks: Buffer[]) => void; // Called if data is truncated (maxSize exceeded)
+    events: EventEmitter; // Emits events - notably 'truncate' if data is truncated
 };
 
 // Takes a buffer and a stream, returns a simple stream that outputs the buffer then the stream. The stream
@@ -65,11 +66,11 @@ export const bufferThenStream = (buffer: BufferInProgress, inputStream: stream.R
         }
     });
 
-    buffer.onTruncate = () => {
+    buffer.events.on('truncate', (chunks) => {
         // If the stream hasn't started yet, start it now, so it grabs the buffer
         // data before it gets truncated:
         if (!active) outputStream.read(0);
-    };
+    });
 
     return outputStream;
 };
@@ -105,7 +106,7 @@ export const streamToBuffer = (input: stream.Readable, maxSize = MAX_BUFFER_SIZE
                 if (currentSize > maxSize) {
                     // Announce truncation, so that other mechanisms (asStream) can
                     // capture this data if they're interested in it.
-                    bufferPromise.onTruncate?.(chunks);
+                    bufferPromise.events.emit('truncate', chunks);
 
                     // Drop all the data so far & stop reading
                     bufferPromise.currentChunks = chunks = [];
@@ -138,6 +139,7 @@ export const streamToBuffer = (input: stream.Readable, maxSize = MAX_BUFFER_SIZE
         }
     );
     bufferPromise.currentChunks = chunks;
+    bufferPromise.events = new EventEmitter();
     return bufferPromise;
 };
 
