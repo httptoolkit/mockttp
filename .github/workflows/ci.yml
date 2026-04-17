@@ -1,5 +1,9 @@
 name: CI
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: '0 9 * * 2' # Weekly build
 jobs:
   build:
     name: Build & test
@@ -22,7 +26,7 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           check-latest: true
-          cache: 'npm'
+          cache: ${{ github.event_name != 'schedule' && 'npm' || '' }}
           cache-dependency-path: 'package.json'
 
       - run: npm install
