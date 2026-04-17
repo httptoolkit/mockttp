@@ -11,6 +11,7 @@ import {
     getLocal,
     AbortedRequest,
     CompletedRequest,
+    CompletedResponse,
     Request
 } from "../../..";
 import {
@@ -18,6 +19,7 @@ import {
     nodeOnly,
     getDeferred,
     Deferred,
+    delay,
     sendRawRequest,
     makeAbortableRequest,
     defaultNodeConnectionHeader
@@ -251,6 +253,54 @@ nodeOnly(() => {
                 });
 
                 expect(response).to.deep.equal({ "test":true });
+            });
+
+            it("should pass through bodies successfully even if observed by events", async () => {
+                // Concern here is that body observation might consume data unexpectedly, so we need
+                // to check that both proxied traffic and event data stay intact.
+                const eventTimeout = <T>(label: string) =>
+                    delay(100).then<T>(() => { throw new Error(`Timed out waiting for ${label}`); });
+
+                const upstreamRequest = getDeferred<CompletedRequest>();
+                const proxiedResponse = getDeferred<CompletedResponse>();
+
+                await remoteServer.forAnyRequest().thenCallback(async (req) => {
+                    upstreamRequest.resolve(await req);
+                    return {
+                        statusCode: 200,
+                        body: await req.body.getText()
+                    };
+                });
+
+                await server.on('request', () => {});
+                await server.on('response', (res) => proxiedResponse.resolve(res));
+                await server.forPost(remoteServer.url).thenPassThrough();
+
+                const rawBody = JSON.stringify({ test: true });
+                const response = await Promise.race([
+                    request.post({
+                        url: remoteServer.url,
+                        body: rawBody,
+                        headers: {
+                            'content-type': 'application/json'
+                        }
+                    }),
+                    eventTimeout<string>('proxy response')
+                ]);
+
+                expect(response).to.equal(rawBody);
+
+                const seenUpstreamRequest = await Promise.race([
+                    upstreamRequest,
+                    eventTimeout<CompletedRequest>('request event')
+                ]);
+                const seenProxiedResponse = await Promise.race([
+                    proxiedResponse,
+                    eventTimeout<CompletedResponse>('response event')
+                ]);
+
+                expect(await seenUpstreamRequest.body.getText()).to.equal(rawBody);
+                expect(await seenProxiedResponse.body.getText()).to.equal(rawBody);
             });
 
             it("should be able to pass through requests with a body buffer", async () => {
