@@ -14,9 +14,9 @@ jobs:
         include:
           - node-version: 20.x
           - node-version: 22.x
-          - node-version: 'v22.20.0'
-            deploys-docs: true
           - node-version: 24.x
+          - node-version: 'v24.15.0'
+            deploys-docs: true
           - node-version: latest
 
     steps:
@@ -90,7 +90,7 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: 'v22.20.0'
+          node-version: 'v24.15.0'
           registry-url: 'https://registry.npmjs.org'
           cache: 'npm'
           cache-dependency-path: 'package.json'
