@@ -51,7 +51,7 @@ nodeOnly(() => {
             });
 
             await expect(
-                request.get("http://not-a-real-server.test:${remoteServer.port}")
+                request.get(`http://not-a-real-server.test:${remoteServer.port}`)
             ).to.be.rejectedWith("ENOTFOUND"); // Goes nowhere
         });
 

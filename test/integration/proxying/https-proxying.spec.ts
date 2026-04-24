@@ -1,6 +1,7 @@
 import { Buffer } from 'buffer';
 import * as https from 'https';
 import * as http2 from 'http2';
+import * as net from 'net';
 import * as fs from 'fs/promises';
 import * as zlib from 'zlib';
 
@@ -16,7 +17,9 @@ import {
     http2ProxyRequest,
     makeDestroyable,
     DestroyableServer,
-    ignoreNetworkError
+    ignoreNetworkError,
+    openRawTlsSocket,
+    sendRawRequest
 } from "../../test-utils";
 import { getCA } from "../../../src/util/certificates";
 import { streamToBuffer } from "../../../src/util/buffer-utils";
@@ -243,13 +246,32 @@ nodeOnly(() => {
                         ignoreHostHttpsErrors: ['127.0.0.1']
                     });
 
-                    let response = await request.get(`https://127.0.0.1:${badServer.port}`, {
-                        strictSSL: false,
-                        resolveWithFullResponse: true,
-                        simple: false
+                    // Can't use `request` here: it relies on `tunnel-agent`, which sets the TLS
+                    // SNI servername to the target host - Node v25+ rejects SNI with an IP literal.
+                    // Instead we CONNECT through the proxy ourselves and TLS without IP-literal SNI.
+                    const proxyReq = https.request({
+                        host: 'localhost',
+                        port: server.port,
+                        method: 'CONNECT',
+                        path: `127.0.0.1:${badServer.port}`,
+                        rejectUnauthorized: false
+                    });
+                    proxyReq.end();
+
+                    const proxySocket = await new Promise<net.Socket>((resolve, reject) => {
+                        proxyReq.once('connect', (res, socket) => {
+                            if (res.statusCode !== 200) reject(new Error(`Proxy CONNECT failed: ${res.statusCode}`));
+                            else resolve(socket);
+                        });
+                        proxyReq.once('error', reject);
                     });
 
-                    expect(response.statusCode).to.equal(200);
+                    const tlsSocket = await openRawTlsSocket(proxySocket, { rejectUnauthorized: false });
+                    const response = await sendRawRequest(tlsSocket,
+                        `GET / HTTP/1.1\r\nHost: 127.0.0.1:${badServer.port}\r\nConnection: close\r\n\r\n`
+                    );
+
+                    expect(response).to.match(/^HTTP\/1\.1 200\b/);
                 });
 
                 it("should refuse to pass through requests if a non-matching host is listed", async () => {
