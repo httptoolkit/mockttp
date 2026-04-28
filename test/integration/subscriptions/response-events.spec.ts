@@ -324,9 +324,17 @@ describe("Response subscriptions", () => {
 
 describe("Abort subscriptions", () => {
     let server = getLocal();
+    let remoteServer = getLocal();
 
-    beforeEach(() => server.start());
-    afterEach(() => server.stop());
+    beforeEach(async () => {
+        await server.start();
+        await remoteServer.start();
+        await remoteServer.forAnyRequest().thenReply(200);
+    });
+    afterEach(async () => {
+        await server.stop();
+        await remoteServer.stop();
+    });
 
     it("should not be sent for successful requests", async () => {
         let seenAbortPromise = getDeferred<AbortedRequest>();
@@ -454,7 +462,7 @@ describe("Abort subscriptions", () => {
         await server.on('abort', (r) => seenAbortPromise.resolve(r));
 
         await server.forGet('/mocked-endpoint').thenPassThrough({
-            transformRequest: { replaceHost: { targetHost: 'example.testserver.host' } },
+            transformRequest: { replaceHost: { targetHost: `localhost:${remoteServer.port}` } },
             beforeResponse: () => 'close'
         });
 
