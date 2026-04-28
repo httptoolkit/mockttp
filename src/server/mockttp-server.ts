@@ -211,7 +211,19 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
 
         if (this.server) await this.server.destroy();
 
-        if (this.keyLogStream) this.keyLogStream.end();
+        if (this.keyLogStream) {
+            const keyLogStream = this.keyLogStream;
+            await new Promise<void>((resolve) => {
+                keyLogStream.end();
+                if (keyLogStream.writableFinished || keyLogStream.errored) {
+                    resolve();
+                    return;
+                }
+                // N.b. errors are already logged by setup logic
+                keyLogStream.once('finish', resolve);
+                keyLogStream.once('error', () => resolve());
+            });
+        }
 
         this.reset();
     }
