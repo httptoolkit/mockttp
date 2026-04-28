@@ -517,16 +517,35 @@ describe("When configured for HTTPS", () => {
                 await fs.unlink(keyLogFile).catch(() => {});
             });
 
+            const expectedKeyTypes = [
+                'CLIENT_HANDSHAKE_TRAFFIC_SECRET',
+                'SERVER_HANDSHAKE_TRAFFIC_SECRET',
+                'CLIENT_TRAFFIC_SECRET_0',
+                'SERVER_TRAFFIC_SECRET_0'
+            ];
+
+            // To manage slow disks with very quick start/stop cycles (mainly in CI)
+            // we poll until the expected content is in the keylog file:
+            const readKeyLogWhenReady = async () => {
+                const deadline = Date.now() + 1000;
+                let contents = '';
+                while (Date.now() < deadline) {
+                    contents = await fs.readFile(keyLogFile, 'utf8').catch(() => '');
+                    if (expectedKeyTypes.every(k => contents.includes(k))) return contents;
+                    await delay(50);
+                }
+                return contents;
+            };
+
             it("should log downstream TLS keys to the file", async () => {
                 await server.forGet('/').thenReply(200);
                 await fetch(server.url);
 
-                const keyLogContents = await fs.readFile(keyLogFile, 'utf8');
+                const keyLogContents = await readKeyLogWhenReady();
 
-                expect(keyLogContents).to.include('CLIENT_HANDSHAKE_TRAFFIC_SECRET');
-                expect(keyLogContents).to.include('SERVER_HANDSHAKE_TRAFFIC_SECRET');
-                expect(keyLogContents).to.include('CLIENT_TRAFFIC_SECRET_0');
-                expect(keyLogContents).to.include('SERVER_TRAFFIC_SECRET_0');
+                for (const keyType of expectedKeyTypes) {
+                    expect(keyLogContents).to.include(keyType);
+                }
             });
 
             it("should log upstream TLS keys to the file", async () => {
@@ -534,12 +553,11 @@ describe("When configured for HTTPS", () => {
                 await server.forGet('/').thenForwardTo(remoteNonLoggingServer.url);
                 await fetch(`http://localhost:${server.port}/`);
 
-                const keyLogContents = await fs.readFile(keyLogFile, 'utf8');
+                const keyLogContents = await readKeyLogWhenReady();
 
-                expect(keyLogContents).to.include('CLIENT_HANDSHAKE_TRAFFIC_SECRET');
-                expect(keyLogContents).to.include('SERVER_HANDSHAKE_TRAFFIC_SECRET');
-                expect(keyLogContents).to.include('CLIENT_TRAFFIC_SECRET_0');
-                expect(keyLogContents).to.include('SERVER_TRAFFIC_SECRET_0');
+                for (const keyType of expectedKeyTypes) {
+                    expect(keyLogContents).to.include(keyType);
+                }
             });
 
             it("should log upstream HTTP/2 TLS keys to the file", async () => {
@@ -551,12 +569,11 @@ describe("When configured for HTTPS", () => {
                 const res = await getHttp2Response(req);
                 expect(res[':status']).to.equal(200);
 
-                const keyLogContents = await fs.readFile(keyLogFile, 'utf8');
+                const keyLogContents = await readKeyLogWhenReady();
 
-                expect(keyLogContents).to.include('CLIENT_HANDSHAKE_TRAFFIC_SECRET');
-                expect(keyLogContents).to.include('SERVER_HANDSHAKE_TRAFFIC_SECRET');
-                expect(keyLogContents).to.include('CLIENT_TRAFFIC_SECRET_0');
-                expect(keyLogContents).to.include('SERVER_TRAFFIC_SECRET_0');
+                for (const keyType of expectedKeyTypes) {
+                    expect(keyLogContents).to.include(keyType);
+                }
             });
 
             it("should log upstream WebSocket HTTP/2 TLS keys to the file", async () => {
@@ -571,12 +588,11 @@ describe("When configured for HTTPS", () => {
                 ws.close(1000);
                 await new Promise((resolve) => ws.addEventListener('close', resolve));
 
-                const keyLogContents = await fs.readFile(keyLogFile, 'utf8');
+                const keyLogContents = await readKeyLogWhenReady();
 
-                expect(keyLogContents).to.include('CLIENT_HANDSHAKE_TRAFFIC_SECRET');
-                expect(keyLogContents).to.include('SERVER_HANDSHAKE_TRAFFIC_SECRET');
-                expect(keyLogContents).to.include('CLIENT_TRAFFIC_SECRET_0');
-                expect(keyLogContents).to.include('SERVER_TRAFFIC_SECRET_0');
+                for (const keyType of expectedKeyTypes) {
+                    expect(keyLogContents).to.include(keyType);
+                }
             });
 
         });
