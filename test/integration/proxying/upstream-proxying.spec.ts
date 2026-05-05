@@ -536,7 +536,7 @@ nodeOnly(() => {
             });
 
             it("should fallback to intermediateProxy using PAC file", async () => {
-                const pacFile = `function FindProxyForURL(url, host) { return "PROXY invalid-proxy:8080; PROXY ${url.parse(intermediateProxy.url).host};";  }`;
+                const pacFile = `function FindProxyForURL(url, host) { return "PROXY invalid-proxy.invalid:8080; PROXY ${url.parse(intermediateProxy.url).host};";  }`;
                 await remoteServer.forGet('/proxy-fallback').thenReply(200, pacFile);
 
                 await server.forAnyRequest().thenPassThrough({
