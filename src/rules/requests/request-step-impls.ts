@@ -5,6 +5,7 @@ import type * as dns from 'dns';
 import * as net from 'net';
 import * as tls from 'tls';
 import * as http from 'http';
+import type * as http2 from 'http2';
 import * as https from 'https';
 
 import * as _ from 'lodash';
@@ -44,7 +45,8 @@ import {
     dropDefaultHeaders,
     validateHeader,
     updateRawHeaders,
-    getHeaderValue
+    getHeaderValue,
+    objectHeadersToFlat
 } from '../../util/header-utils';
 import { streamToBuffer, asBuffer } from '../../util/buffer-utils';
 import {
@@ -119,7 +121,8 @@ import {
     TimeoutStep,
     DelayStep,
     WebhookStep,
-    WaitForRequestBodyStep
+    WaitForRequestBodyStep,
+    InformationalResponseStep
 } from './request-step-definitions';
 
 // Re-export various type definitions. This is mostly for compatibility with external
@@ -1494,6 +1497,52 @@ export class WaitForRequestBodyStepImpl extends WaitForRequestBodyStep {
     }
 }
 
+export class InformationalResponseStepImpl extends InformationalResponseStep {
+
+    static readonly fromDefinition = copyDefinitionToImpl;
+
+    async handle(_request: OngoingRequest, response: OngoingResponse): Promise<{ continue: true }> {
+        const flatHeaders = this.headers === undefined
+            ? []
+            : Array.isArray(this.headers)
+                ? flattenPairedRawHeaders(this.headers)
+                : objectHeadersToFlat(this.headers);
+
+        if (isHttp2(response)) {
+            // HTTP/2 informational responses go via additionalHeaders on the stream.
+            const h2Headers: { [k: string]: string } = { ':status': String(this.status) };
+            for (let i = 0; i < flatHeaders.length; i += 2) {
+                // H2 header names must be lowercase per RFC 7540.
+                const name = flatHeaders[i].toLowerCase();
+                const value = flatHeaders[i + 1];
+                const existing = h2Headers[name];
+                if (existing === undefined) {
+                    h2Headers[name] = value;
+                } else {
+                    h2Headers[name] = (Array.isArray(existing) ? [...existing, value] : [existing, value]) as any;
+                }
+            }
+            (response as http2.Http2ServerResponse).stream.additionalHeaders(h2Headers);
+        } else {
+            // HTTP/1.1: build the raw status-line + headers and use _writeRaw, the same
+            // primitive Node's own writeContinue/writeProcessing/writeEarlyHints use.
+            // Hacky but effective for now, could consider submitting a raw
+            // additionalHeaders H1 API to Node in future.
+            const reason = http.STATUS_CODES[this.status] ?? 'Information';
+            let raw = `HTTP/1.1 ${this.status} ${reason}\r\n`;
+            for (let i = 0; i < flatHeaders.length; i += 2) {
+                raw += `${flatHeaders[i]}: ${flatHeaders[i + 1]}\r\n`;
+            }
+            raw += '\r\n';
+            (response as unknown as {
+                _writeRaw: (data: string, encoding: BufferEncoding) => void
+            })._writeRaw(raw, 'ascii');
+        }
+
+        return { continue: true };
+    }
+}
+
 const encodeWebhookBody = (body: Buffer) => {
     return {
         format: 'base64',
@@ -1621,5 +1670,6 @@ export const StepLookup = {
     'json-rpc-response': JsonRpcResponseStepImpl,
     'delay': DelayStepImpl,
     'wait-for-request-body': WaitForRequestBodyStepImpl,
-    'webhook': WebhookStepImpl
+    'webhook': WebhookStepImpl,
+    'informational-response': InformationalResponseStepImpl
 }

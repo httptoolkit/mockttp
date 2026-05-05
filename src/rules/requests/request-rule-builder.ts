@@ -3,7 +3,7 @@ import { Readable } from 'stream';
 import * as url from 'url';
 import { MaybePromise } from '@httptoolkit/util';
 
-import { Headers, CompletedRequest, Method, MockedEndpoint, Trailers } from "../../types";
+import { Headers, RawHeaders, CompletedRequest, Method, MockedEndpoint, Trailers } from "../../types";
 import type { RequestRuleData } from "./request-rule";
 
 import {
@@ -23,7 +23,8 @@ import {
     DelayStep,
     WebhookStep,
     WaitForRequestBodyStep,
-    RequestWebhookEvents
+    RequestWebhookEvents,
+    InformationalResponseStep
 } from "./request-step-definitions";
 import { byteLength } from "../../util/util";
 import { BaseRuleBuilder } from "../base-rule-builder";
@@ -129,6 +130,20 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
      */
     addWebhook(url: string, events?: RequestWebhookEvents[]): this {
         this.steps.push(new WebhookStep(url, events ?? ['request', 'response']));
+        return this;
+    }
+
+    /**
+     * Send an HTTP 1xx informational response (e.g. 102 Processing,
+     * 103 Early Hints) to the client before the rule's final response.
+     * Multiple informational responses can be sent by calling this method
+     * multiple times before the terminal step.
+     *
+     * Status must be in 100-199, but not 101 (Upgrade); use the websocket
+     * rules to handle websocket upgrades instead.
+     */
+    sendInfoResponse(status: number, headers?: Headers | RawHeaders): this {
+        this.steps.push(new InformationalResponseStep(status, headers));
         return this;
     }
 

@@ -1073,6 +1073,38 @@ export class DelayStep extends Serializable implements RequestStepDefinition {
 
 }
 
+/**
+ * A non-terminal step that sends an HTTP 1xx informational response
+ * (e.g. 103 Early Hints) before any subsequent step. Multiple
+ * informational responses may be sent before a final response.
+ *
+ * Status must be in 100-199, excluding 101.
+ */
+export class InformationalResponseStep extends Serializable implements RequestStepDefinition {
+
+    readonly type = 'informational-response';
+    static readonly isFinal = false;
+
+    constructor(
+        public readonly status: number,
+        public readonly headers?: Headers | RawHeaders
+    ) {
+        super();
+
+        if (!Number.isInteger(status) || status < 100 || status > 199) {
+            throw new Error(`Informational response status must be an integer in 100-199 (got ${status})`);
+        }
+        if (status === 101) {
+            throw new Error(`Informational response status 101 is not supported; use websocket rules to handle upgrades`);
+        }
+    }
+
+    explain(): string {
+        return `send a ${this.status} informational response`;
+    }
+
+}
+
 export class WaitForRequestBodyStep extends Serializable implements RequestStepDefinition {
 
     readonly type = 'wait-for-request-body'
@@ -1126,5 +1158,6 @@ export const StepDefinitionLookup = {
     'json-rpc-response': JsonRpcResponseStep,
     'delay': DelayStep,
     'wait-for-request-body': WaitForRequestBodyStep,
-    'webhook': WebhookStep
+    'webhook': WebhookStep,
+    'informational-response': InformationalResponseStep
 }
