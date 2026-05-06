@@ -1,7 +1,9 @@
 import { expect } from "chai";
 
 import { CompletedRequest, getLocal } from "../../..";
-import { delay, getDeferred, isNode } from "../../test-utils";
+import { delay, getDeferred, isNode, nodeSatisfies } from "../../test-utils";
+
+const FETCH_ENABLES_H2_BY_DEFAULT = ">=26";
 
 describe("TLS passthrough subscriptions", () => {
 
@@ -47,7 +49,9 @@ describe("TLS passthrough subscriptions", () => {
         const { tlsMetadata } = openEvent;
         expect(tlsMetadata.sniHostname).to.equal('bypass.localhost');
         expect(tlsMetadata.clientAlpn).to.deep.equal(isNode
-            ? ['http/1.1']
+            ? (nodeSatisfies(FETCH_ENABLES_H2_BY_DEFAULT)
+                ? ['http/1.1', 'h2']
+                : ['http/1.1'])
             : ['h2', 'http/1.1']
         );
         expect(tlsMetadata.ja3Fingerprint.length).to.equal(32);
