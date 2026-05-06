@@ -1,5 +1,4 @@
 import * as _ from 'lodash';
-import * as http from 'http';
 
 import {
     Headers,
@@ -284,14 +283,16 @@ export function dropDefaultHeaders(response: OngoingResponse) {
     );
 }
 
+// RFC 7230 token char set — anything outside this in a name is invalid.
+const VALID_TOKEN_CHARS = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
+
 export function validateHeader(name: string, value: string | string[]): boolean {
-    try {
-        http.validateHeaderName(name);
-        http.validateHeaderValue(name, value);
-        return true;
-    } catch (e) {
-        return false;
+    if (typeof name !== 'string' || !VALID_TOKEN_CHARS.test(name)) return false;
+    const values = Array.isArray(value) ? value : [value];
+    for (const v of values) {
+        if (typeof v !== 'string' || /[\r\n]/.test(v)) return false;
     }
+    return true;
 }
 
 /**

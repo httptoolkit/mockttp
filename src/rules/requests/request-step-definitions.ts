@@ -19,6 +19,7 @@ import {
 
 import { Replace } from '../../util/type-utils';
 import { asBuffer } from '../../util/buffer-utils';
+import { validateHeader } from '../../util/header-utils';
 import { isAbsoluteUrl } from '../../util/url';
 import {
     MatchReplacePairs,
@@ -1096,6 +1097,17 @@ export class InformationalResponseStep extends Serializable implements RequestSt
         }
         if (status === 101) {
             throw new Error(`Informational response status 101 is not supported; use websocket rules to handle upgrades`);
+        }
+
+        if (headers !== undefined) {
+            const pairs: Array<[string, string | string[]]> = Array.isArray(headers)
+                ? headers.map(([k, v]) => [k, v])
+                : Object.entries(headers).filter(([, v]) => v !== undefined) as Array<[string, string | string[]]>;
+            for (const [name, value] of pairs) {
+                if (!validateHeader(name, value)) {
+                    throw new Error(`Invalid informational response header: ${JSON.stringify(name)}`);
+                }
+            }
         }
     }
 

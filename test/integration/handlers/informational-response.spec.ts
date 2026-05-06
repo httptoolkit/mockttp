@@ -85,6 +85,25 @@ describe("Informational response steps", () => {
             })).not.to.throw();
         });
 
+        it("rejects header names containing a colon", () => {
+            expect(() => new InformationalResponseStep(103, { 'bad:name': 'v' })).to.throw(/header/i);
+        });
+
+        it("rejects header names containing CR or LF", () => {
+            expect(() => new InformationalResponseStep(103, { 'bad\r\nname': 'v' })).to.throw(/header/i);
+            expect(() => new InformationalResponseStep(103, { 'bad\nname': 'v' })).to.throw(/header/i);
+        });
+
+        it("rejects header values containing CR or LF", () => {
+            expect(() => new InformationalResponseStep(103, { 'x': 'a\r\nInjected: yes' })).to.throw(/header/i);
+            expect(() => new InformationalResponseStep(103, { 'x': 'a\nb' })).to.throw(/header/i);
+        });
+
+        it("rejects invalid headers passed as raw header pairs", () => {
+            expect(() => new InformationalResponseStep(103, [['x', 'a\r\nb']])).to.throw(/header/i);
+            expect(() => new InformationalResponseStep(103, [['bad:name', 'v']])).to.throw(/header/i);
+        });
+
         it("explains itself", () => {
             const step = new InformationalResponseStep(103, { 'link': '</a>' });
             expect(step.explain()).to.contain('103');
