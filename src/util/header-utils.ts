@@ -286,11 +286,15 @@ export function dropDefaultHeaders(response: OngoingResponse) {
 // RFC 7230 token char set — anything outside this in a name is invalid.
 const VALID_TOKEN_CHARS = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
 
+// RFC 7230 field-value chars: HTAB / SP / VCHAR / obs-text. I.e. tab, plus
+// 0x20–0x7E, plus 0x80–0xFF. Matches Node's checkInvalidHeaderChar.
+const INVALID_VALUE_CHAR = /[^\t\x20-\x7E\x80-\xFF]/;
+
 export function validateHeader(name: string, value: string | string[]): boolean {
     if (typeof name !== 'string' || !VALID_TOKEN_CHARS.test(name)) return false;
     const values = Array.isArray(value) ? value : [value];
     for (const v of values) {
-        if (typeof v !== 'string' || /[\r\n]/.test(v)) return false;
+        if (typeof v !== 'string' || INVALID_VALUE_CHAR.test(v)) return false;
     }
     return true;
 }
