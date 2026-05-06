@@ -322,6 +322,12 @@ export async function createComboServer(options: ComboServerOptions): Promise<De
     // our case, we want to handle the garbage requests too, so we disable it:
     (server as any)._httpServer.requireHostHeader = false;
 
+    // Disable auto 417 on unknown expect, and map this back to
+    // normal request behaviour instead.
+    (server as any)._httpServer.on('checkExpectation', (req: http.IncomingMessage, res: http.ServerResponse) => {
+        (server as any)._httpServer.emit('request', req, res);
+    });
+
     server.on('connection', (socket: net.Socket | http2.ServerHttp2Stream) => {
         socket[SocketTimingInfo] ||= buildSocketTimingInfo();
 

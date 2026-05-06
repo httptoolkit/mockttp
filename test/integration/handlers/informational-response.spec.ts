@@ -256,6 +256,38 @@ describe("Informational response steps", () => {
             });
         });
 
+        describe("with non-standard Expect headers", () => {
+
+            const server = getLocal();
+
+            beforeEach(() => server.start());
+            afterEach(() => server.stop());
+
+            it("routes a non-standard Expect through to the matching rule", async () => {
+                const endpoint = await server.forGet('/x').thenReply(200, 'rule ran');
+
+                const sock = await openRawSocket(server);
+                const raw = await new Promise<string>((resolve, reject) => {
+                    let buf = '';
+                    sock.on('data', d => { buf += d.toString('utf8'); });
+                    sock.on('end', () => resolve(buf));
+                    sock.on('error', reject);
+                    sock.write(
+                        `GET /x HTTP/1.1\r\nHost: localhost\r\n` +
+                        `Expect: x-weird-thing\r\nConnection: close\r\n\r\n`
+                    );
+                });
+
+                expect(raw).to.contain('HTTP/1.1 200');
+                expect(raw).to.contain('rule ran');
+                expect(raw).not.to.contain('417');
+
+                const seen = await endpoint.getSeenRequests();
+                expect(seen.length).to.equal(1);
+                expect(seen[0].headers['expect']).to.equal('x-weird-thing');
+            });
+        });
+
         describe("over HTTP/2", () => {
 
             if (nodeSatisfies(BROKEN_H2_OVER_H2_TUNNELLING)) return;
