@@ -1,5 +1,6 @@
 import * as http from 'http';
 import * as http2 from 'http2';
+import * as tls from 'tls';
 import * as url from 'url';
 
 import { getLocal, Mockttp, matchers, requestSteps } from "../../..";
@@ -10,7 +11,8 @@ import {
     cleanup,
     BROKEN_H2_OVER_H2_TUNNELLING,
     nodeSatisfies,
-    openRawSocket
+    openRawSocket,
+    getHttp2Response
 } from "../../test-utils";
 
 // Read raw bytes from an HTTP/1.1 connection until the server closes it,
@@ -458,6 +460,110 @@ describe("Informational response steps", () => {
                 expect(result.response[':status']).to.equal(200);
 
                 await cleanup(client);
+            });
+        });
+
+        describe("forwarded from H1 upstream to H2 client via passthrough", () => {
+
+            // H2 downstream + H1 upstream — exercises cross-protocol relay
+            // (the proxy receives the upstream 1xx as an H1 'information' event
+            // and re-emits it via H2 additionalHeaders).
+            const upstream = getLocal();
+            const proxy = getLocal();
+
+            beforeEach(async () => {
+                await upstream.start();
+                await proxy.start();
+            });
+            afterEach(async () => {
+                await proxy.stop();
+                await upstream.stop();
+            });
+
+            it("forwards a 103 Early Hints response and rewrites it for HTTP/2", async () => {
+                await upstream.forGet('/x')
+                    .sendInfoResponse(103, { 'link': '</style.css>; rel=preload' })
+                    .thenReply(200, 'final body');
+                await proxy.forGet('/x').thenForwardTo(`http://localhost:${upstream.port}`);
+
+                const client = http2.connect(proxy.url);
+                const req = client.request({ ':path': '/x' });
+                const result = await collectHttp2(req);
+
+                expect(result.informational.length).to.equal(1);
+                expect(result.informational[0][':status']).to.equal(103);
+                expect(result.informational[0]['link']).to.equal('</style.css>; rel=preload');
+                expect(result.response[':status']).to.equal(200);
+                expect(result.body.toString('utf8')).to.equal('final body');
+
+                await cleanup(client);
+            });
+        });
+
+        describe("forwarded from H2 upstream to H2 client via passthrough", () => {
+
+            if (nodeSatisfies(BROKEN_H2_OVER_H2_TUNNELLING)) return;
+
+            const upstream = getLocal({
+                http2: true, // Prefer H2 in ALPN, so the proxy negotiates H2 upstream.
+                https: {
+                    keyPath: './test/fixtures/test-ca.key',
+                    certPath: './test/fixtures/test-ca.pem'
+                }
+            });
+            const proxy = getLocal({
+                https: {
+                    keyPath: './test/fixtures/test-ca.key',
+                    certPath: './test/fixtures/test-ca.pem'
+                }
+            });
+
+            beforeEach(async () => {
+                await upstream.start();
+                await proxy.start();
+            });
+            afterEach(async () => {
+                await proxy.stop();
+                await upstream.stop();
+            });
+
+            it("forwards a 103 Early Hints response end-to-end over HTTP/2", async () => {
+                const upstreamEndpoint = await upstream.forGet('/x')
+                    .sendInfoResponse(103, { 'link': '</style.css>; rel=preload' })
+                    .thenReply(200, 'final body');
+                await proxy.forGet(upstream.urlFor('/x')).thenPassThrough();
+
+                const proxyClient = http2.connect(proxy.url);
+                const tunnelReq = proxyClient.request({
+                    ':method': 'CONNECT',
+                    ':authority': `localhost:${upstream.port}`
+                });
+                expect((await getHttp2Response(tunnelReq))[':status']).to.equal(200);
+
+                const tunnelledClient = http2.connect(upstream.url, {
+                    createConnection: () => tls.connect({
+                        host: 'localhost',
+                        servername: 'localhost',
+                        socket: tunnelReq as any,
+                        ALPNProtocols: ['h2']
+                    })
+                });
+
+                const req = tunnelledClient.request({ ':path': '/x' });
+                const result = await collectHttp2(req);
+
+                expect(result.informational.length).to.equal(1);
+                expect(result.informational[0][':status']).to.equal(103);
+                expect(result.informational[0]['link']).to.equal('</style.css>; rel=preload');
+                expect(result.response[':status']).to.equal(200);
+                expect(result.body.toString('utf8')).to.equal('final body');
+
+                const seen = await upstreamEndpoint.getSeenRequests();
+                expect(seen.length).to.equal(1);
+                expect(seen[0].httpVersion, 'proxy should have used H2 to upstream')
+                    .to.match(/^2/);
+
+                await cleanup(tunnelledClient, proxyClient);
             });
         });
     });

@@ -1229,40 +1229,36 @@ export class PassThroughStepImpl extends PassThroughStep {
 
             // Forward upstream 1xx responses downstream, except 100 (Node handles automatically) and
             // 101 (handled elsewhere by websocket steps etc).
-            if (shouldTryH2Upstream) {
-                // http2-wrapper 'information' drops headers, so we hook the raw h2 stream:
-                serverReq.once('socket', () => {
-                    const h2Stream = (serverReq as any)._request as http2.ClientHttp2Stream | undefined;
-                    if (!h2Stream) return;
-                    h2Stream.on('headers', (h2Headers: http2.IncomingHttpHeaders) => {
+            const tryForward1xx = (statusCode: number, flatHeaders: string[]) => {
+                if (statusCode < 102 || statusCode > 199) return;
+                try {
+                    sendInfoResponse(clientRes, statusCode, flatHeaders);
+                } catch (e) {
+                    // Downstream may have moved on (e.g. final response already started).
+                }
+            };
+            serverReq.once('socket', () => {
+                const h2Stream = (serverReq as any)._request as http2.ClientHttp2Stream | undefined;
+                if (h2Stream) {
+                    h2Stream.on('headers', (h2Headers) => {
                         const status = Number(h2Headers[':status']);
-                        if (!(status >= 102 && status <= 199)) return;
+                        if (!(status >= 100 && status < 200)) return;
                         const flat: string[] = [];
                         for (const [name, value] of Object.entries(h2Headers)) {
                             if (name.startsWith(':') || value === undefined) continue;
                             if (Array.isArray(value)) for (const v of value) flat.push(name, v);
                             else flat.push(name, value);
                         }
-                        try {
-                            sendInfoResponse(clientRes, status, flat);
-                        } catch (e) {
-                            // Downstream may have already moved on, e.g. the final response
-                            // started — best-effort, just drop.
-                        }
+                        tryForward1xx(status, flat);
                     });
-                });
-            } else {
-                serverReq.on('information', (info) => {
-                    if (!(info.statusCode >= 102 && info.statusCode <= 199)) return;
-                    const rawHeaders = (info as any).rawHeaders as string[] | undefined;
-                    const flat = rawHeaders ?? objectHeadersToFlat(info.headers as Headers);
-                    try {
-                        sendInfoResponse(clientRes, info.statusCode, flat);
-                    } catch (e) {
-                        // Best-effort, drop on error.
-                    }
-                });
-            }
+                } else {
+                    serverReq.on('information', (info) => {
+                        const rawHeaders = (info as any).rawHeaders as string[] | undefined;
+                        const flat = rawHeaders ?? objectHeadersToFlat((info.headers ?? {}) as Headers);
+                        tryForward1xx(info.statusCode, flat);
+                    });
+                }
+            });
 
             // We always start upstream connections *immediately*. This might be less efficient, but it
             // ensures that we're accurately mirroring downstream, which has indeed already connected.
