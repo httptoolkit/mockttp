@@ -1,4 +1,6 @@
+import * as http from 'http';
 import * as http2 from 'http2';
+import * as url from 'url';
 
 import { getLocal, Mockttp, matchers, requestSteps } from "../../..";
 const { InformationalResponseStep } = requestSteps;
@@ -186,6 +188,36 @@ describe("Informational response steps", () => {
             it("can be chained: builder method returns this", async () => {
                 const builder = server.forGet('/x').sendInfoResponse(103, { 'link': '</a>' });
                 expect(typeof builder.thenReply).to.equal('function');
+            });
+
+            it("emits a Node-parseable information with status and headers", async () => {
+                await server.forGet('/x')
+                    .sendInfoResponse(199, { 'x-hint': 'value', 'link': '</a>' })
+                    .thenReply(200, 'ok');
+
+                const infoEvents: Array<{ statusCode: number, statusMessage: string, headers: http.IncomingHttpHeaders }> = [];
+                const finalStatus = await new Promise<number>((resolve, reject) => {
+                    const req = http.get(url.parse(server.urlFor('/x')));
+                    req.on('information', (info) => {
+                        infoEvents.push({
+                            statusCode: info.statusCode,
+                            statusMessage: info.statusMessage,
+                            headers: info.headers
+                        });
+                    });
+                    req.on('response', (res) => {
+                        res.on('data', () => {});
+                        res.on('end', () => resolve(res.statusCode!));
+                    });
+                    req.on('error', reject);
+                });
+
+                expect(infoEvents.length).to.equal(1);
+                expect(infoEvents[0].statusCode).to.equal(199);
+                expect(infoEvents[0].statusMessage).to.equal('Information');
+                expect(infoEvents[0].headers['x-hint']).to.equal('value');
+                expect(infoEvents[0].headers['link']).to.equal('</a>');
+                expect(finalStatus).to.equal(200);
             });
 
             it("is non-final: allows a terminal step to follow it", async () => {
