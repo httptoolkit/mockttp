@@ -1227,6 +1227,43 @@ export class PassThroughStepImpl extends PassThroughStep {
                 reject(e);
             });
 
+            // Forward upstream 1xx responses downstream, except 100 (Node handles automatically) and
+            // 101 (handled elsewhere by websocket steps etc).
+            if (shouldTryH2Upstream) {
+                // http2-wrapper 'information' drops headers, so we hook the raw h2 stream:
+                serverReq.once('socket', () => {
+                    const h2Stream = (serverReq as any)._request as http2.ClientHttp2Stream | undefined;
+                    if (!h2Stream) return;
+                    h2Stream.on('headers', (h2Headers: http2.IncomingHttpHeaders) => {
+                        const status = Number(h2Headers[':status']);
+                        if (!(status >= 102 && status <= 199)) return;
+                        const flat: string[] = [];
+                        for (const [name, value] of Object.entries(h2Headers)) {
+                            if (name.startsWith(':') || value === undefined) continue;
+                            if (Array.isArray(value)) for (const v of value) flat.push(name, v);
+                            else flat.push(name, value);
+                        }
+                        try {
+                            sendInfoResponse(clientRes, status, flat);
+                        } catch (e) {
+                            // Downstream may have already moved on, e.g. the final response
+                            // started — best-effort, just drop.
+                        }
+                    });
+                });
+            } else {
+                serverReq.on('information', (info) => {
+                    if (!(info.statusCode >= 102 && info.statusCode <= 199)) return;
+                    const rawHeaders = (info as any).rawHeaders as string[] | undefined;
+                    const flat = rawHeaders ?? objectHeadersToFlat(info.headers as Headers);
+                    try {
+                        sendInfoResponse(clientRes, info.statusCode, flat);
+                    } catch (e) {
+                        // Best-effort, drop on error.
+                    }
+                });
+            }
+
             // We always start upstream connections *immediately*. This might be less efficient, but it
             // ensures that we're accurately mirroring downstream, which has indeed already connected.
             serverReq.flushHeaders();
@@ -1497,6 +1534,40 @@ export class WaitForRequestBodyStepImpl extends WaitForRequestBodyStep {
     }
 }
 
+function sendInfoResponse(
+    response: OngoingResponse,
+    status: number,
+    flatHeaders: string[]
+) {
+    if (isHttp2(response)) {
+        const h2Headers: { [k: string]: string } = { ':status': String(status) };
+        for (let i = 0; i < flatHeaders.length; i += 2) {
+            const name = flatHeaders[i].toLowerCase();
+            if (name.startsWith(':')) continue;
+            const value = flatHeaders[i + 1];
+            const existing = h2Headers[name];
+            if (existing === undefined) {
+                h2Headers[name] = value;
+            } else {
+                h2Headers[name] = (Array.isArray(existing) ? [...existing, value] : [existing, value]) as any;
+            }
+        }
+        (response as http2.Http2ServerResponse).stream.additionalHeaders(h2Headers);
+    } else {
+        // HTTP/1.1: build the raw status-line + headers and use _writeRaw, the same
+        // primitive Node's own writeContinue/writeProcessing/writeEarlyHints use.
+        const reason = http.STATUS_CODES[status] ?? 'Information';
+        let raw = `HTTP/1.1 ${status} ${reason}\r\n`;
+        for (let i = 0; i < flatHeaders.length; i += 2) {
+            raw += `${flatHeaders[i]}: ${flatHeaders[i + 1]}\r\n`;
+        }
+        raw += '\r\n';
+        (response as unknown as {
+            _writeRaw: (data: string, encoding: BufferEncoding) => void
+        })._writeRaw(raw, 'ascii');
+    }
+}
+
 export class InformationalResponseStepImpl extends InformationalResponseStep {
 
     static readonly fromDefinition = copyDefinitionToImpl;
@@ -1508,37 +1579,7 @@ export class InformationalResponseStepImpl extends InformationalResponseStep {
                 ? flattenPairedRawHeaders(this.headers)
                 : objectHeadersToFlat(this.headers);
 
-        if (isHttp2(response)) {
-            // HTTP/2 informational responses go via additionalHeaders on the stream.
-            const h2Headers: { [k: string]: string } = { ':status': String(this.status) };
-            for (let i = 0; i < flatHeaders.length; i += 2) {
-                // H2 header names must be lowercase per RFC 7540.
-                const name = flatHeaders[i].toLowerCase();
-                const value = flatHeaders[i + 1];
-                const existing = h2Headers[name];
-                if (existing === undefined) {
-                    h2Headers[name] = value;
-                } else {
-                    h2Headers[name] = (Array.isArray(existing) ? [...existing, value] : [existing, value]) as any;
-                }
-            }
-            (response as http2.Http2ServerResponse).stream.additionalHeaders(h2Headers);
-        } else {
-            // HTTP/1.1: build the raw status-line + headers and use _writeRaw, the same
-            // primitive Node's own writeContinue/writeProcessing/writeEarlyHints use.
-            // Hacky but effective for now, could consider submitting a raw
-            // additionalHeaders H1 API to Node in future.
-            const reason = http.STATUS_CODES[this.status] ?? 'Information';
-            let raw = `HTTP/1.1 ${this.status} ${reason}\r\n`;
-            for (let i = 0; i < flatHeaders.length; i += 2) {
-                raw += `${flatHeaders[i]}: ${flatHeaders[i + 1]}\r\n`;
-            }
-            raw += '\r\n';
-            (response as unknown as {
-                _writeRaw: (data: string, encoding: BufferEncoding) => void
-            })._writeRaw(raw, 'ascii');
-        }
-
+        sendInfoResponse(response, this.status, flatHeaders);
         return { continue: true };
     }
 }

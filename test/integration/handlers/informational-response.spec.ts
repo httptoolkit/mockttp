@@ -288,6 +288,80 @@ describe("Informational response steps", () => {
             });
         });
 
+        describe("forwarded from upstream via passthrough", () => {
+
+            const upstream = getLocal();
+            const proxy = getLocal();
+
+            beforeEach(async () => {
+                await upstream.start();
+                await proxy.start();
+            });
+            afterEach(async () => {
+                await proxy.stop();
+                await upstream.stop();
+            });
+
+            function getWithInfo(target: Mockttp, path: string) {
+                return new Promise<{
+                    info: Array<{ statusCode: number, headers: http.IncomingHttpHeaders }>,
+                    finalStatus: number,
+                    body: string
+                }>((resolve, reject) => {
+                    const info: Array<{ statusCode: number, headers: http.IncomingHttpHeaders }> = [];
+                    const req = http.get(url.parse(target.urlFor(path)));
+                    req.on('information', (i) => info.push({ statusCode: i.statusCode, headers: i.headers }));
+                    req.on('response', (res) => {
+                        let body = '';
+                        res.on('data', (d) => { body += d.toString('utf8'); });
+                        res.on('end', () => resolve({ info, finalStatus: res.statusCode!, body }));
+                    });
+                    req.on('error', reject);
+                });
+            }
+
+            it("forwards a 103 Early Hints response from the upstream server to the client", async () => {
+                await upstream.forGet('/x')
+                    .sendInfoResponse(103, { 'link': '</style.css>; rel=preload' })
+                    .thenReply(200, 'final body');
+                await proxy.forGet('/x').thenForwardTo(`http://localhost:${upstream.port}`);
+
+                const result = await getWithInfo(proxy, '/x');
+
+                expect(result.info.length).to.equal(1);
+                expect(result.info[0].statusCode).to.equal(103);
+                expect(result.info[0].headers['link']).to.equal('</style.css>; rel=preload');
+                expect(result.finalStatus).to.equal(200);
+                expect(result.body).to.equal('final body');
+            });
+
+            it("forwards multiple 1xx responses preserving order", async () => {
+                await upstream.forGet('/x')
+                    .sendInfoResponse(102)
+                    .sendInfoResponse(103, { 'link': '</a>' })
+                    .thenReply(200, 'ok');
+                await proxy.forGet('/x').thenForwardTo(`http://localhost:${upstream.port}`);
+
+                const result = await getWithInfo(proxy, '/x');
+
+                expect(result.info.map(i => i.statusCode)).to.deep.equal([102, 103]);
+                expect(result.info[1].headers['link']).to.equal('</a>');
+                expect(result.finalStatus).to.equal(200);
+            });
+
+            it("does not forward upstream 100 Continue (could duplicate auto-100)", async () => {
+                await upstream.forGet('/x')
+                    .sendInfoResponse(100)
+                    .thenReply(200, 'ok');
+                await proxy.forGet('/x').thenForwardTo(`http://localhost:${upstream.port}`);
+
+                const result = await getWithInfo(proxy, '/x');
+
+                expect(result.info.map(i => i.statusCode)).not.to.include(100);
+                expect(result.finalStatus).to.equal(200);
+            });
+        });
+
         describe("over HTTP/2", () => {
 
             if (nodeSatisfies(BROKEN_H2_OVER_H2_TUNNELLING)) return;
