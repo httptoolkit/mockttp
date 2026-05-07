@@ -262,6 +262,17 @@ export class MockttpAdminRequestBuilder {
                     tags
                 }
             }`,
+            'response-information': gql`subscription OnResponseInformation {
+                responseInformation {
+                    id
+                    statusCode
+                    statusMessage
+                    rawHeaders
+                    timingEvents
+                    tags
+                    eventTimestamp
+                }
+            }`,
             'response-body-data': gql`subscription OnResponseBodyData {
                 responseBodyData {
                     id

@@ -40,6 +40,7 @@ import {
     TlsMetadata,
     TlsSetupCompleted,
     SocketMetadata,
+    Expects100Continue,
 } from '../util/socket-extensions';
 import { MockttpHttpsOptions } from '../mockttp';
 import { buildSocksServer, SocksServerOptions, SocksTcpAddress } from './socks-server';
@@ -318,14 +319,26 @@ export async function createComboServer(options: ComboServerOptions): Promise<De
         unknownProtocol: unknownProtocolServer
     }, options.requestListener);
 
-    // In Node v20, this option was added, rejecting all requests with no host header. While that's good, in
-    // our case, we want to handle the garbage requests too, so we disable it:
-    (server as any)._httpServer.requireHostHeader = false;
+    const httpServer = (server as any)._httpServer as http.Server;
+
+    // In Node v20, this option was added, rejecting all requests with no host header. While
+    // that's good, in our case, we want to handle the garbage requests too, so we disable it:
+    httpServer.requireHostHeader = false;
 
     // Disable auto 417 on unknown expect, and map this back to
     // normal request behaviour instead.
-    (server as any)._httpServer.on('checkExpectation', (req: http.IncomingMessage, res: http.ServerResponse) => {
-        (server as any)._httpServer.emit('request', req, res);
+    httpServer.on('checkExpectation', (req, res) => httpServer.emit('request', req, res));
+
+    // Handle Expect: 100-continue ourselves, disabling Node's auto-reply.
+    httpServer.on('checkContinue', (req, res) => {
+        req[Expects100Continue] = true;
+        httpServer.emit('request', req, res);
+    });
+
+    const http2Server = (server as any)._http2Server as http2.Http2Server;
+    http2Server.on('checkContinue', (req, res) => {
+        req[Expects100Continue] = true;
+        http2Server.emit('request', req, res);
     });
 
     server.on('connection', (socket: net.Socket | http2.ServerHttp2Stream) => {

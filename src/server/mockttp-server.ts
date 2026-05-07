@@ -31,6 +31,7 @@ import {
     RawPassthroughEvent,
     RawPassthroughDataEvent,
     RawHeaders,
+    InformationalResponse,
     InitiatedResponse,
     BodyData
 } from "../types";
@@ -60,6 +61,7 @@ import {
     TlsSetupCompleted,
     SocketMetadata,
     TlsMetadata,
+    Expects100Continue,
 } from '../util/socket-extensions';
 import { getSocketMetadataTags, getSocketMetadataFromProxyAuth } from '../util/socket-metadata'
 import {
@@ -72,11 +74,13 @@ import {
     parseRawHttpResponse,
     buildInitiatedResponse,
     preprocessRequest,
+    isHttp2,
     ExtendedRawRequest
 } from "../util/request-utils";
 import { asBuffer } from "../util/buffer-utils";
 import {
     pairFlatRawHeaders,
+    rawHeadersToObject
 } from "../util/header-utils";
 import { AbortError } from "../rules/requests/request-step-impls";
 import { WebSocketRuleData, WebSocketRule } from "../rules/websockets/websocket-rule";
@@ -335,6 +339,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     public on(event: 'request-body-data', callback: (req: BodyData) => void): Promise<void>;
     public on(event: 'request', callback: (req: CompletedRequest) => void): Promise<void>;
     public on(event: 'response-initiated', callback: (req: InitiatedResponse) => void): Promise<void>;
+    public on(event: 'response-information', callback: (info: InformationalResponse) => void): Promise<void>;
     public on(event: 'response-body-data', callback: (req: BodyData) => void): Promise<void>;
     public on(event: 'response', callback: (req: CompletedResponse) => void): Promise<void>;
     public on(event: 'abort', callback: (req: InitiatedRequest) => void): Promise<void>;
@@ -411,6 +416,32 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             initiatedRes.timingEvents = { ...initiatedRes.timingEvents };
             initiatedRes.tags = initiatedRes.tags.slice();
             emitter.emit('response-initiated', initiatedRes);
+        });
+    }
+
+    private announceResponseInformationAsync(
+        emitter: EventEmitter,
+        response: OngoingResponse,
+        status: number,
+        flatHeaders: string[]
+    ) {
+        if (emitter.listenerCount('response-information') === 0) return;
+
+        setImmediate(() => {
+            // This matches & extends initiatedResponse, but with tweaks for the info
+            // that is otherwise not stored since we haven't called writeHead etc yet.
+            const rawHeaders = pairFlatRawHeaders(flatHeaders);
+            const info: InformationalResponse = {
+                ...buildInitiatedResponse(response),
+                statusCode: status,
+                statusMessage: isHttp2(response) ? '' : (http.STATUS_CODES[status] ?? ''),
+                headers: rawHeadersToObject(rawHeaders),
+                rawHeaders,
+                eventTimestamp: now()
+            };
+            info.timingEvents = { ...info.timingEvents };
+            info.tags = info.tags.slice();
+            emitter.emit('response-information', info);
         });
     }
 
@@ -694,9 +725,18 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
                 onWriteHead: () => this.announceInitialResponseAsync(emitter, response),
                 onBodyData: emitter.listenerCount('response-body-data') > 0
                     ? this.announceBodyDataAsync.bind(this, emitter, 'response')
-                    : undefined
+                    : undefined,
+                onInformationalResponse: (status, flatHeaders) =>
+                    this.announceResponseInformationAsync(emitter, response, status, flatHeaders)
             }
         );
+
+        // If the request had Expect: 100-continue, we trigger the auto response now.
+        // Standard Node behaviour, reproduced manually for event visibility.
+        if (rawRequest[Expects100Continue]) {
+            response.sendInformationalResponse(100, []);
+        }
+
         const hasResponseListener = emitter.listenerCount('response') > 0;
         if (hasResponseListener) {
             // Start buffering response body if there's somebody who

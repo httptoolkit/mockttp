@@ -14,6 +14,7 @@ export const TlsMetadata = Symbol('tls-metadata');
 export const ClientErrorInProgress = Symbol('client-error-in-progress');
 export const SocketTimingInfo = Symbol('socket-timing-info');
 export const SocketMetadata = Symbol('socket-metadata');
+export const Expects100Continue = Symbol('expects-100-continue');
 
 export interface SocketMetadata {
     tags?: string[];
@@ -102,7 +103,22 @@ declare module 'tls' {
     }
 }
 
+declare module 'http' {
+    interface Server {
+        requireHostHeader?: boolean;
+    }
+
+    interface IncomingMessage {
+        [Expects100Continue]?: true;
+    }
+}
+
+
 declare module 'http2' {
+    interface Http2ServerRequest {
+        [Expects100Continue]?: true;
+    }
+
     interface Http2Session {
         // session.socket is cleared before error handling kicks in. That's annoying,
         // so we manually preserve the socket elsewhere to work around it.

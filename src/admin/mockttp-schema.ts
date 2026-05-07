@@ -22,6 +22,7 @@ export const MockttpSchema = gql`
         requestBodyData: BodyData!
         requestReceived: Request!
         responseInitiated: InitiatedResponse!
+        responseInformation: InformationalResponse!
         responseBodyData: BodyData!
         responseCompleted: Response!
         webSocketRequest: Request!
@@ -226,6 +227,20 @@ export const MockttpSchema = gql`
 
         headers: Json!
         rawHeaders: Json!
+    }
+
+    type InformationalResponse {
+        id: ID!
+        timingEvents: Json!
+        tags: [String!]!
+
+        statusCode: Int!
+        statusMessage: String!
+
+        headers: Json!
+        rawHeaders: Json!
+
+        eventTimestamp: Float!
     }
 
     type Response {

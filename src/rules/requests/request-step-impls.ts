@@ -1232,7 +1232,7 @@ export class PassThroughStepImpl extends PassThroughStep {
             const tryForward1xx = (statusCode: number, flatHeaders: string[]) => {
                 if (statusCode < 102 || statusCode > 199) return;
                 try {
-                    sendInfoResponse(clientRes, statusCode, flatHeaders);
+                    clientRes.sendInformationalResponse(statusCode, flatHeaders);
                 } catch (e) {
                     // Downstream may have moved on (e.g. final response already started).
                 }
@@ -1530,40 +1530,6 @@ export class WaitForRequestBodyStepImpl extends WaitForRequestBodyStep {
     }
 }
 
-function sendInfoResponse(
-    response: OngoingResponse,
-    status: number,
-    flatHeaders: string[]
-) {
-    if (isHttp2(response)) {
-        const h2Headers: { [k: string]: string } = { ':status': String(status) };
-        for (let i = 0; i < flatHeaders.length; i += 2) {
-            const name = flatHeaders[i].toLowerCase();
-            if (name.startsWith(':')) continue;
-            const value = flatHeaders[i + 1];
-            const existing = h2Headers[name];
-            if (existing === undefined) {
-                h2Headers[name] = value;
-            } else {
-                h2Headers[name] = (Array.isArray(existing) ? [...existing, value] : [existing, value]) as any;
-            }
-        }
-        (response as http2.Http2ServerResponse).stream.additionalHeaders(h2Headers);
-    } else {
-        // HTTP/1.1: build the raw status-line + headers and use _writeRaw, the same
-        // primitive Node's own writeContinue/writeProcessing/writeEarlyHints use.
-        const reason = http.STATUS_CODES[status] ?? 'Information';
-        let raw = `HTTP/1.1 ${status} ${reason}\r\n`;
-        for (let i = 0; i < flatHeaders.length; i += 2) {
-            raw += `${flatHeaders[i]}: ${flatHeaders[i + 1]}\r\n`;
-        }
-        raw += '\r\n';
-        (response as unknown as {
-            _writeRaw: (data: string, encoding: BufferEncoding) => void
-        })._writeRaw(raw, 'ascii');
-    }
-}
-
 export class InformationalResponseStepImpl extends InformationalResponseStep {
 
     static readonly fromDefinition = copyDefinitionToImpl;
@@ -1575,7 +1541,7 @@ export class InformationalResponseStepImpl extends InformationalResponseStep {
                 ? flattenPairedRawHeaders(this.headers)
                 : objectHeadersToFlat(this.headers);
 
-        sendInfoResponse(response, this.status, flatHeaders);
+        response.sendInformationalResponse(this.status, flatHeaders);
         return { continue: true };
     }
 }

@@ -33,6 +33,7 @@ const graphqlSubscriptionPairs = Object.entries({
     'requestBodyData': 'request-body-data',
     'requestReceived': 'request',
     'responseInitiated': 'response-initiated',
+    'responseInformation': 'response-information',
     'responseBodyData': 'response-body-data',
     'responseCompleted': 'response',
     'webSocketRequest': 'websocket-request',

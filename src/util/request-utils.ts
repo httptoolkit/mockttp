@@ -547,13 +547,47 @@ export function trackResponse(
     options: {
         maxSize: number,
         onWriteHead: () => void,
-        onBodyData?: (id: string, timestamp: number, content: Uint8Array, isEnded: boolean) => void
+        onBodyData?: (id: string, timestamp: number, content: Uint8Array, isEnded: boolean) => void,
+        onInformationalResponse: (status: number, flatHeaders: string[]) => void
     }
 ): OngoingResponse {
     let trackedResponse = <OngoingResponse> response;
 
     trackedResponse.timingEvents = timingEvents;
     trackedResponse.tags = tags;
+
+    trackedResponse.sendInformationalResponse = (status, flatHeaders) => {
+        options.onInformationalResponse(status, flatHeaders);
+
+        if (isHttp2(trackedResponse)) {
+            const h2Headers: { [k: string]: string } = { ':status': String(status) };
+            for (let i = 0; i < flatHeaders.length; i += 2) {
+                // H2 header names must be lowercase per RFC 7540.
+                const name = flatHeaders[i].toLowerCase();
+                if (name.startsWith(':')) continue; // Skip pseudo-headers from upstream
+                const value = flatHeaders[i + 1];
+                const existing = h2Headers[name];
+                if (existing === undefined) {
+                    h2Headers[name] = value;
+                } else {
+                    h2Headers[name] = (Array.isArray(existing) ? [...existing, value] : [existing, value]) as any;
+                }
+            }
+            (trackedResponse as unknown as http2.Http2ServerResponse).stream.additionalHeaders(h2Headers);
+        } else {
+            // HTTP/1.1: build the raw status-line + headers and use _writeRaw, the same
+            // primitive Node's own writeContinue/writeProcessing/writeEarlyHints use.
+            const reason = http.STATUS_CODES[status] ?? 'Information';
+            let raw = `HTTP/1.1 ${status} ${reason}\r\n`;
+            for (let i = 0; i < flatHeaders.length; i += 2) {
+                raw += `${flatHeaders[i]}: ${flatHeaders[i + 1]}\r\n`;
+            }
+            raw += '\r\n';
+            (trackedResponse as unknown as {
+                _writeRaw: (data: string, encoding: BufferEncoding) => void
+            })._writeRaw(raw, 'ascii');
+        }
+    };
 
     const trackingStream = new stream.PassThrough();
 

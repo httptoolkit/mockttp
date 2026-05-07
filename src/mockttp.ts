@@ -24,6 +24,7 @@ import {
     RawPassthroughEvent,
     RawPassthroughDataEvent,
     InitiatedResponse,
+    InformationalResponse,
     BodyData
 } from "./types";
 import type { RequestRuleData } from "./rules/requests/request-rule";
@@ -400,6 +401,21 @@ export interface Mockttp {
      * @category Events
      */
     on(event: 'response-initiated', callback: (req: InitiatedResponse) => void): Promise<void>;
+
+    /**
+     * Subscribe to hear about HTTP 1xx informational responses (e.g. 102 Processing,
+     * 103 Early Hints) sent before the final response.
+     *
+     * This is only useful in some niche use cases, such as logging all requests seen
+     * by the server independently of the rules defined.
+     *
+     * The callback will be called asynchronously from request handling. This function
+     * returns a promise, and the callback is not guaranteed to be registered until
+     * the promise is resolved.
+     *
+     * @category Events
+     */
+    on(event: 'response-information', callback: (info: InformationalResponse) => void): Promise<void>;
 
     /**
      * Subscribe to hear about response body data live, streaming in progressive
@@ -951,6 +967,7 @@ export type SubscribableEvent =
     | 'request-body-data'
     | 'request'
     | 'response-initiated'
+    | 'response-information'
     | 'response-body-data'
     | 'response'
     | 'websocket-request'

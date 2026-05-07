@@ -319,6 +319,7 @@ export interface OngoingResponse extends http.ServerResponse {
     getRawTrailers(): RawTrailers;
     timingEvents: TimingEvents;
     tags: string[];
+    sendInformationalResponse(status: number, flatHeaders: string[]): void;
 }
 
 export interface InitiatedResponse {
@@ -329,6 +330,21 @@ export interface InitiatedResponse {
     rawHeaders: RawHeaders;
     timingEvents: TimingEvents;
     tags: string[];
+}
+
+/**
+ * An HTTP 1xx informational response (e.g. 100 Continue, 102 Processing,
+ * 103 Early Hints) sent before the final response. Multiple of these may
+ * be sent for a single request before the final response headers arrive.
+ */
+export interface InformationalResponse extends InitiatedResponse {
+    /**
+     * A high-precision floating-point monotonically increasing timestamp
+     * recording when the informational response was sent.
+     *
+     * To link this to the current time, compare it to `timingEvents.startTime`.
+     */
+    eventTimestamp: number;
 }
 
 export interface BodyData {
