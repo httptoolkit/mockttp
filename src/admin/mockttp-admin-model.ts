@@ -113,9 +113,9 @@ export function buildAdminServerModel(
 
     // Build a set of event publishing callbacks (but don't subscribe them yet - we only
     // want to subscribe on demand, to allow the server to opt-out unused event processing).
-    const eventListeners = graphqlSubscriptionPairs.reduce((acc, [, eventName]) => {
+    const eventListeners = graphqlSubscriptionPairs.reduce((acc, [gqlName, eventName]) => {
         acc[eventName] = (evt: any) => {
-            pubsub.publish(eventName, { [eventName]: evt });
+            pubsub.publish(eventName, { [gqlName]: evt });
         };
         return acc;
     }, {} as { [eventName: string]: (...args: any[]) => void });
@@ -126,9 +126,7 @@ export function buildAdminServerModel(
                 // Subscribe to the underlying server event, if we haven't already. Needs to actively check
                 // currently listeners because reset() clears all listeners, so they may disappear any time.
                 if (mockServer.listenerCount(eventName, eventListeners[eventName]) === 0) {
-                    mockServer.on(eventName as any, (evt) => {
-                        pubsub.publish(eventName, { [gqlName]: evt });
-                    });
+                    mockServer.on(eventName as any, eventListeners[eventName]);
                 }
                 return pubsub.asyncIterator(eventName);
             }

@@ -253,6 +253,20 @@ describe("Request initiated subscriptions", () => {
                     'dupe-header': ['A', 'B']
                 });
             });
+
+            it("should not multiply events when multiple subscriptions are registered", async () => {
+                await client.forAnyRequest().thenReply(200);
+
+                let cb1 = 0, cb2 = 0;
+                await client.on('request', () => { cb1++; });
+                await client.on('request', () => { cb2++; });
+
+                await fetch(client.urlFor("/")).then(r => r.text());
+                await delay(200);
+
+                expect(cb1).to.equal(1);
+                expect(cb2).to.equal(1);
+            });
         });
     });
 });
