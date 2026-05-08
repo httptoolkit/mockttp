@@ -647,6 +647,119 @@ nodeOnly(() => {
 
             });
 
+            describe("to a lenient HTTP/2 target accepting duplicate single-value headers", () => {
+
+                // Upstream HTTP/2 server with strictSingleValueFields disabled, so it can
+                // receive duplicate single-value request headers and send duplicate
+                // single-value response headers (e.g. x-content-type-options).
+                const lenientH2Server = makeDestroyable(http2.createSecureServer({
+                    allowHTTP1: false,
+                    key: fs.readFileSync('./test/fixtures/test-ca.key'),
+                    cert: fs.readFileSync('./test/fixtures/test-ca.pem'),
+                    strictSingleValueFields: false
+                } as any));
+
+                // Use the low-level stream API to bypass the compat-layer header
+                // validation and directly emit duplicate single-value headers.
+                lenientH2Server.on('stream', (stream: http2.ServerHttp2Stream, headers: any, flags: number, rawHeaders: string[]) => {
+                    // Capture the values we received for x-test-header (from rawHeaders,
+                    // since the compat-style headers object collapses duplicates) and
+                    // echo them back so the test can verify request-direction duplicates.
+                    const received: string[] = [];
+                    for (let i = 0; i < rawHeaders.length; i += 2) {
+                        if (rawHeaders[i].toLowerCase() === 'x-test-header') {
+                            received.push(rawHeaders[i + 1]);
+                        }
+                    }
+
+                    stream.respond({
+                        ':status': 200,
+                        'x-received-test-header': JSON.stringify(received),
+                        // Duplicate single-value response header to test response direction:
+                        'x-content-type-options': ['nosniff', 'nosniff']
+                    } as any);
+                    stream.end("Real HTTP/2 response");
+                });
+
+                let targetPort: number;
+
+                beforeEach(async () => {
+                    targetPort = await getPort();
+                    await new Promise<void>((resolve, reject) => {
+                        lenientH2Server.on('error', reject);
+                        lenientH2Server.listen(targetPort, resolve);
+                    });
+                });
+
+                afterEach(() => lenientH2Server.destroy());
+
+                it("preserves duplicate single-value headers in both directions", async function () {
+                    if (!nodeSatisfies(">=24.15.0")) this.skip();
+
+                    await server.forGet(`https://localhost:${targetPort}/`)
+                        .thenPassThrough({ ignoreHostHttpsErrors: ['localhost'] });
+
+                    const client = http2.connect(server.url);
+
+                    const req = client.request({
+                        ':method': 'CONNECT',
+                        ':authority': `localhost:${targetPort}`
+                    });
+
+                    const responseHeaders = await getHttp2Response(req);
+                    expect(responseHeaders[':status']).to.equal(200);
+
+                    const proxiedClient = http2.connect(`https://localhost:${targetPort}`, {
+                        createConnection: () => tls.connect({
+                            socket: req as any,
+                            ALPNProtocols: ['h2']
+                        }),
+                        // Allow the test client to send duplicate single-value headers:
+                        strictSingleValueFields: false
+                    } as any);
+
+                    const proxiedRequest = proxiedClient.request({
+                        ':path': '/',
+                        'x-test-header': ['value-1', 'value-2'] as any
+                    });
+
+                    // Capture both parsed headers and rawHeaders, since the parsed
+                    // headers object collapses duplicate single-value fields.
+                    const responseInfo = await new Promise<{
+                        headers: http2.IncomingHttpHeaders & http2.IncomingHttpStatusHeader,
+                        rawHeaders: string[]
+                    }>((resolve, reject) => {
+                        proxiedRequest.on('response', (headers, _flags, rawHeaders) => {
+                            resolve({ headers, rawHeaders });
+                        });
+                        proxiedRequest.on('error', reject);
+                    });
+
+                    expect(responseInfo.headers[':status']).to.equal(200);
+
+                    // Request direction: both header values must reach upstream.
+                    expect(responseInfo.headers['x-received-test-header']).to.equal(
+                        JSON.stringify(['value-1', 'value-2'])
+                    );
+
+                    // Response direction: duplicate single-value response header
+                    // must reach the test client, with both copies preserved on the wire.
+                    const ctoValues: string[] = [];
+                    for (let i = 0; i < responseInfo.rawHeaders.length; i += 2) {
+                        if (responseInfo.rawHeaders[i].toLowerCase() === 'x-content-type-options') {
+                            ctoValues.push(responseInfo.rawHeaders[i + 1]);
+                        }
+                    }
+                    expect(ctoValues).to.deep.equal(['nosniff', 'nosniff']);
+
+                    const responseBody = await getHttp2Body(proxiedRequest);
+                    expect(responseBody.toString('utf8')).to.equal("Real HTTP/2 response");
+
+                    await cleanup(proxiedClient, client);
+                });
+
+            });
+
         });
 
     });

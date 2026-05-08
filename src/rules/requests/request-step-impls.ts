@@ -794,7 +794,7 @@ export class PassThroughStepImpl extends PassThroughStep {
                 setDefaultHeaders: shouldTryH2Upstream, // For now, we need this for unexpected H2->H1 header fallback
                 ...({
                     // Disable strict HTTP/2 single-value field validation, extracted here
-                    // due to types. Needed for compatibility with weird servers, Node 25.7+
+                    // due to types. Needed for compatibility with weird servers, Node 24.15+.
                     strictSingleValueFields: false,
                 }),
 

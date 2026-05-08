@@ -316,29 +316,33 @@ export async function createComboServer(options: ComboServerOptions): Promise<De
     server = httpolyglot.createServer({
         tls: tlsServer,
         socks: socksServer,
-        unknownProtocol: unknownProtocolServer
+        unknownProtocol: unknownProtocolServer,
+        http: {
+            // In Node v20, this option was added, rejecting all requests with no host
+            // header. While that's good, in our case, we want to handle the garbage
+            // requests too, so we disable it:
+            requireHostHeader: false
+        },
+        http2: {
+            // In Node v24.15+ this option was added to allow duplicate single-value headers
+            // to be received rather than rejected during parsing. This matches HTTP/1 and
+            // avoids dropping parseable mildly invalid cases.
+            strictSingleValueFields: false
+        } as http2.ServerOptions
     }, options.requestListener);
 
-    const httpServer = (server as any)._httpServer as http.Server;
+    // Disable auto 417 on unknown expect, and map this back to normal request
+    // behaviour instead. (Only fires on the HTTP/1 subserver.)
+    server.on('checkExpectation', (req, res) => options.requestListener(req, res));
 
-    // In Node v20, this option was added, rejecting all requests with no host header. While
-    // that's good, in our case, we want to handle the garbage requests too, so we disable it:
-    httpServer.requireHostHeader = false;
-
-    // Disable auto 417 on unknown expect, and map this back to
-    // normal request behaviour instead.
-    httpServer.on('checkExpectation', (req, res) => httpServer.emit('request', req, res));
-
-    // Handle Expect: 100-continue ourselves, disabling Node's auto-reply.
-    httpServer.on('checkContinue', (req, res) => {
+    // Handle Expect: 100-continue ourselves, disabling Node's auto-reply. Fires on
+    // both HTTP/1 and HTTP/2 subservers — httpolyglot proxies the listener to both.
+    server.on('checkContinue', (
+        req: http.IncomingMessage | http2.Http2ServerRequest,
+        res: http.ServerResponse | http2.Http2ServerResponse
+    ) => {
         req[Expects100Continue] = true;
-        httpServer.emit('request', req, res);
-    });
-
-    const http2Server = (server as any)._http2Server as http2.Http2Server;
-    http2Server.on('checkContinue', (req, res) => {
-        req[Expects100Continue] = true;
-        http2Server.emit('request', req, res);
+        options.requestListener(req as http.IncomingMessage, res as http.ServerResponse);
     });
 
     server.on('connection', (socket: net.Socket | http2.ServerHttp2Stream) => {
