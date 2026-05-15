@@ -186,6 +186,35 @@ describe("TLS error subscriptions", () => {
             expect((await seenClientErrorPromise).errorCode).to.equal('ECONNRESET');
         });
 
+        it("should continue firing after a reset, and not deliver to listeners from before the reset", async () => {
+            // reset() swaps the eventEmitter under the hood, so anything that snapshots
+            // the emitter at server-start time would silently drop later events.
+            let preResetCount = 0;
+            await goodServer.on('tls-client-error', () => preResetCount++);
+
+            const tcpSocket1 = await openRawSocket(goodServer);
+            await openRawTlsSocket(tcpSocket1);
+            tcpSocket1.resetAndDestroy();
+            await delay(10);
+            expect(preResetCount).to.equal(1);
+
+            await goodServer.reset();
+
+            let secondError = getDeferred<TlsHandshakeFailure>();
+            await goodServer.on('tls-client-error', (r) => secondError.resolve(r));
+
+            const tcpSocket2 = await openRawSocket(goodServer);
+            await openRawTlsSocket(tcpSocket2);
+            tcpSocket2.resetAndDestroy();
+
+            const seenTlsError = await Promise.race([
+                delay(200).then(() => false),
+                secondError
+            ]);
+            expect(seenTlsError).not.to.equal(false);
+            expect(preResetCount).to.equal(1);
+        });
+
         it("should not be sent for requests from non-TLS clients that reset before sending anything", async () => {
             let seenTlsErrorPromise = getDeferred<TlsHandshakeFailure>();
             await goodServer.on('tls-client-error', (r) => seenTlsErrorPromise.resolve(r));

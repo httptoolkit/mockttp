@@ -160,7 +160,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             keyLogStream: this.keyLogStream,
 
             requestListener: this.app,
-            tlsClientErrorListener: this.announceTlsErrorAsync.bind(this, this.eventEmitter),
+            tlsClientErrorListener: this.announceTlsErrorAsync.bind(this),
             tlsPassthroughListener: this.passthroughSocket.bind(this, 'tls'),
             rawPassthroughListener: this.passthroughSocket.bind(this, 'raw')
         });
@@ -625,10 +625,11 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         });
     }
 
-    private async announceTlsErrorAsync(emitter: EventEmitter, socket: net.Socket, request: TlsHandshakeFailure) {
+    private async announceTlsErrorAsync(socket: net.Socket, request: TlsHandshakeFailure) {
         // Ignore errors after TLS is setup, those are client errors
         if (socket instanceof tls.TLSSocket && socket[TlsSetupCompleted]) return;
 
+        const emitter = this.eventEmitter;
         setImmediate(() => {
             if (this.debug) console.warn(`TLS client error: ${JSON.stringify(request)}`);
             emitter.emit('tls-client-error', request);
