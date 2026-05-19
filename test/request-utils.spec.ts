@@ -1,8 +1,10 @@
 import { Buffer } from 'buffer';
 import * as zlib from 'zlib';
+import * as stream from 'stream';
 
 import { expect, nodeOnly } from './test-utils';
-import { buildBodyReader } from '../src/util/request-utils';
+import { buildBodyReader, preprocessRequest } from '../src/util/request-utils';
+import { LastHopEncrypted } from '../src/util/socket-extensions';
 
 nodeOnly(() => {
     describe("buildBodyReader", () => {
@@ -87,5 +89,35 @@ nodeOnly(() => {
             });
         });
 
+    });
+
+    describe("preprocessRequest", () => {
+        it('reconstructs valid absolute URLs from bracketed IPv6 host headers', () => {
+            const req = Object.assign(new stream.PassThrough(), {
+                method: 'GET',
+                url: '/api',
+                headers: {
+                    host: '[::1]:8000'
+                },
+                rawHeaders: ['Host', '[::1]:8000'],
+                httpVersion: '1.1',
+                socket: {
+                    [LastHopEncrypted]: false
+                }
+            }) as any;
+
+            const result = preprocessRequest(req, {
+                type: 'request',
+                serverPort: 45454,
+                maxBodySize: 1024
+            });
+
+            expect(result).to.not.equal(null);
+            expect(req.url).to.equal('http://[::1]:8000/api');
+            expect(req.destination).to.deep.equal({
+                hostname: '::1',
+                port: 8000
+            });
+        });
     });
 });
