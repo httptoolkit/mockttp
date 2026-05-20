@@ -124,13 +124,13 @@ describe("Client error subscription", () => {
                 let errorPromise = getDeferred<ClientError>();
                 await server.on('client-error', (e) => errorPromise.resolve(e));
 
-                sendRawRequest(server, 'GET /abc HTTP/1.1\r\nHost: a:1:2\r\n\r\n');
+                sendRawRequest(server, 'GET /abc HTTP/1.1\r\nHost: a^1:2\r\n\r\n');
 
                 let clientError = await errorPromise;
 
                 expect(clientError.errorCode).to.equal("ERR_INVALID_URL");
                 expect(clientError.request.method).to.equal("GET");
-                expect(clientError.request.url).to.equal("http://a:1:2/abc");
+                expect(clientError.request.url).to.equal("http://a^1:2/abc");
 
                 const response = clientError.response as CompletedResponse;
                 expect(response.statusCode).to.equal(400);
