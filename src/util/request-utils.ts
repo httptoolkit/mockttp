@@ -711,14 +711,14 @@ function emitBodyDataEvents(
     let pendingContentTimer: NodeJS.Timeout | undefined = undefined;
     let finished = false;
 
-    function flushPendingContent() {
-        if (finished) return; // Should never happen, but just in case
+    function flushPendingContent(isFinal: boolean) {
+        if (finished) return;
 
         const hasEnded = 'writableEnded' in message
             ? message.writableEnded
             : message.readableEnded;
 
-        finished = hasEnded || !!message.errored || message.destroyed;
+        finished = hasEnded || isFinal;
 
         callback(
             message.id,
@@ -753,14 +753,17 @@ function emitBodyDataEvents(
             // (or the exact time of the last flush, for the final part).
             timestamp = now();
             pendingContentTimer = setTimeout(
-                flushPendingContent,
+                () => flushPendingContent(false),
                 CHUNK_BUFFER_INTERVAL_MS
             );
         }
     });
 
-    bodyStream.on('error', flushPendingContent);
-    bodyStream.on('end', flushPendingContent);
+    // 'end' fires for a fully read stream, 'error' for an errored one, and
+    // 'close' covers writable cases - both completed & cleanly aborted.
+    bodyStream.on('error', () => flushPendingContent(true));
+    bodyStream.on('end', () => flushPendingContent(true));
+    bodyStream.on('close', () => flushPendingContent(true));
 }
 
 /**
