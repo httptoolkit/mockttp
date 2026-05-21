@@ -1,8 +1,42 @@
-import { normalizeUrl } from '../src/util/url';
+import { normalizeHost, normalizeUrl } from '../src/util/url';
 
 import { expect } from "./test-utils";
 
 describe("URL normalization for matching", () => {
+    describe("host normalization", () => {
+        it("should bracket IPv6 hosts with non-default HTTP ports", () => {
+            expect(
+                normalizeHost('http', '[::1]:8000')
+            ).to.equal('[::1]:8000');
+        });
+
+        it("should bracket IPv6 hosts with non-default HTTPS ports", () => {
+            expect(
+                normalizeHost('https', '[::1]:8443')
+            ).to.equal('[::1]:8443');
+        });
+
+        it("should bracket IPv6 hosts when normalizing away the default port", () => {
+            expect(
+                normalizeHost('http', '[::1]:80')
+            ).to.equal('[::1]');
+
+            expect(
+                normalizeHost('https', '[::1]:443')
+            ).to.equal('[::1]');
+        });
+
+        it("should preserve existing formatting for IPv4 and domain hosts", () => {
+            expect(
+                normalizeHost('http', '127.0.0.1:8000')
+            ).to.equal('127.0.0.1:8000');
+
+            expect(
+                normalizeHost('https', 'example.com:443')
+            ).to.equal('example.com');
+        });
+    });
+
     it("should do nothing to fully specified URLs", () => {
         expect(
             normalizeUrl('https://example.com/abc')

@@ -2,6 +2,7 @@ import * as url from 'url';
 import * as _ from 'lodash';
 
 import { nthIndexOf } from './util';
+import { isIPv6Address } from './ip-utils';
 import { Destination } from '../types';
 
 // Is this URL fully qualified?
@@ -92,11 +93,14 @@ export const getDestination = (protocol: string, host: string): Destination => {
 
 export const normalizeHost = (protocol: string, host: string) => {
     const { hostname, port } = getDestination(protocol, host);
+    const normalizedHostname = isIPv6Address(hostname)
+        ? `[${hostname}]`
+        : hostname;
 
     if (port === getDefaultPort(protocol)) {
-        return hostname;
+        return normalizedHostname;
     } else {
-        return `${hostname}:${port}`;
+        return `${normalizedHostname}:${port}`;
     }
 }
 
