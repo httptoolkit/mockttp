@@ -106,17 +106,124 @@ nodeOnly(() => {
             }
         });
 
-        it("rejects non-RSA CA keys with a clear error", async () => {
+        // We only ever generate RSA CAs by default, but we support external
+        // EC CAs for use elsewhere:
+        async function generateEcCA(namedCurve: 'P-256' | 'P-384' | 'P-521') {
+            const keys = await crypto.subtle.generateKey(
+                { name: 'ECDSA', namedCurve },
+                true,
+                ['sign', 'verify']
+            ) as CryptoKeyPair;
+
+            const cert = await x509.X509CertificateGenerator.createSelfSigned({
+                serialNumber: 'A1',
+                name: 'CN=EC Test CA',
+                notBefore: new Date(Date.now() - 60 * 60 * 1000),
+                notAfter: new Date(Date.now() + 24 * 60 * 60 * 1000),
+                signingAlgorithm: { name: 'ECDSA', hash: 'SHA-256' },
+                keys,
+                extensions: [
+                    new x509.BasicConstraintsExtension(true, undefined, true),
+                    new x509.KeyUsagesExtension(x509.KeyUsageFlags.keyCertSign, true)
+                ]
+            });
+
+            const key = x509.PemConverter.encode(
+                await crypto.subtle.exportKey('pkcs8', keys.privateKey),
+                'PRIVATE KEY'
+            );
+
+            return { key, cert: cert.toString('pem') };
+        }
+
+        it("can use an EC (P-256) CA to sign certificates for HTTPS interception", async () => {
+            const ecCA = await generateEcCA('P-256');
+            const ca = await getCA({ key: ecCA.key, cert: ecCA.cert });
+
+            const { cert, key } = await ca.generateCertificate('localhost');
+
+            // The leaf keeps an RSA key, but is signed by the EC CA:
+            const leafCert = new x509.X509Certificate(cert);
+            expect(leafCert.signatureAlgorithm.name).to.equal('ECDSA');
+            expect(leafCert.publicKey.algorithm.name).to.equal('RSASSA-PKCS1-v1_5');
+            expect(await leafCert.verify({
+                publicKey: new x509.X509Certificate(ecCA.cert)
+            })).to.equal(true);
+
+            server = makeDestroyable(https.createServer({ cert, key }, (req: any, res: any) => {
+                res.writeHead(200);
+                res.end('ec-signed response!');
+            }));
+            await new Promise<void>((resolve) => server!.listen(4430, resolve));
+
+            const response = await new Promise<string>((resolve, reject) => {
+                const req = https.request({
+                    hostname: 'localhost',
+                    port: 4430,
+                    ca: [ecCA.cert]
+                }, (res) => {
+                    let data = '';
+                    res.on('data', (d) => { data += d; });
+                    res.on('end', () => resolve(data));
+                });
+                req.on('error', reject);
+                req.end();
+            });
+            expect(response).to.equal('ec-signed response!');
+        });
+
+        it("can use P-384 & P-521 EC CA keys, with matching signature hashes", async () => {
+            for (const [curve, expectedHash] of [['P-384', 'SHA-384'], ['P-521', 'SHA-512']] as const) {
+                const ecCA = await generateEcCA(curve);
+                const ca = await getCA({ key: ecCA.key, cert: ecCA.cert });
+
+                const { cert } = await ca.generateCertificate('example.com');
+
+                const leafCert = new x509.X509Certificate(cert);
+                const signatureAlgorithm = leafCert.signatureAlgorithm as EcdsaParams;
+                expect(signatureAlgorithm.name).to.equal('ECDSA');
+                expect((signatureAlgorithm.hash as Algorithm).name).to.equal(expectedHash);
+                expect(await leafCert.verify({
+                    publicKey: new x509.X509Certificate(ecCA.cert)
+                })).to.equal(true);
+            }
+        });
+
+        it("can use a SEC1 'BEGIN EC PRIVATE KEY' PEM as a CA key", async () => {
+            const ecCA = await generateEcCA('P-256');
+
+            const sec1Key = createPrivateKey(ecCA.key)
+                .export({ type: 'sec1', format: 'pem' })
+                .toString();
+            expect(sec1Key.split('\n')[0]).to.equal('-----BEGIN EC PRIVATE KEY-----');
+
+            const ca = await getCA({ key: sec1Key, cert: ecCA.cert });
+            const { cert } = await ca.generateCertificate('example.com');
+
+            const leafCert = new x509.X509Certificate(cert);
+            expect(await leafCert.verify({
+                publicKey: new x509.X509Certificate(ecCA.cert)
+            })).to.equal(true);
+        });
+
+        it("rejects unsupported CA keys with a clear error", async () => {
             const generatedCA = await generateCACertificate();
 
-            const ecKey = generateKeyPairSync('ec', { namedCurve: 'P-256' })
+            // The certs here don't need to match - keys are imported (and so rejected) first:
+
+            const ed25519Key = generateKeyPairSync('ed25519')
                 .privateKey.export({ type: 'pkcs8', format: 'pem' })
                 .toString();
-
-            // The cert here doesn't need to match - the key is imported (and so rejected) first:
             await expect(
-                getCA({ key: ecKey, cert: generatedCA.cert })
-            ).to.be.rejectedWith("only RSA CA keys are supported");
+                getCA({ key: ed25519Key, cert: generatedCA.cert })
+            ).to.be.rejectedWith("only RSA & EC CA keys are supported");
+
+            const secp256k1Key = generateKeyPairSync('ec', { namedCurve: 'secp256k1' })
+                .privateKey.export({ type: 'pkcs8', format: 'pem' })
+                .toString();
+            await expect(
+                getCA({ key: secp256k1Key, cert: generatedCA.cert })
+            ).to.be.rejectedWith("only P-256, P-384 & P-521 are supported");
         });
 
         describe("with a constrained CA", () => {

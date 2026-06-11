@@ -78,10 +78,24 @@ function arrayBufferToPem(buffer: ArrayBuffer, label: string): string {
     return `-----BEGIN ${label}-----\n${lines.join('\n')}\n-----END ${label}-----\n`;
 }
 
+// Map supported Node curve names to WebCrypto's.
+const EC_CURVE_NAMES: { [nodeCurveName: string]: 'P-256' | 'P-384' | 'P-521' } = {
+    'prime256v1': 'P-256',
+    'secp384r1': 'P-384',
+    'secp521r1': 'P-521'
+};
+
+// ECDSA cert signatures must use the hash matching the curve strength (BR 7.1.3.2):
+const EC_CURVE_HASHES: { [namedCurve: string]: string } = {
+    'P-256': 'SHA-256',
+    'P-384': 'SHA-384',
+    'P-521': 'SHA-512'
+};
+
 async function pemToCryptoKey(pem: string): Promise<CryptoKey> {
-    // Node's createPrivateKey natively parses both PKCS#1 ("BEGIN RSA PRIVATE
-    // KEY") and PKCS#8 ("BEGIN PRIVATE KEY") PEM, so we normalise to PKCS#8 DER
-    // and hand that to WebCrypto.
+    // Node's createPrivateKey natively parses PKCS#1 ("BEGIN RSA PRIVATE KEY"),
+    // SEC1 ("BEGIN EC PRIVATE KEY") and PKCS#8 ("BEGIN PRIVATE KEY") PEM, so we
+    // normalise to PKCS#8 DER and hand that to WebCrypto.
     let keyObject: ReturnType<typeof createPrivateKey>;
     try {
         keyObject = createPrivateKey(pem);
@@ -89,23 +103,37 @@ async function pemToCryptoKey(pem: string): Promise<CryptoKey> {
         throw new Error(`Unsupported or malformed private key: ${e?.message ?? e}`);
     }
 
-    // CA key generation and signing here are RSA-only (RSASSA-PKCS1-v1_5),
-    // matching the previous behaviour. Reject anything else with a clear error
-    // rather than a cryptic WebCrypto DataError.
-    if (keyObject.asymmetricKeyType !== 'rsa') {
+    const pkcs8Der = keyObject.export({ type: 'pkcs8', format: 'der' });
+
+    if (keyObject.asymmetricKeyType === 'rsa') {
+        return crypto.subtle.importKey(
+            'pkcs8',
+            pkcs8Der,
+            { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+            true, // extractable
+            ['sign']
+        );
+    } else if (keyObject.asymmetricKeyType === 'ec') {
+        const curve = keyObject.asymmetricKeyDetails?.namedCurve;
+        const namedCurve = curve !== undefined ? EC_CURVE_NAMES[curve] : undefined;
+        if (!namedCurve) {
+            throw new Error(
+                `Unsupported EC curve '${curve}' for CA key: only P-256, P-384 & P-521 are supported`
+            );
+        }
+        return crypto.subtle.importKey(
+            'pkcs8',
+            pkcs8Der,
+            { name: 'ECDSA', namedCurve },
+            true, // extractable
+            ['sign']
+        );
+    } else {
+        // Reject everything else (Ed25519, DSA, etc) upfront with a clear error.
         throw new Error(
-            `Unsupported CA key type '${keyObject.asymmetricKeyType}': only RSA CA keys are supported`
+            `Unsupported CA key type '${keyObject.asymmetricKeyType}': only RSA & EC CA keys are supported`
         );
     }
-
-    const pkcs8Der = keyObject.export({ type: 'pkcs8', format: 'der' });
-    return crypto.subtle.importKey(
-        'pkcs8',
-        pkcs8Der,
-        { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
-        true, // extractable
-        ['sign']
-    );
 }
 
 /**
@@ -392,13 +420,22 @@ class CA {
         // We don't include SubjectKeyIdentifierExtension as that's no longer recommended
         extensions.push(await x509.AuthorityKeyIdentifierExtension.create(this.caCert, false));
 
+        // The signature algorithm must match the CA key type (the leaf key itself
+        // is always RSA, but the cert's signature comes from the CA key):
+        const signingAlgorithm = this.caKey.algorithm.name === 'ECDSA'
+            ? {
+                name: 'ECDSA',
+                hash: EC_CURVE_HASHES[(this.caKey.algorithm as EcKeyAlgorithm).namedCurve]
+            }
+            : KEY_PAIR_ALGO;
+
         const certificate = await x509.X509CertificateGenerator.create({
             serialNumber: generateSerialNumber(),
             subject: subjectDistinguishedName,
             issuer: issuerDistinguishedName,
             notBefore,
             notAfter,
-            signingAlgorithm: KEY_PAIR_ALGO,
+            signingAlgorithm,
             publicKey: leafKeyPair.publicKey,
             signingKey: this.caKey,
             extensions
