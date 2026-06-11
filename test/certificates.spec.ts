@@ -1,6 +1,7 @@
 import * as https from 'https';
 import * as path from 'path';
 import * as fs from 'fs/promises';
+import { createPrivateKey, generateKeyPairSync } from 'crypto';
 import * as x509 from '@peculiar/x509';
 
 import {
@@ -81,6 +82,41 @@ nodeOnly(() => {
                 keyPath: path.join(__dirname, 'fixtures', 'ca-pkcs1.key'),
                 certPath: path.join(__dirname, 'fixtures', 'ca-pkcs1.pem'),
             });
+        });
+
+        it("can sign certificates with both PKCS#8 and PKCS#1 RSA CA keys", async () => {
+            const generatedCA = await generateCACertificate();
+
+            const pkcs8Key = generatedCA.key;
+            expect(pkcs8Key.split('\n')[0]).to.equal('-----BEGIN PRIVATE KEY-----');
+
+            const pkcs1Key = createPrivateKey(pkcs8Key)
+                .export({ type: 'pkcs1', format: 'pem' })
+                .toString();
+            expect(pkcs1Key.split('\n')[0]).to.equal('-----BEGIN RSA PRIVATE KEY-----');
+
+            const parsedCaCert = new x509.X509Certificate(generatedCA.cert);
+
+            for (const key of [pkcs8Key, pkcs1Key]) {
+                const ca = await getCA({ key, cert: generatedCA.cert, keyLength: 2048 });
+                const { cert } = await ca.generateCertificate('example.com');
+
+                const leafCert = new x509.X509Certificate(cert);
+                expect(await leafCert.verify({ publicKey: parsedCaCert })).to.equal(true);
+            }
+        });
+
+        it("rejects non-RSA CA keys with a clear error", async () => {
+            const generatedCA = await generateCACertificate();
+
+            const ecKey = generateKeyPairSync('ec', { namedCurve: 'P-256' })
+                .privateKey.export({ type: 'pkcs8', format: 'pem' })
+                .toString();
+
+            // The cert here doesn't need to match - the key is imported (and so rejected) first:
+            await expect(
+                getCA({ key: ecKey, cert: generatedCA.cert })
+            ).to.be.rejectedWith("only RSA CA keys are supported");
         });
 
         describe("with a constrained CA", () => {

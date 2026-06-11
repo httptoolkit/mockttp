@@ -1,14 +1,12 @@
 import { Buffer } from 'buffer';
 import * as fs from 'fs/promises';
+import { createPrivateKey } from 'crypto';
 
 import * as _ from 'lodash';
 
 import * as x509 from '@peculiar/x509';
 import * as asn1X509 from '@peculiar/asn1-x509';
 import * as asn1Schema from '@peculiar/asn1-schema';
-
-// Import for PKCS#8 structure
-import { PrivateKeyInfo } from '@peculiar/asn1-pkcs8';
 
 const crypto = globalThis.crypto;
 
@@ -80,53 +78,33 @@ function arrayBufferToPem(buffer: ArrayBuffer, label: string): string {
     return `-----BEGIN ${label}-----\n${lines.join('\n')}\n-----END ${label}-----\n`;
 }
 
-// OID for rsaEncryption - used to wrap PKCS#1 keys into PKCS#8 below:
-const rsaEncryptionOid = "1.2.840.113549.1.1.1";
-
-async function pemToCryptoKey(pem: string) {
-    // The PEM might be PKCS#8 ("BEGIN PRIVATE KEY") or PKCS#1 ("BEGIN
-    // RSA PRIVATE KEY"). We want to transparently accept both, but
-    // we can only import PKCS#8, so we detect & convert if required.
-
-    const keyData = x509.PemConverter.decodeFirst(pem);
-    let pkcs8KeyData: ArrayBuffer;
-
+async function pemToCryptoKey(pem: string): Promise<CryptoKey> {
+    // Node's createPrivateKey natively parses both PKCS#1 ("BEGIN RSA PRIVATE
+    // KEY") and PKCS#8 ("BEGIN PRIVATE KEY") PEM, so we normalise to PKCS#8 DER
+    // and hand that to WebCrypto.
+    let keyObject: ReturnType<typeof createPrivateKey>;
     try {
-        // Try to parse the PEM as PKCS#8 PrivateKeyInfo - if it works,
-        // we can just use it directly as-is:
-        asn1Schema.AsnConvert.parse(keyData, PrivateKeyInfo);
-        pkcs8KeyData = keyData;
+        keyObject = createPrivateKey(pem);
     } catch (e: any) {
-        // If parsing as PKCS#8 fails, assume it's PKCS#1 (RSAPrivateKey)
-        // and proceed to wrap it as an RSA key in a PrivateKeyInfo structure.
-        const rsaPrivateKeyDer = keyData;
-
-        try {
-            const privateKeyInfo = new PrivateKeyInfo({
-                version: 0,
-                privateKeyAlgorithm: new asn1X509.AlgorithmIdentifier({
-                    algorithm: rsaEncryptionOid
-                }),
-                privateKey: new asn1Schema.OctetString(rsaPrivateKeyDer)
-            });
-            pkcs8KeyData = asn1Schema.AsnConvert.serialize(privateKeyInfo);
-        } catch (conversionError: any) {
-            throw new Error(
-                `Unsupported or malformed key format. Failed to parse as PKCS#8 with ${
-                    e.message || e.toString()
-                } and failed to convert to PKCS#1 with ${
-                    conversionError.message || conversionError.toString()
-                }`
-            );
-        }
+        throw new Error(`Unsupported or malformed private key: ${e?.message ?? e}`);
     }
 
-    return await crypto.subtle.importKey(
-        "pkcs8", // N.b, pkcs1 is not supported, which is why we need the above
-        pkcs8KeyData,
-        { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-        true, // Extractable
-        ["sign"]
+    // CA key generation and signing here are RSA-only (RSASSA-PKCS1-v1_5),
+    // matching the previous behaviour. Reject anything else with a clear error
+    // rather than a cryptic WebCrypto DataError.
+    if (keyObject.asymmetricKeyType !== 'rsa') {
+        throw new Error(
+            `Unsupported CA key type '${keyObject.asymmetricKeyType}': only RSA CA keys are supported`
+        );
+    }
+
+    const pkcs8Der = keyObject.export({ type: 'pkcs8', format: 'der' });
+    return crypto.subtle.importKey(
+        'pkcs8',
+        pkcs8Der,
+        { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+        true, // extractable
+        ['sign']
     );
 }
 
