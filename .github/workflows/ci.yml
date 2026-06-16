@@ -19,6 +19,13 @@ jobs:
             deploys-docs: true
           - node-version: latest
 
+    services:
+      # Self-hosted certificate linter, to run lintcert tests reliably against a local instance
+      certlinter:
+        image: ghcr.io/pkimetal/pkimetal:latest
+        ports:
+          - 8080:8080
+
     steps:
       - uses: actions/checkout@v6
 
@@ -31,6 +38,9 @@ jobs:
 
       - run: npm install
 
+      - name: Wait for cert linter
+        run: timeout 60 bash -c 'until curl -sf http://localhost:8080/ >/dev/null; do sleep 1; done'
+
       - run: npm run ci-tests
         env:
           # Node v22+ needs no strip-types (because we use ts-node for full TS instead)
@@ -38,6 +48,8 @@ jobs:
             ${{ (!startsWith(matrix.node-version, '20') && '--no-experimental-strip-types') || '' }}
           # We log performance test results to Posthog to track trends:
           POSTHOG_PERF_API_KEY: ${{ secrets.POSTHOG_PERF_API_KEY }}
+          # Point lintcert tests at the self-hosted linter service above:
+          PKIMETAL_BASE_URL: http://localhost:8080
 
       - name: Upload docs artifact
         uses: actions/upload-artifact@v6

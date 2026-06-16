@@ -8,11 +8,13 @@ import {
     DestroyableServer,
     makeDestroyable,
     expect,
-    ignoreNetworkError,
     nodeOnly
 } from "./test-utils";
 
 import { getCA, CA, generateCACertificate, generateSPKIFingerprint } from '../src/util/certificates';
+
+// We use public pkimet.al for local dev, CI uses a self-hosted version for reliability
+const LINTCERT_URL = `${process.env.PKIMETAL_BASE_URL ?? 'https://pkimet.al'}/lintcert`;
 
 const validateLintSiteCertResults = (cert: string, results: any[]) => {
     // We don't worry about warnings
@@ -351,19 +353,16 @@ nodeOnly(() => {
 
             const { cert } = caCertificate;
 
-            const response = await ignoreNetworkError(
-                fetch('https://pkimet.al/lintcert', {
-                    method: 'POST',
-                    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-                    body: new URLSearchParams({
-                        'b64input': cert,
-                        'format': 'json',
-                        'severity': 'warning',
-                        'profile': 'tbr_root_tlsserver' // TLS Baseline root CA
-                    })
-                }),
-                { context: this }
-            );
+            const response = await fetch(LINTCERT_URL, {
+                method: 'POST',
+                headers: { 'content-type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({
+                    'b64input': cert,
+                    'format': 'json',
+                    'severity': 'warning',
+                    'profile': 'tbr_root_tlsserver' // TLS Baseline root CA
+                })
+            });
 
             expect(response.status).to.equal(200);
             const results = await response.json();
@@ -384,19 +383,16 @@ nodeOnly(() => {
                 { type: 'dns', 'value': 'httptoolkit.com' },
             ]);
 
-            const response = await ignoreNetworkError(
-                fetch('https://pkimet.al/lintcert', {
-                    method: 'POST',
-                    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-                    body: new URLSearchParams({
-                        'b64input': cert,
-                        'format': 'json',
-                        'severity': 'warning',
-                        'profile': 'tbr_leaf_tlsserver_dv' // TLS Baseline domain-validated server
-                    })
-                }),
-                { context: this }
-            );
+            const response = await fetch(LINTCERT_URL, {
+                method: 'POST',
+                headers: { 'content-type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({
+                    'b64input': cert,
+                    'format': 'json',
+                    'severity': 'warning',
+                    'profile': 'tbr_leaf_tlsserver_dv' // TLS Baseline domain-validated server
+                })
+            });
 
             expect(response.status).to.equal(200);
             const results = await response.json();
@@ -417,19 +413,16 @@ nodeOnly(() => {
                 { type: 'dns', 'value': '*.httptoolkit.com' },
             ]);
 
-            const response = await ignoreNetworkError(
-                fetch('https://pkimet.al/lintcert', {
-                    method: 'POST',
-                    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-                    body: new URLSearchParams({
-                        'b64input': cert,
-                        'format': 'json',
-                        'severity': 'warning',
-                        'profile': 'tbr_leaf_tlsserver_dv' // TLS Baseline domain-validated server
-                    })
-                }),
-                { context: this, timeout: 9000 }
-            );
+            const response = await fetch(LINTCERT_URL, {
+                method: 'POST',
+                headers: { 'content-type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({
+                    'b64input': cert,
+                    'format': 'json',
+                    'severity': 'warning',
+                    'profile': 'tbr_leaf_tlsserver_dv' // TLS Baseline domain-validated server
+                })
+            });
 
             expect(response.status).to.equal(200);
             const results = await response.json();
@@ -449,19 +442,16 @@ nodeOnly(() => {
 
             const { cert } = caCertificate;
 
-            const response = await ignoreNetworkError(
-                fetch('https://pkimet.al/lintcert', {
-                    method: 'POST',
-                    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-                    body: new URLSearchParams({
-                        'b64input': cert,
-                        'format': 'json',
-                        'severity': 'warning',
-                        'profile': 'tbr_root_tlsserver' // TLS Baseline root CA
-                    })
-                }),
-                { context: this }
-            );
+            const response = await fetch(LINTCERT_URL, {
+                method: 'POST',
+                headers: { 'content-type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({
+                    'b64input': cert,
+                    'format': 'json',
+                    'severity': 'warning',
+                    'profile': 'tbr_root_tlsserver' // TLS Baseline root CA
+                })
+            });
 
             expect(response.status).to.equal(200);
             const results = await response.json();
