@@ -286,7 +286,7 @@ describe("Client error subscription", () => {
                 await server.on('client-error', (e) => errorPromise.resolve(e));
 
                 const socket = await openRawTlsSocket(server, {
-                    servername: `localhost:${server.port}`,
+                    servername: 'localhost',
                     ALPNProtocols: ['h2']
                 });
 
@@ -299,7 +299,7 @@ describe("Client error subscription", () => {
                     'client-error:ERR_HTTP2_ERROR',
                     'client-error:bad-preface'
                 ]);
-                expect(error.request.url).to.equal(server.url + '/');
+                expect(error.request.url).to.equal('https://localhost/');
                 expect(error.response).to.equal('aborted');
 
                 expect(error.request.timingEvents.startTime).to.be.greaterThan(0);
@@ -315,7 +315,7 @@ describe("Client error subscription", () => {
                 await server.on('client-error', (e) => errorPromise.resolve(e));
 
                 const socket = await openRawTlsSocket(server, {
-                    servername: `localhost:${server.port}`,
+                    servername: 'localhost',
                     ALPNProtocols: ['h2']
                 });
 
@@ -328,7 +328,7 @@ describe("Client error subscription", () => {
                 expect(error.request.tags).to.deep.equal([
                     'client-error:ERR_HTTP2_ERROR'
                 ]);
-                expect(error.request.url).to.equal(server.url + '/');
+                expect(error.request.url).to.equal('https://localhost/');
                 expect(error.response).to.equal('aborted');
             });
 
