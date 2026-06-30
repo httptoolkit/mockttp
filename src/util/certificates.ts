@@ -1,12 +1,14 @@
 import { Buffer } from 'buffer';
 import * as fs from 'fs/promises';
-import { createPrivateKey } from 'crypto';
+import { createPrivateKey, createHash } from 'crypto';
 
 import * as _ from 'lodash';
 
 import * as x509 from '@peculiar/x509';
 import * as asn1X509 from '@peculiar/asn1-x509';
 import * as asn1Schema from '@peculiar/asn1-schema';
+
+import { CTLogOperator, deriveCTLogOperators, embedSCTsAndSign } from './certificate-transparency';
 
 const crypto = globalThis.crypto;
 
@@ -50,6 +52,12 @@ export interface BaseCAOptions {
      * connections.
      */
     organizationName?: string;
+
+    /**
+     * Whether to embed Signed Certificate Timestamps (SCTs) from
+     * derived CT log operators in generated leaf certificates.
+     */
+    certificateTransparency?: boolean;
 }
 
 export type PEM = string | string[] | Buffer | Buffer[];
@@ -91,6 +99,24 @@ const EC_CURVE_HASHES: { [namedCurve: string]: string } = {
     'P-384': 'SHA-384',
     'P-521': 'SHA-512'
 };
+
+// Pregenerated throwaway signatures for building a proto-certificate for CT without
+// actually signing it (X509CertificateGenerator's signature mode). The value is
+// discarded once we re-sign over the final TBS, but needs to validate.
+const RSA_PLACEHOLDER_SIGNATURE = new Uint8Array(256);
+const EC_PLACEHOLDER_SIGNATURES: { [namedCurve: string]: Uint8Array } = {
+    'P-256': new Uint8Array(64),
+    'P-384': new Uint8Array(96),
+    'P-521': new Uint8Array(132)
+};
+
+function placeholderSignature(caKey: CryptoKey): Uint8Array {
+    if (caKey.algorithm.name === 'ECDSA') {
+        return EC_PLACEHOLDER_SIGNATURES[(caKey.algorithm as EcKeyAlgorithm).namedCurve];
+    }
+    return RSA_PLACEHOLDER_SIGNATURE;
+}
+
 
 async function pemToCryptoKey(pem: string): Promise<CryptoKey> {
     // Node's createPrivateKey natively parses PKCS#1 ("BEGIN RSA PRIVATE KEY"),
@@ -297,8 +323,9 @@ export async function getCA(options: CAOptions): Promise<CA> {
         throw new Error('Unrecognized https options: you need to provide either a keyPath & certPath, or a key & cert.')
     }
 
+    const caKeyPem = certOptions.key.toString();
     const caCert = new x509.X509Certificate(certOptions.cert.toString());
-    const caKey = await pemToCryptoKey(certOptions.key.toString());
+    const caKey = await pemToCryptoKey(caKeyPem);
 
     return new CA(caCert, caKey, options);
 }
@@ -322,6 +349,8 @@ export type { CA };
 
 class CA {
     private options: BaseCAOptions;
+    private ctLogOperators: [CTLogOperator, CTLogOperator] | undefined;
+    private issuerKeyHash: Buffer | undefined;
 
     constructor(
         private caCert: x509.X509Certificate,
@@ -343,6 +372,21 @@ class CA {
                 )
             };
         }
+
+        if (this.options.certificateTransparency) {
+            this.ctLogOperators = deriveCTLogOperators(caCert);
+            this.issuerKeyHash = createHash('sha256')
+                .update(Buffer.from(caCert.publicKey.rawData))
+                .digest();
+        }
+    }
+
+    getCTLogDetails(): Array<{ logId: Buffer, publicKey: Buffer }> {
+        if (!this.ctLogOperators) throw new Error('CT not enabled');
+        return this.ctLogOperators.map(op => ({
+            logId: Buffer.from(op.logId),
+            publicKey: Buffer.from(op.publicKey)
+        }));
     }
 
     async generateCertificate(domain: string): Promise<GeneratedCertificate> {
@@ -429,7 +473,7 @@ class CA {
             }
             : KEY_PAIR_ALGO;
 
-        const certificate = await x509.X509CertificateGenerator.create({
+        const certParams = {
             serialNumber: generateSerialNumber(),
             subject: subjectDistinguishedName,
             issuer: issuerDistinguishedName,
@@ -437,16 +481,36 @@ class CA {
             notAfter,
             signingAlgorithm,
             publicKey: leafKeyPair.publicKey,
-            signingKey: this.caKey,
             extensions
-        });
+        };
+
+        let certPem: string;
+        if (this.ctLogOperators) {
+            // Build the cert without signing it (the generator's signature mode), so
+            // we sign exactly once - over the final TBS that includes the SCT extension.
+            // SCTs are signed over this proto TBS; the placeholder signature is discarded.
+            const protoCert = await x509.X509CertificateGenerator.create({
+                ...certParams,
+                signature: placeholderSignature(this.caKey)
+            });
+            const finalCertDer = await embedSCTsAndSign(
+                protoCert, this.ctLogOperators, this.issuerKeyHash!, this.caKey, signingAlgorithm
+            );
+            certPem = arrayBufferToPem(finalCertDer, "CERTIFICATE");
+        } else {
+            const certificate = await x509.X509CertificateGenerator.create({
+                ...certParams,
+                signingKey: this.caKey
+            });
+            certPem = certificate.toString("pem");
+        }
 
         const generatedCertificate: GeneratedCertificate = {
             key: arrayBufferToPem(
                 await crypto.subtle.exportKey("pkcs8", leafKeyPair.privateKey as CryptoKey),
                 "PRIVATE KEY"
             ),
-            cert: certificate.toString("pem"),
+            cert: certPem,
             ca: this.caCert.toString("pem"),
             expiresAt: notAfter
         };

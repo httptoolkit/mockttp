@@ -28,6 +28,7 @@ module.exports = function(config) {
                     // Core code stubs are set in pkgJson.browser.
                     "http-proxy-agent": require.resolve('./test/empty-stub.js'),
                     "https-proxy-agent": require.resolve('./test/empty-stub.js'),
+                    "hardened-https-agent": require.resolve('./test/empty-stub.js'),
                     "request-promise-native": require.resolve('./test/empty-stub.js'),
                     "get-port": require.resolve('./test/empty-stub.js'),
                     "dns2": require.resolve('./test/empty-stub.js'),
