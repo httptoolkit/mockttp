@@ -73,7 +73,8 @@ export type { ServerMockedEndpoint } from "./server/mocked-endpoint";
 // Export TLS utility methods:
 export {
     generateCACertificate,
-    generateSPKIFingerprint
+    generateSPKIFingerprint,
+    getCertificateTransparencyLogs
 } from './util/certificates';
 
 // Export various referenced utility types:

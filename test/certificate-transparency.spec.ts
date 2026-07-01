@@ -6,7 +6,7 @@ import * as x509 from '@peculiar/x509';
 
 import { HardenedHttpsAgent } from 'hardened-https-agent';
 
-import { getLocal } from '..';
+import { getLocal, getCertificateTransparencyLogs } from '..';
 import { expect, nodeOnly } from "./test-utils";
 
 import { getCA, CA } from '../src/util/certificates';
@@ -109,6 +109,26 @@ nodeOnly(() => {
             expect(logs8[0].logId).to.deep.equal(logs1[0].logId);
             expect(logs8[0].publicKey).to.deep.equal(logs1[0].publicKey);
             expect(logs8[1].logId).to.deep.equal(logs1[1].logId);
+        });
+
+        it("exposes the CA's CT logs publicly (from the cert alone), matching what is embedded", async () => {
+            const cert = await caCert;
+            const ca = await getCA({ key: await caKey, cert, certificateTransparency: true });
+
+            const published = getCertificateTransparencyLogs(cert);
+            const embedded = ca.getCTLogDetails();
+
+            expect(published).to.have.length(2);
+            expect(published[0].logId).to.have.length(32); // SHA-256 of the SPKI
+            expect(published[0].logId).to.deep.equal(embedded[0].logId);
+            expect(published[0].publicKey).to.deep.equal(embedded[0].publicKey);
+            expect(published[1].logId).to.deep.equal(embedded[1].logId);
+            expect(published[1].publicKey).to.deep.equal(embedded[1].publicKey);
+
+            // usableSince is the CA cert's notBefore (safe: <= every backdated SCT):
+            const caNotBefore = new x509.X509Certificate(cert).notBefore;
+            expect(published[0].usableSince.getTime()).to.equal(caNotBefore.getTime());
+            expect(published[1].usableSince.getTime()).to.equal(caNotBefore.getTime());
         });
 
         it("getCTLogDetails throws when CT is not enabled", async () => {

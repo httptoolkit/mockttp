@@ -297,6 +297,29 @@ export async function generateSPKIFingerprint(certPem: string): Promise<string> 
     return Buffer.from(hashBuffer).toString('base64');
 }
 
+/**
+ * Derive the Certificate Transparency logs for a given CA certificate.
+ *
+ * When a CA is used with `certificateTransparency` enabled, Mockttp embeds SCTs
+ * signed by two logs deterministically derived from that CA certificate. This
+ * returns those logs' ids & public keys (SPKI, DER) - exactly matching the SCTs
+ * embedded in generated certificates.
+ *
+ * Only the CA certificate is required: derivation is a pure function of the cert's
+ * public key, independent of how the CA private key happens to be encoded.
+ */
+export function getCertificateTransparencyLogs(
+    caCert: string
+): Array<{ logId: Buffer, publicKey: Buffer, usableSince: Date }> {
+    const cert = new x509.X509Certificate(caCert);
+    const usableSince = cert.notBefore;
+    return deriveCTLogOperators(cert).map(op => ({
+        logId: Buffer.from(op.logId),
+        publicKey: Buffer.from(op.publicKey),
+        usableSince
+    }));
+}
+
 // Generates a unique serial number for a certificate as a hex string:
 function generateSerialNumber() {
     return 'A' + crypto.randomUUID().replace(/-/g, '');
