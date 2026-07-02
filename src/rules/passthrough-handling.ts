@@ -25,7 +25,7 @@ import {
     CallbackRequestResult,
     CallbackResponseMessageResult
 } from './requests/request-step-definitions';
-import { AbortError } from './requests/request-step-impls';
+import { AbortError } from '../util/abort-error';
 import {
     CADefinition,
     PassThroughInitialTransforms,

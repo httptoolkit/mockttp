@@ -195,7 +195,6 @@
     "https-proxy-agent": "^7.0.6",
     "isomorphic-ws": "^4.0.1",
     "lodash": "^4.16.4",
-    "lru-cache": "^11.2.7",
     "milliparsec": "^5.1.1",
     "native-duplexpair": "^1.0.0",
     "pac-proxy-agent": "^7.0.0",

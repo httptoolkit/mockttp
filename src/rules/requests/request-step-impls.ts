@@ -23,12 +23,13 @@ import {
     OngoingResponse
 } from "../../types";
 
-import { CustomError, MaybePromise, ErrorLike, isErrorLike, delay } from '@httptoolkit/util';
+import { MaybePromise, ErrorLike, isErrorLike, delay } from '@httptoolkit/util';
+
+import { AbortError } from '../../util/abort-error';
 import { isAbsoluteUrl, getEffectivePort } from '../../util/url';
 import {
     waitForCompletedRequest,
     buildBodyReader,
-    shouldKeepAlive,
     isHttp2,
     writeHead,
     encodeBodyBuffer,
@@ -70,7 +71,7 @@ import { MockttpDeserializationOptions } from '../rule-deserialization'
 
 import { assertParamDereferenced } from '../rule-parameters';
 
-import { getAgent } from '../http-agents';
+import { getAgent, getConnection } from '../http-agents';
 import { ProxySettingSource } from '../proxy-config';
 import {
     ForwardingOptions,
@@ -139,18 +140,6 @@ export {
     ResponseTransform
 }
 
-// An error that indicates that the step is aborting the request.
-// This could be intentional, or an upstream server aborting the request.
-export class AbortError extends CustomError {
-
-    constructor(
-        message: string,
-        readonly code: string
-    ) {
-        super(message);
-    }
-
-}
 
 function isSerializedBuffer(obj: any): obj is SerializedBuffer {
     return obj?.type === 'Buffer' && !!obj.data;
@@ -471,6 +460,9 @@ export class PassThroughStepImpl extends PassThroughStep {
         let { protocol, pathname, search: query } = url.parse(reqUrl);
         const clientSocket = (clientReq as any).socket as net.Socket;
 
+        // Resolve the downstream connection up front, in case it's lost later in async flows
+        const connection = getConnection(clientReq);
+
         // Actual IP address or hostname
         let hostAddress = destination.hostname;
         // Same as hostAddress, unless it's an IP, in which case it's our best guess of the
@@ -724,13 +716,12 @@ export class PassThroughStepImpl extends PassThroughStep {
         // handle a request in that case - make sure our proxyConfig is always dereferenced before use.
         const proxySettingSource = assertParamDereferenced(this.proxyConfig) as ProxySettingSource;
 
-        // Mirror the keep-alive-ness of the incoming request in our outgoing request
         const agent = await getAgent({
+            connection,
             protocol: (protocol || undefined) as 'http:' | 'https:' | undefined,
             hostname: hostname!,
             port: effectivePort,
             tryHttp2: shouldTryH2Upstream,
-            keepAlive: shouldKeepAlive(clientReq),
             proxySettingSource
         });
 

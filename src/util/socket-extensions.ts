@@ -15,6 +15,15 @@ export const ClientErrorInProgress = Symbol('client-error-in-progress');
 export const SocketTimingInfo = Symbol('socket-timing-info');
 export const SocketMetadata = Symbol('socket-metadata');
 export const Expects100Continue = Symbol('expects-100-continue');
+export const UpstreamConnectionAgents = Symbol('upstream-connection-agents');
+
+/**
+ * The set of upstream agents dedicated to a single downstream connection (or
+ * tunnel), keyed by upstream protocol/proxy. Attached to the connection itself so
+ * that upstream connections are reused within one downstream connection but never
+ * shared between separate downstream connections, and are torn down automatically.
+ */
+export type UpstreamConnectionAgentMap = Map<string, { destroy(): void }>;
 
 export interface SocketMetadata {
     tags?: string[];
@@ -76,6 +85,9 @@ declare module 'net' {
          * example) later on.
          */
         [SocketMetadata]?: SocketMetadata;
+
+        // Upstream agents for this connection (a non-H2 request's socket). See UpstreamConnectionAgentMap.
+        [UpstreamConnectionAgents]?: UpstreamConnectionAgentMap;
     }
 }
 
@@ -123,6 +135,9 @@ declare module 'http2' {
         // session.socket is cleared before error handling kicks in. That's annoying,
         // so we manually preserve the socket elsewhere to work around it.
         initialSocket?: net.Socket;
+
+        // Upstream agents for this session (the connection for all its H2 requests).
+        [UpstreamConnectionAgents]?: UpstreamConnectionAgentMap;
     }
 
     interface ServerHttp2Stream {
@@ -131,6 +146,9 @@ declare module 'http2' {
         [LastTunnelAddress]?: string;
         [SocketTimingInfo]?: SocketTimingData;
         [SocketMetadata]?: SocketMetadata;
+
+        // Upstream agents owned by this H2 CONNECT tunnel stream (plaintext requests within it).
+        [UpstreamConnectionAgents]?: UpstreamConnectionAgentMap;
     }
 }
 

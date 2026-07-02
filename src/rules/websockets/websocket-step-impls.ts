@@ -54,7 +54,7 @@ import {
 } from '../../util/header-utils';
 import { MaybePromise } from '@httptoolkit/util';
 
-import { getAgent } from '../http-agents';
+import { getAgent, getConnection } from '../http-agents';
 import { ProxySettingSource } from '../proxy-config';
 import { assertParamDereferenced } from '../rule-parameters';
 import {
@@ -363,12 +363,12 @@ export class PassThroughWebSocketStepImpl extends PassThroughWebSocketStep {
         const proxySettingSource = assertParamDereferenced(this.proxyConfig) as ProxySettingSource;
 
         const agent = await getAgent({
+            connection: getConnection(req),
             protocol: parsedUrl.protocol as 'ws:' | 'wss:',
             hostname: effectiveHostname,
             port: effectivePort,
             proxySettingSource,
-            tryHttp2: false, // We don't support websockets over H2 yet
-            keepAlive: false // Not a thing for websockets: they take over the whole connection
+            tryHttp2: false // We don't support websockets over H2 yet
         });
 
         // Strip any extension offers we can't handle (i.e. anything other than

@@ -68,10 +68,6 @@ import {
     getSocketMetadataTags
 } from './socket-metadata';
 
-export const shouldKeepAlive = (req: OngoingRequest): boolean =>
-    req.httpVersion !== '1.0' &&
-    req.headers['connection'] !== 'close';
-
 export const writeHead = (
     response: http.ServerResponse | http2.Http2ServerResponse,
     status: number,
