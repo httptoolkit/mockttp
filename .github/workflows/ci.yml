@@ -131,7 +131,7 @@ jobs:
           fi
 
       # Make sure we have the latest npm for publishing:
-      - run: npm install -g npm@latest
+      - run: npm install -g npm@^11
 
       - name: Publish to npm
         run: |
