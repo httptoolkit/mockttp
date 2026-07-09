@@ -121,6 +121,19 @@ export interface PassThroughStepConnectionOptions {
      * transparently proxy network traffic, errors and all.
      */
     simulateConnectionErrors?: boolean;
+
+    /**
+     * Mirror the inbound connection's TLS fingerprint into the upstream connection, so
+     * that the proxied request presents the same TLS ClientHello (cipher suites, extensions,
+     * curves, etc) as the original client, instead of Mockttp's own default fingerprint.
+     *
+     * This only applies to intercepted HTTPS/TLS traffic (where we have a client hello to
+     * mirror), and requires the native `tls-impersonate` module - fully effective on Node
+     * v26.4+. Where impersonation isn't available, this falls back to the default fingerprint.
+     *
+     * Defaults to false.
+     */
+    mirrorTlsFingerprint?: boolean;
 }
 
 /**

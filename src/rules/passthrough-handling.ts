@@ -19,7 +19,9 @@ import { isMockttpBody, encodeBodyBuffer } from '../util/request-utils';
 import { areFFDHECurvesSupported } from '../util/openssl-compat';
 import { findRawHeaderIndex, getHeaderValue } from '../util/header-utils';
 import { getDefaultPort } from '../util/url';
-import { TlsMetadata } from '../util/socket-extensions';
+import { TlsMetadata, TlsClientHello } from '../util/socket-extensions';
+import { buildTlsImpersonationConfig } from '../util/tls-impersonation';
+import type { Connection } from './http-agents';
 
 import {
     CallbackRequestResult,
@@ -37,6 +39,11 @@ import { applyMatchReplace } from './match-replace';
 // issues so far as possible, by closely emulating a Firefox Client Hello:
 const NEW_CURVES_SUPPORTED = areFFDHECurvesSupported(process.versions.openssl);
 
+// Trust intermediate certificates from the trusted CA list too. Without this, trusted CAs
+// are only used when they are self-signed root certificates. Seems to cause issues in Node v20
+// in HTTP/2 tests, so disabled below the supported v22 version.
+const allowPartialTrustChain = semver.satisfies(process.version, '>=22.9.0');
+
 const SSL_OP_LEGACY_SERVER_CONNECT = 1 << 2;
 const SSL_OP_TLSEXT_PADDING = 1 << 4;
 const SSL_OP_NO_ENCRYPT_THEN_MAC = 1 << 19;
@@ -49,7 +56,10 @@ export function getUpstreamTlsOptions({
 
     ignoreHostHttpsErrors,
     clientCertificateHostMap,
-    trustedCAs
+    trustedCAs,
+
+    connection,
+    tryHttp2Upstream
 }: {
     // The effective hostname & port we're connecting to - note that this isn't exactly
     // the same as the destination (e.g. if you tunnel to an IP but set a hostname via SNI
@@ -60,7 +70,13 @@ export function getUpstreamTlsOptions({
     // The general config that's relevant to this request:
     ignoreHostHttpsErrors: string[] | boolean,
     clientCertificateHostMap: { [host: string]: { pfx: Buffer, passphrase?: string } },
-    trustedCAs: Array<string> | undefined
+    trustedCAs: Array<string> | undefined,
+
+    // The downstream connection, used to mirror client hellos.
+    connection?: Connection,
+
+    // Whether we're going to attempt HTTP/2 upstream, required to control our ALPN configuration.
+    tryHttp2Upstream?: boolean
 }): tls.ConnectionOptions {
     const strictHttpsChecks = shouldUseStrictHttps(hostname, port, ignoreHostHttpsErrors);
 
@@ -70,12 +86,53 @@ export function getUpstreamTlsOptions({
         clientCertificateHostMap['*'] ||
         {};
 
-    return {
+    // Allow connecting to old servers that don't support secure renegotiation, iff not strict:
+    const maybeLegacyConnect = strictHttpsChecks ? 0 : SSL_OP_LEGACY_SERVER_CONNECT;
+
+    const trustOptions: tls.SecureContextOptions = {
+        allowPartialTrustChain,
+        ...(trustedCAs ? { ca: trustedCAs } : {}),
+        ...clientCert
+    };
+
+    const connectionOptions: tls.ConnectionOptions = {
         servername: hostname && !isIP(hostname)
             ? hostname
             : undefined, // Can't send IPs in SNI
+        rejectUnauthorized: strictHttpsChecks
+    };
 
-        // We precisely control the various TLS parameters here to limit TLS fingerprinting issues:
+    // If the connection carries an inbound client hello to mirror, reproduce its TLS fingerprint
+    // upstream instead of our default.
+    const clientHello = connection?.[TlsClientHello];
+    if (connection && clientHello) {
+        const impersonationConfig = buildTlsImpersonationConfig(connection, clientHello, {
+            ...trustOptions,
+            ...(maybeLegacyConnect ? { secureOptions: maybeLegacyConnect } : {}),
+            security: strictHttpsChecks ? 'secure' : 'insecure'
+        });
+
+        // This should only be undefined if impersonation isn't supported:
+        if (impersonationConfig) {
+            // Mirror the client's ALPN, filtered to protocols we want upstream.
+            // N.b. http2-wrapper currently overrides ALPN on the H2 path regardless (for now).
+            const speakableUpstreamAlpn = tryHttp2Upstream ? ['h2', 'http/1.1'] : ['http/1.1'];
+            const mirroredAlpn = impersonationConfig.tlsOptions.ALPNProtocols
+                ?.filter(p => speakableUpstreamAlpn.includes(p));
+
+            return {
+                ...connectionOptions,
+                ...impersonationConfig.tlsOptions,
+                ALPNProtocols: mirroredAlpn?.length ? mirroredAlpn : undefined
+            };
+        }
+    }
+
+    // Default fingerprint, emulating a Firefox v103 client hello to limit TLS fingerprinting issues:
+    return {
+        ...connectionOptions,
+        ...trustOptions,
+
         ecdhCurve: [
             'X25519',
             'prime256v1', // N.B. Equivalent to secp256r1
@@ -127,32 +184,11 @@ export function getUpstreamTlsOptions({
                 : []
             )
         ].join(':'),
-        secureOptions: strictHttpsChecks
-            ? SSL_OP_TLSEXT_PADDING | SSL_OP_NO_ENCRYPT_THEN_MAC
-            : SSL_OP_TLSEXT_PADDING | SSL_OP_NO_ENCRYPT_THEN_MAC | SSL_OP_LEGACY_SERVER_CONNECT,
-        ...({
-            // Valid, but not included in Node.js TLS module types:
-            requestOSCP: true
-        } as any),
-
-        // Trust intermediate certificates from the trusted CA list too. Without this, trusted CAs
-        // are only used when they are self-signed root certificates. Seems to cause issues in Node v20
-        // in HTTP/2 tests, so disabled below the supported v22 version.
-        allowPartialTrustChain: semver.satisfies(process.version, '>=22.9.0'),
+        secureOptions: SSL_OP_TLSEXT_PADDING | SSL_OP_NO_ENCRYPT_THEN_MAC | maybeLegacyConnect,
+        requestOCSP: true,
 
         // Allow TLSv1, if !strict:
-        minVersion: strictHttpsChecks ? tls.DEFAULT_MIN_VERSION : 'TLSv1',
-
-        // Skip certificate validation entirely, if not strict:
-        rejectUnauthorized: strictHttpsChecks,
-
-        // Override the set of trusted CAs, if configured to do so:
-        ...(trustedCAs ? {
-            ca: trustedCAs
-        } : {}),
-
-        // Use a client cert, if one matches for this hostname+port:
-        ...clientCert
+        minVersion: strictHttpsChecks ? tls.DEFAULT_MIN_VERSION : 'TLSv1'
     }
 }
 

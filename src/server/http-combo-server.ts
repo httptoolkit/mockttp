@@ -38,6 +38,7 @@ import {
     LastTunnelAddress,
     LastHopEncrypted,
     TlsMetadata,
+    TlsClientHello,
     TlsSetupCompleted,
     SocketMetadata,
     Expects100Continue,
@@ -366,6 +367,7 @@ export async function createComboServer(options: ComboServerOptions): Promise<De
             // With TLS metadata, we only propagate directly from parent sockets, not through
             // CONNECT etc - we only want it if the final hop is TLS, previous values don't matter.
             socket[TlsMetadata] ??= parentSocket[TlsMetadata];
+            socket[TlsClientHello] ??= parentSocket[TlsClientHello];
         } else if (!socket[SocketTimingInfo]) {
             socket[SocketTimingInfo] = buildSocketTimingInfo();
         }
@@ -383,6 +385,7 @@ export async function createComboServer(options: ComboServerOptions): Promise<De
     server!.on('session', (session) => {
         session.once('remoteSettings', () => {
             (session.socket as tls.TLSSocket)[TlsSetupCompleted] = true;
+            session[TlsClientHello] ??= session.initialSocket?.[TlsClientHello];
         });
     });
 
@@ -541,6 +544,10 @@ function analyzeAndMaybePassThroughTls(
                 ja3Fingerprint: calculateJa3(helloData),
                 ja4Fingerprint: calculateJa4(helloData)
             };
+
+            // Keep the raw parsed hello too, so it can be mirrored into the upstream TLS
+            // connection later (fingerprint impersonation):
+            socket[TlsClientHello] = helloData;
 
             if (shouldPassThrough(upstreamDestination?.hostname, passThroughPatterns, interceptOnlyPatterns)) {
                 passthroughListener(socket, upstreamDestination.hostname, upstreamDestination.port);

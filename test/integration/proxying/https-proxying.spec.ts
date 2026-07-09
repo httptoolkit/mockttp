@@ -89,23 +89,20 @@ nodeOnly(() => {
                 await server.forAnyRequest().thenPassThrough();
 
                 let response = await ignoreNetworkError( // External service, can be unreliable, c'est la vie
-                    request.get("https://check.ja3.zone/", {
-                        headers: {
-                            // The hash may be recorded with the user agent that's used - we don't want the database
-                            // to fill up with records that make it clear it's Mockttp's fingerprint!
-                            'user-agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:103.0) Gecko/20100101 Firefox/103.0'
-                        }
-                    }),
+                    request.get("https://testserver.host/tls/fingerprint"),
                     { context: this, timeout: 4000 }
                 );
 
-                const ja3Hash = JSON.parse(response).hash;
+                const ja4 = JSON.parse(response).ja4;
 
-                // Any hash is fine, as long as it's not a super common Node.js hash:
-                expect(ja3Hash).be.oneOf([
-                    '66bd0ddf06e1943541373fc7283c0c00', // Node <17
-                    '555d2f0593c1e23a9b59cfaa7dc0e43a', // Node 17+
-                    'd4262504d91b8e4c9a7788df0b11c26b'  // Node 24.5+
+                // The JA4 of Mockttp's emulated (Firefox-ish) upstream fingerprint - deliberately
+                // not a common Node.js fingerprint. It varies with the bundled OpenSSL (1.1.1 lacks
+                // the ffdhe supported-groups; 3.5 changes the cipher & extension set), so there's one
+                // known value per OpenSSL generation, verified live on the supported Node 20-26 range:
+                expect(ja4).be.oneOf([
+                    't13d181100_796efca44d18_6acbe59d8432', // OpenSSL 1.1.1 (Node <=16)
+                    't13d181100_796efca44d18_d2c0cc1cf7b4', // OpenSSL 3.0-3.4 (Node 17 to 24.4)
+                    't13d171200_5b57614c22b0_248eb8cf00c0'  // OpenSSL 3.5+ (Node 24.5+, & recent 22.x LTS)
                 ]);
             });
 

@@ -799,7 +799,13 @@ export class PassThroughStepImpl extends PassThroughStep {
                     port: effectivePort,
                     ignoreHostHttpsErrors: this.ignoreHostHttpsErrors,
                     clientCertificateHostMap: this.clientCertificateHostMap,
-                    trustedCAs
+                    trustedCAs,
+
+                    // Pass the connection through to mirror its inbound TLS fingerprint upstream,
+                    // if that's enabled (getUpstreamTlsOptions reads the hello from it):
+                    ...(this.mirrorTlsFingerprint && protocol === 'https:'
+                        ? { connection, tryHttp2Upstream: shouldTryH2Upstream }
+                        : {})
                 })
             }, (serverRes) => (async () => {
                 serverRes.on('error', (e: any) => {
@@ -1423,6 +1429,7 @@ export class PassThroughStepImpl extends PassThroughStep {
             } as ResponseTransform : undefined,
             lookupOptions: data.lookupOptions,
             simulateConnectionErrors: !!data.simulateConnectionErrors,
+            mirrorTlsFingerprint: !!data.mirrorTlsFingerprint,
             ignoreHostHttpsErrors: data.ignoreHostCertificateErrors,
             additionalTrustedCAs: data.extraCACertificates,
             clientCertificateHostMap: _.mapValues(data.clientCertificateHostMap,

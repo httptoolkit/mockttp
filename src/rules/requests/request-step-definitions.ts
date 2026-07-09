@@ -682,6 +682,7 @@ export interface SerializedPassThroughData {
     clientCertificateHostMap?: { [host: string]: { pfx: string, passphrase?: string } };
     lookupOptions?: PassThroughLookupOptions;
     simulateConnectionErrors?: boolean;
+    mirrorTlsFingerprint?: boolean;
 
     transformRequest?: Replace<RequestTransform, {
         'replaceBody'?: string, // Serialized as base64 buffer
@@ -756,6 +757,8 @@ export class PassThroughStep extends Serializable implements RequestStepDefiniti
 
     public readonly simulateConnectionErrors: boolean;
 
+    public readonly mirrorTlsFingerprint: boolean;
+
     constructor(options: PassThroughStepOptions = {}) {
         super();
 
@@ -767,6 +770,7 @@ export class PassThroughStep extends Serializable implements RequestStepDefiniti
         this.lookupOptions = options.lookupOptions;
         this.proxyConfig = options.proxyConfig;
         this.simulateConnectionErrors = !!options.simulateConnectionErrors;
+        this.mirrorTlsFingerprint = !!options.mirrorTlsFingerprint;
 
         this.extraCACertificates = options.additionalTrustedCAs || [];
 
@@ -919,6 +923,7 @@ export class PassThroughStep extends Serializable implements RequestStepDefiniti
             proxyConfig: serializeProxyConfig(this.proxyConfig, channel),
             lookupOptions: this.lookupOptions,
             simulateConnectionErrors: this.simulateConnectionErrors,
+            mirrorTlsFingerprint: this.mirrorTlsFingerprint,
             ignoreHostCertificateErrors: this.ignoreHostHttpsErrors,
             extraCACertificates: this.extraCACertificates.map((certObject) => {
                 // We use toString to make sure that buffers always end up as

@@ -1,6 +1,7 @@
 import type * as streams from 'stream';
 import type * as net from 'net';
 import type * as tls from 'tls';
+import type { TlsClientHelloMessage } from 'read-tls-client-hello';
 import { TlsSocketMetadata } from '../types';
 
 // We store a bunch of metadata that we directly attach to sockets, TLS
@@ -16,6 +17,7 @@ export const SocketTimingInfo = Symbol('socket-timing-info');
 export const SocketMetadata = Symbol('socket-metadata');
 export const Expects100Continue = Symbol('expects-100-continue');
 export const UpstreamConnectionAgents = Symbol('upstream-connection-agents');
+export const TlsClientHello = Symbol('tls-client-hello');
 
 /**
  * The set of upstream agents dedicated to a single downstream connection (or
@@ -73,6 +75,7 @@ declare module 'net' {
         [TlsMetadata]?: TlsSocketMetadata;
         [InitialRemoteAddress]?: string;
         [InitialRemotePort]?: number;
+        [TlsClientHello]?: TlsClientHelloMessage;
 
         /**
          * Arbitrary custom metadata that may be added during socket processing,
@@ -112,6 +115,8 @@ declare module 'tls' {
          */
         [InitialRemoteAddress]?: string;
         [InitialRemotePort]?: number;
+
+        [TlsClientHello]?: TlsClientHelloMessage;
     }
 }
 
@@ -138,6 +143,8 @@ declare module 'http2' {
 
         // Upstream agents for this session (the connection for all its H2 requests).
         [UpstreamConnectionAgents]?: UpstreamConnectionAgentMap;
+
+        [TlsClientHello]?: TlsClientHelloMessage;
     }
 
     interface ServerHttp2Stream {
@@ -149,6 +156,8 @@ declare module 'http2' {
 
         // Upstream agents owned by this H2 CONNECT tunnel stream (plaintext requests within it).
         [UpstreamConnectionAgents]?: UpstreamConnectionAgentMap;
+
+        [TlsClientHello]?: TlsClientHelloMessage;
     }
 }
 
