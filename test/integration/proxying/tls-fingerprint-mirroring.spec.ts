@@ -4,6 +4,7 @@ import * as tls from 'tls';
 import * as https from 'https';
 import * as http2 from 'http2';
 
+import * as WebSocket from 'isomorphic-ws';
 import { trackClientHellos } from 'read-tls-client-hello';
 
 import { getLocal, Mockttp } from "../../..";
@@ -189,6 +190,67 @@ nodeOnly(() => {
             await h2RequestViaServer();
 
             expect(target.lastJa4).to.equal(clientJa4);
+        });
+
+        // Open a WS connection and resolve once it closes - we only need the TLS hello, not the WS
+        // exchange, so we tolerate errors (e.g. the target closing immediately):
+        const openWsOnce = (url: string) => new Promise<void>((resolve) => {
+            const ws = new WebSocket(url, { rejectUnauthorized: false });
+            ws.on('open', () => ws.close());
+            ws.on('close', () => resolve());
+            ws.on('error', () => resolve());
+        });
+
+        // The client's own WS JA4, measured against a tracking wss server (matching openWsOnce):
+        const measureClientWsJa4 = async () => {
+            let ja4: string | undefined;
+            const probe = makeDestroyable(https.createServer({ key, cert }));
+            trackClientHellos(probe);
+            const probeWs = new WebSocket.Server({ server: probe });
+            probeWs.on('connection', (ws, req) => {
+                ja4 = (req.socket as tls.TLSSocket).tlsClientHello?.ja4;
+                ws.close();
+            });
+            await new Promise<void>((resolve) => probe.listen(0, '127.0.0.1', resolve));
+            const port = (probe.address() as net.AddressInfo).port;
+
+            await openWsOnce(`wss://localhost:${port}`);
+
+            probeWs.close();
+            await probe.destroy();
+            return ja4;
+        };
+
+        it("mirrors the client's TLS fingerprint upstream over WebSockets", async function () {
+            if (!nodeSatisfies(IMPERSONATION_FULL_FIDELITY)) this.skip();
+
+            // A wss target recording the JA4 of the (mirrored) upstream hello Mockttp presents:
+            let upstreamJa4: string | undefined;
+            const wsTarget = makeDestroyable(https.createServer({ key, cert }));
+            trackClientHellos(wsTarget);
+            const wsTargetServer = new WebSocket.Server({ server: wsTarget });
+            wsTargetServer.on('connection', (ws, req) => {
+                upstreamJa4 = (req.socket as tls.TLSSocket).tlsClientHello?.ja4;
+                ws.close();
+            });
+            await new Promise<void>((resolve) => wsTarget.listen(0, '127.0.0.1', resolve));
+            const wsTargetPort = (wsTarget.address() as net.AddressInfo).port;
+
+            try {
+                await server.forAnyWebSocket().thenForwardTo(`wss://localhost:${wsTargetPort}`, {
+                    ignoreHostHttpsErrors: ['localhost', '127.0.0.1'],
+                    mirrorTlsFingerprint: true
+                });
+
+                const clientJa4 = await measureClientWsJa4();
+                await openWsOnce(`wss://localhost:${server.port}`);
+
+                // The upstream wss connection now presents our client's own fingerprint:
+                expect(upstreamJa4).to.equal(clientJa4);
+            } finally {
+                wsTargetServer.close();
+                await wsTarget.destroy();
+            }
         });
 
         it("offers upstream ALPN matching our protocol, not the client's mirrored ALPN", async function () {

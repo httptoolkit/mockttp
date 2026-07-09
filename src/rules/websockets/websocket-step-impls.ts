@@ -418,6 +418,10 @@ export class PassThroughWebSocketStepImpl extends PassThroughWebSocketStep {
                 ignoreHostHttpsErrors: this.ignoreHostHttpsErrors,
                 clientCertificateHostMap: this.clientCertificateHostMap,
                 trustedCAs,
+
+                ...(this.mirrorTlsFingerprint
+                    ? { connection: getConnection(req) }
+                    : {})
             }) : {})
         };
 
@@ -552,6 +556,7 @@ export class PassThroughWebSocketStepImpl extends PassThroughWebSocketStep {
             ...data,
             proxyConfig: deserializeProxyConfig(data.proxyConfig, channel, ruleParams),
             simulateConnectionErrors: data.simulateConnectionErrors ?? false,
+            mirrorTlsFingerprint: data.mirrorTlsFingerprint ?? false,
             extraCACertificates: data.extraCACertificates || [],
             ignoreHostHttpsErrors: data.ignoreHostCertificateErrors,
             clientCertificateHostMap: _.mapValues(data.clientCertificateHostMap,

@@ -78,6 +78,7 @@ export interface SerializedPassThroughWebSocketData {
     lookupOptions?: PassThroughLookupOptions;
     proxyConfig?: SerializedProxyConfig;
     simulateConnectionErrors?: boolean;
+    mirrorTlsFingerprint?: boolean;
     ignoreHostCertificateErrors?: string[] | boolean; // Doesn't match option name, backward compat
     extraCACertificates?: Array<{ cert: string } | { certPath: string }>;
     clientCertificateHostMap?: { [host: string]: { pfx: string, passphrase?: string } };
@@ -101,6 +102,7 @@ export class PassThroughWebSocketStep extends Serializable implements WebSocketS
     public readonly lookupOptions: PassThroughLookupOptions | undefined;
     public readonly proxyConfig?: ProxyConfig;
     public readonly simulateConnectionErrors: boolean;
+    public readonly mirrorTlsFingerprint: boolean;
 
     public readonly ignoreHostHttpsErrors: string[] | boolean = [];
     public readonly clientCertificateHostMap: {
@@ -122,6 +124,7 @@ export class PassThroughWebSocketStep extends Serializable implements WebSocketS
         this.lookupOptions = options.lookupOptions;
         this.proxyConfig = options.proxyConfig;
         this.simulateConnectionErrors = !!options.simulateConnectionErrors;
+        this.mirrorTlsFingerprint = !!options.mirrorTlsFingerprint;
 
         this.extraCACertificates = options.additionalTrustedCAs || [];
         this.clientCertificateHostMap = options.clientCertificateHostMap || {};
@@ -178,6 +181,7 @@ export class PassThroughWebSocketStep extends Serializable implements WebSocketS
             lookupOptions: this.lookupOptions,
             proxyConfig: serializeProxyConfig(this.proxyConfig, channel),
             simulateConnectionErrors: this.simulateConnectionErrors,
+            mirrorTlsFingerprint: this.mirrorTlsFingerprint,
             ignoreHostCertificateErrors: this.ignoreHostHttpsErrors,
             extraCACertificates: this.extraCACertificates.map((certObject) => {
                 // We use toString to make sure that buffers always end up as
