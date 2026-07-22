@@ -297,13 +297,20 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
     async start(
         listenOptions: number | {
             port: number,
-            host: string
+            host?: string
         } = DEFAULT_ADMIN_SERVER_PORT
     ) {
         if (this.server) throw new Error('Admin server already running');
 
+        // By default we bind to localhost only, so the admin server (which can remotely control
+        // arbitrary network behaviour) is not exposed to the wider network. A host can be passed
+        // explicitly to listen on other interfaces where that's genuinely required.
+        const resolvedListenOptions = typeof listenOptions === 'number'
+            ? { port: listenOptions, host: '127.0.0.1' }
+            : { host: '127.0.0.1', ...listenOptions };
+
         await new Promise<void>((resolve, reject) => {
-            this.server = makeDestroyable(this.app.listen(listenOptions, () => resolve()));
+            this.server = makeDestroyable(this.app.listen(resolvedListenOptions, () => resolve()));
 
             this.server.on('error', reject);
 

@@ -178,7 +178,7 @@ async function requestFromAdminServer<T>(serverUrl: string, path: string, option
  */
 export async function resetAdminServer(options: AdminClientOptions = {}): Promise<void> {
     const serverUrl = options.adminServerUrl ||
-        `http://localhost:${DEFAULT_ADMIN_SERVER_PORT}`;
+        `http://127.0.0.1:${DEFAULT_ADMIN_SERVER_PORT}`;
     await requestFromAdminServer(serverUrl, '/reset', {
         ...options.requestOptions,
         method: 'POST'
@@ -219,7 +219,7 @@ export class AdminClient<Plugins extends { [key: string]: AdminPlugin<any, any> 
         super();
         this.debug = !!options.debug;
         this.adminClientOptions = _.defaults(options, {
-            adminServerUrl: `http://localhost:${DEFAULT_ADMIN_SERVER_PORT}`,
+            adminServerUrl: `http://127.0.0.1:${DEFAULT_ADMIN_SERVER_PORT}`,
             adminStreamReconnectAttempts: 10
         });
     }
