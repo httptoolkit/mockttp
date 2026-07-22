@@ -904,7 +904,7 @@ nodeOnly(() => {
                 let client = getRemote();
 
                 await expect(client.start())
-                    .to.eventually.be.rejectedWith('Failed to connect to admin server at http://localhost:45454');
+                    .to.eventually.be.rejectedWith('Failed to connect to admin server at http://127.0.0.1:45454');
             });
         });
 
