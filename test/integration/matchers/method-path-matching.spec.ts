@@ -1,7 +1,7 @@
 import { stripIndent } from "common-tags";
 
 import { getLocal } from "../../..";
-import { expect, browserOnly } from "../../test-utils";
+import { expect, browserOnly, nodeOnly, sendRawRequest } from "../../test-utils";
 
 describe("Method & path request matching", function () {
     let server = getLocal();
@@ -27,6 +27,47 @@ describe("Method & path request matching", function () {
 You can disable CORS by passing { cors: false } to getLocal/getRemote, but this may cause issues \
 connecting to your mock server from browsers, unless you mock all required OPTIONS preflight \
 responses by hand.`);
+        });
+    });
+
+    nodeOnly(() => {
+        // TRACE & QUERY can't be sent via fetch (TRACE is a forbidden method, and
+        // both are awkward to send with a body) so we exercise them over a raw socket.
+
+        it("should match TRACE requests", async () => {
+            await server.forTrace('/').thenReply(200, 'trace-response');
+
+            const response = await sendRawRequest(server,
+                `TRACE / HTTP/1.1\r\nHost: localhost:${server.port}\r\n\r\n`
+            );
+
+            expect(response).to.include('HTTP/1.1 200');
+            expect(response).to.include('trace-response');
+        });
+
+        it("should match QUERY requests, including their body", async () => {
+            await server.forQuery('/')
+                .withBody('query-request-body')
+                .thenReply(200, 'query-response');
+
+            const body = 'query-request-body';
+            const response = await sendRawRequest(server,
+                `QUERY / HTTP/1.1\r\nHost: localhost:${server.port}\r\n` +
+                `Content-Length: ${body.length}\r\n\r\n${body}`
+            );
+
+            expect(response).to.include('HTTP/1.1 200');
+            expect(response).to.include('query-response');
+        });
+
+        it("should not match QUERY requests against .forGet()", async () => {
+            await server.forGet('/').thenReply(200, 'get-response');
+
+            const response = await sendRawRequest(server,
+                `QUERY / HTTP/1.1\r\nHost: localhost:${server.port}\r\nContent-Length: 0\r\n\r\n`
+            );
+
+            expect(response).to.include('HTTP/1.1 503');
         });
     });
 

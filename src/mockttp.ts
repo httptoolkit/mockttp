@@ -320,6 +320,53 @@ export interface Mockttp {
     forOptions(url?: string | RegExp): RequestRuleBuilder;
 
     /**
+     * Get a builder for a mock rule that will match TRACE requests for the given path.
+     * If no path is specified, this matches all TRACE requests.
+     *
+     * The path can be either a string, or a regular expression to match against.
+     * Path matching always ignores query parameters. To match query parameters,
+     * use .withQuery({ a: 'b' }) or withExactQuery('?a=b').
+     *
+     * There are a few supported matching formats:
+     * - Relative string paths (`/abc`) will be compared only to the request's path,
+     *   independent of the host & protocol, ignoring query params.
+     * - Absolute string paths with no protocol (`localhost:8000/abc`) will be
+     *   compared to the URL independent of the protocol, ignoring query params.
+     * - Fully absolute string paths (`http://localhost:8000/abc`) will be compared
+     *   to entire URL, ignoring query params.
+     * - Regular expressions can match the absolute URL: `/^http:\/\/localhost:8000\/abc$/`
+     * - Regular expressions can also match the path: `/^\/abc/`
+     *
+     * @category Mock HTTP requests
+     */
+    forTrace(url?: string | RegExp): RequestRuleBuilder;
+
+    /**
+     * Get a builder for a mock rule that will match QUERY requests for the given path.
+     * If no path is specified, this matches all QUERY requests.
+     *
+     * This matches the QUERY method itself, and is unrelated to `.withQuery()`, which
+     * matches URL query-string parameters.
+     *
+     * The path can be either a string, or a regular expression to match against.
+     * Path matching always ignores query parameters. To match query parameters,
+     * use .withQuery({ a: 'b' }) or withExactQuery('?a=b').
+     *
+     * There are a few supported matching formats:
+     * - Relative string paths (`/abc`) will be compared only to the request's path,
+     *   independent of the host & protocol, ignoring query params.
+     * - Absolute string paths with no protocol (`localhost:8000/abc`) will be
+     *   compared to the URL independent of the protocol, ignoring query params.
+     * - Fully absolute string paths (`http://localhost:8000/abc`) will be compared
+     *   to entire URL, ignoring query params.
+     * - Regular expressions can match the absolute URL: `/^http:\/\/localhost:8000\/abc$/`
+     * - Regular expressions can also match the path: `/^\/abc/`
+     *
+     * @category Mock HTTP requests
+     */
+    forQuery(url?: string | RegExp): RequestRuleBuilder;
+
+    /**
      * Match JSON-RPC requests, optionally matching a given method and/or params.
      *
      * If no method or params are specified, this will match all JSON-RPC requests.
@@ -1078,6 +1125,14 @@ export abstract class AbstractMockttp {
             `);
         }
         return new RequestRuleBuilder(Method.OPTIONS, url, this.addRequestRule);
+    }
+
+    forTrace(url?: string | RegExp): RequestRuleBuilder {
+        return new RequestRuleBuilder(Method.TRACE, url, this.addRequestRule);
+    }
+
+    forQuery(url?: string | RegExp): RequestRuleBuilder {
+        return new RequestRuleBuilder(Method.QUERY, url, this.addRequestRule);
     }
 
     forJsonRpcRequest(match: { method?: string, params?: any } = {}) {

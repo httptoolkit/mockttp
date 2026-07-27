@@ -11,7 +11,9 @@ export enum Method {
     DELETE,
     PATCH,
     HEAD,
-    OPTIONS
+    OPTIONS,
+    TRACE,
+    QUERY
 }
 
 export enum RulePriority {
