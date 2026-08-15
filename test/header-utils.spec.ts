@@ -1,4 +1,4 @@
-import { updateRawHeaders } from "../src/util/header-utils";
+import { h2HeadersToH1, updateRawHeaders } from "../src/util/header-utils";
 import { expect } from "./test-utils";
 
 describe("Header utils", () => {
@@ -73,6 +73,23 @@ describe("Header utils", () => {
                 })
             ).to.deep.equal([
                 ['C', 'd']
+            ]);
+        });
+
+    });
+
+    describe("h2HeadersToH1", () => {
+
+        it("combines multiple cookie headers using only their values", () => {
+            expect(
+                h2HeadersToH1([
+                    [':authority', 'example.com'],
+                    ['cookie', 'session=abc'],
+                    ['cookie', 'preferences=dark-mode']
+                ], 'GET')
+            ).to.deep.equal([
+                ['Host', 'example.com'],
+                ['Cookie', 'session=abc; preferences=dark-mode']
             ]);
         });
 

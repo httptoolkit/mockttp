@@ -234,7 +234,7 @@ export function h2HeadersToH1(h2Headers: RawHeaders, method: string): RawHeaders
     const cookieHeaders = findRawHeaders(h1Headers, 'cookie')
     if (cookieHeaders.length > 1) {
         h1Headers = h1Headers.filter(([key]) => key.toLowerCase() !== 'cookie');
-        h1Headers.push(['Cookie', cookieHeaders.join('; ')]);
+        h1Headers.push(['Cookie', cookieHeaders.map(([, value]) => value).join('; ')]);
     }
 
     // We don't know if the request has a body yet - but just in case, we ensure it could:
