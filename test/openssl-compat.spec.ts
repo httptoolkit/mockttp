@@ -1,5 +1,7 @@
 import { expect } from 'chai';
-import { areFFDHECurvesSupported } from '../src/util/openssl-compat';
+import * as tls from 'tls';
+
+import { areFFDHECurvesSupported, isSecLevelSupported } from '../src/util/openssl-compat';
 
 describe('areFFDHECurvesSupported', () => {
     it('True only for 3+ versions', () => {
@@ -20,5 +22,25 @@ describe('areFFDHECurvesSupported', () => {
 
     it('Assumes false when version is uknown', () => {
         expect(areFFDHECurvesSupported(undefined)).to.be.false;
+    });
+});
+
+describe('isSecLevelSupported', () => {
+    it('Matches whether the TLS backend actually accepts the directive', () => {
+        // Detected rather than hardcoded, since this suite runs on runtimes with
+        // different TLS backends. The point is that the helper agrees with reality.
+        let accepted: boolean;
+        try {
+            tls.createSecureContext({ ciphers: 'AES128-SHA:@SECLEVEL=0' });
+            accepted = true;
+        } catch (e) {
+            accepted = false;
+        }
+
+        expect(isSecLevelSupported()).to.equal(accepted);
+    });
+
+    it('Is stable across calls', () => {
+        expect(isSecLevelSupported()).to.equal(isSecLevelSupported());
     });
 });

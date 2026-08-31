@@ -16,7 +16,7 @@ import { asBuffer } from '../util/buffer-utils';
 import { isIP, isLocalhostAddress, normalizeIP } from '../util/ip-utils';
 import { CachedDns, dnsLookup, DnsLookupFunction } from '../util/dns';
 import { isMockttpBody, encodeBodyBuffer } from '../util/request-utils';
-import { areFFDHECurvesSupported } from '../util/openssl-compat';
+import { areFFDHECurvesSupported, isSecLevelSupported } from '../util/openssl-compat';
 import { findRawHeaderIndex, getHeaderValue } from '../util/header-utils';
 import { getDefaultPort } from '../util/url';
 import { TlsMetadata, TlsClientHello } from '../util/socket-extensions';
@@ -178,8 +178,9 @@ export function getUpstreamTlsOptions({
             'AES256-SHA',
 
             // This magic cipher is the very obtuse way that OpenSSL downgrades the overall
-            // security level to allow various legacy settings, protocols & ciphers:
-            ...(!strictHttpsChecks
+            // security level to allow various legacy settings, protocols & ciphers. It's
+            // OpenSSL-only though - other backends reject the whole cipher string:
+            ...(!strictHttpsChecks && isSecLevelSupported()
                 ? ['@SECLEVEL=0']
                 : []
             )
