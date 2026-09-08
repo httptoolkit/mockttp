@@ -23,7 +23,7 @@ import {
     OngoingResponse
 } from "../../types";
 
-import { MaybePromise, ErrorLike, isErrorLike, delay } from '@httptoolkit/util';
+import { MaybePromise, ErrorLike, isErrorLike, asErrorLike, delay } from '@httptoolkit/util';
 
 import { AbortError } from '../../util/abort-error';
 import { isAbsoluteUrl, getEffectivePort } from '../../util/url';
@@ -122,6 +122,7 @@ import {
     TimeoutStep,
     DelayStep,
     WebhookStep,
+    RequestWebhookEvents,
     WaitForRequestBodyStep,
     InformationalResponseStep
 } from './request-step-definitions';
@@ -1557,12 +1558,49 @@ export class WebhookStepImpl extends WebhookStep {
     static readonly fromDefinition = (defn: WebhookStep) => new WebhookStepImpl(defn.url, defn.events);
     protected outgoingSockets = new Set<net.Socket>();
 
-    private sendEvent(data: {
-        eventType: string;
+    private reportError(
+        options: RequestStepOptions,
+        eventType: RequestWebhookEvents,
+        error: ErrorLike
+    ) {
+        console.warn(`Error sending ${eventType} webhook to ${this.url}:`, options.debug
+            ? error
+            : error.message
+        );
+
+        options.emitEventCallback?.('webhook-error', {
+            url: this.url,
+            webhookEventType: eventType,
+            error: {
+                name: error.name,
+                code: error.code,
+                message: error.message,
+                stack: error.stack
+            }
+        });
+    }
+
+    private sendEvent(options: RequestStepOptions, data: {
+        eventType: RequestWebhookEvents;
+        eventData: {};
+    }) {
+        try {
+            this.sendRequest(options, data);
+        } catch (e) {
+            this.reportError(options, data.eventType, asErrorLike(e));
+        }
+    }
+
+    private sendRequest(options: RequestStepOptions, data: {
+        eventType: RequestWebhookEvents;
         eventData: {};
     }) {
         const content = JSON.stringify(data);
-        const req = http.request(this.url, {
+        const requestModule = new URL(this.url).protocol === 'https:'
+            ? https
+            : http;
+
+        const req = requestModule.request(this.url, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -1588,20 +1626,23 @@ export class WebhookStepImpl extends WebhookStep {
         });
 
         req.on('error', (e) => {
-            console.warn(`Error sending webhook to ${this.url}:`, e);
+            this.reportError(options, data.eventType, e);
         });
 
         req.on('response', (res) => {
-            if (res.statusCode !== 200) {
-                console.warn(`Received unexpected ${res.statusCode} response from webhook ${this.url} for ${data.eventType}`);
+            const statusCode = res.statusCode!;
+            if (statusCode < 200 || statusCode >= 300) {
+                this.reportError(options, data.eventType, new Error(
+                    `Received unexpected ${statusCode} response from webhook`
+                ));
             }
 
-            res.on('error', () => {});
+            res.on('error', (e) => this.reportError(options, data.eventType, e));
             res.resume();
         });
     }
 
-    async handle(request: OngoingRequest, response: OngoingResponse) {
+    async handle(request: OngoingRequest, response: OngoingResponse, options: RequestStepOptions) {
         if (isSocketLoop(this.outgoingSockets, (request as any).socket)) {
             // We refuse to fire webhooks for incoming webhook requests, to avoid infinite loops in the (quite reasonable)
             // case where you send webhooks to Mockttp/HTTP Toolkit to debug their behaviour. Better to just return
@@ -1628,11 +1669,11 @@ export class WebhookStepImpl extends WebhookStep {
                     body: encodeWebhookBody(completedReq.body.buffer)
                 }
 
-                this.sendEvent({
+                this.sendEvent(options, {
                     eventType: 'request',
                     eventData: eventData
                 });
-            }).catch(() => {});
+            }).catch((e) => this.reportError(options, 'request', asErrorLike(e)));
         }
 
         if (this.events.includes('response')) {
@@ -1648,11 +1689,11 @@ export class WebhookStepImpl extends WebhookStep {
                     body: encodeWebhookBody(completedRes.body.buffer)
                 }
 
-                this.sendEvent({
+                this.sendEvent(options, {
                     eventType: 'response',
                     eventData: eventData
                 });
-            }).catch(() => {});
+            }).catch((e) => this.reportError(options, 'response', asErrorLike(e)));
         }
 
         return { continue: true };

@@ -127,6 +127,11 @@ export class RequestRuleBuilder extends BaseRuleBuilder {
      * no event list is specified then it defaults to `['request', 'response']`.
      *
      * The JSON body will contain `{ eventType: string, eventData: object }`.
+     *
+     * Webhook delivery is fire-and-forget: it does not affect the request being
+     * handled. If delivery fails (a connection error, or a non-2xx response) that's
+     * reported as a `webhook-error` rule event, which you can subscribe to with
+     * `server.on('rule-event', ...)`.
      */
     addWebhook(url: string, events?: RequestWebhookEvents[]): this {
         this.steps.push(new WebhookStep(url, events ?? ['request', 'response']));

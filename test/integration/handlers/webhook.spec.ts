@@ -1,4 +1,4 @@
-import { getLocal } from "../../..";
+import { getLocal, RuleEvent } from "../../..";
 import { delay, expect, getDeferred, isWeb, nodeOnly } from "../../test-utils";
 
 describe("Webhook handlers", () => {
@@ -300,6 +300,110 @@ describe("Webhook handlers", () => {
 
         const webhookResponseBody = await webhookResponseRequests[0].body.getJson() as any;
         expect(webhookResponseBody.eventType).to.equal('response');
+    });
+
+    describe("with an HTTPS webhook URL", () => {
+
+        const httpsWebhookTarget = getLocal({
+            https: {
+                keyPath: './test/fixtures/test-ca.key',
+                certPath: './test/fixtures/test-ca.pem'
+            }
+        });
+
+        beforeEach(() => httpsWebhookTarget.start());
+        afterEach(() => httpsWebhookTarget.stop());
+
+        it("should send events to the webhook", async () => {
+            const resCompleted = getDeferred();
+            httpsWebhookTarget.on('response', () => resCompleted.resolve());
+
+            const webhookEndpoint = await httpsWebhookTarget.forPost().thenReply(200);
+
+            await server.forAnyRequest()
+                .addWebhook(httpsWebhookTarget.url, ['response'])
+                .thenReply(200, 'Mock response');
+
+            const response = await fetch(server.url);
+            expect(response.status).to.equal(200);
+
+            await resCompleted;
+
+            const webhookRequests = await webhookEndpoint.getSeenRequests();
+            expect(webhookRequests.length).to.equal(1);
+
+            const webhookBody = await webhookRequests[0].body.getJson() as any;
+            expect(webhookBody.eventType).to.equal('response');
+            expect(webhookBody.eventData.statusCode).to.equal(200);
+        });
+
+    });
+
+    it("should report an error event if the webhook connection fails", async () => {
+        await webhookTarget.forPost().thenCloseConnection();
+
+        const ruleEvents: RuleEvent<any>[] = [];
+        await server.on('rule-event', (e) => ruleEvents.push(e));
+
+        const rule = await server.forAnyRequest()
+            .addWebhook(webhookTarget.url, ['response'])
+            .thenReply(200, 'Mock response');
+
+        const response = await fetch(server.url);
+        expect(response.status).to.equal(200);
+        expect(await response.text()).to.equal('Mock response');
+
+        await delay(100);
+
+        expect(ruleEvents.length).to.equal(1);
+        expect(ruleEvents[0].ruleId).to.equal(rule.id);
+        expect(ruleEvents[0].eventType).to.equal('webhook-error');
+        expect(ruleEvents[0].eventData.url).to.equal(webhookTarget.url);
+        expect(ruleEvents[0].eventData.webhookEventType).to.equal('response');
+        expect(ruleEvents[0].eventData.error.code).to.equal('ECONNRESET');
+    });
+
+    it("should report an error event if the webhook returns a failure response", async () => {
+        await webhookTarget.forPost().thenReply(500, 'Webhook failure');
+
+        const ruleEvents: RuleEvent<any>[] = [];
+        await server.on('rule-event', (e) => ruleEvents.push(e));
+
+        const rule = await server.forAnyRequest()
+            .addWebhook(webhookTarget.url, ['response'])
+            .thenReply(200, 'Mock response');
+
+        const response = await fetch(server.url);
+        expect(response.status).to.equal(200);
+
+        await delay(100);
+
+        expect(ruleEvents.length).to.equal(1);
+        expect(ruleEvents[0].ruleId).to.equal(rule.id);
+        expect(ruleEvents[0].eventType).to.equal('webhook-error');
+        expect(ruleEvents[0].eventData.url).to.equal(webhookTarget.url);
+        expect(ruleEvents[0].eventData.webhookEventType).to.equal('response');
+        expect(ruleEvents[0].eventData.error.message).to.equal(
+            'Received unexpected 500 response from webhook'
+        );
+    });
+
+    it("should not report an error event for other successful responses", async () => {
+        await webhookTarget.forPost().thenReply(204);
+
+        const ruleEvents: RuleEvent<any>[] = [];
+        await server.on('rule-event', (e) => ruleEvents.push(e));
+
+        await server.forAnyRequest()
+            .addWebhook(webhookTarget.url, ['response'])
+            .thenReply(200, 'Mock response');
+
+        const response = await fetch(server.url);
+        expect(response.status).to.equal(200);
+
+        await delay(100);
+
+        expect(ruleEvents.length).to.equal(0);
     });
 
     it("should throw given an invalid URL", async () => {
