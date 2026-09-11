@@ -19,6 +19,11 @@ declare module "net" {
 }
 
 declare module "tls" {
+    // A valid tls.connect() option, but only declared for TLSSocket in @types/node < v24:
+    interface ConnectionOptions {
+        requestOCSP?: boolean | undefined;
+    }
+
     interface TLSSocket {
         // Internal handle, used for monkeypatching & error tracking
         _handle?: {
