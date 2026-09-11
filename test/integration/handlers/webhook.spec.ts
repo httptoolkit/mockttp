@@ -22,7 +22,7 @@ describe("Webhook handlers", () => {
         it("should fire both events if both are enabled explicitly", async () => {
             const resCompleted = getDeferred();
             let resCount = 0;
-            webhookTarget.on('response', () => {
+            await webhookTarget.on('response', () => {
                 resCount++;
                 if (resCount == 2) resCompleted.resolve();
             });
@@ -98,7 +98,7 @@ describe("Webhook handlers", () => {
         it("should fire a request event by itself", async () => {
             const resCompleted = getDeferred();
             let resCount = 0;
-            webhookTarget.on('response', () => {
+            await webhookTarget.on('response', () => {
                 resCount++;
                 if (resCount == 1) resCompleted.resolve();
                 if (resCount > 1) throw new Error("Received too many webhook calls");
@@ -165,7 +165,7 @@ describe("Webhook handlers", () => {
     it("should fire a response event by itself", async () => {
         const resCompleted = getDeferred();
         let resCount = 0;
-        webhookTarget.on('response', () => {
+        await webhookTarget.on('response', () => {
             resCount++;
             if (resCount == 1) resCompleted.resolve();
             if (resCount > 1) throw new Error("Received too many webhook calls");
@@ -222,7 +222,7 @@ describe("Webhook handlers", () => {
     });
 
     it("should fire no events if an empty list is provided", async () => {
-        webhookTarget.on('response', () => {
+        await webhookTarget.on('response', () => {
             throw new Error("Received unexpected webhook call");
         });
 
@@ -257,7 +257,7 @@ describe("Webhook handlers", () => {
     it("should support multiple registrations to allow using different URLs", async () => {
         const resCompleted = getDeferred();
         let resCount = 0;
-        webhookTarget.on('response', () => {
+        await webhookTarget.on('response', () => {
             resCount++;
             if (resCount == 2) resCompleted.resolve();
             if (resCount > 2) throw new Error("Received too many webhook calls");
@@ -316,7 +316,7 @@ describe("Webhook handlers", () => {
 
         it("should send events to the webhook", async () => {
             const resCompleted = getDeferred();
-            httpsWebhookTarget.on('response', () => resCompleted.resolve());
+            await httpsWebhookTarget.on('response', () => resCompleted.resolve());
 
             const webhookEndpoint = await httpsWebhookTarget.forPost().thenReply(200);
 
