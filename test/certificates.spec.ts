@@ -39,6 +39,20 @@ const validateLintSiteCertResults = (cert: string, results: any[]) => {
     expect(failures).to.deep.equal([]);
 };
 
+const expectLeafToMatchCA = (caCertPem: string, leafCertPem: string) => {
+    const caCert = new x509.X509Certificate(caCertPem);
+    const leafCert = new x509.X509Certificate(leafCertPem);
+
+    const caSubject = Buffer.from(caCert.subjectName.toArrayBuffer()).toString('hex');
+    const leafIssuer = Buffer.from(leafCert.issuerName.toArrayBuffer()).toString('hex');
+    expect(leafIssuer).to.equal(caSubject);
+
+    const caKeyId = caCert.getExtension(x509.SubjectKeyIdentifierExtension)?.keyId;
+    const leafAuthorityKeyId = leafCert.getExtension(x509.AuthorityKeyIdentifierExtension)?.keyId;
+    expect(caKeyId).to.not.equal(undefined);
+    expect(leafAuthorityKeyId).to.equal(caKeyId);
+};
+
 nodeOnly(() => {
     describe("Certificate generation", () => {
         const caKey = fs.readFile(path.join(__dirname, 'fixtures', 'test-ca.key'), 'utf8');
@@ -64,6 +78,51 @@ nodeOnly(() => {
             await new Promise<void>((resolve) => server!.listen(4430, resolve));
 
             await expect(fetch('https://localhost:4430')).to.have.responseText('signed response!');
+        });
+
+        [false, true].forEach((certificateTransparency) => {
+            it(`matches the CA's name & key id exactly, with CT ${
+                certificateTransparency ? 'enabled' : 'disabled'
+            }`, async () => {
+                const keys = await crypto.subtle.generateKey(
+                    { name: 'ECDSA', namedCurve: 'P-256' },
+                    true,
+                    ['sign', 'verify']
+                ) as CryptoKeyPair;
+
+                const mixedEncodingCA = await x509.X509CertificateGenerator.createSelfSigned({
+                    serialNumber: 'A1',
+                    name: new x509.Name([
+                        // We mix encodings to catch unexpected re-encoding in either direction:
+                        { C: [{ printableString: 'GB' }] },
+                        { O: [{ utf8String: 'Example Organization' }] },
+                        { CN: [{ utf8String: 'Example Test CA' }] }
+                    ]),
+                    notBefore: new Date(Date.now() - 60 * 60 * 1000),
+                    notAfter: new Date(Date.now() + 24 * 60 * 60 * 1000),
+                    signingAlgorithm: { name: 'ECDSA', hash: 'SHA-256' },
+                    keys,
+                    extensions: [
+                        new x509.BasicConstraintsExtension(true, undefined, true),
+                        new x509.KeyUsagesExtension(x509.KeyUsageFlags.keyCertSign, true),
+                        await x509.SubjectKeyIdentifierExtension.create(keys.publicKey, false)
+                    ]
+                });
+                const caCertPem = mixedEncodingCA.toString('pem');
+                const ca = await getCA({
+                    key: x509.PemConverter.encode(
+                        await crypto.subtle.exportKey('pkcs8', keys.privateKey),
+                        'PRIVATE KEY'
+                    ),
+                    cert: caCertPem,
+                    certificateTransparency
+                });
+
+                for (const domain of ['localhost', 'a_domain.example.com']) {
+                    const { cert } = await ca.generateCertificate(domain);
+                    expectLeafToMatchCA(caCertPem, cert);
+                }
+            });
         });
 
         it("can calculate the SPKI fingerprint for a certificate", async () => {
@@ -206,6 +265,42 @@ nodeOnly(() => {
             expect(await leafCert.verify({
                 publicKey: new x509.X509Certificate(ecCA.cert)
             })).to.equal(true);
+        });
+
+        it("copies the CA's subject key id exactly", async () => {
+            const keys = await crypto.subtle.generateKey(
+                { name: 'ECDSA', namedCurve: 'P-256' },
+                true,
+                ['sign', 'verify']
+            ) as CryptoKeyPair;
+
+            const unusualKeyId = '0102030405060708';
+            const caCert = await x509.X509CertificateGenerator.createSelfSigned({
+                serialNumber: 'A1',
+                name: 'CN=Unusual Key Id CA',
+                notBefore: new Date(Date.now() - 60 * 60 * 1000),
+                notAfter: new Date(Date.now() + 24 * 60 * 60 * 1000),
+                signingAlgorithm: { name: 'ECDSA', hash: 'SHA-256' },
+                keys,
+                extensions: [
+                    new x509.BasicConstraintsExtension(true, undefined, true),
+                    new x509.KeyUsagesExtension(x509.KeyUsageFlags.keyCertSign, true),
+                    new x509.SubjectKeyIdentifierExtension(unusualKeyId, false)
+                ]
+            });
+            const caKey = x509.PemConverter.encode(
+                await crypto.subtle.exportKey('pkcs8', keys.privateKey),
+                'PRIVATE KEY'
+            );
+
+            const ca = await getCA({ key: caKey, cert: caCert.toString('pem') });
+            const { cert } = await ca.generateCertificate('localhost');
+
+            expectLeafToMatchCA(caCert.toString('pem'), cert);
+            expect(
+                new x509.X509Certificate(cert)
+                    .getExtension(x509.AuthorityKeyIdentifierExtension)?.keyId
+            ).to.equal(unusualKeyId);
         });
 
         it("rejects unsupported CA keys with a clear error", async () => {

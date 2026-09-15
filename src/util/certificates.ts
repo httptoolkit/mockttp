@@ -227,7 +227,7 @@ export async function generateCACertificate(options: {
         const mappedKey = SUBJECT_NAME_MAP[key] || key;
         subjectNameParts.push({ [mappedKey]: [value] });
     }
-    const subjectDistinguishedName = new x509.Name(subjectNameParts).toString();
+    const subjectDistinguishedName = new x509.Name(subjectNameParts);
 
     const notBefore = new Date();
     // Make it valid for the last 24h - helps in cases where clocks slightly disagree
@@ -236,6 +236,11 @@ export async function generateCACertificate(options: {
     const notAfter = new Date();
     // Valid for the next 10 years by default (BR sets an 8 year minimum)
     notAfter.setFullYear(notAfter.getFullYear() + 10);
+
+    const subjectKeyIdentifier = await x509.SubjectKeyIdentifierExtension.create(
+        keyPair.publicKey as CryptoKey,
+        false
+    );
 
     const extensions: x509.Extension[] = [
         new x509.BasicConstraintsExtension(
@@ -249,8 +254,9 @@ export async function generateCACertificate(options: {
             x509.KeyUsageFlags.cRLSign,
             true
         ),
-        await x509.SubjectKeyIdentifierExtension.create(keyPair.publicKey as CryptoKey, false),
-        await x509.AuthorityKeyIdentifierExtension.create(keyPair.publicKey as CryptoKey, false)
+        subjectKeyIdentifier,
+        // We're self-signed, so AKI matches our SKI:
+        new x509.AuthorityKeyIdentifierExtension(subjectKeyIdentifier.keyId, false)
     ];
 
     const permittedDomains = options.nameConstraints?.permitted || [];
@@ -450,8 +456,9 @@ class CA {
                 subjectJsonNameParams.push({ [mappedKey]: [subjectAttributes[key]] });
             }
         }
-        const subjectDistinguishedName = new x509.Name(subjectJsonNameParams).toString();
-        const issuerDistinguishedName = this.caCert.subject;
+        const subjectDistinguishedName = new x509.Name(subjectJsonNameParams);
+        // Issuer must byte-match (no string round-trip) the CA:
+        const issuerDistinguishedName = this.caCert.subjectName;
 
         const notBefore = new Date();
         notBefore.setDate(notBefore.getDate() - 1); // Valid from 24 hours ago
@@ -485,7 +492,14 @@ class CA {
         ));
 
         // We don't include SubjectKeyIdentifierExtension as that's no longer recommended
-        extensions.push(await x509.AuthorityKeyIdentifierExtension.create(this.caCert, false));
+        // Our AKI must exactly match the CA's SKI, so we copy if possible:
+        const caSubjectKeyId = this.caCert.getExtension<x509.SubjectKeyIdentifierExtension>(
+            asn1X509.id_ce_subjectKeyIdentifier
+        );
+        extensions.push(caSubjectKeyId
+            ? new x509.AuthorityKeyIdentifierExtension(caSubjectKeyId.keyId, false)
+            : await x509.AuthorityKeyIdentifierExtension.create(this.caCert, false)
+        );
 
         // The signature algorithm must match the CA key type (the leaf key itself
         // is always RSA, but the cert's signature comes from the CA key):
