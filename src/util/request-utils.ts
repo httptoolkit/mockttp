@@ -142,11 +142,24 @@ export async function decodeBodyBuffer(buffer: Buffer, headers: Headers) {
     )
 }
 
+const unbufferedBodyReaders = new WeakMap<OngoingBody, () => stream.Readable>();
+
 // Parse an in-progress request or response stream, i.e. where the body or possibly even the headers have
 // not been fully received/sent yet.
 const parseBodyStream = (bodyStream: stream.Readable, maxSize: number, getHeaders: () => Headers): OngoingBody => {
     let bufferPromise: BufferInProgress | null = null;
     let completedBuffer: Buffer | null = null;
+    let streamTaken = false;
+
+    const capture = (): BufferInProgress => {
+        if (!bufferPromise) {
+            bufferPromise = streamToBuffer(bodyStream, maxSize);
+            bufferPromise
+                .then((buffer) => completedBuffer = buffer)
+                .catch(() => {}); // If we get no body, completedBuffer stays null
+        }
+        return bufferPromise;
+    };
 
     let body = {
         // Returns a stream for the full body, not the live streaming body.
@@ -154,24 +167,19 @@ const parseBodyStream = (bodyStream: stream.Readable, maxSize: number, getHeader
         // and buffered data, and then continues with the live stream, if active.
         // Listeners to this stream *must* be attached synchronously after this call.
         asStream() {
+            if (streamTaken) throw new Error('Cannot replay an unbuffered body stream');
             // If we've already buffered the whole body, just stream it out:
             if (completedBuffer) return bufferToStream(completedBuffer);
 
             // Otherwise, we want to start buffering now, and wrap that with
             // a stream that can live-stream the buffered data on demand:
-            const buffer = body.asBuffer();
+            const buffer = capture();
             buffer.catch(() => {}); // Errors will be handled via the stream, so silence unhandled rejections here.
             return bufferThenStream(buffer, bodyStream);
         },
         asBuffer() {
-            if (!bufferPromise) {
-                bufferPromise = streamToBuffer(bodyStream, maxSize);
-
-                bufferPromise
-                    .then((buffer) => completedBuffer = buffer)
-                    .catch(() => {}); // If we get no body, completedBuffer stays null
-            }
-            return bufferPromise;
+            if (streamTaken) return Promise.reject(new Error('Cannot replay an unbuffered body stream'));
+            return capture();
         },
         async asDecodedBuffer() {
             const buffer = await body.asBuffer();
@@ -188,7 +196,22 @@ const parseBodyStream = (bodyStream: stream.Readable, maxSize: number, getHeader
         },
     };
 
+    unbufferedBodyReaders.set(body, () => {
+        // Matchers or earlier steps may already have read some of the body.
+        // Reuse their replay stream instead of losing that prefix.
+        if (bufferPromise) return body.asStream();
+        if (streamTaken) throw new Error('Cannot replay an unbuffered body stream');
+        streamTaken = true;
+        return bodyStream;
+    });
+
     return body;
+}
+
+/** @internal Consume a body once unless an existing reader requires replay. */
+export function streamBodyWithoutBuffering(body: OngoingBody): stream.Readable {
+    const read = unbufferedBodyReaders.get(body);
+    return read ? read() : body.asStream();
 }
 
 async function runAsyncOrUndefined<R>(func: () => Promise<R>): Promise<R | undefined> {

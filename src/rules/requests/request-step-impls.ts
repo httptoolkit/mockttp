@@ -29,6 +29,7 @@ import { AbortError } from '../../util/abort-error';
 import { isAbsoluteUrl, getEffectivePort } from '../../util/url';
 import {
     waitForCompletedRequest,
+    streamBodyWithoutBuffering,
     buildBodyReader,
     isHttp2,
     writeHead,
@@ -164,6 +165,7 @@ export interface RequestStepOptions {
     emitEventCallback?: (type: string, event: unknown) => void;
     keyLogStream?: Writable;
     debug: boolean;
+    bufferRequestBody?: boolean;
 }
 
 export class FixedResponseStepImpl extends FixedResponseStep {
@@ -484,9 +486,19 @@ export class PassThroughStepImpl extends PassThroughStep {
             `);
         }
 
-        // We have to capture the request stream immediately, to make sure nothing is lost if it
-        // goes past its max length (truncating the data) before we start sending upstream.
-        const clientReqBody = clientReq.body.asStream();
+        const needsRequestBody = !!(
+            options.bufferRequestBody ||
+            this.beforeRequest ||
+            this.beforeResponse ||
+            this.transformRequest?.updateJsonBody ||
+            this.transformRequest?.patchJsonBody ||
+            this.transformRequest?.matchReplaceBody
+        );
+        // Capture replay streams before async setup so truncation cannot discard
+        // bytes before forwarding starts. Otherwise retain normal stream backpressure.
+        const clientReqBody = needsRequestBody
+            ? clientReq.body.asStream()
+            : streamBodyWithoutBuffering(clientReq.body);
 
         const isH2Downstream = isHttp2(clientReq);
 

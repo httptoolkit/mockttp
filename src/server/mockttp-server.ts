@@ -768,6 +768,8 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
                 if (this.debug) console.log(`Request matched rule: ${nextRule.explain()}`);
                 await nextRule.handle(request, response, {
                     record: this.recordTraffic,
+                    bufferRequestBody: emitter.listenerCount('request') > 0 ||
+                        emitter.listenerCount('request-body-data') > 0,
                     debug: this.debug,
                     keyLogStream: this.keyLogStream,
                     emitEventCallback: (emitter.listenerCount('rule-event') !== 0)

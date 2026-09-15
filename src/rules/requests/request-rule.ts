@@ -79,6 +79,7 @@ export class RequestRule implements RequestRule {
 
     handle(req: OngoingRequest, res: OngoingResponse, options: {
         record?: boolean,
+        bufferRequestBody?: boolean,
         debug: boolean,
         keyLogStream?: Writable,
         emitEventCallback?: (type: string, event: unknown) => void
@@ -88,6 +89,7 @@ export class RequestRule implements RequestRule {
                 const result = await step.handle(req, res, {
                     emitEventCallback: options.emitEventCallback,
                     keyLogStream: options.keyLogStream,
+                    bufferRequestBody: options.record || options.bufferRequestBody,
                     debug: options.debug
                 });
 
