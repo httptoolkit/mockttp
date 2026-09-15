@@ -542,6 +542,7 @@ export function trackResponse(
     tags: string[],
     options: {
         maxSize: number,
+        captureBody?: boolean,
         onWriteHead: () => void,
         onBodyData?: (id: string, timestamp: number, content: Uint8Array, isEnded: boolean) => void,
         onInformationalResponse: (status: number, flatHeaders: string[]) => void
@@ -589,6 +590,12 @@ export function trackResponse(
 
     if (options.onBodyData) {
         emitBodyDataEvents(trackedResponse, trackingStream, options.onBodyData);
+    }
+
+    if (options.captureBody === false) {
+        // maxSize only limits an active body reader. Without one, the side
+        // stream must still be consumed to avoid an unbounded writable queue.
+        trackingStream.resume();
     }
 
     const originalWriteHeader = trackedResponse.writeHead;

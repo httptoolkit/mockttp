@@ -717,12 +717,14 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
 
         this.announceInitialRequestAsync(emitter, request);
 
+        const hasResponseListener = emitter.listenerCount('response') > 0;
         const response = trackResponse(
             rawResponse,
             request.timingEvents,
             request.tags,
             {
                 maxSize: this.maxBodySize,
+                captureBody: hasResponseListener,
                 onWriteHead: () => this.announceInitialResponseAsync(emitter, response),
                 onBodyData: emitter.listenerCount('response-body-data') > 0
                     ? this.announceBodyDataAsync.bind(this, emitter, 'response')
@@ -738,7 +740,6 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             response.sendInformationalResponse(100, []);
         }
 
-        const hasResponseListener = emitter.listenerCount('response') > 0;
         if (hasResponseListener) {
             // Start buffering response body if there's somebody who
             // might want to hear about it later
