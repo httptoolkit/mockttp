@@ -451,7 +451,9 @@ class CA {
             }
         }
         const subjectDistinguishedName = new x509.Name(subjectJsonNameParams).toString();
-        const issuerDistinguishedName = this.caCert.subject;
+        // Preserve the encoded name: text conversion can change ASN.1 string types,
+        // preventing clients that compare issuer/subject DER from building the chain.
+        const issuerDistinguishedName = this.caCert.subjectName;
 
         const notBefore = new Date();
         notBefore.setDate(notBefore.getDate() - 1); // Valid from 24 hours ago
