@@ -199,6 +199,6 @@
     "ws": "^8.20.0"
   },
   "optionalDependencies": {
-    "tls-impersonate": "^0.1.0"
+    "tls-impersonate": "^0.2.0"
   }
 }

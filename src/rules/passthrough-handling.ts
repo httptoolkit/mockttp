@@ -103,12 +103,15 @@ export function getUpstreamTlsOptions({
     };
 
     // If the connection carries an inbound client hello to mirror, reproduce its TLS fingerprint
-    // upstream instead of our default.
+    // upstream instead of our default. We skip on non-strict connections, as in that case we don't
+    // really want to mirror - that implies matching restrictions too (no new TLS) - we want to widen.
     const clientHello = connection?.[TlsClientHello];
-    if (connection && clientHello) {
+    if (connection && clientHello && strictHttpsChecks) {
         const impersonationConfig = buildTlsImpersonationConfig(connection, clientHello, {
             ...trustOptions,
             ...(maybeLegacyConnect ? { secureOptions: maybeLegacyConnect } : {}),
+            // For now this is a no-op - later we should re-enable this for insecure, but with
+            // a retry layer to widen only if the initial conn fails with a negotiation error.
             security: strictHttpsChecks ? 'secure' : 'insecure'
         });
 
