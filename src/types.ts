@@ -214,7 +214,15 @@ export interface OngoingRequest extends Request, stream.Readable {
 
 export interface OngoingBody {
     asStream: () => stream.Readable;
+    /**
+     * Resolves with the body content when it's done, or an empty body if the body is dropped
+     * due to hitting the max buffering limits.
+     */
     asBuffer: () => Promise<Buffer>;
+    /**
+     * Resolves at the end of the body stream - regardless of buffering behaviour.
+     */
+    waitForEnd: () => Promise<void>;
     asDecodedBuffer: () => Promise<Buffer>;
     asText: () => Promise<string>;
     asJson: () => Promise<object>;

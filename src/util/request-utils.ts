@@ -33,13 +33,10 @@ import {
 import { makePropertyWritable } from './util';
 import { Mutable } from './type-utils';
 import {
-    bufferThenStream,
-    bufferToStream,
-    BufferInProgress,
     splitBuffer,
-    streamToBuffer,
     asBuffer
 } from './buffer-utils';
+import { StreamCapture } from './stream-capture';
 import {
     flattenPairedRawHeaders,
     getHeaderValue,
@@ -145,8 +142,14 @@ export async function decodeBodyBuffer(buffer: Buffer, headers: Headers) {
 // Parse an in-progress request or response stream, i.e. where the body or possibly even the headers have
 // not been fully received/sent yet.
 const parseBodyStream = (bodyStream: stream.Readable, maxSize: number, getHeaders: () => Headers): OngoingBody => {
-    let bufferPromise: BufferInProgress | null = null;
-    let completedBuffer: Buffer | null = null;
+    let capture: StreamCapture | null = null;
+
+    const startCapture = () => {
+        if (!capture) {
+            capture = new StreamCapture(bodyStream, maxSize);
+        }
+        return capture;
+    };
 
     let body = {
         // Returns a stream for the full body, not the live streaming body.
@@ -154,24 +157,13 @@ const parseBodyStream = (bodyStream: stream.Readable, maxSize: number, getHeader
         // and buffered data, and then continues with the live stream, if active.
         // Listeners to this stream *must* be attached synchronously after this call.
         asStream() {
-            // If we've already buffered the whole body, just stream it out:
-            if (completedBuffer) return bufferToStream(completedBuffer);
-
-            // Otherwise, we want to start buffering now, and wrap that with
-            // a stream that can live-stream the buffered data on demand:
-            const buffer = body.asBuffer();
-            buffer.catch(() => {}); // Errors will be handled via the stream, so silence unhandled rejections here.
-            return bufferThenStream(buffer, bodyStream);
+            return startCapture().takeStream();
         },
         asBuffer() {
-            if (!bufferPromise) {
-                bufferPromise = streamToBuffer(bodyStream, maxSize);
-
-                bufferPromise
-                    .then((buffer) => completedBuffer = buffer)
-                    .catch(() => {}); // If we get no body, completedBuffer stays null
-            }
-            return bufferPromise;
+            return startCapture().buffer;
+        },
+        waitForEnd() {
+            return startCapture().completed;
         },
         async asDecodedBuffer() {
             const buffer = await body.asBuffer();

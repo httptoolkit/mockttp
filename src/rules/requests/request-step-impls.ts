@@ -1524,7 +1524,9 @@ export class WaitForRequestBodyStepImpl extends WaitForRequestBodyStep {
     static readonly fromDefinition = () => new WaitForRequestBodyStepImpl();
 
     async handle(request: OngoingRequest): Promise<{ continue: true }> {
-        await request.body.asBuffer();
+        // Wait for body delivery to complete - not just buffering to end (they can be
+        // different, e.g. if buffer tops out the max buffering limits).
+        await request.body.waitForEnd();
         return { continue: true };
     }
 }
