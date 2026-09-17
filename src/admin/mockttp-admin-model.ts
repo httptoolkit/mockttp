@@ -1,4 +1,4 @@
-import * as _ from "lodash";
+import _ from 'lodash';
 import { Duplex } from 'stream';
 
 import { PubSub } from "graphql-subscriptions";

@@ -1,5 +1,5 @@
 import { stripIndent } from "common-tags";
-import * as cors from 'cors';
+import type { CorsOptions } from 'cors';
 
 import type { CAOptions } from './util/certificates';
 
@@ -909,7 +909,7 @@ export interface MockttpOptions {
      * If this is set to false, browser requests will typically fail unless you
      * stub OPTIONS responses by hand.
      */
-    cors?: boolean | cors.CorsOptions;
+    cors?: boolean | CorsOptions;
 
     /**
      * Should the server print extra debug information?
@@ -1036,7 +1036,7 @@ export type SubscribableEvent =
  * @hidden
  */
 export abstract class AbstractMockttp {
-    protected corsOptions: boolean | cors.CorsOptions;
+    protected corsOptions: boolean | CorsOptions;
     protected debug: boolean;
     protected recordTraffic: boolean;
     protected suggestChanges: boolean;

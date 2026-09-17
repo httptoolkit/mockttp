@@ -1,4 +1,4 @@
-import * as _ from 'lodash';
+import _ from 'lodash';
 import { AdminServer, AdminServerOptions } from "./admin-server";
 
 import { MockttpOptions } from "../mockttp";

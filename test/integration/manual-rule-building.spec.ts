@@ -1,5 +1,5 @@
-import * as _ from "lodash";
-import * as WebSocket from 'isomorphic-ws';
+import _ from 'lodash';
+import WebSocket from 'isomorphic-ws';
 
 import { getLocal, matchers, requestSteps, webSocketSteps } from "../..";
 import { expect } from "../test-utils";

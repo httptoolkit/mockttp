@@ -4,7 +4,7 @@ import * as https from 'https';
 import * as http2 from 'http2';
 import * as fs from 'fs/promises';
 import * as tmp from 'tmp-promise';
-import * as WebSocket from 'isomorphic-ws';
+import WebSocket from 'isomorphic-ws';
 
 import { getLocal, Mockttp } from "../..";
 import {

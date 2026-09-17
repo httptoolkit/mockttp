@@ -1,4 +1,4 @@
-import * as _ from 'lodash';
+import _ from 'lodash';
 import { Kind, ObjectValueNode, ValueNode } from "graphql";
 
 export function astToObject<T>(ast: ObjectValueNode): T {

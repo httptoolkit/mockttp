@@ -1,7 +1,7 @@
 import { Buffer } from 'buffer';
 import * as stream from 'stream';
 
-import _ = require('lodash');
+import _ from 'lodash';
 import gql from 'graphql-tag';
 
 import { MockedEndpoint, MockedEndpointData } from "../types";

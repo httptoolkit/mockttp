@@ -1,7 +1,7 @@
 import { Buffer } from 'buffer';
 import { Duplex } from 'stream';
 
-import * as _ from 'lodash';
+import _ from 'lodash';
 
 import { MaybePromise } from '@httptoolkit/util';
 import {

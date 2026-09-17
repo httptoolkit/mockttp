@@ -1,4 +1,4 @@
-import * as WebSocket from 'isomorphic-ws';
+import WebSocket from 'isomorphic-ws';
 
 import {
     getLocal,

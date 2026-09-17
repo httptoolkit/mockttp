@@ -1,4 +1,4 @@
-import _ = require('lodash');
+import _ from 'lodash';
 
 import { MockedEndpoint } from "../types";
 import { Mockttp, AbstractMockttp, MockttpOptions, PortRange, SubscribableEvent } from "../mockttp";

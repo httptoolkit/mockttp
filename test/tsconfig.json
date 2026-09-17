@@ -1,15 +1,19 @@
 {
     "compilerOptions": {
-        "target": "es6",
+        "target": "ES2022",
         "module": "commonjs",
         "strict": true,
+        "esModuleInterop": true,
         "lib": [
-            "dom",
-            "es2015"
+            "ES2022",
+            "dom"
         ],
         "paths": {
             "@httptoolkit/proxy-agent": ["../custom-typings/proxy-agent.d.ts"]
-        }
+        },
+        "types": [
+            "mocha"
+        ]
     },
     "compileOnSave": true,
     "buildOnSave": true,

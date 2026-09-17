@@ -1,4 +1,4 @@
-import * as autocannon from 'autocannon';
+import autocannon from 'autocannon';
 import { expect } from '../test-utils';
 
 export interface PerformanceResult {

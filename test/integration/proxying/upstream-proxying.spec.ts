@@ -1,7 +1,7 @@
-import _ = require("lodash");
+import _ from 'lodash';
 import * as fs from 'fs/promises';
-import request = require("request-promise-native");
-import url = require('url');
+import request from 'request-promise-native';
+import * as url from 'url';
 
 import { getLocal, Mockttp, MockedEndpoint, getAdminServer, getRemote } from "../../..";
 import {

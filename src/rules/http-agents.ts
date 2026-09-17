@@ -4,7 +4,7 @@ import * as http from 'http';
 import * as https from 'https';
 import type * as http2 from 'http2';
 
-import * as h2Client from 'http2-wrapper';
+import h2Client from 'http2-wrapper';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import { PacProxyAgent } from 'pac-proxy-agent';
 import { SocksProxyAgent } from 'socks-proxy-agent';

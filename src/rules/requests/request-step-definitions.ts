@@ -1,4 +1,4 @@
-import _ = require('lodash');
+import _ from 'lodash';
 import type * as net from 'net';
 import { encode as encodeBase64 } from 'base64-arraybuffer';
 import { Readable, Transform } from 'stream';

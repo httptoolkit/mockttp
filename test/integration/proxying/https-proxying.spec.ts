@@ -5,9 +5,9 @@ import * as net from 'net';
 import * as fs from 'fs/promises';
 import * as zlib from 'zlib';
 
-import _ = require("lodash");
+import _ from 'lodash';
 import getPort from 'get-port';
-import request = require("request-promise-native");
+import request from 'request-promise-native';
 
 import { getLocal, Mockttp, CompletedResponse } from "../../..";
 import {

@@ -2,7 +2,7 @@ import { Buffer } from 'buffer';
 import * as fs from 'fs/promises';
 import { createPrivateKey, createHash } from 'crypto';
 
-import * as _ from 'lodash';
+import _ from 'lodash';
 
 import * as x509 from '@peculiar/x509';
 import * as asn1X509 from '@peculiar/asn1-x509';

@@ -8,9 +8,9 @@ import * as http from 'http';
 import type * as http2 from 'http2';
 import * as https from 'https';
 
-import * as _ from 'lodash';
+import _ from 'lodash';
 import * as fs from 'fs/promises';
-import * as h2Client from 'http2-wrapper';
+import h2Client from 'http2-wrapper';
 import { decode as decodeBase64 } from 'base64-arraybuffer';
 import { Transform } from 'stream';
 import { stripIndent, oneLine } from 'common-tags';

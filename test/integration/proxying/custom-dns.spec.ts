@@ -1,6 +1,6 @@
-import _ = require("lodash");
+import _ from 'lodash';
 import * as net from 'net';
-import request = require("request-promise-native");
+import request from 'request-promise-native';
 
 import { getLocal } from "../../..";
 import {

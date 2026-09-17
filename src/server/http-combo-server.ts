@@ -1,11 +1,11 @@
-import _ = require('lodash');
+import _ from 'lodash';
 import { Writable } from 'stream';
 import * as net from 'net';
 import * as tls from 'tls';
 import * as http from 'http';
 import * as http2 from 'http2';
 
-import * as semver from 'semver';
+import semver from 'semver';
 
 const now = () => performance.now();
 import { makeDestroyable, DestroyableServer } from 'destroyable-server';

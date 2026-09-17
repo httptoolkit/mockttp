@@ -1,4 +1,4 @@
-import * as semver from 'semver';
+import semver from 'semver';
 
 export function areFFDHECurvesSupported(opensslVersion: string | undefined) {
     // FFDHE curves (ffdhe2048, ffdhe3072) are only avaliable from

@@ -4,7 +4,7 @@ import * as tls from 'tls';
 import * as https from 'https';
 import * as http2 from 'http2';
 
-import * as WebSocket from 'isomorphic-ws';
+import WebSocket from 'isomorphic-ws';
 import { trackClientHellos } from 'read-tls-client-hello';
 
 import { getLocal, Mockttp } from "../../..";

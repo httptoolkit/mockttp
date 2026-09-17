@@ -4,10 +4,10 @@ import * as net from 'net';
 import * as zlib from 'zlib';
 
 import getPort from 'get-port';
-import request = require("request-promise-native");
+import request from 'request-promise-native';
 
-import * as WebSocket from 'isomorphic-ws';
-import type * as Ws from 'ws';
+import WebSocket from 'isomorphic-ws';
+import type { WebSocket as Ws, Server as WsServer } from 'ws';
 
 import {
     getLocal,
@@ -734,7 +734,7 @@ nodeOnly(() => {
 
             it("should keep the websocket stream alive", async () => {
                 const id = getClientSessionId(client);
-                const streamWsServer: Ws.Server = (adminServer as any)
+                const streamWsServer: WsServer = (adminServer as any)
                     .sessions[id].streamServer;
 
                 expect(streamWsServer.clients.size).to.equal(1);
@@ -749,7 +749,7 @@ nodeOnly(() => {
                 await client.on('request', () => {});
 
                 const id = getClientSessionId(client);
-                const subWsServer: Ws.Server = (adminServer as any)
+                const subWsServer: WsServer = (adminServer as any)
                     .sessions[id].subscriptionServer.server;
 
                 expect(subWsServer.clients.size).to.equal(1);
@@ -949,7 +949,7 @@ nodeOnly(() => {
                 // Forcefully kill the /subscription websocket connection, so that all
                 // active subscriptions are disconnected:
                 const id = getClientSessionId(client1);
-                const subWsServer: Ws.Server = (adminServer as any)
+                const subWsServer: WsServer = (adminServer as any)
                     .sessions[id].subscriptionServer.server;
                 subWsServer.clients.forEach((socket: Ws) => socket.terminate());
                 await delay(500); // Wait for the disconnect & subsequent reconnect to complete
@@ -971,7 +971,7 @@ nodeOnly(() => {
                 // Forcefully kill the /stream websocket connection, so that dynamic
                 // handlers & matchers are disconnected:
                 const id = getClientSessionId(client1);
-                const streamWsServer: Ws.Server = (adminServer as any)
+                const streamWsServer: WsServer = (adminServer as any)
                     .sessions[id].streamServer;
                 streamWsServer.clients.forEach((socket: Ws) => socket.terminate());
                 await delay(200); // Wait for the disconnect & subsequent reconnect to complete

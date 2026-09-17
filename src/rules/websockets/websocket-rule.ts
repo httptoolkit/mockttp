@@ -2,7 +2,7 @@ import { Writable } from 'stream';
 import * as net from 'net';
 import * as http from 'http';
 
-import * as _ from 'lodash';
+import _ from 'lodash';
 import {
     OngoingRequest,
     CompletedRequest,

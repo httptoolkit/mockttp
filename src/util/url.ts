@@ -1,5 +1,5 @@
 import * as url from 'url';
-import * as _ from 'lodash';
+import _ from 'lodash';
 
 import { nthIndexOf } from './util';
 import { isIPv6Address } from './ip-utils';

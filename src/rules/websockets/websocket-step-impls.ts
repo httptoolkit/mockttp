@@ -5,8 +5,8 @@ import * as http from 'http';
 import * as https from 'https';
 import { Duplex } from 'stream';
 
-import * as _ from 'lodash';
-import * as WebSocket from 'ws';
+import _ from 'lodash';
+import WebSocket from 'ws';
 
 // These were internal ws modules before 8.20.0, now officially exported.
 // @types/ws doesn't include types for these yet, so we type them manually:

@@ -1,7 +1,7 @@
 import { Buffer } from 'buffer';
 import * as url from 'url';
 
-import * as _ from 'lodash';
+import _ from 'lodash';
 import { oneLine } from 'common-tags';
 import * as multipart from 'parse-multipart-data';
 import { MaybePromise, joinAnd } from '@httptoolkit/util';

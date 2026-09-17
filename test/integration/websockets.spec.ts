@@ -3,8 +3,8 @@ import * as net from 'net';
 import * as http from 'http';
 import * as https from 'https';
 
-import * as WebSocket from 'isomorphic-ws';
-import HttpProxyAgent = require('http-proxy-agent');
+import WebSocket from 'isomorphic-ws';
+import HttpProxyAgent from 'http-proxy-agent';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import getPort from 'get-port';
 

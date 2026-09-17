@@ -5,12 +5,12 @@ import * as tls from "tls";
 import * as http from "http";
 import * as http2 from "http2";
 
-import * as _ from "lodash";
+import _ from 'lodash';
 import { EventEmitter } from 'events';
 import getPort, { portNumbers } from 'get-port';
-import connect = require("connect");
-import cors = require("cors");
-import WebSocket = require("ws");
+import connect from 'connect';
+import cors from 'cors';
+import type { WebSocket } from 'ws';
 
 const now = () => performance.now();
 import { Mutex } from 'async-mutex';

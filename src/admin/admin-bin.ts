@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import childProcess = require('child_process');
-import Mockttp = require('../main');
+import * as childProcess from 'child_process';
+import * as Mockttp from '../main';
 
 handleArgs(process.argv).catch((e) => {
     console.error(e);

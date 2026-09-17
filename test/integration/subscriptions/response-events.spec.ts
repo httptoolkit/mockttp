@@ -1,4 +1,4 @@
-import * as _ from 'lodash';
+import _ from 'lodash';
 import { PassThrough } from 'stream';
 import * as http from 'http';
 import * as zlib from 'zlib';

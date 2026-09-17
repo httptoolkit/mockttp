@@ -2,11 +2,12 @@ import { Buffer } from 'buffer';
 import * as http from 'http';
 import * as net from 'net';
 
-import * as _ from 'lodash';
-import * as express from 'express';
-import * as cors from 'cors';
+import _ from 'lodash';
+import express from 'express';
+import cors from 'cors';
+import type { CorsOptions } from 'cors';
 import { json as jsonParser } from 'milliparsec';
-import * as Ws from 'ws';
+import Ws from 'ws';
 
 import { createHandler as createGraphQLHandler } from 'graphql-http/lib/use/express';
 import { execute, GraphQLScalarType, subscribe } from 'graphql';
@@ -14,7 +15,7 @@ import gql from 'graphql-tag';
 import { makeExecutableSchema } from '@graphql-tools/schema';
 import { SubscriptionServer } from '@httptoolkit/subscriptions-transport-ws';
 import { EventEmitter } from 'stream';
-import DuplexPair = require('native-duplexpair');
+import DuplexPair from 'native-duplexpair';
 
 import { makeDestroyable, DestroyableServer } from "destroyable-server";
 import { isErrorLike } from '@httptoolkit/util';
@@ -36,7 +37,7 @@ export interface AdminServerOptions<Plugins extends { [key: string]: AdminPlugin
     /**
      * Set CORS options to limit the sites which can send requests to manage this admin server.
      */
-    corsOptions?: cors.CorsOptions & {
+    corsOptions?: CorsOptions & {
         strict?: boolean,
         allowPrivateNetworkAccess?: boolean
     };
@@ -80,7 +81,7 @@ export interface AdminServerOptions<Plugins extends { [key: string]: AdminPlugin
 
 async function strictOriginMatch(
     origin: string | undefined,
-    expectedOrigin: cors.CorsOptions['origin']
+    expectedOrigin: CorsOptions['origin']
 ): Promise<boolean> {
     if (!origin) return false;
 
@@ -114,7 +115,7 @@ async function strictOriginMatch(
 export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> }> {
 
     private debug: boolean;
-    private requiredOrigin: cors.CorsOptions['origin'] | false;
+    private requiredOrigin: CorsOptions['origin'] | false;
     private webSocketKeepAlive: number | undefined;
     private ruleParams: RuleParameters;
 

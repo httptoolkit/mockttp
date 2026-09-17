@@ -1,4 +1,4 @@
-import * as _ from 'lodash';
+import _ from 'lodash';
 import * as os from 'os';
 import * as net from 'net';
 import * as tls from 'tls';

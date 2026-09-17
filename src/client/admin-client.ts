@@ -1,9 +1,9 @@
-import _ = require('lodash');
+import _ from 'lodash';
 import { EventEmitter } from 'events';
 import { Duplex } from 'stream';
-import DuplexPair = require('native-duplexpair');
-import * as WebSocket from 'isomorphic-ws';
-import connectWebSocketStream = require('@httptoolkit/websocket-stream');
+import DuplexPair from 'native-duplexpair';
+import WebSocket from 'isomorphic-ws';
+import connectWebSocketStream from '@httptoolkit/websocket-stream';
 import { SubscriptionClient } from '@httptoolkit/subscriptions-transport-ws';
 import { CustomError, ErrorLike, MaybePromise, getDeferred } from '@httptoolkit/util';
 import { print } from 'graphql';

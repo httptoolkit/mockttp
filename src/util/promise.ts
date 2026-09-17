@@ -1,4 +1,5 @@
-import _ = require("lodash");
+import _ from 'lodash';
+import type { Dictionary } from 'lodash';
 import { MaybePromise } from "@httptoolkit/util";
 
 export async function filter<T>(
@@ -9,6 +10,6 @@ export async function filter<T>(
     return array.filter((v, i) => testResults[i]);
 }
 
-export async function objectAllPromise<V>(obj: _.Dictionary<MaybePromise<V>>): Promise<_.Dictionary<V>> {
+export async function objectAllPromise<V>(obj: Dictionary<MaybePromise<V>>): Promise<Dictionary<V>> {
     return _.zipObject(Object.keys(obj), await Promise.all(Object.values(obj)));
 }

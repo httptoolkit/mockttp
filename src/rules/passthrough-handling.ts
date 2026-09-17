@@ -4,10 +4,11 @@ import * as tls from 'tls';
 import * as url from 'url';
 import type * as net from 'net';
 
-import * as _ from 'lodash';
+import _ from 'lodash';
+import type { MemoizedFunction } from 'lodash';
 import { oneLine } from 'common-tags';
 import CacheableLookup from 'cacheable-lookup';
-import * as semver from 'semver';
+import semver from 'semver';
 import { ErrorLike, unreachableCheck } from '@httptoolkit/util';
 
 import { CompletedBody, Headers, RawHeaders } from '../types';
@@ -572,7 +573,12 @@ function shouldUseStrictHttps(
     return !skipHttpsErrors;
 }
 
-export const getDnsLookupFunction = _.memoize((lookupOptions: PassThroughLookupOptions | undefined) => {
+export type DnsLookupFunctionGetter =
+    ((lookupOptions: PassThroughLookupOptions | undefined) => DnsLookupFunction) & MemoizedFunction;
+
+export const getDnsLookupFunction: DnsLookupFunctionGetter = _.memoize((
+    lookupOptions: PassThroughLookupOptions | undefined
+): DnsLookupFunction => {
     if (!lookupOptions) {
         // By default, use 10s caching of hostnames, just to reduce the delay from
         // endlessly 10ms query delay for 'localhost' with every request.

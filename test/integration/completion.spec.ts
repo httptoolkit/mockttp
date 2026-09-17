@@ -1,6 +1,6 @@
 import { getLocal } from "../..";
 import { expect } from "../test-utils";
-import * as _ from "lodash";
+import _ from 'lodash';
 
 describe("HTTP mock rule completion", function () {
     let server = getLocal();

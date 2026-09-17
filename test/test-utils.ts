@@ -10,7 +10,7 @@ import * as http from 'http';
 import * as https from 'https';
 import * as http2 from 'http2';
 
-import * as _ from 'lodash';
+import _ from 'lodash';
 import * as http2Wrapper from 'http2-wrapper';
 import {
     FormData as FormDataPolyfill,
@@ -20,9 +20,9 @@ import { RequestPromise } from 'request-promise-native';
 import * as semver from 'semver';
 import { SocksClient, SocksProxy } from 'socks';
 
-import chai = require("chai");
-import chaiAsPromised = require("chai-as-promised");
-import chaiFetch = require("chai-fetch");
+import * as chai from 'chai';
+import chaiAsPromised from 'chai-as-promised';
+import chaiFetch from 'chai-fetch';
 import { makeDestroyable, DestroyableServer } from "destroyable-server";
 import {
     delay,
@@ -30,7 +30,7 @@ import {
     Deferred
 } from '@httptoolkit/util';
 
-import * as dns2 from 'dns2'; // Imported here just for types
+import type * as dns2 from 'dns2'; // Imported here just for types
 
 import { Mockttp } from "..";
 
@@ -289,7 +289,7 @@ export function watchForEvent(event: string, ...servers: Mockttp[]) {
 // An extremely simple & dumb DNS server for quick testing:
 export async function startDnsServer(callback: (question: dns2.DnsQuestion) => string | undefined) {
     // We import the implementation async, because it fails in the browser
-    const dns2 = await import('dns2');
+    const dns2 = (await import('dns2')).default;
 
     const server = makeDestroyable(dns2.createServer(async (request, sendResponse) => {
         const response = dns2.Packet.createResponseFromRequest(request);

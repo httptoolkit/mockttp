@@ -1,7 +1,7 @@
 import { Buffer } from 'buffer';
 import { Writable } from 'stream';
 
-import * as _ from 'lodash';
+import _ from 'lodash';
 
 import { OngoingRequest, CompletedRequest, OngoingResponse, Explainable, RulePriority } from "../../types";
 import { buildBodyReader, buildInitiatedRequest, waitForCompletedRequest } from '../../util/request-utils';

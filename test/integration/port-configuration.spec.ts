@@ -1,4 +1,4 @@
-import * as _ from 'lodash';
+import _ from 'lodash';
 import { getLocal } from "../..";
 import { expect, nodeOnly, isNode } from '../test-utils';
 
