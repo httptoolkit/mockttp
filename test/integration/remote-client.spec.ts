@@ -154,6 +154,25 @@ nodeOnly(() => {
                     expect(await targetEndpoint.getSeenRequests()).to.deep.equal([]);
                 });
 
+                it("should successfully pass through requests when beforeRequest returns nothing", async () => {
+                    await targetServer.forGet('/').thenReply(200, 'target response');
+
+                    let seenMethod: string | undefined;
+                    await remoteServer.forGet(targetServer.url).thenPassThrough({
+                        beforeRequest: (req) => {
+                            // Inspection-only callbacks return nothing at all:
+                            seenMethod = req.method;
+                        }
+                    });
+
+                    const response = await request.get(targetServer.url, {
+                        proxy: remoteServer.url
+                    });
+
+                    expect(seenMethod).to.equal('GET');
+                    expect(response).to.equal('target response');
+                });
+
                 it("should successfully replace request & response bodies", async () => {
                     // Echo the incoming request
                     await targetServer.forAnyRequest().thenCallback(async (req) => ({
