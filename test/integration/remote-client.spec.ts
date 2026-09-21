@@ -1004,6 +1004,44 @@ nodeOnly(() => {
             });
         });
 
+        describe("when the admin server port is already taken", () => {
+            let blockingServer: net.Server;
+            let port: number;
+
+            beforeEach(async () => {
+                port = await getPort();
+                blockingServer = net.createServer();
+                await new Promise<void>((resolve) =>
+                    blockingServer.listen({ port, host: '127.0.0.1' }, resolve)
+                );
+            });
+
+            afterEach(() => new Promise<void>((resolve) => blockingServer.close(() => resolve())));
+
+            it("fails to start", async () => {
+                const adminServer = getAdminServer();
+
+                await expect(adminServer.start(port))
+                    .to.eventually.be.rejectedWith(/EADDRINUSE/);
+            });
+
+            it("can still be stopped after failing to start", async () => {
+                const adminServer = getAdminServer();
+                await adminServer.start(port).catch(() => {});
+
+                await expect(adminServer.stop()).to.eventually.be.fulfilled;
+            });
+
+            it("can be started on a free port after failing to start", async () => {
+                const adminServer = getAdminServer();
+                await adminServer.start(port).catch(() => {});
+
+                const freePort = await getPort();
+                await adminServer.start(freePort);
+                await adminServer.stop();
+            });
+        });
+
         describe("with message body decoding disabled", () => {
 
             const server = getAdminServer();
