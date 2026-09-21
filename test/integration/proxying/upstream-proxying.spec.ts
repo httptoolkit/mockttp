@@ -6,7 +6,9 @@ import * as url from 'url';
 import { getLocal, Mockttp, MockedEndpoint, getAdminServer, getRemote } from "../../..";
 import {
     expect,
-    nodeOnly
+    nodeOnly,
+    TEST_ADMIN_SERVER_PORT,
+    TEST_ADMIN_SERVER_URL
 } from "../../test-utils";
 
 const INITIAL_ENV = _.cloneDeep(process.env);
@@ -359,11 +361,11 @@ nodeOnly(() => {
 
             const adminServer = getAdminServer();
 
-            before(() => adminServer.start());
+            before(() => adminServer.start(TEST_ADMIN_SERVER_PORT));
             after(() => adminServer.stop());
 
             beforeEach(async () => {
-                server = getRemote();
+                server = getRemote({ adminServerUrl: TEST_ADMIN_SERVER_URL });
                 await server.start();
 
                 // Configure Request to use the *first* server as a proxy

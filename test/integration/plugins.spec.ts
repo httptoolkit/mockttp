@@ -1,6 +1,11 @@
 import gql from "graphql-tag";
 import { PluggableAdmin, MockttpPluggableAdmin } from "../..";
-import { expect, nodeOnly } from "../test-utils";
+import {
+    expect,
+    nodeOnly,
+    TEST_ADMIN_SERVER_PORT,
+    TEST_ADMIN_SERVER_URL
+} from "../test-utils";
 
 nodeOnly(() => {
     describe("Admin server plugins", function () {
@@ -24,9 +29,9 @@ nodeOnly(() => {
                     }
                 }
             });
-            await adminServer.start();
+            await adminServer.start(TEST_ADMIN_SERVER_PORT);
 
-            adminClient = new PluggableAdmin.AdminClient();
+            adminClient = new PluggableAdmin.AdminClient({ adminServerUrl: TEST_ADMIN_SERVER_URL });
             await adminClient.start({
                 myPlugin: {}
             });
@@ -55,11 +60,11 @@ nodeOnly(() => {
                     }
                 }
             });
-            await adminServer.start();
+            await adminServer.start(TEST_ADMIN_SERVER_PORT);
 
             let client = adminClient = new PluggableAdmin.AdminClient<{
                 myPlugin: PluggableAdmin.AdminPlugin<{}, { aMetadataField: boolean }>
-            }>();
+            }>({ adminServerUrl: TEST_ADMIN_SERVER_URL });
             const startResult = await client.start({
                 myPlugin: {}
             });
@@ -83,9 +88,9 @@ nodeOnly(() => {
                     }
                 }
             });
-            await adminServer.start();
+            await adminServer.start(TEST_ADMIN_SERVER_PORT);
 
-            adminClient = new PluggableAdmin.AdminClient();
+            adminClient = new PluggableAdmin.AdminClient({ adminServerUrl: TEST_ADMIN_SERVER_URL });
             await adminClient.start({
                 myPlugin: {}
             });
@@ -118,9 +123,9 @@ nodeOnly(() => {
                     http: MockttpPluggableAdmin.MockttpAdminPlugin
                 }
             });
-            await adminServer.start();
+            await adminServer.start(TEST_ADMIN_SERVER_PORT);
 
-            const client = adminClient = new PluggableAdmin.AdminClient();
+            const client = adminClient = new PluggableAdmin.AdminClient({ adminServerUrl: TEST_ADMIN_SERVER_URL });
             await adminClient.start({
                 myPlugin: {},
                 http: {}
@@ -169,9 +174,9 @@ nodeOnly(() => {
                     }
                 }
             });
-            await adminServer.start();
+            await adminServer.start(TEST_ADMIN_SERVER_PORT);
 
-            adminClient = new PluggableAdmin.AdminClient();
+            adminClient = new PluggableAdmin.AdminClient({ adminServerUrl: TEST_ADMIN_SERVER_URL });
             await adminClient.start({
                 myPlugin: {}
             });

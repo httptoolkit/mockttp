@@ -8,7 +8,9 @@ import {
     makeDestroyable,
     nodeOnly,
     delay,
-    getDeferred
+    getDeferred,
+    TEST_ADMIN_SERVER_PORT,
+    TEST_ADMIN_SERVER_URL
 } from "../../test-utils";
 
 nodeOnly(() => {
@@ -144,12 +146,13 @@ nodeOnly(() => {
         describe("with a remote client", () => {
             const adminServer = getAdminServer();
             const remoteClient = getRemote({
+                adminServerUrl: TEST_ADMIN_SERVER_URL,
                 socks: true,
                 passthrough: ['unknown-protocol']
             });
 
             beforeEach(async () => {
-                await adminServer.start();
+                await adminServer.start(TEST_ADMIN_SERVER_PORT);
                 await remoteClient.start()
             });
             afterEach(async () => {
