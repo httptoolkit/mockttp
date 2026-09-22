@@ -25,7 +25,9 @@ import {
     browserOnly,
     delay,
     getDeferred,
-    defaultNodeConnectionHeader
+    defaultNodeConnectionHeader,
+    TEST_ADMIN_SERVER_PORT,
+    TEST_ADMIN_SERVER_URL
 } from "../test-utils";
 import type { MockttpClient } from "../../dist/client/mockttp-client";
 
@@ -55,9 +57,9 @@ nodeOnly(() => {
         describe("with no configuration", () => {
 
             const server = getAdminServer();
-            const remoteServer = getRemote();
+            const remoteServer = getRemote({ adminServerUrl: TEST_ADMIN_SERVER_URL });
 
-            before(() => server.start());
+            before(() => server.start(TEST_ADMIN_SERVER_PORT));
             after(() => server.stop());
 
             beforeEach(() => remoteServer.start());
@@ -560,7 +562,7 @@ nodeOnly(() => {
             it("should support explicitly resetting all servers", async () => {
                 await remoteServer.forGet("/mocked-endpoint").thenReply(200, "mocked data");
 
-                await resetAdminServer();
+                await resetAdminServer({ adminServerUrl: TEST_ADMIN_SERVER_URL });
 
                 const result = await request.get(remoteServer.urlFor("/mocked-endpoint")).catch((e) => e);
 
@@ -571,7 +573,7 @@ nodeOnly(() => {
             it("should reject multiple clients trying to control the same port", async () => {
                 const port = remoteServer.port!;
 
-                await expect(getRemote().start(port))
+                await expect(getRemote({ adminServerUrl: TEST_ADMIN_SERVER_URL }).start(port))
                     .to.eventually.be.rejectedWith(`Failed to start mock session: listen EADDRINUSE`);
             });
 
@@ -590,7 +592,7 @@ nodeOnly(() => {
                 });
 
                 it("should reject Mockttp clients trying to use that port", async () => {
-                    await expect(getRemote().start(port))
+                    await expect(getRemote({ adminServerUrl: TEST_ADMIN_SERVER_URL }).start(port))
                         .to.eventually.be.rejectedWith(/Failed to start mock session: listen EADDRINUSE/);
                 });
             });
@@ -619,9 +621,9 @@ nodeOnly(() => {
                     }
                 }
             });
-            let client = getRemote();
+            let client = getRemote({ adminServerUrl: TEST_ADMIN_SERVER_URL });
 
-            before(() => server.start());
+            before(() => server.start(TEST_ADMIN_SERVER_PORT));
             after(() => server.stop());
 
             beforeEach(() => client.start());
@@ -651,9 +653,9 @@ nodeOnly(() => {
                 }
             });
 
-            let client = getRemote();
+            let client = getRemote({ adminServerUrl: TEST_ADMIN_SERVER_URL });
 
-            before(() => server.start());
+            before(() => server.start(TEST_ADMIN_SERVER_PORT));
             after(() => server.stop());
 
             beforeEach(() => client.start());
@@ -724,9 +726,9 @@ nodeOnly(() => {
             let adminServer = getAdminServer({
                 webSocketKeepAlive: 50
             });
-            let client = getRemote();
+            let client = getRemote({ adminServerUrl: TEST_ADMIN_SERVER_URL });
 
-            before(() => adminServer.start());
+            before(() => adminServer.start(TEST_ADMIN_SERVER_PORT));
             after(() => adminServer.stop());
 
             beforeEach(() => client.start());
@@ -770,19 +772,20 @@ nodeOnly(() => {
 
             let client: Mockttp;
 
-            before(() => server.start());
+            before(() => server.start(TEST_ADMIN_SERVER_PORT));
             after(() => server.stop());
 
             afterEach(() => client.stop());
 
             it("rejects clients with no origin", async () => {
-                client = getRemote();
+                client = getRemote({ adminServerUrl: TEST_ADMIN_SERVER_URL });
 
                 await expect(client.start()).to.be.rejectedWith('403');
             });
 
             it("rejects clients with the wrong origin", async () => {
                 client = getRemote({
+                    adminServerUrl: TEST_ADMIN_SERVER_URL,
                     client: {
                         headers: {
                             origin: 'https://twitter.com'
@@ -795,6 +798,7 @@ nodeOnly(() => {
 
             it("rejects clients with the wrong origin protocol", async () => {
                 client = getRemote({
+                    adminServerUrl: TEST_ADMIN_SERVER_URL,
                     client: {
                         headers: {
                             origin: 'http://example.com'
@@ -807,6 +811,7 @@ nodeOnly(() => {
 
             it("allows clients that specify the correct origin", async () => {
                 client = getRemote({
+                    adminServerUrl: TEST_ADMIN_SERVER_URL,
                     client: {
                         headers: {
                             origin: 'https://example.com'
@@ -819,6 +824,7 @@ nodeOnly(() => {
 
             it("rejects subscriptions for clients that specify no origin", async () => {
                 client = getRemote({
+                    adminServerUrl: TEST_ADMIN_SERVER_URL,
                     client: {
                         headers: {
                             origin: 'https://example.com'
@@ -830,7 +836,7 @@ nodeOnly(() => {
 
                 // Manually send a subscription socket with no Origin (can't start an invalid client
                 // and test, because the client fails to start given a bad origin)
-                const ws = new WebSocket(`ws://localhost:45454/session/${client.port}/subscription`);
+                const ws = new WebSocket(`ws://localhost:${TEST_ADMIN_SERVER_PORT}/session/${client.port}/subscription`);
 
                 await expect(new Promise((resolve, reject) => {
                     ws.addEventListener('open', resolve);
@@ -840,6 +846,7 @@ nodeOnly(() => {
 
             it("rejects subscriptions for clients that specify the wrong origin", async () => {
                 client = getRemote({
+                    adminServerUrl: TEST_ADMIN_SERVER_URL,
                     client: {
                         headers: {
                             origin: 'https://example.com'
@@ -851,7 +858,7 @@ nodeOnly(() => {
 
                 // Manually send a subscription socket with the wrong Origin (can't start an invalid client
                 // and test, because the client fails to start given a bad origin)
-                const ws = new WebSocket(`ws://localhost:45454/session/${client.port}/subscription`, {
+                const ws = new WebSocket(`ws://localhost:${TEST_ADMIN_SERVER_PORT}/session/${client.port}/subscription`, {
                     headers: {
                         origin: 'https://twitter.com'
                     }
@@ -865,6 +872,7 @@ nodeOnly(() => {
 
             it("allows subscriptions for clients that specify the correct origin", async () => {
                 client = getRemote({
+                    adminServerUrl: TEST_ADMIN_SERVER_URL,
                     client: {
                         headers: {
                             origin: 'https://example.com'
@@ -876,7 +884,7 @@ nodeOnly(() => {
 
                 // Manually send a subscription socket with the right Origin for consistency with above
                 const id = getClientSessionId(client);
-                const ws = new WebSocket(`ws://localhost:45454/session/${id}/subscription`, {
+                const ws = new WebSocket(`ws://localhost:${TEST_ADMIN_SERVER_PORT}/session/${id}/subscription`, {
                     headers: {
                         origin: 'https://example.com'
                     }
@@ -896,15 +904,15 @@ nodeOnly(() => {
 
             const adminServer = getAdminServer();
 
-            const client1 = getRemote();
-            const client2 = getRemote();
+            const client1 = getRemote({ adminServerUrl: TEST_ADMIN_SERVER_URL });
+            const client2 = getRemote({ adminServerUrl: TEST_ADMIN_SERVER_URL });
 
             afterEach(() => Promise.all([
                 client1.stop(),
                 client2.stop()
             ]));
 
-            beforeEach(() => adminServer.start());
+            beforeEach(() => adminServer.start(TEST_ADMIN_SERVER_PORT));
             afterEach(() => adminServer.stop());
 
             it("should expose events for mock server start & stop", async () => {
@@ -984,7 +992,7 @@ nodeOnly(() => {
                 await client1.start();
                 const clientPort = client1.port;
 
-                await resetAdminServer();
+                await resetAdminServer({ adminServerUrl: TEST_ADMIN_SERVER_URL });
                 await client2.start(clientPort);
 
                 // Client 1 should be broken now, because it was reset. It should _not_ try to
@@ -1004,14 +1012,53 @@ nodeOnly(() => {
             });
         });
 
+        describe("when the admin server port is already taken", () => {
+            let blockingServer: net.Server;
+            let port: number;
+
+            beforeEach(async () => {
+                port = await getPort();
+                blockingServer = net.createServer();
+                await new Promise<void>((resolve) =>
+                    blockingServer.listen({ port, host: '127.0.0.1' }, resolve)
+                );
+            });
+
+            afterEach(() => new Promise<void>((resolve) => blockingServer.close(() => resolve())));
+
+            it("fails to start", async () => {
+                const adminServer = getAdminServer();
+
+                await expect(adminServer.start(port))
+                    .to.eventually.be.rejectedWith(/EADDRINUSE/);
+            });
+
+            it("can still be stopped after failing to start", async () => {
+                const adminServer = getAdminServer();
+                await adminServer.start(port).catch(() => {});
+
+                await expect(adminServer.stop()).to.eventually.be.fulfilled;
+            });
+
+            it("can be started on a free port after failing to start", async () => {
+                const adminServer = getAdminServer();
+                await adminServer.start(port).catch(() => {});
+
+                const freePort = await getPort();
+                await adminServer.start(freePort);
+                await adminServer.stop();
+            });
+        });
+
         describe("with message body decoding disabled", () => {
 
             const server = getAdminServer();
             const client = getRemote({
+                adminServerUrl: TEST_ADMIN_SERVER_URL,
                 messageBodyDecoding: 'none'
             });
 
-            before(() => server.start());
+            before(() => server.start(TEST_ADMIN_SERVER_PORT));
             after(() => server.stop());
 
             beforeEach(() => client.start());

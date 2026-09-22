@@ -310,8 +310,22 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
             ? { port: listenOptions, host: '127.0.0.1' }
             : { host: '127.0.0.1', ...listenOptions };
 
-        await new Promise<void>((resolve, reject) => {
-            this.server = makeDestroyable(this.app.listen(resolvedListenOptions, () => resolve()));
+        try {
+            await this.listen(resolvedListenOptions);
+        } catch (e) {
+            // Failed to bind (e.g. EADDRINUSE), so there's no running server to track:
+            this.server = null;
+            throw e;
+        }
+    }
+
+    private listen(listenOptions: { port: number, host: string }) {
+        return new Promise<void>((resolve, reject) => {
+            // Express 5 passes listen errors to this callback too, so we must reject here,
+            // or a failed bind would look like a successful start:
+            this.server = makeDestroyable(this.app.listen(listenOptions, (error?: Error) =>
+                error ? reject(error) : resolve()
+            ));
 
             this.server.on('error', reject);
 

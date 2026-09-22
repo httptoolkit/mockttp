@@ -128,6 +128,13 @@ export function httpGet(url: string): Promise<Response> {
 
 export const expect = chai.expect;
 
+// A fixed admin server port for tests, outside the default ephemeral port ranges (Linux
+// 32768-60999, macOS & Windows 49152-65535). The default 45454 is inside the Linux range,
+// so an outgoing connection from another test can randomly hold it and block the admin
+// server from binding.
+export const TEST_ADMIN_SERVER_PORT = 30454;
+export const TEST_ADMIN_SERVER_URL = `http://127.0.0.1:${TEST_ADMIN_SERVER_PORT}`;
+
 export function browserOnly(body: Function) {
     if (!isNode) body();
 }

@@ -19,7 +19,9 @@ import {
     sendRawRequest,
     defaultNodeConnectionHeader,
     delay,
-    pollUntil
+    pollUntil,
+    TEST_ADMIN_SERVER_PORT,
+    TEST_ADMIN_SERVER_URL
 } from "../../test-utils";
 
 // Headers we ignore when checking the received values, because they can vary depending
@@ -198,9 +200,9 @@ describe("Request initiated subscriptions", () => {
     nodeOnly(() => {
         describe("with a remote client", () => {
             let adminServer = getAdminServer();
-            let client = getRemote();
+            let client = getRemote({ adminServerUrl: TEST_ADMIN_SERVER_URL });
 
-            before(() => adminServer.start());
+            before(() => adminServer.start(TEST_ADMIN_SERVER_PORT));
             after(() => adminServer.stop());
 
             beforeEach(() => client.start());
@@ -395,9 +397,9 @@ describe("Request subscriptions", () => {
     nodeOnly(() => {
         describe("with a remote client", () => {
             let adminServer = getAdminServer();
-            let client = getRemote();
+            let client = getRemote({ adminServerUrl: TEST_ADMIN_SERVER_URL });
 
-            before(() => adminServer.start());
+            before(() => adminServer.start(TEST_ADMIN_SERVER_PORT));
             after(() => adminServer.stop());
 
             beforeEach(() => client.start());
