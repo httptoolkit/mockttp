@@ -1328,14 +1328,18 @@ export class PassThroughStepImpl extends PassThroughStep {
         let beforeRequest: ((req: CompletedRequest) => MaybePromise<CallbackRequestResult | void>) | undefined;
         if (data.hasBeforeRequestCallback) {
             beforeRequest = async (req: CompletedRequest) => {
-                const result = withDeserializedCallbackBuffers<CallbackRequestResult>(
-                    await channel.request<
-                        BeforePassthroughRequestRequest,
-                        WithSerializedCallbackBuffers<CallbackRequestResult>
-                    >('beforeRequest', {
-                        args: [await withSerializedBodyReader(req, bodySerializer)]
-                    })
-                );
+                const callbackResult = await channel.request<
+                    BeforePassthroughRequestRequest,
+                    WithSerializedCallbackBuffers<CallbackRequestResult> | undefined
+                >('beforeRequest', {
+                    args: [await withSerializedBodyReader(req, bodySerializer)]
+                });
+
+                // Inspection-only callbacks return nothing at all, and the client
+                // sends that through as undefined, so there's nothing to deserialize:
+                if (!callbackResult) return callbackResult;
+
+                const result = withDeserializedCallbackBuffers<CallbackRequestResult>(callbackResult);
 
                 if (result.response && typeof result.response !== 'string') {
                     result.response = withDeserializedCallbackBuffers(
