@@ -201,5 +201,8 @@
   },
   "optionalDependencies": {
     "tls-impersonate": "^0.2.0"
+  },
+  "allowScripts": {
+    "tls-impersonate@0.2.0": true
   }
 }
