@@ -465,19 +465,21 @@ export class RawBodyIncludesMatcher extends Serializable implements RequestMatch
 export class RegexBodyMatcher extends Serializable implements RequestMatcher {
     readonly type = 'raw-body-regexp';
     readonly regexString: string;
+    readonly regexFlags: string;
 
     constructor(regex: RegExp) {
         super();
         this.regexString = regex.source;
+        this.regexFlags = regex.flags;
     }
 
     async matches(request: OngoingRequest) {
-        let bodyMatcher = new RegExp(this.regexString);
+        let bodyMatcher = new RegExp(this.regexString, this.regexFlags);
         return bodyMatcher.test(await request.body.asText());
     }
 
     explain() {
-        return `with a body matching /${unescapeRegexp(this.regexString)}/`;
+        return `with a body matching /${unescapeRegexp(this.regexString)}/${this.regexFlags ?? ''}`;
     }
 
 }

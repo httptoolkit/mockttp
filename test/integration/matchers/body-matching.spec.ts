@@ -83,6 +83,13 @@ describe("Body matching", function () {
                 method: 'POST'
             })).not.to.have.responseText("matched");
         });
+
+        it('should respect the regular expression flags', async () => {
+            return expect(fetch(server.url, {
+                method: 'POST',
+                body: '{"USERNAME": "TEST", "passwd": "test"}'
+            })).to.have.responseText('matched');
+        });
     });
 
     describe("for included strings", () => {
