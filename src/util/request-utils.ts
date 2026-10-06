@@ -230,9 +230,9 @@ export const buildBodyReader = (
                 (await this.getDecodedBuffer())!.toString()
             );
         },
-        async getJson() {
+        async getJson<R>() {
             return runAsyncOrUndefined(async () =>
-                JSON.parse((await completedBody.getText())!)
+                JSON.parse((await completedBody.getText())!) as R
             )
         },
         async getUrlEncodedFormData() {

@@ -244,9 +244,13 @@ export interface CompletedBody {
     /**
      * The contents of the response, decoded, parsed as UTF-8 string, and
      * then parsed a JSON. The response is decoded and returned asynchronously
-     * as a Promise.
+     * as a Promise. This returns undefined if the body can't be decoded or
+     * isn't valid JSON.
+     *
+     * The result covers any JSON value by default, or you can pass a type
+     * argument to set the type you expect.
      */
-    getJson(): Promise<object | undefined>;
+    getJson<R = object | string | number | boolean | null>(): Promise<R | undefined>;
 
     /**
      * The contents of the response, decoded, and then parsed automatically as
