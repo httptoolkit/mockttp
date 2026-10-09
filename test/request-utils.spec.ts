@@ -89,6 +89,44 @@ nodeOnly(() => {
             });
         });
 
+        describe(".json", () => {
+            it('parses JSON objects', async () => {
+                const body = buildBodyReader(Buffer.from('{"a":1}'), {});
+                expect(await body.getJson()).to.deep.equal({ a: 1 });
+            });
+
+            it('parses JSON arrays', async () => {
+                const body = buildBodyReader(Buffer.from('[1,2]'), {});
+                expect(await body.getJson()).to.deep.equal([1, 2]);
+            });
+
+            it('parses JSON primitives', async () => {
+                const numberBody = buildBodyReader(Buffer.from('42'), {});
+                expect(await numberBody.getJson()).to.equal(42);
+
+                const nullBody = buildBodyReader(Buffer.from('null'), {});
+                expect(await nullBody.getJson()).to.equal(null);
+            });
+
+            it('can return an explicitly typed result', async () => {
+                const body = buildBodyReader(Buffer.from('{"a":1}'), {});
+                const json = await body.getJson<{ a: number }>();
+                expect(json?.a).to.equal(1);
+            });
+
+            it('is undefined for invalid JSON', async () => {
+                const body = buildBodyReader(Buffer.from('{oops'), {});
+                expect(await body.getJson()).to.equal(undefined);
+            });
+
+            it('is undefined for unknown encodings', async () => {
+                const body = buildBodyReader(Buffer.from('{"a":1}'), {
+                    'content-encoding': 'randomized'
+                });
+                expect(await body.getJson()).to.equal(undefined);
+            });
+        });
+
     });
 
     describe("preprocessRequest", () => {
