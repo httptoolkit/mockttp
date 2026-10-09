@@ -348,6 +348,89 @@ nodeOnly(() => {
                 wsErrors = []; // Clear this, so the test passes, since it's expected
             });
 
+            describe("with upstream error logging control", () => {
+
+                let originalConsoleMethods: {
+                    warn: (...args: any[]) => void,
+                    error: (...args: any[]) => void,
+                    log: (...args: any[]) => void
+                };
+                let consoleCalls: string[];
+
+                // Capture console output so we can assert it's gated as expected
+                beforeEach(() => {
+                    consoleCalls = [];
+                    originalConsoleMethods = {
+                        warn: console.warn,
+                        error: console.error,
+                        log: console.log
+                    };
+                    console.warn = (...args: any[]) => consoleCalls.push(`warn: ${args[0]}`);
+                    console.error = (...args: any[]) => consoleCalls.push(`error: ${args[0]}`);
+                    console.log = (...args: any[]) => consoleCalls.push(`log: ${args[0]}`);
+                });
+
+                afterEach(() => {
+                    console.warn = originalConsoleMethods.warn;
+                    console.error = originalConsoleMethods.error;
+                    console.log = originalConsoleMethods.log;
+                    // We deliberately trigger upstream WebSocket errors; clear the
+                    // expected error so the outer afterEach's empty-check passes.
+                    wsErrors = [];
+                });
+
+                // Trigger an upstream WebSocket error by sending an invalid client frame,
+                // then killing the raw socket (mirrors the test above). This makes the
+                // mockttp proxy's pipeWebSocket error handler want to log to the console.
+                async function triggerUpstreamWsError(): Promise<void> {
+                    const ws = new WebSocket(`ws://localhost:${wsPort}`, {
+                        agent: new HttpProxyAgent(`http://localhost:${mockServer.port}`)
+                    });
+
+                    await new Promise<void>((resolve) => {
+                        ws.on('open', () => {
+                            const rawWs = ws as any;
+
+                            // Only measure console output caused by the error itself:
+                            consoleCalls.length = 0;
+
+                            const buf = Buffer.allocUnsafe(2);
+                            buf.writeUInt16BE(0);
+                            const sender = rawWs._sender;
+                            sender.sendFrame(sender.constructor.frame(buf, {
+                                fin: true,
+                                rsv1: false,
+                                opcode: 0x08,
+                                mask: true,
+                                readOnly: false
+                            }), () => {
+                                rawWs._socket.end();
+                                resolve();
+                            });
+                        });
+                    });
+                    wsErrors = [];
+                }
+
+                it("logs nothing for upstream errors when logUpstreamErrors is false", async () => {
+                    mockServer.forAnyWebSocket().thenPassThrough({ logUpstreamErrors: false });
+
+                    await triggerUpstreamWsError();
+                    await delay(50);
+
+                    expect(consoleCalls).to.be.empty;
+                });
+
+                it("still logs upstream errors by default (logUpstreamErrors true)", async () => {
+                    mockServer.forAnyWebSocket().thenPassThrough();
+
+                    await triggerUpstreamWsError();
+                    await delay(50);
+
+                    expect(consoleCalls.length).to.be.greaterThan(0);
+                });
+            });
+
             it('can be passed through successfully over HTTPS', async () => {
                 mockServer.forAnyWebSocket().thenPassThrough();
 
