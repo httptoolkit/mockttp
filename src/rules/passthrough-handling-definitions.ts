@@ -135,6 +135,17 @@ export interface PassThroughStepConnectionOptions {
      * Defaults to false.
      */
     mirrorTlsFingerprint?: boolean;
+
+    /**
+     * Whether to log low-level upstream connection errors (e.g. ECONNRESET, EPIPE) to the
+     * console when a passthrough rule fails to reach the target server.
+     *
+     * These errors are often expected in normal use (clients disconnect, servers reset
+     * connections, etc), so this can be set to `false` to keep the console output clean.
+     *
+     * Defaults to true.
+     */
+    logUpstreamErrors?: boolean;
 }
 
 /**

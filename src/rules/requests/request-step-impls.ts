@@ -1435,6 +1435,7 @@ export class PassThroughStepImpl extends PassThroughStep {
             lookupOptions: data.lookupOptions,
             simulateConnectionErrors: !!data.simulateConnectionErrors,
             mirrorTlsFingerprint: !!data.mirrorTlsFingerprint,
+            logUpstreamErrors: data.logUpstreamErrors ?? true,
             ignoreHostHttpsErrors: data.ignoreHostCertificateErrors,
             additionalTrustedCAs: data.extraCACertificates,
             clientCertificateHostMap: _.mapValues(data.clientCertificateHostMap,

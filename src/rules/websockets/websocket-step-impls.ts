@@ -118,12 +118,14 @@ function isValidStatusCode(code: number) {
 
 const INVALID_STATUS_REGEX = /Invalid WebSocket frame: invalid status code (\d+)/;
 
-function pipeWebSocket(inSocket: WebSocket, outSocket: WebSocket) {
+function pipeWebSocket(inSocket: WebSocket, outSocket: WebSocket, logUpstreamErrors: boolean) {
     const onPipeFailed = (op: string) => (err?: Error) => {
         if (!err) return;
 
         inSocket.close();
-        console.error(`Websocket ${op} failed`, err);
+        if (logUpstreamErrors) {
+            console.error(`Websocket ${op} failed`, err);
+        }
     };
 
     inSocket.on('message', (msg, isBinary) => {
@@ -137,7 +139,9 @@ function pipeWebSocket(inSocket: WebSocket, outSocket: WebSocket) {
             try {
                 outSocket.close(num, reason);
             } catch (e) {
-                console.warn(e);
+                if (logUpstreamErrors) {
+                    console.warn(e);
+                }
                 outSocket.close();
             }
         } else {
@@ -156,7 +160,9 @@ function pipeWebSocket(inSocket: WebSocket, outSocket: WebSocket) {
     // If either socket has an general error (connection failure, but also could be invalid WS
     // frames) then we kill the raw connection upstream to simulate a generic connection error:
     inSocket.on('error', (err) => {
-        console.log(`Error in proxied WebSocket:`, err);
+        if (logUpstreamErrors) {
+            console.log(`Error in proxied WebSocket:`, err);
+        }
         const rawOutSocket = outSocket as any;
 
         if (err.message.match(INVALID_STATUS_REGEX)) {
@@ -186,7 +192,8 @@ function pipeWebSocket(inSocket: WebSocket, outSocket: WebSocket) {
 function mirrorRejection(
     downstreamSocket: net.Socket,
     upstreamRejectionResponse: http.IncomingMessage,
-    simulateConnectionErrors: boolean
+    simulateConnectionErrors: boolean,
+    logUpstreamErrors: boolean
 ) {
     return new Promise<void>((resolve) => {
         if (downstreamSocket.writable) {
@@ -199,7 +206,9 @@ function mirrorRejection(
             upstreamRejectionResponse.pipe(downstreamSocket);
             upstreamRejectionResponse.on('end', resolve);
             upstreamRejectionResponse.on('error', (error) => {
-                console.warn('Error receiving WebSocket upstream rejection response:', error);
+                if (logUpstreamErrors) {
+                    console.warn('Error receiving WebSocket upstream rejection response:', error);
+                }
                 if (simulateConnectionErrors) {
                     resetOrDestroy(downstreamSocket);
                 } else {
@@ -275,8 +284,8 @@ export class PassThroughWebSocketStepImpl extends PassThroughWebSocketStep {
             skipUTF8Validation: true // Preserve even invalid weird stuff
         });
         this.wsServer.on('connection', (ws: InterceptedWebSocket) => {
-            pipeWebSocket(ws, ws.upstreamWebSocket);
-            pipeWebSocket(ws.upstreamWebSocket, ws);
+            pipeWebSocket(ws, ws.upstreamWebSocket, this.logUpstreamErrors);
+            pipeWebSocket(ws.upstreamWebSocket, ws, this.logUpstreamErrors);
         });
     }
 
@@ -474,7 +483,9 @@ export class PassThroughWebSocketStepImpl extends PassThroughWebSocketStep {
                     }
                 }
             } catch (e) {
-                console.warn('Failed to negotiate WebSocket extensions:', e);
+                if (this.logUpstreamErrors) {
+                    console.warn('Failed to negotiate WebSocket extensions:', e);
+                }
                 upstreamSocket.destroy();
                 incomingSocket.end();
                 return;
@@ -509,12 +520,16 @@ export class PassThroughWebSocketStepImpl extends PassThroughWebSocketStep {
         });
 
         upstreamReq.on('response', (upstreamRes) => {
-            console.log(`Unexpected websocket response from ${wsUrl}: ${upstreamRes.statusCode}`);
-            mirrorRejection(incomingSocket, upstreamRes, this.simulateConnectionErrors);
+            if (this.logUpstreamErrors) {
+                console.log(`Unexpected websocket response from ${wsUrl}: ${upstreamRes.statusCode}`);
+            }
+            mirrorRejection(incomingSocket, upstreamRes, this.simulateConnectionErrors, this.logUpstreamErrors);
         });
 
         upstreamReq.on('error', (e) => {
-            console.warn(e);
+            if (this.logUpstreamErrors) {
+                console.warn(e);
+            }
             if (this.simulateConnectionErrors) {
                 resetOrDestroy(incomingSocket);
             } else {
@@ -557,6 +572,7 @@ export class PassThroughWebSocketStepImpl extends PassThroughWebSocketStep {
             proxyConfig: deserializeProxyConfig(data.proxyConfig, channel, ruleParams),
             simulateConnectionErrors: data.simulateConnectionErrors ?? false,
             mirrorTlsFingerprint: data.mirrorTlsFingerprint ?? false,
+            logUpstreamErrors: data.logUpstreamErrors ?? true,
             extraCACertificates: data.extraCACertificates || [],
             ignoreHostHttpsErrors: data.ignoreHostCertificateErrors,
             clientCertificateHostMap: _.mapValues(data.clientCertificateHostMap,
@@ -594,7 +610,7 @@ export class EchoWebSocketStepImpl extends EchoWebSocketStep {
             skipUTF8Validation: true // Preserve even invalid weird stuff
         });
         this.wsServer.on('connection', (ws: WebSocket) => {
-            pipeWebSocket(ws, ws);
+            pipeWebSocket(ws, ws, true);
         });
     }
 
