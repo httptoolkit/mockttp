@@ -68,12 +68,18 @@ function probePort(interfaceIp: string, port: number): Promise<boolean> {
                 port,
                 ipv6Only: interfaceIp === '::1'
             });
-            probeServer.once('listening', () => {
+            // Only one of these events fires per probe. Each handler removes the other, or the
+            // unfired listener would stay on the shared probeServer and accumulate on every probe.
+            const onListening = () => {
+                probeServer.removeListener('error', onError);
                 probeServer.close(() => resolve(false));
-            });
-            probeServer.once('error', () => {
+            };
+            const onError = () => {
+                probeServer.removeListener('listening', onListening);
                 resolve(true);
-            });
+            };
+            probeServer.once('listening', onListening);
+            probeServer.once('error', onError);
         })
     );
 
