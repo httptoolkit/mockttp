@@ -703,7 +703,9 @@ function emitBodyDataEvents(
     callback: (id: string, timestamp: number, content: Uint8Array, isEnded: boolean) => void
 ) {
     let timestamp: number | undefined = undefined;
-    let pendingContent: Uint8Array | undefined = undefined;
+    // Chunks received since the last flush. Collected in a list and concatenated once
+    // per flush, since concatenating on every chunk copies the whole batch each time.
+    let pendingChunks: Uint8Array[] = [];
     let pendingContentTimer: NodeJS.Timeout | undefined = undefined;
     let finished = false;
 
@@ -723,12 +725,16 @@ function emitBodyDataEvents(
             finished
                 ? now()
                 : (timestamp || now()),
-            pendingContent || Buffer.alloc(0),
+            pendingChunks.length === 0
+                ? Buffer.alloc(0)
+                : pendingChunks.length === 1
+                    ? pendingChunks[0]
+                    : Buffer.concat(pendingChunks),
             hasEnded
         );
 
         timestamp = undefined;
-        pendingContent = undefined;
+        pendingChunks = [];
 
         if (pendingContentTimer) {
             clearTimeout(pendingContentTimer);
@@ -737,11 +743,7 @@ function emitBodyDataEvents(
     }
 
     bodyStream.on('data', (d) => {
-        if (pendingContent) {
-            pendingContent = Buffer.concat([pendingContent, d]);
-        } else {
-            pendingContent = d;
-        }
+        pendingChunks.push(d);
 
         // Don't emit immediately - queue up a flush, to batch & emit at intervals:
         if (!pendingContentTimer) {

@@ -688,6 +688,35 @@ describe("Response body chunk subscriptions", () => {
         // Mildly difficult to do streaming well in browsers, and the above covers the basic
         // functionality, so we just test this node only:
 
+        it("should batch many quickly written chunks without losing or reordering data", async () => {
+            const dataEvents: BodyData[] = [];
+            await server.on('response-body-data', (event) => dataEvents.push(event));
+
+            const stream = new PassThrough();
+            await server.forGet('/mocked-endpoint').thenStream(200, stream);
+
+            const responsePromise = fetch(server.urlFor("/mocked-endpoint"));
+            await delay(10);
+
+            // 2000 distinct 1 KB chunks, written faster than the batching interval:
+            const chunks = _.range(2000).map((i) =>
+                Buffer.from(`${i}`.padStart(4, '0').repeat(256))
+            );
+            chunks.forEach((chunk) => stream.write(chunk));
+            stream.end();
+
+            const responseBody = Buffer.from(await (await responsePromise).arrayBuffer());
+            await pollUntil(() => dataEvents.some((e) => e.isEnded));
+
+            const received = Buffer.concat(dataEvents.map((e) => e.content));
+            expect(received.equals(Buffer.concat(chunks))).to.equal(true);
+            expect(responseBody.equals(Buffer.concat(chunks))).to.equal(true);
+            // Batched into far fewer events than chunks:
+            expect(dataEvents.length).to.be.lessThan(chunks.length / 10);
+            expect(dataEvents.filter((e) => e.isEnded)).to.have.length(1);
+            expect(dataEvents[dataEvents.length - 1].isEnded).to.equal(true);
+        });
+
         it("should stream body chunks as they are received", async () => {
             const dataEvents: BodyData[] = [];
             await server.on('response-body-data', (event) => dataEvents.push(event));
