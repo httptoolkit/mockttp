@@ -1,0 +1,176 @@
+<!DOCTYPE html><html class="default" lang="en" data-base="../"><head><meta charset="utf-8"/><meta http-equiv="x-ua-compatible" content="IE=edge"/><title>MockttpOptions | mockttp</title><meta name="description" content="Documentation for mockttp"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="../assets/style.css"/><link rel="stylesheet" href="../assets/highlight.css"/><script defer src="../assets/main.js"></script><script async src="../assets/icons.js" id="tsd-icons-script"></script><script async src="../assets/search.js" id="tsd-search-script"></script><script async src="../assets/navigation.js" id="tsd-nav-script"></script><script async src="../assets/hierarchy.js" id="tsd-hierarchy-script"></script></head><body><script>document.documentElement.dataset.theme = localStorage.getItem("tsd-theme") || "os";document.body.style.display="none";setTimeout(() => window.app?app.showPage():document.body.style.removeProperty("display"),500)</script><header class="tsd-page-toolbar">
+<div class="tsd-toolbar-contents container"><a href="../index.html" class="title">mockttp</a>
+<div id="tsd-toolbar-links"></div><button id="tsd-search-trigger" class="tsd-widget" aria-label="Search"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-search"></use></svg></button><dialog id="tsd-search" aria-label="Search"><input role="combobox" id="tsd-search-input" aria-controls="tsd-search-results" aria-autocomplete="list" aria-expanded="true" autocapitalize="off" autocomplete="off" placeholder="Search the docs" maxLength="100"/>
+<ul role="listbox" id="tsd-search-results"></ul>
+<div id="tsd-search-status" aria-live="polite" aria-atomic="true">
+<div>Preparing search index...</div></div></dialog><a href="#" class="tsd-widget menu" id="tsd-toolbar-menu-trigger" data-toggle="menu" aria-label="Menu"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-menu"></use></svg></a></div></header>
+<div class="container container-main">
+<div class="col-content">
+<div class="tsd-page-title">
+<ul class="tsd-breadcrumb" aria-label="Breadcrumb">
+<li><a href="" aria-current="page">MockttpOptions</a></li></ul>
+<h1>Interface MockttpOptions</h1></div>
+<div class="tsd-signature"><span class="tsd-signature-keyword">interface</span> <span class="tsd-kind-interface">MockttpOptions</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#cors">cors</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">boolean</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">CorsOptions</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#debug">debug</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#http2">http2</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">boolean</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;fallback&quot;</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#https">https</a><span class="tsd-signature-symbol">?:</span> <a href="../types/MockttpHttpsOptions.html" class="tsd-signature-type tsd-kind-type-alias">MockttpHttpsOptions</a><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#maxbodysize">maxBodySize</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#passthrough">passthrough</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">&quot;unknown-protocol&quot;</span><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#recordtraffic">recordTraffic</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#socks">socks</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">boolean</span> <span class="tsd-signature-symbol">|</span> <a href="SocksServerOptions.html" class="tsd-signature-type tsd-kind-interface">SocksServerOptions</a><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#suggestchanges">suggestChanges</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div>
+<section class="tsd-panel tsd-hierarchy" data-refl="974">
+<h4>Hierarchy (<a href="../hierarchy.html#MockttpOptions">View Summary</a>)</h4>
+<ul class="tsd-hierarchy">
+<li class="tsd-hierarchy-item"><span class="tsd-hierarchy-target">MockttpOptions</span>
+<ul class="tsd-hierarchy">
+<li class="tsd-hierarchy-item"><a href="MockttpClientOptions.html" class="tsd-signature-type tsd-kind-interface">MockttpClientOptions</a></li></ul></li></ul></section><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/httptoolkit/mockttp/blob/72dfe163d16d545cfb259b3f42b0c823c132712d/src/mockttp.ts#L903">mockttp.ts:903</a></li></ul></aside>
+<section class="tsd-panel-group tsd-index-group">
+<section class="tsd-panel tsd-index-panel">
+<details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
+<h5 class="tsd-index-heading uppercase">Index</h5></summary>
+<div class="tsd-accordion-details">
+<section class="tsd-index-section">
+<h3 class="tsd-index-heading tsd-anchor-link" id="properties">Properties<a href="#properties" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-index-list"><a href="#cors" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>cors?</span></a>
+<a href="#debug" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>debug?</span></a>
+<a href="#http2" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>http2?</span></a>
+<a href="#https" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>https?</span></a>
+<a href="#maxbodysize" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>max<wbr/>Body<wbr/>Size?</span></a>
+<a href="#passthrough" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>passthrough?</span></a>
+<a href="#recordtraffic" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>record<wbr/>Traffic?</span></a>
+<a href="#socks" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>socks?</span></a>
+<a href="#suggestchanges" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>suggest<wbr/>Changes?</span></a>
+</div></section></div></details></section></section>
+<details class="tsd-panel-group tsd-member-group tsd-accordion" open><summary class="tsd-accordion-summary" data-key="section-Properties"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
+<h2 class="tsd-anchor-link" id="properties-1">Properties<a href="#properties-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h2></summary>
+<section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="cors"><code class="tsd-tag">Optional</code><span>cors</span><a href="#cors" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">cors</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">boolean</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">CorsOptions</span></div>
+<div class="tsd-comment tsd-typography"><p>Should the server automatically respond to OPTIONS requests with a permissive
+response?</p>
+<p>Defaults to true for remote clients (e.g. in the browser), and false otherwise.
+If this is set to false, browser requests will typically fail unless you
+stub OPTIONS responses by hand.</p>
+</div><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/httptoolkit/mockttp/blob/72dfe163d16d545cfb259b3f42b0c823c132712d/src/mockttp.ts#L912">mockttp.ts:912</a></li></ul></aside></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="debug"><code class="tsd-tag">Optional</code><span>debug</span><a href="#debug" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">debug</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">boolean</span></div>
+<div class="tsd-comment tsd-typography"><p>Should the server print extra debug information?</p>
+</div><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/httptoolkit/mockttp/blob/72dfe163d16d545cfb259b3f42b0c823c132712d/src/mockttp.ts#L917">mockttp.ts:917</a></li></ul></aside></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="http2"><code class="tsd-tag">Optional</code><span>http2</span><a href="#http2" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">http2</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">boolean</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;fallback&quot;</span></div>
+<div class="tsd-comment tsd-typography"><p>Should HTTP/2 be enabled? Can be true, false, or 'fallback'. If true,
+HTTP/2 is used for all clients supporting it. If false, HTTP/2 is never
+used. If 'fallback' HTTP/2 is used only for clients that do not advertise
+support for HTTP/1.1, but HTTP/1.1 is used by preference in all other
+cases.</p>
+<p>Client HTTP/2 support is only advertised as part of the TLS options.
+When no HTTPS configuration is provided, 'fallback' is equivalent to
+false.</p>
+</div><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/httptoolkit/mockttp/blob/72dfe163d16d545cfb259b3f42b0c823c132712d/src/mockttp.ts#L938">mockttp.ts:938</a></li></ul></aside></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="https"><code class="tsd-tag">Optional</code><span>https</span><a href="#https" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">https</span><span class="tsd-signature-symbol">?:</span> <a href="../types/MockttpHttpsOptions.html" class="tsd-signature-type tsd-kind-type-alias">MockttpHttpsOptions</a></div>
+<div class="tsd-comment tsd-typography"><p>The HTTPS settings to be used. Optional, only HTTP interception will be
+enabled if omitted. This should be set to either a { key, cert } object
+containing the private key and certificate in PEM format, or a { keyPath,
+certPath } object containing the path to files containing that content.</p>
+</div><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/httptoolkit/mockttp/blob/72dfe163d16d545cfb259b3f42b0c823c132712d/src/mockttp.ts#L925">mockttp.ts:925</a></li></ul></aside></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="maxbodysize"><code class="tsd-tag">Optional</code><span>max<wbr/>Body<wbr/>Size</span><a href="#maxbodysize" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">maxBodySize</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span></div>
+<div class="tsd-comment tsd-typography"><p>The maximum body size to process, in bytes.</p>
+<p>Bodies larger than this will be dropped, becoming empty, so they won't match
+body matchers, won't be available in .seenRequests, and won't be included in
+subscribed event data. Body data will still typically be included in passed
+through request &amp; response data, in most cases, so this won't affect the
+external HTTP clients otherwise.</p>
+</div><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/httptoolkit/mockttp/blob/72dfe163d16d545cfb259b3f42b0c823c132712d/src/mockttp.ts#L1009">mockttp.ts:1009</a></li></ul></aside></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="passthrough"><code class="tsd-tag">Optional</code><span>passthrough</span><a href="#passthrough" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">passthrough</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">&quot;unknown-protocol&quot;</span><span class="tsd-signature-symbol">[]</span></div>
+<div class="tsd-comment tsd-typography"><p>An array of rules for traffic that should be passed through the proxy
+immediately, without interception or modification.</p>
+<p>This is subtly different to TLS passthrough/interceptOnly, which only
+apply to TLS connections, and only after the TLS client hello has been
+received and found to match a rule.</p>
+<p>For now, the only rule here is 'unknown-protocol', which enables
+passthrough of all unknown protocols (i.e. traffic that is definitely
+not HTTP, HTTP/2, WebSocket, or SOCKS traffic) which are received on
+a proxy connection (a connection carrying end-destination information,
+such as SOCKS - direct connections of unknown data without any final
+destination information from a preceeding tunnel cannot be passed
+through).</p>
+<p>Unknown protocol connections that cannot be passed through (because
+this rule is not enabled, or because they are not proxied with a
+destination specified) will be closed with a 400 Bad Request HTTP
+response like any other client HTTP error.</p>
+</div><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/httptoolkit/mockttp/blob/72dfe163d16d545cfb259b3f42b0c823c132712d/src/mockttp.ts#L973">mockttp.ts:973</a></li></ul></aside></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="recordtraffic"><code class="tsd-tag">Optional</code><span>record<wbr/>Traffic</span><a href="#recordtraffic" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">recordTraffic</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">boolean</span></div>
+<div class="tsd-comment tsd-typography"><p>Record the requests &amp; response for all traffic matched by each rule, and make
+it available via endpoint.getSeenRequests().</p>
+<p>Defaults to true. It can be useful to set this to false if lots of data will
+be sent to/via the server, to avoid storing all traffic in memory unnecessarily,
+if getSeenRequests will not be used.</p>
+<p>If this is set to false then getSeenRequests() will always return
+an empty array. This only disables the built-in persistence of request data,
+so traffic can still be captured live or stored elsewhere using
+.on('request') &amp; .on('response').</p>
+</div><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/httptoolkit/mockttp/blob/72dfe163d16d545cfb259b3f42b0c823c132712d/src/mockttp.ts#L998">mockttp.ts:998</a></li></ul></aside></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="socks"><code class="tsd-tag">Optional</code><span>socks</span><a href="#socks" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">socks</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">boolean</span> <span class="tsd-signature-symbol">|</span> <a href="SocksServerOptions.html" class="tsd-signature-type tsd-kind-interface">SocksServerOptions</a></div>
+<div class="tsd-comment tsd-typography"><p>Should the server accept incoming SOCKS connections? Defaults to false.</p>
+<p>If set to true or if detailed options are provided, the server will listen
+for incoming SOCKS connections on the same port as the HTTP server, unwrap
+received connections, and handle them like any other incoming TCP connection
+(intercepting HTTP(S) from within the SOCKS connection as normal).</p>
+<p>The only supported option for now is <code>authMethods</code>.</p>
+</div><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/httptoolkit/mockttp/blob/72dfe163d16d545cfb259b3f42b0c823c132712d/src/mockttp.ts#L950">mockttp.ts:950</a></li></ul></aside></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="suggestchanges"><code class="tsd-tag">Optional</code><span>suggest<wbr/>Changes</span><a href="#suggestchanges" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">suggestChanges</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">boolean</span></div>
+<div class="tsd-comment tsd-typography"><p>By default, requests that match no rules will receive an explanation of the
+request &amp; existing rules, followed by some suggested example Mockttp code
+which could be used to match the rule.</p>
+<p>In some cases where the end client is unaware of Mockttp, these example
+suggestions are just confusing. Set <code>suggestChanges</code> to false to disable it.</p>
+</div><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/httptoolkit/mockttp/blob/72dfe163d16d545cfb259b3f42b0c823c132712d/src/mockttp.ts#L983">mockttp.ts:983</a></li></ul></aside></section></section></details></div>
+<div class="col-sidebar">
+<div class="page-menu">
+<div class="tsd-navigation settings">
+<details class="tsd-accordion"><summary class="tsd-accordion-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
+<h3>Settings</h3></summary>
+<div class="tsd-accordion-details">
+<div class="tsd-filter-visibility"><span class="settings-label">Member Visibility</span>
+<ul id="tsd-filter-options">
+<li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-inherited" name="inherited" checked/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>Inherited</span></label></li></ul></div>
+<div class="tsd-theme-toggle"><label class="settings-label" for="tsd-theme">Theme</label><select id="tsd-theme"><option value="os">OS</option><option value="light">Light</option><option value="dark">Dark</option></select></div></div></details></div>
+<details open class="tsd-accordion tsd-page-navigation"><summary class="tsd-accordion-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
+<h3>On This Page</h3></summary>
+<div class="tsd-accordion-details">
+<details open class="tsd-accordion tsd-page-navigation-section"><summary class="tsd-accordion-summary" data-key="section-Properties"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>Properties</summary>
+<div><a href="#cors"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>cors</span></a><a href="#debug"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>debug</span></a><a href="#http2"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>http2</span></a><a href="#https"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>https</span></a><a href="#maxbodysize"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>max<wbr/>Body<wbr/>Size</span></a><a href="#passthrough"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>passthrough</span></a><a href="#recordtraffic"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>record<wbr/>Traffic</span></a><a href="#socks"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>socks</span></a><a href="#suggestchanges"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>suggest<wbr/>Changes</span></a></div></details></div></details></div>
+<div class="site-menu">
+<nav class="tsd-navigation"><a href="../modules.html">mockttp</a>
+<ul class="tsd-small-nested-navigation" id="tsd-nav-container">
+<li>Loading...</li></ul></nav></div></div></div><footer>
+<p class="tsd-generator">Generated using <a href="https://typedoc.org/" target="_blank">TypeDoc</a></p></footer>
+<div class="overlay"></div></body></html>
