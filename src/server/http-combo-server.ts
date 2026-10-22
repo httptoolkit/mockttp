@@ -68,6 +68,12 @@ const originalSocketInit = (<any>tls.TLSSocket.prototype)._init;
             tlsSocket._parent?.remotePort ||
             tlsSocket._handle?._parentWrap?.stream?.remotePort;
 
+        // Work around Node bug when sockets are destroyed:
+        if (!tlsSocket._handle) {
+            tlsSocket.destroy();
+            return;
+        }
+
         return loadSNI?.apply(this, arguments as any);
     };
 };
