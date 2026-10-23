@@ -1329,6 +1329,32 @@ nodeOnly(() => {
                 expect(await proxiedRequestData.body.getText()).to.equal('');
             });
 
+            it("should still proxy larger request bodies if beforeRequest changes only the headers", async () => {
+                const message = "A large request body";
+
+                const remoteEndpoint = await remoteServer.forAnyRequest().thenReply(200);
+                await server.forPost(remoteServer.url).thenPassThrough({
+                    beforeRequest: (req) => ({
+                        headers: { ...req.headers, 'x-added-header': 'yes' }
+                    })
+                });
+
+                let response = await request.post({
+                    url: remoteServer.url,
+                    body: message,
+                    resolveWithFullResponse: true
+                });
+
+                expect(response.statusCode).to.equal(200);
+
+                // The body was too large to buffer, so its length can't be measured here - but
+                // the original body is still streamed upstream, with its original framing:
+                const resultingRequest = (await remoteEndpoint.getSeenRequests())[0];
+                expect(resultingRequest.headers['x-added-header']).to.equal('yes');
+                expect(resultingRequest.headers['content-length']).to.equal(message.length.toString());
+                expect(await resultingRequest.body.getText()).to.equal(message);
+            });
+
             it("should still proxy larger response bodies", async () => {
                 await remoteServer.forAnyRequest().thenReply(200, "A large response body");
                 const proxyEndpoint = await server.forGet(remoteServer.url).thenPassThrough();
