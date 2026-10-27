@@ -560,7 +560,9 @@ describe("When configured for HTTPS", () => {
                 }
             });
 
-            it("should log upstream HTTP/2 TLS keys to the file", async () => {
+            it("should log upstream HTTP/2 TLS keys to the file", async function () {
+                this.timeout(10000); // Real external request, can be slow in CI
+
                 // Make an HTTP request, but proxy to an HTTP2-only HTTPS server:
                 await server.forAnyRequest().thenForwardTo('https://http2.testserver.host');
 
