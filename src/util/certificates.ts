@@ -353,10 +353,12 @@ export async function getCA(options: CAOptions): Promise<CA> {
     }
 
     const caKeyPem = certOptions.key.toString();
-    const caCert = new x509.X509Certificate(certOptions.cert.toString());
+    const caChain = certOptions.cert.toString();
+    // X509Certificate reads the first certificate; retain all issuers for TLS.
+    const caCert = new x509.X509Certificate(caChain);
     const caKey = await pemToCryptoKey(caKeyPem);
 
-    return new CA(caCert, caKey, options);
+    return new CA(caCert, caKey, options, caChain);
 }
 
 // We share a single keypair across all certificates in this process, and
@@ -384,7 +386,8 @@ class CA {
     constructor(
         private caCert: x509.X509Certificate,
         private caKey: CryptoKey,
-        options?: BaseCAOptions
+        options?: BaseCAOptions,
+        private caChain: string = caCert.toString("pem")
     ) {
         this.options = options ?? {};
 
@@ -548,7 +551,7 @@ class CA {
                 "PRIVATE KEY"
             ),
             cert: certPem,
-            ca: this.caCert.toString("pem"),
+            ca: this.caChain,
             expiresAt: notAfter
         };
 
