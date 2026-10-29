@@ -79,6 +79,13 @@ export interface Mockttp {
     stop(): Promise<void>;
 
     /**
+     * Enable a named HTTPS configuration on an extra port.
+     *
+     * @category Setup
+     */
+    enableExtraHttps(name: string): Promise<number>;
+
+    /**
      * Enable extra debug output so you can understand exactly what the server is doing.
      *
      * @category Setup
@@ -119,6 +126,13 @@ export interface Mockttp {
      * @category Metadata
      */
     port: number;
+
+    /**
+     * Names of the extra HTTPS configurations available to enable.
+     *
+     * @category Metadata
+     */
+    extraHttpsNames: string[];
 
     /**
      * The environment variables typically needed to use this server as a proxy, in a format you
@@ -923,6 +937,9 @@ export interface MockttpOptions {
      * certPath } object containing the path to files containing that content.
      */
     https?: MockttpHttpsOptions;
+
+    /** Named HTTPS configurations, opened only when enableExtraHttps is called. */
+    extraHttps?: { [name: string]: MockttpHttpsOptions };
 
     /**
      * Should HTTP/2 be enabled? Can be true, false, or 'fallback'. If true,

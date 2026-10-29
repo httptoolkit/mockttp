@@ -119,6 +119,14 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
         return this.adminClient.stop();
     }
 
+    get extraHttpsNames(): string[] {
+        return this.adminClient.metadata.http.extraHttpsNames ?? [];
+    }
+
+    enableExtraHttps(name: string): Promise<number> {
+        return this.adminClient.sendQuery(this.requestBuilder!.buildEnableExtraHttpsQuery(name));
+    }
+
     public addRequestRules = async (...rules: RequestRuleData[]): Promise<MockedEndpoint[]> => {
         return this._addRequestRules(rules, false);
     }
