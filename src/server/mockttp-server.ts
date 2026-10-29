@@ -110,6 +110,10 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     private app: connect.Server;
     private server: DestroyableServer<net.Server> | undefined;
 
+    private readonly additionalServers = new Set<DestroyableServer<net.Server>>();
+    private readonly extraHttps: { [name: string]: MockttpHttpsOptions };
+    private readonly httpsPortPromises = new Map<string, Promise<number>>();
+
     private eventEmitter: EventEmitter;
 
     private readonly initialDebugSetting: boolean;
@@ -120,6 +124,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         this.initialDebugSetting = this.debug;
 
         this.httpsOptions = options.https;
+        this.extraHttps = options.extraHttps ?? {};
         this.isHttp2Enabled = options.http2 ?? 'fallback';
         this.socksOptions = options.socks ?? false;
         this.passthroughUnknownProtocols = options.passthrough?.includes('unknown-protocol') ?? false;
@@ -151,19 +156,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             });
         }
 
-        this.server = await createComboServer({
-            debug: this.debug,
-            https: this.httpsOptions,
-            http2: this.isHttp2Enabled,
-            socks: this.socksOptions,
-            passthroughUnknownProtocols: this.passthroughUnknownProtocols,
-            keyLogStream: this.keyLogStream,
-
-            requestListener: this.app,
-            tlsClientErrorListener: this.announceTlsErrorAsync.bind(this),
-            tlsPassthroughListener: this.passthroughSocket.bind(this, 'tls'),
-            rawPassthroughListener: this.passthroughSocket.bind(this, 'raw')
-        });
+        this.server = await this.createServer(this.httpsOptions);
 
         // We use a mutex here to avoid contention on ports with parallel setup
         await serverPortCheckMutex.runExclusive(async () => {
@@ -176,19 +169,6 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             if (this.debug) console.log(`Starting mock server on port ${port}`);
             this.server!.listen(port);
         });
-
-        // Handle & report client request errors
-        this.server!.on('clientError', this.handleInvalidHttp1Request.bind(this));
-        this.server!.on('sessionError', this.handleInvalidHttp2Request.bind(this));
-
-        // Track the socket of HTTP/2 sessions, for error reporting later:
-        this.server!.on('session', (session) => {
-            session.on('connect', (session: http2.Http2Session, socket: net.Socket) => {
-                session.initialSocket = socket;
-            });
-        });
-
-        this.server!.on('upgrade', this.handleWebSocket.bind(this));
 
         return new Promise<void>((resolve, reject) => {
             this.server!.on('listening', resolve);
@@ -210,10 +190,90 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         });
     }
 
+    private async createServer(httpsOptions: MockttpHttpsOptions | undefined) {
+        const server = await createComboServer({
+            debug: this.debug,
+            https: httpsOptions,
+            http2: this.isHttp2Enabled,
+            socks: this.socksOptions,
+            passthroughUnknownProtocols: this.passthroughUnknownProtocols,
+            keyLogStream: this.keyLogStream,
+
+            requestListener: this.app,
+            tlsClientErrorListener: this.announceTlsErrorAsync.bind(this),
+            tlsPassthroughListener: this.passthroughSocket.bind(this, 'tls'),
+            rawPassthroughListener: this.passthroughSocket.bind(this, 'raw')
+        });
+
+        // Handle & report client request errors
+        server.on('clientError', this.handleInvalidHttp1Request.bind(this));
+        server.on('sessionError', this.handleInvalidHttp2Request.bind(this));
+
+        // Track the socket of HTTP/2 sessions, for error reporting later:
+        server.on('session', (session) => {
+            session.on('connect', (session: http2.Http2Session, socket: net.Socket) => {
+                session.initialSocket = socket;
+            });
+        });
+
+        server.on('upgrade', this.handleWebSocket.bind(this));
+
+        return server;
+    }
+
+    private async startHttpsPort(httpsOptions: MockttpHttpsOptions): Promise<number> {
+        const mainServer = this.server;
+        if (!mainServer?.listening) throw new Error('Cannot add a port before the server is started');
+        const startPort = this.port + 1;
+
+        const server = await this.createServer({ ...this.httpsOptions, ...httpsOptions });
+        this.additionalServers.add(server);
+        try {
+            await serverPortCheckMutex.runExclusive(async () => {
+                const port = await getPort({ port: portNumbers(startPort, 65535) });
+                if (!mainServer.listening) throw new Error('Mock server has stopped');
+                await new Promise<void>((resolve, reject) => {
+                    server.once('error', reject);
+                    server.listen(port, resolve);
+                });
+            });
+            return (server.address() as net.AddressInfo).port;
+        } catch (error) {
+            this.additionalServers.delete(server);
+            await server.destroy().catch(() => {});
+            throw error;
+        }
+    }
+
+    get extraHttpsNames(): string[] {
+        return Object.keys(this.extraHttps);
+    }
+
+    async enableExtraHttps(name: string): Promise<number> {
+        if (!Object.prototype.hasOwnProperty.call(this.extraHttps, name)) {
+            throw new Error(`Unknown HTTPS port configuration: ${name}`);
+        }
+        const existing = this.httpsPortPromises.get(name);
+        if (existing) return existing;
+
+        const opening = this.startHttpsPort(this.extraHttps[name]);
+        this.httpsPortPromises.set(name, opening);
+        opening.catch(() => {
+            if (this.httpsPortPromises.get(name) === opening) this.httpsPortPromises.delete(name);
+        });
+        return opening;
+    }
+
     async stop(): Promise<void> {
         if (this.debug) console.log(`Stopping server at ${this.url}`);
 
-        if (this.server) await this.server.destroy();
+        const servers = [
+            ...(this.server ? [this.server] : []),
+            ...this.additionalServers
+        ];
+        this.additionalServers.clear();
+        this.httpsPortPromises.clear();
+        await Promise.all(servers.map(server => server.destroy()));
 
         if (this.keyLogStream) {
             const keyLogStream = this.keyLogStream;
