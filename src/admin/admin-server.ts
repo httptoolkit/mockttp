@@ -143,7 +143,7 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
 
     private adminPlugins: PluginConstructorMap<Plugins>;
 
-    private sessions: { [id: string]: {
+    private sessions = new Map<string, {
         handleRequest: RequestHandler,
         stop: () => Promise<void>,
 
@@ -151,7 +151,7 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
         streamServer: Ws.Server,
 
         sessionPlugins: Plugins
-    } } = { };
+    }>();
 
     constructor(options: AdminServerOptions<Plugins> = {}) {
         this.debug = options.debug || false;
@@ -280,7 +280,7 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
             if (!sessionMatch) return next();
 
             const sessionId = sessionMatch[1];
-            const session = this.sessions[sessionId];
+            const session = this.sessions.get(sessionId);
 
             if (!session) {
                 res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
@@ -296,7 +296,7 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
     async resetAdminServer() {
         if (this.debug) console.log('Resetting admin server');
         await Promise.all(
-            Object.values(this.sessions).map(({ stop }) => stop())
+            [...this.sessions.values()].map(({ stop }) => stop())
         );
     }
 
@@ -371,9 +371,9 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
                 if (isMatch) {
                     const sessionId = isMatch[1];
 
-                    let wsServer: Ws.Server = isSubscriptionRequest
-                        ? this.sessions[sessionId]?.subscriptionServer.server
-                        : this.sessions[sessionId]?.streamServer;
+                    const wsServer = isSubscriptionRequest
+                        ? this.sessions.get(sessionId)?.subscriptionServer.server
+                        : this.sessions.get(sessionId)?.streamServer;
 
                     if (wsServer) {
                         wsServer.handleUpgrade(req, socket, head, (ws) => {
@@ -399,8 +399,8 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
 
             this.eventEmitter.emit('mock-session-stopping', plugins);
 
-            const session = this.sessions[sessionId];
-            delete this.sessions[sessionId];
+            const session = this.sessions.get(sessionId)!;
+            this.sessions.delete(sessionId);
 
             await Promise.all(Object.values(plugins).map(plugin => plugin.stop()));
 
@@ -532,13 +532,13 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
             streamServer.on('close', () => clearInterval(webSocketKeepAlive));
         }
 
-        this.sessions[sessionId] = {
+        this.sessions.set(sessionId, {
             sessionPlugins: plugins,
             handleRequest,
             streamServer,
             subscriptionServer,
             stop: stopSession
-        };
+        });
 
         this.eventEmitter.emit('mock-session-started', plugins, sessionId);
     }
@@ -547,7 +547,7 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
         if (!this.server) return Promise.resolve();
 
         await Promise.all(
-            Object.values(this.sessions).map((s) => s.stop())
+            [...this.sessions.values()].map((s) => s.stop())
         );
 
         await this.server.destroy();
@@ -627,7 +627,7 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
 
     private resetPluginsForSession(sessionId: string) {
         return Promise.all(
-            Object.values(this.sessions[sessionId].sessionPlugins).map(plugin =>
+            Object.values(this.sessions.get(sessionId)!.sessionPlugins).map(plugin =>
                 plugin.reset?.()
             )
         );
@@ -635,7 +635,7 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
 
     private enableDebugForSession(sessionId: string) {
         return Promise.all(
-            Object.values(this.sessions[sessionId].sessionPlugins).map(plugin =>
+            Object.values(this.sessions.get(sessionId)!.sessionPlugins).map(plugin =>
                 plugin.enableDebug?.()
             )
         );

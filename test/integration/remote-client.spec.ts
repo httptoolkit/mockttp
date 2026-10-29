@@ -756,7 +756,7 @@ nodeOnly(() => {
             it("should keep the websocket stream alive", async () => {
                 const id = getClientSessionId(client);
                 const streamWsServer: WsServer = (adminServer as any)
-                    .sessions[id].streamServer;
+                    .sessions.get(id).streamServer;
 
                 expect(streamWsServer.clients.size).to.equal(1);
                 const streamSocket = [...streamWsServer.clients][0];
@@ -771,7 +771,7 @@ nodeOnly(() => {
 
                 const id = getClientSessionId(client);
                 const subWsServer: WsServer = (adminServer as any)
-                    .sessions[id].subscriptionServer.server;
+                    .sessions.get(id).subscriptionServer.server;
 
                 expect(subWsServer.clients.size).to.equal(1);
                 const subscriptionSocket = [...subWsServer.clients][0];
@@ -977,7 +977,7 @@ nodeOnly(() => {
                 // active subscriptions are disconnected:
                 const id = getClientSessionId(client1);
                 const subWsServer: WsServer = (adminServer as any)
-                    .sessions[id].subscriptionServer.server;
+                    .sessions.get(id).subscriptionServer.server;
                 subWsServer.clients.forEach((socket: Ws) => socket.terminate());
                 await delay(500); // Wait for the disconnect & subsequent reconnect to complete
 
@@ -999,7 +999,7 @@ nodeOnly(() => {
                 // handlers & matchers are disconnected:
                 const id = getClientSessionId(client1);
                 const streamWsServer: WsServer = (adminServer as any)
-                    .sessions[id].streamServer;
+                    .sessions.get(id).streamServer;
                 streamWsServer.clients.forEach((socket: Ws) => socket.terminate());
                 await delay(200); // Wait for the disconnect & subsequent reconnect to complete
 
