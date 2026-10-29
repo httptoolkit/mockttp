@@ -156,6 +156,7 @@ export function buildAdminServerModel(
         },
 
         Mutation: {
+            enableExtraHttps: async (__: unknown, { name }: { name: string }) => mockServer.enableExtraHttps(name),
             addRule: async (__: any, { input }: { input: Serialized<RequestRuleData> }) => {
                 return mockServer.addRequestRule(deserializeRuleData(input, stream, ruleDeserializationOptions));
             },

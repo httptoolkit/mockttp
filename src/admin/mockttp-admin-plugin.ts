@@ -16,7 +16,8 @@ export interface MockttpPluginOptions {
 
 export interface MockttpClientResponse {
     port: number,
-    mockRoot: string
+    mockRoot: string,
+    extraHttpsNames?: string[]
 }
 
 export class MockttpAdminPlugin implements AdminPlugin<
@@ -36,7 +37,8 @@ export class MockttpAdminPlugin implements AdminPlugin<
 
         return {
             port: this.mockServer.port,
-            mockRoot: this.mockServer.url
+            mockRoot: this.mockServer.url,
+            extraHttpsNames: this.mockServer.extraHttpsNames
         };
     }
 
