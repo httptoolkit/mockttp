@@ -678,7 +678,23 @@ export class PassThroughStepImpl extends PassThroughStep {
 
             reqBodyOverride = await buildOverriddenBody(modifiedReq, headers);
 
-            if (reqBodyOverride || modifiedReq?.headers) {
+            // If the body was larger than maxBodySize, the buffered copy is empty, but the
+            // original body is still streamed upstream unchanged, so it can't be measured here.
+            const originalContentLength = getHeaderValue(clientHeaders, 'content-length');
+            const bodyWasTruncated = !reqBodyOverride &&
+                originalContentLength !== undefined &&
+                completedRequest.body.buffer.byteLength !== parseInt(originalContentLength, 10);
+
+            if (bodyWasTruncated) {
+                // Keep the original framing, unless the new headers set their own:
+                if (
+                    !isH2Downstream &&
+                    getHeaderValue(headers, 'content-length') === undefined &&
+                    !getHeaderValue(headers, 'transfer-encoding')?.includes('chunked')
+                ) {
+                    headers['content-length'] = originalContentLength;
+                }
+            } else if (reqBodyOverride || modifiedReq?.headers) {
                 // Automatically match the content-length to the body:
                 const updatedCLHeader = getRequestContentLengthAfterModification(
                     reqBodyOverride || completedRequest.body.buffer,
