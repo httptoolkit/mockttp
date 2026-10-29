@@ -3,13 +3,13 @@ import * as http from 'http';
 import * as net from 'net';
 
 import _ from 'lodash';
-import express from 'express';
+import connect from 'connect';
 import cors from 'cors';
 import type { CorsOptions } from 'cors';
 import { json as jsonParser } from 'milliparsec';
 import Ws from 'ws';
 
-import { createHandler as createGraphQLHandler } from 'graphql-http/lib/use/express';
+import { createHandler as createGraphQLHandler } from 'graphql-http';
 import { execute, GraphQLScalarType, subscribe } from 'graphql';
 import gql from 'graphql-tag';
 import { makeExecutableSchema } from '@graphql-tools/schema';
@@ -112,6 +112,24 @@ async function strictOriginMatch(
     return false;
 }
 
+type JsonRequest = http.IncomingMessage & { body?: unknown };
+type RequestHandler = (req: JsonRequest, res: http.ServerResponse, next: connect.NextFunction) => void;
+
+const getPathname = (url: string | undefined) => (url ?? '/').split('?')[0];
+
+const matchesRoute = (req: http.IncomingMessage, method: string, path: string) =>
+    req.method === method && [path, `${path}/`].includes(getPathname(req.url));
+
+const sendJson = (res: http.ServerResponse, status: number, body: unknown) => {
+    res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(body));
+};
+
+const catchErrors = (handler: (...args: Parameters<RequestHandler>) => Promise<void>): RequestHandler =>
+    (req, res, next) => {
+        handler(req, res, next).catch(next);
+    };
+
 export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> }> {
 
     private debug: boolean;
@@ -119,14 +137,14 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
     private webSocketKeepAlive: number | undefined;
     private ruleParams: RuleParameters;
 
-    private app = express();
+    private app = connect();
     private server: DestroyableServer<http.Server> | null = null;
     private eventEmitter = new EventEmitter();
 
     private adminPlugins: PluginConstructorMap<Plugins>;
 
     private sessions: { [id: string]: {
-        router: express.Router,
+        handleRequest: RequestHandler,
         stop: () => Promise<void>,
 
         subscriptionServer: SubscriptionServer,
@@ -153,11 +171,11 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
                 if (req.headers["access-control-request-private-network"]) {
                     res.setHeader("access-control-allow-private-network", "true");
                 }
-                next(null);
+                next();
             });
         }
 
-        this.app.use(cors(options.corsOptions));
+        this.app.use(cors(options.corsOptions) as connect.HandleFunction);
 
         // If you use strict CORS, and set a specific origin, we'll enforce it:
         this.requiredOrigin = !!options.corsOptions &&
@@ -181,14 +199,24 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
             });
         }
 
-        this.app.use(jsonParser({ payloadLimit: 50 * 1024 * 1024 }));
+        const parseJsonBody = jsonParser({ payloadLimit: 50 * 1024 * 1024 });
+        this.app.use((req, res, next) => {
+            // On parse errors, milliparsec calls next(error) and then next() again, which would
+            // continue handling the request after the error response has been sent.
+            let nextCalled = false;
+            parseJsonBody(req, res, (error?: unknown) => {
+                if (nextCalled) return;
+                nextCalled = true;
+                next(error);
+            });
+        });
 
         const defaultPluginStartParams: PluginStartDefaults<Plugins> = options.pluginDefaults ?? {};
 
-        this.app.post('/start', async (req, res) => {
+        const startSession = async (req: JsonRequest, res: http.ServerResponse) => {
             try {
-                const rawConfig = req.body;
-                const providedPluginStartParams = rawConfig.plugins as PluginStartParamsMap<Plugins>;
+                const rawConfig = req.body as { plugins: PluginStartParamsMap<Plugins> };
+                const providedPluginStartParams = rawConfig.plugins;
 
                 // For each plugin that was specified, we pull default params into their start params.
                 const pluginStartParams = _.mapValues((providedPluginStartParams), (params, pluginId) => {
@@ -199,7 +227,7 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
 
                 const missingPluginId = Object.keys(pluginStartParams).find(pluginId => !(pluginId in this.adminPlugins));
                 if (missingPluginId) {
-                    res.status(400).json({
+                    sendJson(res, 400, {
                         error: `Request to mock using unrecognized plugin: ${missingPluginId}`
                     });
                     return;
@@ -219,47 +247,50 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
                 const sessionId = crypto.randomUUID();
                 await this.startSessionManagementAPI(sessionId, sessionPlugins);
 
-                res.json({
+                sendJson(res, 200, {
                     id: sessionId,
                     pluginData: _.mapValues(pluginStartResults, (r: unknown) =>
                         r ?? {} // Always return _something_, even if the plugin returns null/undefined.
                     )
                 });
             } catch (e) {
-                res.status(500).json({ error: `Failed to start mock session: ${
+                sendJson(res, 500, { error: `Failed to start mock session: ${
                     (isErrorLike(e) && e.message) || e
                 }` });
             }
-        });
+        };
 
-        this.app.post('/reset', async (req, res) => {
+        const resetServer = async (res: http.ServerResponse) => {
             try {
                 await this.resetAdminServer();
-                res.json({ success: true });
+                sendJson(res, 200, { success: true });
             } catch (e) {
-                res.status(500).json({
+                sendJson(res, 500, {
                     error: (isErrorLike(e) && e.message) || 'Unknown error'
                 });
             }
-        });
+        };
 
+        this.app.use(catchErrors(async (req, res, next) => {
+            if (matchesRoute(req, 'POST', '/start')) return startSession(req, res);
+            if (matchesRoute(req, 'POST', '/reset')) return resetServer(res);
 
-        // Dynamically route to mock sessions ourselves, so we can easily add/remove
-        // sessions as we see fit later on.
-        const sessionRequest = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-            const sessionId = req.params.id as string;
-            const sessionRouter = this.sessions[sessionId]?.router;
+            // Sessions are routed dynamically, so they can be added & removed at any time:
+            const sessionMatch = /^\/session\/([^/]+)(\/.*)?$/.exec(getPathname(req.url));
+            if (!sessionMatch) return next();
 
-            if (!sessionRouter) {
-                res.status(404).send('Unknown mock session');
+            const sessionId = sessionMatch[1];
+            const session = this.sessions[sessionId];
+
+            if (!session) {
+                res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
+                res.end('Unknown mock session');
                 console.error(`Request for unknown mock session with id: ${sessionId}`);
                 return;
             }
 
-            sessionRouter(req, res, next);
-        }
-
-        this.app.use('/session/:id/', sessionRequest);
+            session.handleRequest(req, res, next);
+        }));
     }
 
     async resetAdminServer() {
@@ -321,13 +352,9 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
 
     private listen(listenOptions: { port: number, host: string }) {
         return new Promise<void>((resolve, reject) => {
-            // Express 5 passes listen errors to this callback too, so we must reject here,
-            // or a failed bind would look like a successful start:
-            this.server = makeDestroyable(this.app.listen(listenOptions, (error?: Error) =>
-                error ? reject(error) : resolve()
-            ));
-
+            this.server = makeDestroyable(http.createServer(this.app));
             this.server.on('error', reject);
+            this.server.listen(listenOptions, resolve);
 
             this.server.on('upgrade', async (req, socket, head) => {
                 const reqOrigin = req.headers['origin'] as string | undefined;
@@ -365,8 +392,6 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
     }
 
     private async startSessionManagementAPI(sessionId: string, plugins: Plugins): Promise<void> {
-        const mockSessionRouter = express.Router();
-
         let running = true;
         const stopSession = async () => {
             if (!running) return;
@@ -388,11 +413,6 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
             session.streamServer.close();
             session.streamServer.emit('close');
         };
-
-        mockSessionRouter.post('/stop', async (req, res) => {
-            await stopSession();
-            res.json({ success: true });
-        });
 
         // A pair of sockets, representing the 2-way connection between the session & WSs.
         // All websocket messages are written to wsSocket, and then read from sessionSocket
@@ -464,17 +484,36 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
             noServer: true
         });
 
-        mockSessionRouter.use(
-            createGraphQLHandler({
-                schema,
+        const handleGraphQL = createGraphQLHandler<JsonRequest>({
+            schema,
 
-                // Add console logging of all GQL errors:
-                formatError: (error) => {
-                    console.error(error.stack);
-                    return error;
-                }
+            // Add console logging of all GQL errors:
+            formatError: (error) => {
+                console.error(error.stack);
+                return error;
             }
-        ));
+        });
+
+        const handleRequest = catchErrors(async (req, res) => {
+            const sessionPath = getPathname(req.url).slice(`/session/${sessionId}`.length) || '/';
+
+            if (req.method === 'POST' && ['/stop', '/stop/'].includes(sessionPath)) {
+                await stopSession();
+                sendJson(res, 200, { success: true });
+                return;
+            }
+
+            const [body, init] = await handleGraphQL({
+                url: req.url!,
+                method: req.method!,
+                headers: req.headers,
+                // GraphQL-HTTP reads bodies only for POST requests, which are always pre-parsed by the JSON parser
+                body: typeof req.body === 'object' ? req.body as Record<string, unknown> | null : null,
+                raw: req,
+                context: undefined
+            });
+            res.writeHead(init.status, init.statusText, init.headers).end(body);
+        });
 
         if (this.webSocketKeepAlive) {
             // If we have a keep-alive set, send the client a ping frame every Xms to
@@ -495,7 +534,7 @@ export class AdminServer<Plugins extends { [key: string]: AdminPlugin<any, any> 
 
         this.sessions[sessionId] = {
             sessionPlugins: plugins,
-            router: mockSessionRouter,
+            handleRequest,
             streamServer,
             subscriptionServer,
             stop: stopSession
