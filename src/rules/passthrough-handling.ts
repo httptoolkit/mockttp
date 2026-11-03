@@ -8,11 +8,11 @@ import _ from 'lodash';
 import type { MemoizedFunction } from 'lodash';
 import { oneLine } from 'common-tags';
 import CacheableLookup from 'cacheable-lookup';
-import semver from 'semver';
 import { ErrorLike, unreachableCheck } from '@httptoolkit/util';
 
 import { CompletedBody, Headers, RawHeaders } from '../types';
 import { byteLength } from '../util/util';
+import { nodeVersionSatisfies } from '../util/node-version';
 import { asBuffer } from '../util/buffer-utils';
 import { isIP, isLocalhostAddress, normalizeIP } from '../util/ip-utils';
 import { CachedDns, dnsLookup, DnsLookupFunction } from '../util/dns';
@@ -43,7 +43,7 @@ const NEW_CURVES_SUPPORTED = areFFDHECurvesSupported(process.versions.openssl);
 // Trust intermediate certificates from the trusted CA list too. Without this, trusted CAs
 // are only used when they are self-signed root certificates. Seems to cause issues in Node v20
 // in HTTP/2 tests, so disabled below the supported v22 version.
-const allowPartialTrustChain = semver.satisfies(process.version, '>=22.9.0');
+const allowPartialTrustChain = nodeVersionSatisfies('>=22.9.0');
 
 const SSL_OP_LEGACY_SERVER_CONNECT = 1 << 2;
 const SSL_OP_TLSEXT_PADDING = 1 << 4;

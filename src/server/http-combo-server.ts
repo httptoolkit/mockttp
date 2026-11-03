@@ -5,8 +5,6 @@ import * as tls from 'tls';
 import * as http from 'http';
 import * as http2 from 'http2';
 
-import semver from 'semver';
-
 const now = () => performance.now();
 import { makeDestroyable, DestroyableServer } from 'destroyable-server';
 import * as httpolyglot from '@httptoolkit/httpolyglot';
@@ -24,6 +22,7 @@ import { Destination, TlsHandshakeFailure } from '../types';
 import { getCA } from '../util/certificates';
 import { shouldPassThrough } from '../util/server-utils';
 import { getDestination } from '../util/url';
+import { nodeVersionSatisfies } from '../util/node-version';
 import {
     getParentSocket,
     buildSocketTimingInfo,
@@ -191,7 +190,7 @@ export async function createComboServer(options: ComboServerOptions): Promise<De
             ? ['http/1.1', 'http 1.1']
                 : unreachableCheck(options.http2);
 
-        const ALPNOption: tls.TlsOptions = semver.satisfies(process.version, '>=20.4.0')
+        const ALPNOption: tls.TlsOptions = nodeVersionSatisfies('>=20.4.0')
             ? {
                 // In modern Node (20+), ALPNProtocols will reject unknown protocols. To allow those (so we can
                 // at least read the request, and hopefully handle HTTP-like cases - not uncommon) we use the new

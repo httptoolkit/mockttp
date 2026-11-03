@@ -17,7 +17,6 @@ import {
     File as FilePolyfill
 } from "formdata-node";
 import { RequestPromise } from 'request-promise-native';
-import * as semver from 'semver';
 import { SocksClient, SocksProxy } from 'socks';
 
 import * as chai from 'chai';
@@ -36,6 +35,7 @@ import { Mockttp } from "..";
 
 import { isNode, isWeb } from '../src/util/util';
 import { getEffectivePort } from '../src/util/url';
+import { nodeVersionSatisfies } from '../src/util/node-version';
 
 export {
     isNode,
@@ -325,7 +325,7 @@ export async function startDnsServer(callback: (question: dns2.DnsQuestion) => s
 }
 
 export const nodeSatisfies = (range: string) =>
-    isNode && semver.satisfies(process.version, range);
+    isNode && nodeVersionSatisfies(range);
 
 export const BROKEN_H1_OVER_H2_TUNNELLING = "^18.8";
 export const BROKEN_H2_OVER_H2_TUNNELLING = "~20.12"; // https://github.com/nodejs/node/issues/52344

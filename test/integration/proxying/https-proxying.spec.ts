@@ -97,12 +97,13 @@ nodeOnly(() => {
 
                 // The JA4 of Mockttp's emulated (Firefox-ish) upstream fingerprint - deliberately
                 // not a common Node.js fingerprint. It varies with the bundled OpenSSL (1.1.1 lacks
-                // the ffdhe supported-groups; 3.5 changes the cipher & extension set), so there's one
-                // known value per OpenSSL generation, verified live on the supported Node 20-26 range:
+                // the ffdhe supported-groups; 3.5 changes the cipher & extension set; 4.0 skips
+                // padding), so there's one known value per OpenSSL generation:
                 expect(ja4).be.oneOf([
                     't13d181100_796efca44d18_6acbe59d8432', // OpenSSL 1.1.1 (Node <=16)
                     't13d181100_796efca44d18_d2c0cc1cf7b4', // OpenSSL 3.0-3.4 (Node 17 to 24.4)
-                    't13d171200_5b57614c22b0_248eb8cf00c0'  // OpenSSL 3.5+ (Node 24.5+, & recent 22.x LTS)
+                    't13d171200_5b57614c22b0_248eb8cf00c0', // OpenSSL 3.5 (Node 24.5 to 26, & recent 22.x LTS)
+                    't13d171100_5b57614c22b0_d7dbea6057f1'  // OpenSSL 4.0+ (Node 27+)
                 ]);
             });
 
