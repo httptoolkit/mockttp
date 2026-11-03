@@ -53,7 +53,8 @@ export async function pollUntil(
 ) {
     const deadline = Date.now() + timeout;
     await delay(minDelay);
-    while (!condition() && Date.now() < deadline) {
+    while (!condition()) {
+        if (Date.now() >= deadline) throw new Error(`Condition not met within ${timeout}ms: ${condition}`);
         await delay(5);
     }
 }
