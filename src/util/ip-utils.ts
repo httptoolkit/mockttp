@@ -1,8 +1,10 @@
 // These are rough tests for IPs: they exclude valid domain names,
 // but they don't strictly check IP formatting (that's fine - invalid
 // IPs will fail elsewhere - this is for intended-format checks).
+// IPv6 addresses always contain at least two colons, which also
+// distinguishes them from hex-only name:port strings like 'db:80'.
 const IPv4_REGEX = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/;
-const IPv6_REGEX = /^(?=.*[0-9a-fA-F])(?=.*:)[0-9a-fA-F:]{2,39}$/;
+const IPv6_REGEX = /^(?=.*[0-9a-fA-F])(?=.*:.*:)[0-9a-fA-F:]{2,39}$/;
 
 export const isIPv4Address = (ip: string) =>
     IPv4_REGEX.test(ip);

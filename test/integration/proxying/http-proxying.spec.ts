@@ -82,6 +82,42 @@ nodeOnly(() => {
                 expect(response).to.include('Mock response');
             });
 
+            it("should parse hex-only hostnames with ports as normal hosts", async () => {
+                const endpoint = await server.forGet('/').thenReply(200, 'Mock response');
+
+                const response = await sendRawRequest(server,
+                    'GET / HTTP/1.1\r\n' +
+                    'Host: cafe:8080\r\n' +
+                    '\r\n'
+                );
+                expect(response).to.include('HTTP/1.1 200 OK');
+
+                const seenRequests = await endpoint.getSeenRequests();
+                expect(seenRequests[0].destination).to.deep.equal({
+                    hostname: 'cafe',
+                    port: 8080
+                });
+                expect(seenRequests[0].url).to.equal('http://cafe:8080/');
+            });
+
+            it("should parse absolute IPv6 URLs without a port", async () => {
+                const endpoint = await server.forGet('/').thenReply(200, 'Mock response');
+
+                const response = await sendRawRequest(server,
+                    'GET http://[::1]/ HTTP/1.1\r\n' +
+                    'Host: [::1]\r\n' +
+                    '\r\n'
+                );
+                expect(response).to.include('HTTP/1.1 200 OK');
+
+                const seenRequests = await endpoint.getSeenRequests();
+                expect(seenRequests[0].destination).to.deep.equal({
+                    hostname: '::1',
+                    port: 80
+                });
+                expect(seenRequests[0].url).to.equal('http://[::1]/');
+            });
+
             it("should mock proxied HTTP matching requests by host", async () => {
                 await server.forGet().forHost('example.com').thenReply(200, "host matched");
 
