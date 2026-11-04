@@ -92,6 +92,14 @@ export class MockttpAdminRequestBuilder {
         this.messageBodyDecoding = options.messageBodyDecoding;
     }
 
+    buildEnableExtraHttpsQuery(name: string): AdminQuery<{ enableExtraHttps: number }, number> {
+        return {
+            query: gql`mutation EnableExtraHttps($name: String!) { enableExtraHttps(name: $name) }`,
+            variables: { name },
+            transformResponse: response => response.enableExtraHttps
+        };
+    }
+
     buildAddRulesQuery(
         type: 'http' | 'ws',
         rules: Array<RequestRuleData | WebSocketRuleData>,
