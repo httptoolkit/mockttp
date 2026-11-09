@@ -118,12 +118,18 @@ function ifTlsDropped(socket: tls.TLSSocket, errorCallback: () => void) {
     });
 }
 
-function getCauseFromError(error: Error & { code?: string }) {
+// Certificate alerts, by error code. OpenSSL names the alert in lower case in the message,
+// which getCauseFromError matches, but BoringSSL (used by Electron, for example) names it only
+// in upper case, e.g. SSLV3_ALERT_CERTIFICATE_UNKNOWN, so we check the code too.
+const CERT_REJECTED_ALERT_CODE =
+    /^ERR_SSL_.*_ALERT_(BAD_CERTIFICATE|CERTIFICATE_(UNKNOWN|EXPIRED|REVOKED|REQUIRED)|UNKNOWN_CA)$/;
+
+export function getCauseFromError(error: Error & { code?: string }) {
     const cause = (
         /alert certificate/.test(error.message) ||
         /alert bad certificate/.test(error.message) ||
-        error.code === 'ERR_SSL_SSLV3_ALERT_BAD_CERTIFICATE' ||
-        /alert unknown ca/.test(error.message)
+        /alert unknown ca/.test(error.message) ||
+        CERT_REJECTED_ALERT_CODE.test(error.code ?? '')
     )
         // The client explicitly told us it doesn't like the certificate
         ? 'cert-rejected'
