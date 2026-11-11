@@ -1,5 +1,5 @@
 import { expect } from "./test-utils";
-import { getCauseFromError } from "../src/server/http-combo-server";
+import { getCauseFromError } from "../src/util/tls-error-cause";
 
 // Errors as Node reports a client's TLS alert during the handshake, copied from real runs.
 const tlsError = (message: string, code: string) =>
