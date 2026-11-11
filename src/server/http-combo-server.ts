@@ -45,6 +45,7 @@ import {
 import { MockttpHttpsOptions } from '../mockttp';
 import { buildSocksServer, SocksServerOptions, SocksTcpAddress } from './socks-server';
 import { getSocketMetadataFromProxyAuth } from '../util/socket-metadata';
+import { getCauseFromError } from '../util/tls-error-cause';
 
 // Hardcore monkey-patching: force TLSSocket to link servername & remoteAddress to
 // sockets as soon as they're available, without waiting for the handshake to fully
@@ -116,31 +117,6 @@ function ifTlsDropped(socket: tls.TLSSocket, errorCallback: () => void) {
         // in that case that it's rejected our certificate.
         errorCallback();
     });
-}
-
-function getCauseFromError(error: Error & { code?: string }) {
-    const cause = (
-        /alert certificate/.test(error.message) ||
-        /alert bad certificate/.test(error.message) ||
-        error.code === 'ERR_SSL_SSLV3_ALERT_BAD_CERTIFICATE' ||
-        /alert unknown ca/.test(error.message)
-    )
-        // The client explicitly told us it doesn't like the certificate
-        ? 'cert-rejected'
-    : /no shared cipher/.test(error.message)
-        // The client refused to negotiate a cipher. Probably means it didn't like the
-        // cert so refused to continue, but it could genuinely not have a shared cipher.
-        ? 'no-shared-cipher'
-    : (/ECONNRESET/.test(error.message) || error.code === 'ECONNRESET')
-        // The client sent no TLS alert, it just hard RST'd the connection
-        ? 'reset'
-    : error.code === 'ERR_TLS_HANDSHAKE_TIMEOUT'
-        ? 'handshake-timeout'
-    : 'unknown'; // Something else.
-
-    if (cause === 'unknown') console.log('Unknown TLS error:', error);
-
-    return cause;
 }
 
 function buildTlsError(
