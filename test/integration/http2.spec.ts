@@ -7,7 +7,7 @@ import * as http2 from 'http2';
 import * as fs from 'fs';
 import getPort from 'get-port';
 
-import { CompletedRequest, CompletedResponse, getLocal } from "../..";
+import { CompletedRequest, CompletedResponse, getLocal, requestSteps } from "../..";
 import {
     expect,
     nodeOnly,
@@ -645,6 +645,284 @@ nodeOnly(() => {
                     await cleanup(proxiedClient, client);
                 });
 
+            });
+
+            describe("sending responses with no body", () => {
+
+                interface FramedResponse {
+                    headers: http2.IncomingHttpHeaders;
+                    // Whether END_STREAM was set on the response's HEADERS frame:
+                    headersEnded: boolean;
+                    body: string;
+                    trailers?: http2.IncomingHttpHeaders;
+                    rstCode?: number;
+                    headersReceivedAt?: number;
+                    closedAt?: number;
+                }
+
+                function sendRequest(client: http2.ClientHttp2Session, path: string) {
+                    return new Promise<FramedResponse>((resolve, reject) => {
+                        const req = client.request({
+                            ':method': 'POST',
+                            ':path': path,
+                            'content-type': 'application/grpc',
+                            'te': 'trailers'
+                        }, { endStream: true });
+
+                        const result: FramedResponse = { headers: {}, headersEnded: false, body: '' };
+                        req.on('response', (headers, flags) => {
+                            result.headersReceivedAt = Date.now();
+                            result.headers = headers;
+                            result.headersEnded = (flags & http2.constants.NGHTTP2_FLAG_END_STREAM) !== 0;
+                        });
+                        req.on('trailers', (trailers) => { result.trailers = trailers; });
+                        req.setEncoding('utf8');
+                        req.on('data', (chunk: string) => { result.body += chunk; });
+                        req.on('error', reject);
+                        req.on('close', () => resolve({ ...result, rstCode: req.rstCode, closedAt: Date.now() }));
+                    });
+                }
+
+                const grpcError = {
+                    'content-type': 'application/grpc',
+                    'grpc-status': '5',
+                    'grpc-message': 'not%20found'
+                };
+
+                describe("from a callback", () => {
+
+                    async function callbackResponse(result: requestSteps.CallbackResponseMessageResult) {
+                        await server.forPost('/svc.Service/Method').thenCallback(() => result);
+                        const client = http2.connect(server.url);
+                        try {
+                            return await sendRequest(client, '/svc.Service/Method');
+                        } finally {
+                            await cleanup(client);
+                        }
+                    }
+
+                    it("sends headers alone as a single HEADERS frame with END_STREAM", async () => {
+                        const response = await callbackResponse({ statusCode: 200, headers: grpcError });
+
+                        expect(response.headersEnded).to.equal(true);
+                        expect(response.headers[':status']).to.equal(200);
+                        expect(response.headers['grpc-status']).to.equal('5');
+                        expect(response.headers['grpc-message']).to.equal('not%20found');
+                        expect(response.body).to.equal('');
+                        expect(response.trailers).to.equal(undefined);
+                        expect(response.rstCode).to.equal(http2.constants.NGHTTP2_NO_ERROR);
+                    });
+
+                    it("treats an empty body as no body", async () => {
+                        const response = await callbackResponse({ statusCode: 200, headers: grpcError, body: '' });
+                        expect(response.headersEnded).to.equal(true);
+                        expect(response.headers['grpc-status']).to.equal('5');
+                    });
+
+                    it("does the same with repeated Set-Cookie headers", async () => {
+                        const response = await callbackResponse({
+                            statusCode: 404,
+                            headers: {
+                                'content-type': 'application/grpc',
+                                'set-cookie': ['a=1', 'b=2']
+                            }
+                        });
+                        expect(response.headersEnded).to.equal(true);
+                        expect(response.headers[':status']).to.equal(404);
+                        expect(response.headers['set-cookie']).to.deep.equal(['a=1', 'b=2']);
+                    });
+
+                    it("reports the response's status and headers in the response event", async () => {
+                        const responseEvent = getDeferred<CompletedResponse>();
+                        await server.on('response', (r) => responseEvent.resolve(r));
+
+                        await callbackResponse({ statusCode: 200, headers: grpcError });
+
+                        const response = await responseEvent;
+                        expect(response.statusCode).to.equal(200);
+                        expect(response.headers['grpc-status']).to.equal('5');
+                        expect(response.headers['grpc-message']).to.equal('not%20found');
+                        expect(response.rawHeaders[0]).to.deep.equal([':status', '200']);
+                    });
+
+                    it("still sends a body after the headers", async () => {
+                        const response = await callbackResponse({ statusCode: 200, body: 'some body' });
+                        expect(response.headersEnded).to.equal(false);
+                        expect(response.body).to.equal('some body');
+                    });
+
+                    it("still sends trailers after the headers", async () => {
+                        const response = await callbackResponse({
+                            statusCode: 200,
+                            headers: { 'content-type': 'application/grpc' },
+                            trailers: { 'grpc-status': '5' }
+                        });
+                        expect(response.headersEnded).to.equal(false);
+                        expect(response.headers['grpc-status']).to.equal(undefined);
+                        expect(response.trailers?.['grpc-status']).to.equal('5');
+                    });
+
+                    it("still rejects an invalid status as before", async () => {
+                        const response = await callbackResponse({ statusCode: 101, headers: grpcError });
+                        expect(response.headers[':status']).to.equal(500);
+                        expect(response.rstCode).to.equal(http2.constants.NGHTTP2_NO_ERROR);
+                    });
+
+                    it("still sends other repeated headers the usual way", async () => {
+                        // Node checks these only as it sends them, so they aren't sent with the end:
+                        const response = await callbackResponse({
+                            statusCode: 200,
+                            headers: { ...grpcError, 'vary': ['a', 'b'] }
+                        });
+                        expect(response.headersEnded).to.equal(false);
+                        expect(response.headers[':status']).to.equal(200);
+                        expect(response.headers['grpc-status']).to.equal('5');
+                        expect(response.rstCode).to.equal(http2.constants.NGHTTP2_NO_ERROR);
+                    });
+                });
+
+                describe("passed through from an HTTP/2 target", () => {
+
+                    const targetServer = makeDestroyable(http2.createSecureServer({
+                        allowHTTP1: false,
+                        key: fs.readFileSync('./test/fixtures/test-ca.key'),
+                        cert: fs.readFileSync('./test/fixtures/test-ca.pem')
+                    }));
+
+                    targetServer.on('stream', (stream: http2.ServerHttp2Stream, headers: http2.IncomingHttpHeaders) => {
+                        const path = headers[':path'];
+                        if (path === '/headers-only') {
+                            stream.respond({ ':status': 200, ...grpcError }, { endStream: true });
+                        } else if (path === '/body-at-once') {
+                            stream.respond({ ':status': 200, 'content-type': 'text/plain' });
+                            stream.end('the whole body');
+                        } else if (path === '/end-later') {
+                            stream.respond({ ':status': 200, 'content-type': 'text/plain' });
+                            setTimeout(() => stream.end(), 300);
+                        } else if (path === '/with-trailers') {
+                            stream.respond({ ':status': 200, 'content-type': 'application/grpc' }, { waitForTrailers: true });
+                            stream.on('wantTrailers', () => stream.sendTrailers({ 'grpc-status': '0' }));
+                            stream.end(Buffer.from([0, 0, 0, 0, 0]));
+                        } else {
+                            stream.respond({ ':status': 404 }, { endStream: true });
+                        }
+                    });
+
+                    let targetPort: number;
+
+                    beforeEach(async () => {
+                        targetPort = await getPort();
+                        await new Promise<void>((resolve, reject) => {
+                            targetServer.once('error', reject);
+                            targetServer.listen(targetPort, resolve);
+                        });
+                    });
+
+                    afterEach(() => targetServer.destroy());
+
+                    async function proxiedResponse(
+                        path: string,
+                        passThroughOptions: requestSteps.PassThroughStepOptions = {}
+                    ) {
+                        await server.forAnyRequest().thenPassThrough({
+                            ignoreHostHttpsErrors: ['localhost'],
+                            ...passThroughOptions
+                        });
+
+                        const client = http2.connect(server.url);
+                        const tunnel = client.request({
+                            ':method': 'CONNECT',
+                            ':authority': `localhost:${targetPort}`
+                        });
+                        expect((await getHttp2Response(tunnel))[':status']).to.equal(200);
+
+                        const proxiedClient = http2.connect(`https://localhost:${targetPort}`, {
+                            createConnection: () => tls.connect({
+                                socket: tunnel as any,
+                                ALPNProtocols: ['h2']
+                            })
+                        });
+                        try {
+                            return await sendRequest(proxiedClient, path);
+                        } finally {
+                            await cleanup(proxiedClient, client);
+                        }
+                    }
+
+                    it("sends a response the target ended with its headers in the same way", async () => {
+                        const response = await proxiedResponse('/headers-only');
+
+                        expect(response.headersEnded).to.equal(true);
+                        expect(response.headers[':status']).to.equal(200);
+                        expect(response.headers['grpc-status']).to.equal('5');
+                        expect(response.body).to.equal('');
+                        expect(response.rstCode).to.equal(http2.constants.NGHTTP2_NO_ERROR);
+                    });
+
+                    it("does the same for other responses with no body, like a 404", async () => {
+                        const response = await proxiedResponse('/missing');
+                        expect(response.headersEnded).to.equal(true);
+                        expect(response.headers[':status']).to.equal(404);
+                    });
+
+                    it("reports such a response's status and headers in the response event", async () => {
+                        const responseEvent = getDeferred<CompletedResponse>();
+                        await server.on('response', (r) => responseEvent.resolve(r));
+
+                        await proxiedResponse('/headers-only');
+
+                        const response = await responseEvent;
+                        expect(response.statusCode).to.equal(200);
+                        expect(response.headers['grpc-status']).to.equal('5');
+                        expect(response.rawHeaders[0]).to.deep.equal([':status', '200']);
+                    });
+
+                    it("doesn't lose a short body that arrives with the end", async () => {
+                        const response = await proxiedResponse('/body-at-once');
+                        expect(response.headersEnded).to.equal(false);
+                        expect(response.body).to.equal('the whole body');
+                    });
+
+                    it("doesn't hold back headers until a slow response ends", async () => {
+                        const response = await proxiedResponse('/end-later');
+                        expect(response.headersEnded).to.equal(false);
+                        expect(response.body).to.equal('');
+                        // The target ends 300ms after its headers, so they must arrive well before the end:
+                        expect(response.closedAt! - response.headersReceivedAt!).to.be.at.least(200);
+                    });
+
+                    it("still sends a body that replaces the target's empty one", async () => {
+                        const response = await proxiedResponse('/headers-only', {
+                            transformResponse: { replaceBody: 'replaced' }
+                        });
+                        expect(response.headersEnded).to.equal(false);
+                        expect(response.body).to.equal('replaced');
+                    });
+
+                    it("still sends a body read by beforeResponse", async () => {
+                        const response = await proxiedResponse('/body-at-once', {
+                            beforeResponse: () => undefined
+                        });
+                        expect(response.headersEnded).to.equal(false);
+                        expect(response.body).to.equal('the whole body');
+                    });
+
+                    it("doesn't lose a body that arrived while the headers were being changed", async () => {
+                        const response = await proxiedResponse('/body-at-once', {
+                            transformResponse: { updateHeaders: { 'x-changed': 'yes' } }
+                        });
+                        expect(response.headersEnded).to.equal(false);
+                        expect(response.headers['x-changed']).to.equal('yes');
+                        expect(response.body).to.equal('the whole body');
+                    });
+
+                    it("still sends trailers after the body", async () => {
+                        const response = await proxiedResponse('/with-trailers');
+                        expect(response.headersEnded).to.equal(false);
+                        expect(response.body.length).to.equal(5);
+                        expect(response.trailers?.['grpc-status']).to.equal('0');
+                    });
+                });
             });
 
             describe("to a lenient HTTP/2 target accepting duplicate single-value headers", () => {

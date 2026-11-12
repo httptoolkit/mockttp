@@ -1,4 +1,5 @@
 import { Buffer } from 'buffer';
+import type { Readable } from 'stream';
 import { Writable } from 'stream';
 import * as url from 'url';
 import type * as dns from 'dns';
@@ -32,6 +33,7 @@ import {
     buildBodyReader,
     isHttp2,
     writeHead,
+    writeHeadAndEnd,
     encodeBodyBuffer,
     waitForCompletedResponse
 } from '../../util/request-utils';
@@ -186,6 +188,26 @@ export class FixedResponseStepImpl extends FixedResponseStep {
     }
 }
 
+/**
+ * Whether an upstream HTTP/2 response has already ended with no body: END_STREAM came with its
+ * headers. Node marks the client stream's readable side ended as soon as END_STREAM arrives,
+ * before anything reads it (its public endAfterHeaders stays false here, so isn't usable), and
+ * http2-wrapper's response only ends once that's read, so both are checked, with no data buffered.
+ */
+function hasEndedWithHead(serverRes: http.IncomingMessage): boolean {
+    if (!serverRes.httpVersion.startsWith('2')) return false;
+
+    // http2-wrapper's ClientRequest keeps Node's client stream as _request:
+    const upstreamStream = (serverRes as any).req?._request as Readable | undefined;
+
+    const isEnded = (readable: Readable | undefined) =>
+        (readable as any)?._readableState?.ended === true;
+
+    return (isEnded(serverRes) || isEnded(upstreamStream)) &&
+        serverRes.readableLength === 0 &&
+        (upstreamStream?.readableLength ?? 0) === 0;
+}
+
 async function writeResponseFromCallback(
     result: CallbackResponseMessageResult,
     response: OngoingResponse
@@ -213,6 +235,18 @@ async function writeResponseFromCallback(
                 : Buffer.from(result.body),
             result.headers ?? {}
         );
+    }
+
+    if (!result.trailers && !result.rawBody?.length) {
+        // With no body, send the head as the end of the response (one HEADERS frame over HTTP/2),
+        // as gRPC needs for an error with no messages:
+        writeHeadAndEnd(
+            response,
+            result.statusCode || 200,
+            result.statusMessage,
+            result.headers
+        );
+        return;
     }
 
     writeHead(
@@ -1052,24 +1086,37 @@ export class PassThroughStepImpl extends PassThroughStep {
                     serverRawHeaders = objectHeadersToRaw(serverHeaders);
                 }
 
-                writeHead(
-                    clientRes,
-                    serverStatusCode,
-                    serverStatusMessage,
-                    serverRawHeaders
-                        .filter(([key, value]) => {
-                            if (key === ':status') return false;
-                            if (!validateHeader(key, value)) {
-                                console.warn(`Not forwarding invalid header: "${key}: ${value}"`);
-                                // Nothing else we can do in this case regardless - setHeaders will
-                                // throw within Node if we try to set this value.
-                                return false;
-                            }
-                            return true;
-                        })
-                );
+                const forwardedHeaders = serverRawHeaders
+                    .filter(([key, value]) => {
+                        if (key === ':status') return false;
+                        if (!validateHeader(key, value)) {
+                            console.warn(`Not forwarding invalid header: "${key}: ${value}"`);
+                            // Nothing else we can do in this case regardless - setHeaders will
+                            // throw within Node if we try to set this value.
+                            return false;
+                        }
+                        return true;
+                    });
 
-                if (resBodyOverride) {
+                // An HTTP/2 server can end a response with its headers alone (gRPC sends most
+                // errors like this, as "Trailers-Only"). If so, and the body isn't replaced, we
+                // send the headers the same way, rather than headers and then a separate end:
+                const endedWithHead = isH2Downstream &&
+                    !resBodyOverride &&
+                    !originalBody &&
+                    hasEndedWithHead(serverRes);
+
+                if (endedWithHead) {
+                    writeHeadAndEnd(clientRes, serverStatusCode, serverStatusMessage, forwardedHeaders);
+                } else {
+                    writeHead(clientRes, serverStatusCode, serverStatusMessage, forwardedHeaders);
+                }
+
+                if (endedWithHead) {
+                    // Already ended: just finish reading the (empty) upstream response.
+                    serverRes.resume();
+                    resolve();
+                } else if (resBodyOverride) {
                     // Return the override data to the client:
                     clientRes.end(resBodyOverride);
 
