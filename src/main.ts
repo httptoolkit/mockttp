@@ -1,6 +1,6 @@
 export type { MaybePromise } from '@httptoolkit/util';
 
-import { Mockttp, MockttpOptions, MockttpHttpsOptions, SubscribableEvent, PortRange } from "./mockttp";
+import { Mockttp, MockttpOptions, LocalMockttpOptions, MockttpHttpsOptions, SubscribableEvent, PortRange } from "./mockttp";
 import { MockttpServer } from "./server/mockttp-server";
 import { SocksServerOptions } from "./server/socks-server";
 import {
@@ -16,6 +16,7 @@ export type {
     MockttpServer,
     MockttpAdminServer,
     MockttpOptions,
+    LocalMockttpOptions,
     MockttpHttpsOptions,
     MockttpClientOptions,
     MockttpAdminServerOptions,
@@ -101,7 +102,7 @@ export type { Serialized, SerializedValue } from './serialization/serialization'
  * outside your tests before calling this, which will create and manage your fake servers
  * outside the browser.
  */
-export function getLocal(options: MockttpOptions = {}): Mockttp {
+export function getLocal(options: LocalMockttpOptions = {}): Mockttp {
     return new MockttpServer(options);
 }
 
