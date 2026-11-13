@@ -189,19 +189,12 @@ export function updateRawHeaders(
     rawHeaders: RawHeaders,
     headers: Headers
 ) {
-    const updatedRawHeaders = [...rawHeaders];
-    const rawHeaderKeys = updatedRawHeaders.map(([key]) => key.toLowerCase());
+    const updatedKeys = new Set(Object.keys(headers).map((key) => key.toLowerCase()));
 
-    for (const key of Object.keys(headers)) {
-        const lowerCaseKey = key.toLowerCase();
-        for (let i = 0; i < rawHeaderKeys.length; i++) {
-            // If you insert a header that already existed, remove all previous values
-            if (rawHeaderKeys[i] === lowerCaseKey) {
-                updatedRawHeaders.splice(i, 1);
-                rawHeaderKeys.splice(i, 1);
-            }
-        }
-    }
+    // If you insert a header that already existed, remove all previous values
+    const updatedRawHeaders = rawHeaders.filter(([key]) =>
+        !updatedKeys.has(key.toLowerCase())
+    );
 
     // We do all removals in advance, then do all additions here, to ensure that adding
     // a new header twice works correctly.

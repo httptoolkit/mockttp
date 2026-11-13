@@ -63,6 +63,36 @@ describe("Header utils", () => {
             ]);
         });
 
+        it("overrides all values of consecutive duplicate headers", () => {
+            expect(
+                updateRawHeaders([
+                    ['Accept', 'text/html'],
+                    ['ACCEPT', 'text/plain'],
+                    ['accept', 'image/png'],
+                    ['Host', 'example.com']
+                ], {
+                    'Accept': '*/*'
+                })
+            ).to.deep.equal([
+                ['Host', 'example.com'],
+                ['Accept', '*/*']
+            ]);
+        });
+
+        it("deletes all values of consecutive duplicate headers", () => {
+            expect(
+                updateRawHeaders([
+                    ['Via', '1.1 proxy-a'],
+                    ['via', '1.1 proxy-b'],
+                    ['Host', 'example.com']
+                ], {
+                    'VIA': undefined
+                })
+            ).to.deep.equal([
+                ['Host', 'example.com']
+            ]);
+        });
+
         it("deletes existing headers when given an empty value", () => {
             expect(
                 updateRawHeaders([
