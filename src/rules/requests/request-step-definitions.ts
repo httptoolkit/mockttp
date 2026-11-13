@@ -201,8 +201,8 @@ export interface CallbackResponseMessageResult {
      * be automatically encoded to match the Content-Encoding defined in your
      * response headers.
      *
-     * If this is set, the Content-Length header will be automatically updated
-     * or added accordingly, if required.
+     * When modifying a proxied response, an existing Content-Length header will
+     * be automatically corrected to match. It is never added automatically.
      *
      * Defaults to empty.
      *
@@ -215,8 +215,8 @@ export interface CallbackResponseMessageResult {
      * A buffer, which replaces the response body if set, which is sent exactly
      * as is, and is not automatically encoded.
      *
-     * If this is set, the Content-Length header will be automatically updated
-     * or added accordingly, if required.
+     * When modifying a proxied response, an existing Content-Length header will
+     * be automatically corrected to match. It is never added automatically.
      *
      * You should only return one body field: either `body`, `rawBody` or
      * `json`.
@@ -228,8 +228,8 @@ export interface CallbackResponseMessageResult {
      * request body. This will be automatically content-encoded to match the
      * Content-Encoding defined in your response headers.
      *
-     * If this is set, the Content-Length header will be automatically updated
-     * or added accordingly, if required.
+     * When modifying a proxied response, an existing Content-Length header will
+     * be automatically corrected to match. It is never added automatically.
      *
      * You should only return one body field: either `body`, `rawBody` or
      * `json`.
