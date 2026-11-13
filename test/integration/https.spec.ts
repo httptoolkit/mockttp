@@ -109,6 +109,44 @@ describe("When configured for HTTPS", () => {
                 expect(tlsSocket.getPeerCertificate().subject.C).to.equal("UK");
             });
 
+            const getCertSerial = async (servername: string) => {
+                const tlsSocket = tls.connect({
+                    host: 'localhost',
+                    servername,
+                    port: server.port,
+                    rejectUnauthorized: false
+                }).on('error', () => {});
+
+                await new Promise((resolve) => tlsSocket.once('secureConnect', resolve));
+                const serial = tlsSocket.getPeerCertificate().serialNumber;
+                tlsSocket.destroy();
+                return serial;
+            };
+
+            it("should reuse a single certificate for concurrent handshakes to the same name", async () => {
+                const serials = await Promise.all(
+                    Array.from({ length: 5 }, () => getCertSerial('concurrent.example'))
+                );
+
+                expect(new Set(serials).size).to.equal(1);
+            });
+
+            it("should reflect the SNI casing in generated certificates", async () => {
+                const tlsSocket = tls.connect({
+                    host: 'localhost',
+                    servername: 'MiXeD-Case.Example',
+                    port: server.port,
+                    rejectUnauthorized: false
+                }).on('error', () => {});
+
+                await new Promise((resolve) => tlsSocket.once('secureConnect', resolve));
+                const cert = tlsSocket.getPeerCertificate();
+                tlsSocket.destroy();
+
+                expect(cert.subject.CN).to.equal('MiXeD-Case.Example');
+                expect(cert.subjectaltname).to.equal('DNS:MiXeD-Case.Example');
+            });
+
         });
 
         describe("with some hostnames excluded", () => {

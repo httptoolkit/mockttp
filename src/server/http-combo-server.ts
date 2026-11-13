@@ -8,7 +8,7 @@ import * as http2 from 'http2';
 const now = () => performance.now();
 import { makeDestroyable, DestroyableServer } from 'destroyable-server';
 import * as httpolyglot from '@httptoolkit/httpolyglot';
-import { CustomError, delay, unreachableCheck } from '@httptoolkit/util';
+import { CustomError, delay, MaybePromise, unreachableCheck } from '@httptoolkit/util';
 import {
     calculateJa3,
     calculateJa4,
@@ -20,6 +20,7 @@ import { URLPattern } from "urlpattern-polyfill";
 
 import { Destination, TlsHandshakeFailure } from '../types';
 import { getCA } from '../util/certificates';
+import { LruCache } from '../util/lru-cache';
 import { shouldPassThrough } from '../util/server-utils';
 import { getDestination } from '../util/url';
 import { nodeVersionSatisfies } from '../util/node-version';
@@ -186,26 +187,40 @@ export async function createComboServer(options: ComboServerOptions): Promise<De
             }
 
         // Cache secure contexts by domain with expiry tracking, with 1h buffer
-        const EXPIRY_BUFFER_MS = 60 * 60 * 1000;
-        const secureContextCache = new Map<string, { context: tls.SecureContext, expiresAt: Date }>();
+        const CERT_EXPIRY_BUFFER_MS = 60 * 60 * 1000;
+        const PENDING_CERT_TIMEOUT_MS = 2 * 1000;
+        type SecureContextEntry = { context: MaybePromise<tls.SecureContext>, refreshAt: number };
+        const secureContextCache = new LruCache<string, SecureContextEntry>(1000);
 
-        const getSecureContext = async (domain: string): Promise<tls.SecureContext> => {
+        const getSecureContext = (domain: string): MaybePromise<tls.SecureContext> => {
             const cached = secureContextCache.get(domain);
-            const now = Date.now();
+            if (cached && cached.refreshAt > Date.now()) return cached.context;
 
-            if (cached && cached.expiresAt.getTime() - now > EXPIRY_BUFFER_MS) {
-                return cached.context;
-            }
+            const entry: SecureContextEntry = {
+                refreshAt: Date.now() + PENDING_CERT_TIMEOUT_MS,
+                context: ca.generateCertificate(domain).then((generatedCert) => {
+                    const context = tls.createSecureContext({
+                        key: generatedCert.key,
+                        cert: generatedCert.cert,
+                        ca: generatedCert.ca
+                    });
 
-            // Generate new cert (either not cached or expiring soon)
-            const generatedCert = await ca.generateCertificate(domain);
-            const context = tls.createSecureContext({
-                key: generatedCert.key,
-                cert: generatedCert.cert,
-                ca: generatedCert.ca
-            });
-            secureContextCache.set(domain, { context, expiresAt: generatedCert.expiresAt });
-            return context;
+                    if (secureContextCache.get(domain) === entry) {
+                        secureContextCache.set(domain, {
+                            context,
+                            refreshAt: generatedCert.expiresAt.getTime() - CERT_EXPIRY_BUFFER_MS
+                        });
+                    }
+                    return context;
+                }, (error) => {
+                    // Don't cache failures, so later handshakes can retry immediately
+                    if (secureContextCache.get(domain) === entry) secureContextCache.delete(domain);
+                    throw error;
+                })
+            };
+
+            secureContextCache.set(domain, entry);
+            return entry.context;
         };
 
         tlsServer = tls.createServer({
@@ -214,14 +229,18 @@ export async function createComboServer(options: ComboServerOptions): Promise<De
             ca: [defaultCert.ca],
             ...ALPNOption,
             ...(options.https?.tlsServerOptions || {}),
-            SNICallback: async (domain: string, cb: Function) => {
+            SNICallback: (domain: string, cb: Function) => {
                 if (options.debug) console.log(`Generating certificate for ${domain}`);
 
-                try {
-                    cb(null, await getSecureContext(domain));
-                } catch (e) {
-                    console.error('Cert generation error', e);
-                    cb(e);
+                const result = getSecureContext(domain);
+
+                if (result instanceof Promise) {
+                    result.then((context) => cb(null, context), (error) => {
+                        console.error('Cert generation error', error);
+                        cb(error);
+                    });
+                } else {
+                    cb(null, result);
                 }
             }
         });
