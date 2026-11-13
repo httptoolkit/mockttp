@@ -180,17 +180,19 @@ nodeOnly(() => describe('Additional ports', () => {
         const getTunnelIssuer = async (tunnel: Duplex) =>
             (await getCert({ socket: tunnel, servername: 'example.test' })).issuer.CN;
 
-        it("uses the port's CA for TLS within HTTP/2 CONNECT", async () => {
-            const extraPort = await server.addPort({ https: extraCA });
-            const client = http2.connect(`https://localhost:${extraPort}`, { rejectUnauthorized: false });
-            try {
-                const tunnel = client.request({ ':method': 'CONNECT', ':authority': 'example.test:443' });
-                expect((await getHttp2Response(tunnel))[':status']).to.equal(200);
-                expect(await getTunnelIssuer(tunnel)).to.equal('Extra CA');
-            } finally {
-                client.destroy();
-            }
-        });
+        for (const scheme of ['https', 'http']) {
+            it(`uses the port's CA for TLS within HTTP/2 CONNECT over ${scheme}`, async () => {
+                const extraPort = await server.addPort({ https: extraCA });
+                const client = http2.connect(`${scheme}://localhost:${extraPort}`, { rejectUnauthorized: false });
+                try {
+                    const tunnel = client.request({ ':method': 'CONNECT', ':authority': 'example.test:443' });
+                    expect((await getHttp2Response(tunnel))[':status']).to.equal(200);
+                    expect(await getTunnelIssuer(tunnel)).to.equal('Extra CA');
+                } finally {
+                    client.destroy();
+                }
+            });
+        }
 
         it("uses the port's CA for TLS within SOCKS", async () => {
             const extraPort = await server.addPort({ https: extraCA });

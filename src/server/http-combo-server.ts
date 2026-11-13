@@ -419,6 +419,19 @@ export async function createComboServer(options: ComboServerOptions): Promise<Co
     // Mark HTTP/2 sockets as set up once we receive a first settings frame. This always
     // happens immediately after the connection preface, as long as the connection is OK.
     server!.on('session', (session) => {
+        // Cleartext HTTP/2 wraps its socket in a JSStreamSocket, which has no details of its own. Node only
+        // exposes it through a proxy that blocks setting these, so we find it via its internal symbol:
+        const sessionSocketSymbol = Object.getOwnPropertySymbols(session)
+            .find((symbol) => symbol.description === 'socket');
+        const sessionSocket: unknown = sessionSocketSymbol && Reflect.get(session, sessionSocketSymbol);
+        if (
+            sessionSocket instanceof net.Socket &&
+            sessionSocket.constructor.name === 'JSStreamSocket' &&
+            sessionSocket.stream
+        ) {
+            inheritSocketDetails(sessionSocket.stream, sessionSocket);
+        }
+
         session.once('remoteSettings', () => {
             (session.socket as tls.TLSSocket)[TlsSetupCompleted] = true;
             session[TlsClientHello] ??= session.initialSocket?.[TlsClientHello];
