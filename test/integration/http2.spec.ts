@@ -18,7 +18,8 @@ import {
     cleanup,
     BROKEN_H2_OVER_H2_TUNNELLING,
     getDeferred,
-    nodeSatisfies
+    nodeSatisfies,
+    openSocksSocket
 } from "../test-utils";
 
 browserOnly(() => {
@@ -134,6 +135,58 @@ nodeOnly(() => {
                 expect(responseBody.toString('utf8')).to.equal("Proxied HTTP2 response!");
 
                 await cleanup(proxiedClient, client);
+            });
+
+            describe("client address metadata", () => {
+                const socksServer = getLocal({ socks: true });
+
+                let openClients: http2.ClientHttp2Session[] = [];
+                const connectClient = (...args: Parameters<typeof http2.connect>) => {
+                    const client = http2.connect(...args);
+                    openClients.push(client);
+                    return client;
+                };
+
+                beforeEach(() => socksServer.start());
+                afterEach(async () => {
+                    // Close tunnelled clients before their tunnels, and all before the server:
+                    await cleanup(...openClients.reverse());
+                    openClients = [];
+                    await socksServer.stop();
+                });
+
+                const connections: Array<[string, () => Promise<http2.ClientHttp2Session>]> = [
+                    ['direct', async () => connectClient(socksServer.url)],
+                    ['over SOCKS', async () => {
+                        const socket = await openSocksSocket(socksServer, 'example.com', 80);
+                        return connectClient('http://example.com', { createConnection: () => socket });
+                    }],
+                    ['over cleartext HTTP/2 CONNECT', async () => {
+                        const tunnelClient = connectClient(socksServer.url);
+                        const tunnel = tunnelClient.request({ ':method': 'CONNECT', ':authority': 'example.com:80' });
+                        expect((await getHttp2Response(tunnel))[':status']).to.equal(200);
+                        return connectClient('http://example.com', { createConnection: () => tunnel });
+                    }]
+                ];
+
+                for (const [name, connect] of connections) {
+                    it(`should include the client address for cleartext HTTP/2 requests ${name}`, async () => {
+                        const seenRequestPromise = getDeferred<CompletedRequest>();
+                        await socksServer.on('request', (r) => seenRequestPromise.resolve(r));
+                        await socksServer.forAnyRequest().thenReply(200);
+
+                        const req = (await connect()).request({ ':path': '/mocked-endpoint' });
+                        await getHttp2Response(req);
+                        await getHttp2Body(req);
+
+                        const seenRequest = await seenRequestPromise;
+                        expect(seenRequest.remoteIpAddress).to.be.oneOf([
+                            '::ffff:127.0.0.1', // IPv4 localhost
+                            '::1' // IPv6 localhost
+                        ]);
+                        expect(seenRequest.remotePort).to.be.greaterThanOrEqual(32768);
+                    });
+                }
             });
 
             it("can respond to HTTP1-proxied HTTP/2 requests", async () => {
@@ -446,6 +499,39 @@ nodeOnly(() => {
                 expect(seenRequest.protocol).to.equal('https');
                 expect(seenRequest.httpVersion).to.equal('2.0');
                 expect(seenRequest.url).to.equal("https://example.com/mocked-endpoint");
+                expect(seenRequest.remoteIpAddress).to.be.oneOf([
+                    '::ffff:127.0.0.1', // IPv4 localhost
+                    '::1' // IPv6 localhost
+                ]);
+                expect(seenRequest.remotePort).to.be.greaterThanOrEqual(32768);
+
+                await cleanup(proxiedClient, client);
+            });
+
+            it("should include the client address in events for HTTPS tunnelled over cleartext HTTP/2", async () => {
+                const seenRequestPromise = getDeferred<CompletedRequest>();
+                await server.on('request', (r) => seenRequestPromise.resolve(r));
+                await server.forGet('https://example.com/mocked-endpoint').thenReply(200);
+
+                const client = http2.connect(`http://localhost:${server.port}`);
+                const req = client.request({
+                    ':method': 'CONNECT',
+                    ':authority': 'example.com:443'
+                });
+                expect((await getHttp2Response(req))[':status']).to.equal(200);
+
+                const proxiedClient = http2.connect('https://example.com', {
+                    createConnection: () => tls.connect({
+                        socket: req,
+                        ALPNProtocols: ['h2']
+                    })
+                });
+                const proxiedRequest = proxiedClient.request({ ':path': '/mocked-endpoint' });
+                await getHttp2Response(proxiedRequest);
+                await getHttp2Body(proxiedRequest);
+
+                const seenRequest = await seenRequestPromise;
+                expect(seenRequest.url).to.equal('https://example.com/mocked-endpoint');
                 expect(seenRequest.remoteIpAddress).to.be.oneOf([
                     '::ffff:127.0.0.1', // IPv4 localhost
                     '::1' // IPv6 localhost

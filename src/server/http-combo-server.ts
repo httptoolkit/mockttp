@@ -19,7 +19,7 @@ import {
 import { URLPattern } from "urlpattern-polyfill";
 
 import { Destination, TlsHandshakeFailure } from '../types';
-import { getCA } from '../util/certificates';
+import { CAOptions, getCA } from '../util/certificates';
 import { LruCache } from '../util/lru-cache';
 import { shouldPassThrough } from '../util/server-utils';
 import { getDestination } from '../util/url';
@@ -35,6 +35,7 @@ import {
     InitialRemoteAddress,
     InitialRemotePort,
     SocketTimingInfo,
+    ListenerTlsServer,
     LastTunnelAddress,
     LastHopEncrypted,
     TlsMetadata,
@@ -146,18 +147,36 @@ export interface ComboServerOptions {
     rawPassthroughListener: (socket: net.Socket, hostname: string, port?: number) => void;
 };
 
+export type ComboServer = DestroyableServer<net.Server> & {
+    /**
+     * Create an additional (not yet listening) server, which hands all its connections to
+     * this server. If a CA is provided, it's used for TLS on these connections (including
+     * within tunnels) and all other HTTPS settings are shared with the main configuration.
+     */
+    createListener(caOptions?: CAOptions): Promise<DestroyableServer<net.Server>>;
+};
+
 // The low-level server that handles all the sockets & TLS. The server will correctly call the
 // given handler for both HTTP & HTTPS direct connections, or connections when used as an
 // either HTTP or HTTPS proxy, all on the same port.
-export async function createComboServer(options: ComboServerOptions): Promise<DestroyableServer<net.Server>> {
+export async function createComboServer(options: ComboServerOptions): Promise<ComboServer> {
     let server: net.Server;
-    let tlsServer: tls.Server | undefined = undefined;
     let socksServer: net.Server | undefined = undefined;
     let unknownProtocolServer: net.Server | undefined = undefined;
 
-    if (options.https) {
-        const ca = await getCA(options.https);
-        const defaultCert = await ca.generateCertificate(options.https.defaultDomain ?? 'localhost');
+    // Httpolyglot passes all TLS sockets here. We analyze the hello, and then hand the socket
+    // to the TLS server for its CA, which reports its events back through this server.
+    const tlsDispatcher = new tls.Server();
+    tlsDispatcher.removeAllListeners('connection');
+    const analyzeTls = buildTlsAnalyzer(
+        options.https?.tlsPassthrough,
+        options.https?.tlsInterceptOnly,
+        options.tlsPassthroughListener
+    );
+
+    const createTlsServer = async (httpsOptions: MockttpHttpsOptions) => {
+        const ca = await getCA(httpsOptions);
+        const defaultCert = await ca.generateCertificate(httpsOptions.defaultDomain ?? 'localhost');
 
         const serverProtocolPreferences = options.http2 === true
             ? ['h2', 'http/1.1', 'http 1.1'] // 'http 1.1' is non-standard, but used by https-proxy-agent
@@ -223,12 +242,12 @@ export async function createComboServer(options: ComboServerOptions): Promise<De
             return entry.context;
         };
 
-        tlsServer = tls.createServer({
+        const tlsServer = tls.createServer({
             key: defaultCert.key,
             cert: defaultCert.cert,
             ca: [defaultCert.ca],
             ...ALPNOption,
-            ...(options.https?.tlsServerOptions || {}),
+            ...(httpsOptions.tlsServerOptions || {}),
             SNICallback: (domain: string, cb: Function) => {
                 if (options.debug) console.log(`Generating certificate for ${domain}`);
 
@@ -251,13 +270,30 @@ export async function createComboServer(options: ComboServerOptions): Promise<De
             });
         }
 
-        analyzeAndMaybePassThroughTls(
-            tlsServer,
-            options.https.tlsPassthrough,
-            options.https.tlsInterceptOnly,
-            options.tlsPassthroughListener
-        );
-    }
+        tlsServer.on('secureConnection', (socket: tls.TLSSocket) => {
+            tlsDispatcher.emit('secureConnection', socket);
+        });
+        tlsServer.on('tlsClientError', (error: Error, socket: tls.TLSSocket) => {
+            tlsDispatcher.emit('tlsClientError', error, socket);
+        });
+
+        return tlsServer;
+    };
+
+    const defaultTlsServer = options.https
+        ? await createTlsServer(options.https)
+        : undefined;
+
+    tlsDispatcher.on('connection', async (socket: net.Socket) => {
+        const caTlsServer = socket[ListenerTlsServer] ?? defaultTlsServer;
+        if (!caTlsServer) {
+            socket.destroy(); // No HTTPS configured for this connection
+            return;
+        }
+
+        const passedThrough = await analyzeTls(socket);
+        if (!passedThrough) caTlsServer.emit('connection', socket);
+    });
 
     if (options.socks) {
         socksServer = buildSocksServer(options.socks === true ? {} : options.socks);
@@ -315,7 +351,7 @@ export async function createComboServer(options: ComboServerOptions): Promise<De
     }
 
     server = httpolyglot.createServer({
-        tls: tlsServer,
+        tls: tlsDispatcher,
         socks: socksServer,
         unknownProtocol: unknownProtocolServer,
         http: {
@@ -383,6 +419,19 @@ export async function createComboServer(options: ComboServerOptions): Promise<De
     // Mark HTTP/2 sockets as set up once we receive a first settings frame. This always
     // happens immediately after the connection preface, as long as the connection is OK.
     server!.on('session', (session) => {
+        // Cleartext HTTP/2 wraps its socket in a JSStreamSocket, which has no details of its own. Node only
+        // exposes it through a proxy that blocks setting these, so we find it via its internal symbol:
+        const sessionSocketSymbol = Object.getOwnPropertySymbols(session)
+            .find((symbol) => symbol.description === 'socket');
+        const sessionSocket: unknown = sessionSocketSymbol && Reflect.get(session, sessionSocketSymbol);
+        if (
+            sessionSocket instanceof net.Socket &&
+            sessionSocket.constructor.name === 'JSStreamSocket' &&
+            sessionSocket.stream
+        ) {
+            inheritSocketDetails(sessionSocket.stream, sessionSocket);
+        }
+
         session.once('remoteSettings', () => {
             (session.socket as tls.TLSSocket)[TlsSetupCompleted] = true;
             session[TlsClientHello] ??= session.initialSocket?.[TlsClientHello];
@@ -468,7 +517,20 @@ export async function createComboServer(options: ComboServerOptions): Promise<De
         server.emit('connection', res.stream);
     }
 
-    return makeDestroyable(server);
+    return Object.assign(makeDestroyable(server), {
+        createListener: async (caOptions?: CAOptions) => {
+            // The base must not keep its own CA fields, or we'd mix up two different CAs:
+            const baseOptions = _.omit(options.https, ['key', 'cert', 'keyPath', 'certPath']);
+            const listenerTlsServer = caOptions
+                ? await createTlsServer({ ...baseOptions, ...caOptions })
+                : undefined;
+
+            return makeDestroyable(net.createServer((socket) => {
+                if (listenerTlsServer) socket[ListenerTlsServer] = listenerTlsServer;
+                server.emit('connection', socket);
+            }));
+        }
+    });
 }
 
 
@@ -479,7 +541,8 @@ const SOCKET_METADATA = [
     'remotePort',
     SocketTimingInfo,
     SocketMetadata,
-    LastTunnelAddress
+    LastTunnelAddress,
+    ListenerTlsServer
 ] as const;
 
 function inheritSocketDetails(
@@ -497,7 +560,8 @@ function inheritSocketDetails(
 
     for (let fieldName of SOCKET_METADATA) {
         if (target[fieldName] === undefined) {
-            if (typeof source[fieldName] === 'object') {
+            // The listener's TLS server is inherited directly, not cloned:
+            if (typeof source[fieldName] === 'object' && fieldName !== ListenerTlsServer) {
                 (target as any)[fieldName] = _.cloneDeep(source[fieldName]);
             } else {
                 (target as any)[fieldName] = source[fieldName];
@@ -507,12 +571,12 @@ function inheritSocketDetails(
 }
 
 /**
- * Takes tls passthrough configuration (may be empty) and reconfigures a given TLS server so that all
- * client hellos are parsed, matching requests are passed to the given passthrough listener (without
- * continuing setup) and client hello metadata is attached to all sockets.
+ * Takes tls passthrough configuration (may be empty) and builds an analyzer which parses the client
+ * hello of each TLS socket, attaching its metadata to the socket, and passes matching sockets to the
+ * given passthrough listener. Resolves true if the socket was passed through (so TLS setup should not
+ * continue).
  */
-function analyzeAndMaybePassThroughTls(
-    server: tls.Server,
+function buildTlsAnalyzer(
     passthroughList: Required<MockttpHttpsOptions>['tlsPassthrough'] | undefined,
     interceptOnlyList: Required<MockttpHttpsOptions>['tlsInterceptOnly'] | undefined,
     passthroughListener: (socket: net.Socket, hostname: string, port?: number) => void
@@ -523,9 +587,7 @@ function analyzeAndMaybePassThroughTls(
     const passThroughPatterns = passthroughList?.map(({ hostname }) => new URLPattern(`https://${hostname}`)) ?? [];
     const interceptOnlyPatterns = interceptOnlyList?.map(({ hostname }) => new URLPattern(`https://${hostname}`));
 
-    const tlsConnectionListener = server.listeners('connection')[0] as (socket: net.Socket) => {};
-    server.removeListener('connection', tlsConnectionListener);
-    server.on('connection', async (socket: net.Socket) => {
+    return async (socket: net.Socket): Promise<boolean> => {
         try {
             const helloData = await readTlsClientHello(socket);
 
@@ -551,10 +613,10 @@ function analyzeAndMaybePassThroughTls(
 
             if (shouldPassThrough(upstreamDestination?.hostname, passThroughPatterns, interceptOnlyPatterns)) {
                 passthroughListener(socket, upstreamDestination.hostname, upstreamDestination.port);
-                return; // Do not continue with TLS
+                return true; // Do not continue with TLS
             } else if (shouldPassThrough(sniHostname, passThroughPatterns, interceptOnlyPatterns)) {
                 passthroughListener(socket, sniHostname!); // Can't guess the port - not included in SNI
-                return; // Do not continue with TLS
+                return true; // Do not continue with TLS
             }
         } catch (e) {
             if (!(e instanceof NonTlsError)) { // Don't even warn for non-TLS traffic
@@ -565,6 +627,6 @@ function analyzeAndMaybePassThroughTls(
         }
 
         // Didn't match a passthrough hostname - continue with TLS setup
-        tlsConnectionListener.call(server, socket);
-    });
+        return false;
+    };
 }

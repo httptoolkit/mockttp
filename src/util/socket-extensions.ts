@@ -18,6 +18,7 @@ export const SocketMetadata = Symbol('socket-metadata');
 export const Expects100Continue = Symbol('expects-100-continue');
 export const UpstreamConnectionAgents = Symbol('upstream-connection-agents');
 export const TlsClientHello = Symbol('tls-client-hello');
+export const ListenerTlsServer = Symbol('listener-tls-server');
 
 /**
  * The set of upstream agents dedicated to a single downstream connection (or
@@ -91,6 +92,12 @@ declare module 'net' {
 
         // Upstream agents for this connection (a non-H2 request's socket). See UpstreamConnectionAgentMap.
         [UpstreamConnectionAgents]?: UpstreamConnectionAgentMap;
+
+        /**
+         * The custom TLS server for connections on an extra port, using a custom CA config.
+         * If unset, the main TLS configuration is used.
+         */
+        [ListenerTlsServer]?: tls.Server;
     }
 }
 

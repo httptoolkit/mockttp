@@ -41,11 +41,13 @@ import {
     AbstractMockttp,
     MockttpOptions,
     MockttpHttpsOptions,
-    PortRange
+    PortRange,
+    AddPortOptions
 } from "../mockttp";
+import { validateCAOptions } from "../util/certificates";
 import { RequestRule, RequestRuleData } from "../rules/requests/request-rule";
 import { ServerMockedEndpoint } from "./mocked-endpoint";
-import { createComboServer } from "./http-combo-server";
+import { ComboServer, createComboServer } from "./http-combo-server";
 import { filter } from "../util/promise";
 
 import {
@@ -88,6 +90,20 @@ import { SocksServerOptions } from "./socks-server";
 
 const serverPortCheckMutex = new Mutex();
 
+const isPortNumber = (port: unknown): port is number =>
+    typeof port === 'number' && Number.isInteger(port) && port >= 0 && port <= 65535;
+
+// Options may come from remote clients, so we check them at runtime too:
+function validateAddPortOptions({ port, https }: AddPortOptions) {
+    if (port !== undefined && !isPortNumber(port) && !(
+        _.isPlainObject(port) && isPortNumber(port.startPort) && isPortNumber(port.endPort)
+    )) {
+        throw new Error('Invalid port: must be a port number or a { startPort, endPort } range');
+    }
+
+    if (https !== undefined) validateCAOptions(https);
+}
+
 /**
  * A in-process Mockttp implementation. This starts servers on the local machine in the
  * current process, and exposes methods to directly manage them.
@@ -108,7 +124,10 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     private keyLogStream: fs.WriteStream | undefined;
 
     private app: connect.Server;
-    private server: DestroyableServer<net.Server> | undefined;
+    private server: ComboServer | undefined;
+
+    // Set only while running: listeners from addPort(), which hand all sockets to the main server
+    private extraServers: Set<DestroyableServer<net.Server>> | undefined;
 
     private eventEmitter: EventEmitter;
 
@@ -165,18 +184,6 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             rawPassthroughListener: this.passthroughSocket.bind(this, 'raw')
         });
 
-        // We use a mutex here to avoid contention on ports with parallel setup
-        await serverPortCheckMutex.runExclusive(async () => {
-            const port = typeof portParam === 'number'
-                ? portParam
-                : await getPort({
-                    port: portNumbers(portParam.startPort, portParam.endPort)
-                });
-
-            if (this.debug) console.log(`Starting mock server on port ${port}`);
-            this.server!.listen(port);
-        });
-
         // Handle & report client request errors
         this.server!.on('clientError', this.handleInvalidHttp1Request.bind(this));
         this.server!.on('sessionError', this.handleInvalidHttp2Request.bind(this));
@@ -190,30 +197,92 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
 
         this.server!.on('upgrade', this.handleWebSocket.bind(this));
 
-        return new Promise<void>((resolve, reject) => {
-            this.server!.on('listening', resolve);
-            this.server!.on('error', (e: any) => {
-                // Although we try to pick a free port, we may have race conditions, if something else
-                // takes the same port at the same time. If you haven't explicitly picked a port, and
-                // we do have a collision, simply try again.
-                if (e.code === 'EADDRINUSE' && typeof portParam !== 'number') {
-                    if (this.debug) console.log('Address in use, retrying...');
+        await this.listen(this.server, portParam);
+        this.extraServers = new Set();
+    }
 
-                    // Destroy just in case there is something that needs cleanup here. Catch because most
-                    // of the time this will error with 'Server is not running'.
-                    this.server!.destroy().catch(() => {});
-                    resolve(this.start());
-                } else {
-                    reject(e);
-                }
-            });
+    async addPort(options: AddPortOptions = {}): Promise<number> {
+        const extraServers = this.extraServers;
+        const comboServer = this.server;
+        if (!extraServers || !comboServer) throw new Error('Cannot add a port when the server is not running');
+
+        validateAddPortOptions(options);
+
+        const listener = await comboServer.createListener(options.https);
+        const port = await this.listen(listener, options.port).catch(async (e) => {
+            await listener.destroy().catch(() => {});
+            throw e;
         });
+
+        if (this.extraServers !== extraServers) {
+            await listener.destroy();
+            throw new Error('Server stopped while adding a port');
+        }
+
+        extraServers.add(listener);
+        return port;
+    }
+
+    // Starts the server listening on the given port or range, or any free port if unset.
+    private async listen(
+        server: DestroyableServer<net.Server>,
+        portParam: number | PortRange | undefined
+    ): Promise<number> {
+        // We use a mutex here to avoid contention on ports with parallel setup
+        await serverPortCheckMutex.runExclusive(async () => {
+            while (true) {
+                const port = typeof portParam === 'number'
+                        ? portParam
+                    : portParam
+                        ? await getPort({ port: portNumbers(portParam.startPort, portParam.endPort) })
+                    : 0;
+
+                try {
+                    await new Promise<void>((resolve, reject) => {
+                        const onError = (e: Error) => {
+                            server.off('listening', onListening);
+                            reject(e);
+                        };
+                        const onListening = () => {
+                            server.off('error', onError);
+                            resolve();
+                        };
+                        server.once('error', onError);
+                        server.once('listening', onListening);
+                        server.listen(port);
+                    });
+                    return;
+                } catch (e) {
+                    // Although we try to pick a free port, something else may take the same port at
+                    // the same time. If you haven't explicitly picked a port, simply try again.
+                    if (isErrorLike(e) && e.code === 'EADDRINUSE' && typeof portParam !== 'number') {
+                        if (this.debug) console.log('Address in use, retrying...');
+                        continue;
+                    }
+                    throw e;
+                }
+            }
+        });
+
+        server.on('error', (e) => {
+            console.warn('Mock server error', e);
+        });
+
+        const { port } = server.address() as net.AddressInfo;
+        if (this.debug) console.log(`Mock server listening on port ${port}`);
+        return port;
     }
 
     async stop(): Promise<void> {
         if (this.debug) console.log(`Stopping server at ${this.url}`);
 
-        if (this.server) await this.server.destroy();
+        const extraServers = [...this.extraServers ?? []];
+        this.extraServers = undefined;
+
+        await Promise.all([
+            this.server?.destroy(),
+            ...extraServers.map(server => server.destroy())
+        ]);
 
         if (this.keyLogStream) {
             const keyLogStream = this.keyLogStream;
@@ -666,7 +735,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             return preprocessRequest(req, {
                 type,
                 maxBodySize: this.maxBodySize,
-                serverPort: this.port,
+                serverPort: req.socket.localPort ?? this.port,
                 onBodyData: emitter.listenerCount('request-body-data') > 0
                     ? this.announceBodyDataAsync.bind(this, emitter, 'request')
                     : undefined

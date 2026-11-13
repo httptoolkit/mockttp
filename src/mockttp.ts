@@ -33,6 +33,21 @@ import type { SocksServerOptions } from "./server/socks-server";
 
 export type PortRange = { startPort: number, endPort: number };
 
+export interface AddPortOptions {
+    /**
+     * A fixed port, or a { startPort, endPort } range to pick from. Any free port
+     * is used if this is not set.
+     */
+    port?: number | PortRange;
+
+    /**
+     * The CA used to sign TLS certificates on this port, as either a { key, cert }
+     * object containing PEM data, or a { keyPath, certPath } object referencing files
+     * on the server's machine. Defaults to the main server's CA.
+     */
+    https?: CAOptions;
+}
+
 /**
  * A mockttp instance allows you to start and stop mock servers and control their behaviour.
  *
@@ -77,6 +92,23 @@ export interface Mockttp {
      * @category Setup
      */
     stop(): Promise<void>;
+
+    /**
+     * Open an additional listening port on a running server, returning the port number.
+     *
+     * The new port shares rules, events and all other configuration with the main
+     * port. Optionally, it can sign intercepted TLS with a different CA, by passing
+     * a { key, cert } or { keyPath, certPath } object as the `https` option. All
+     * other HTTPS settings are inherited from the main server's configuration.
+     *
+     * As with `start()`, the port can be fixed, chosen from a range, or (by default)
+     * left for the server to pick. Additional ports are closed when the server stops.
+     *
+     * This will reject if the server is not running.
+     *
+     * @category Setup
+     */
+    addPort(options?: AddPortOptions): Promise<number>;
 
     /**
      * Enable extra debug output so you can understand exactly what the server is doing.
