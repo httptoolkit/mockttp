@@ -322,7 +322,7 @@ export type ExtendedRawRequest = (http.IncomingMessage | http2.Http2ServerReques
  */
 export function preprocessRequest(req: ExtendedRawRequest, options: {
     type: 'request' | 'websocket',
-    serverPort: number,
+    serverPort: number | undefined,
     maxBodySize: number,
     onBodyData?: (id: string, timestamp: number, content: Uint8Array, isEnded: boolean) => void
 }): OngoingRequest | null {
@@ -358,7 +358,7 @@ export function preprocessRequest(req: ExtendedRawRequest, options: {
                 req.socket[TlsMetadata]?.sniHostname ??
                 req.socket[LastTunnelAddress] // We use the IP iff we have no hostname available at all
             ))
-            ?? `localhost:${options.serverPort}` // If you specify literally nothing, it's a direct request
+            ?? (options.serverPort === undefined ? 'localhost' : `localhost:${options.serverPort}`) // If you specify literally nothing, it's a direct request
         );
 
         // Actual destination always follows the tunnel - even if it's an IP

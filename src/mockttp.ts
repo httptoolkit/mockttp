@@ -900,6 +900,15 @@ export type MockttpHttpsOptions = CAOptions & {
     keyLogFile?: string;
 };
 
+export interface LocalMockttpOptions extends MockttpOptions {
+    /**
+     * Listen on this absolute Unix domain socket path instead of a TCP port.
+     * Node-only. Call start() without a port. Use the socket path to connect;
+     * the TCP-specific port and url properties are unavailable in this mode.
+     */
+    unixSocketPath?: string;
+}
+
 export interface MockttpOptions {
     /**
      * Should the server automatically respond to OPTIONS requests with a permissive

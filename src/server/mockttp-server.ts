@@ -1,5 +1,6 @@
 import { Buffer } from 'buffer';
 import * as fs from 'fs';
+import * as path from 'path';
 import * as net from "net";
 import * as tls from "tls";
 import * as http from "http";
@@ -39,7 +40,7 @@ import { DestroyableServer } from "destroyable-server";
 import {
     Mockttp,
     AbstractMockttp,
-    MockttpOptions,
+    LocalMockttpOptions,
     MockttpHttpsOptions,
     PortRange
 } from "../mockttp";
@@ -113,11 +114,17 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     private eventEmitter: EventEmitter;
 
     private readonly initialDebugSetting: boolean;
+    private readonly unixSocketPath: string | undefined;
 
-    constructor(options: MockttpOptions = {}) {
+    constructor(options: LocalMockttpOptions = {}) {
         super(options);
 
         this.initialDebugSetting = this.debug;
+        this.unixSocketPath = options.unixSocketPath;
+        if (this.unixSocketPath !== undefined &&
+            (process.platform === 'win32' || !path.isAbsolute(this.unixSocketPath))) {
+            throw new Error('unixSocketPath requires an absolute Unix domain socket path');
+        }
 
         this.httpsOptions = options.https;
         this.isHttp2Enabled = options.http2 ?? 'fallback';
@@ -143,7 +150,10 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         this.app.use(this.handleRequest.bind(this));
     }
 
-    async start(portParam: number | PortRange = { startPort: 8000, endPort: 65535 }): Promise<void> {
+    async start(portParam?: number | PortRange): Promise<void> {
+        if (this.unixSocketPath !== undefined && portParam !== undefined) {
+            throw new Error('A TCP port cannot be specified with unixSocketPath');
+        }
         if (this.keyLogFilePath) {
             this.keyLogStream = fs.createWriteStream(this.keyLogFilePath, { flags: 'a' });
             this.keyLogStream.on('error', (err) => {
@@ -167,10 +177,15 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
 
         // We use a mutex here to avoid contention on ports with parallel setup
         await serverPortCheckMutex.runExclusive(async () => {
+            if (this.unixSocketPath !== undefined) {
+                if (this.debug) console.log(`Starting mock server on ${this.unixSocketPath}`);
+                this.server!.listen(this.unixSocketPath);
+                return;
+            }
             const port = typeof portParam === 'number'
                 ? portParam
                 : await getPort({
-                    port: portNumbers(portParam.startPort, portParam.endPort)
+                    port: portNumbers(portParam?.startPort ?? 8000, portParam?.endPort ?? 65535)
                 });
 
             if (this.debug) console.log(`Starting mock server on port ${port}`);
@@ -196,7 +211,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
                 // Although we try to pick a free port, we may have race conditions, if something else
                 // takes the same port at the same time. If you haven't explicitly picked a port, and
                 // we do have a collision, simply try again.
-                if (e.code === 'EADDRINUSE' && typeof portParam !== 'number') {
+                if (e.code === 'EADDRINUSE' && this.unixSocketPath === undefined && typeof portParam !== 'number') {
                     if (this.debug) console.log('Address in use, retrying...');
 
                     // Destroy just in case there is something that needs cleanup here. Catch because most
@@ -211,7 +226,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     }
 
     async stop(): Promise<void> {
-        if (this.debug) console.log(`Stopping server at ${this.url}`);
+        if (this.debug) console.log(`Stopping server at ${this.unixSocketPath ?? this.url}`);
 
         if (this.server) await this.server.destroy();
 
@@ -252,7 +267,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     private get address() {
         if (!this.server) throw new Error('Cannot get address before server is started');
 
-        return (this.server.address() as net.AddressInfo)
+        return this.server.address();
     }
 
     get url(): string {
@@ -268,7 +283,12 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
     get port(): number {
         if (!this.server) throw new Error('Cannot get port before server is started');
 
-        return this.address.port;
+        const address = this.address;
+        if (typeof address === 'string') {
+            throw new Error('A Mockttp server listening on a Unix socket has no TCP port');
+        }
+        if (!address) throw new Error('Cannot get port before server is listening');
+        return address.port;
     }
 
     private addToRuleSets<R extends RequestRule | WebSocketRule>(
@@ -666,7 +686,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             return preprocessRequest(req, {
                 type,
                 maxBodySize: this.maxBodySize,
-                serverPort: this.port,
+                serverPort: this.unixSocketPath === undefined ? this.port : undefined,
                 onBodyData: emitter.listenerCount('request-body-data') > 0
                     ? this.announceBodyDataAsync.bind(this, emitter, 'request')
                     : undefined
