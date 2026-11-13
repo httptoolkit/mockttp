@@ -14,7 +14,7 @@ import { SchemaIntrospector } from './schema-introspection';
 import type { RequestRuleData } from "../rules/requests/request-rule";
 import type { WebSocketRuleData } from '../rules/websockets/websocket-rule';
 
-import { SubscribableEvent } from '../mockttp';
+import { SubscribableEvent, AddPortOptions } from '../mockttp';
 import { MockedEndpointClient } from "./mocked-endpoint-client";
 import { AdminClient } from './admin-client';
 import { serializeRuleData } from '../rules/rule-serialization';
@@ -92,11 +92,11 @@ export class MockttpAdminRequestBuilder {
         this.messageBodyDecoding = options.messageBodyDecoding;
     }
 
-    buildEnableExtraHttpsQuery(name: string): AdminQuery<{ enableExtraHttps: number }, number> {
+    buildAddPortQuery(options: AddPortOptions): AdminQuery<{ addPort: number }, number> {
         return {
-            query: gql`mutation EnableExtraHttps($name: String!) { enableExtraHttps(name: $name) }`,
-            variables: { name },
-            transformResponse: response => response.enableExtraHttps
+            query: gql`mutation AddPort($options: Raw) { addPort(options: $options) }`,
+            variables: { options },
+            transformResponse: response => response.addPort
         };
     }
 

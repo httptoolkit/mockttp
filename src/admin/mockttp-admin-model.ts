@@ -27,6 +27,7 @@ import {
 } from "../rules/rule-deserialization";
 import { decodeBodyBuffer } from "../util/request-utils";
 import { SubscribableEvent } from "../main";
+import type { AddPortOptions } from "../mockttp";
 
 const graphqlSubscriptionPairs = Object.entries({
     'requestInitiated': 'request-initiated',
@@ -156,7 +157,9 @@ export function buildAdminServerModel(
         },
 
         Mutation: {
-            enableExtraHttps: async (__: unknown, { name }: { name: string }) => mockServer.enableExtraHttps(name),
+            addPort: async (__: unknown, { options }: { options?: AddPortOptions | null }) => {
+                return mockServer.addPort(options ?? {});
+            },
             addRule: async (__: any, { input }: { input: Serialized<RequestRuleData> }) => {
                 return mockServer.addRequestRule(deserializeRuleData(input, stream, ruleDeserializationOptions));
             },

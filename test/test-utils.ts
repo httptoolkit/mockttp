@@ -235,7 +235,7 @@ export async function openRawTlsSocket(
 }
 
 export async function openSocksSocket(
-    server: Mockttp,
+    server: { port: number },
     targetHost: string,
     targetPort: number,
     options: Omit<SocksProxy, 'port'> = { type: 5 }

@@ -33,6 +33,21 @@ import type { SocksServerOptions } from "./server/socks-server";
 
 export type PortRange = { startPort: number, endPort: number };
 
+export interface AddPortOptions {
+    /**
+     * A fixed port, or a { startPort, endPort } range to pick from. Any free port
+     * is used if this is not set.
+     */
+    port?: number | PortRange;
+
+    /**
+     * The CA used to sign TLS certificates on this port, as either a { key, cert }
+     * object containing PEM data, or a { keyPath, certPath } object referencing files
+     * on the server's machine. Defaults to the main server's CA.
+     */
+    https?: CAOptions;
+}
+
 /**
  * A mockttp instance allows you to start and stop mock servers and control their behaviour.
  *
@@ -79,11 +94,21 @@ export interface Mockttp {
     stop(): Promise<void>;
 
     /**
-     * Enable a named HTTPS configuration on an extra port.
+     * Open an additional listening port on a running server, returning the port number.
+     *
+     * The new port shares rules, events and all other configuration with the main
+     * port. Optionally, it can sign intercepted TLS with a different CA, by passing
+     * a { key, cert } or { keyPath, certPath } object as the `https` option. All
+     * other HTTPS settings are inherited from the main server's configuration.
+     *
+     * As with `start()`, the port can be fixed, chosen from a range, or (by default)
+     * left for the server to pick. Additional ports are closed when the server stops.
+     *
+     * This will reject if the server is not running.
      *
      * @category Setup
      */
-    enableExtraHttps(name: string): Promise<number>;
+    addPort(options?: AddPortOptions): Promise<number>;
 
     /**
      * Enable extra debug output so you can understand exactly what the server is doing.
@@ -126,13 +151,6 @@ export interface Mockttp {
      * @category Metadata
      */
     port: number;
-
-    /**
-     * Names of the extra HTTPS configurations available to enable.
-     *
-     * @category Metadata
-     */
-    extraHttpsNames: string[];
 
     /**
      * The environment variables typically needed to use this server as a proxy, in a format you
@@ -937,9 +955,6 @@ export interface MockttpOptions {
      * certPath } object containing the path to files containing that content.
      */
     https?: MockttpHttpsOptions;
-
-    /** Named HTTPS configurations, opened only when enableExtraHttps is called. */
-    extraHttps?: { [name: string]: MockttpHttpsOptions };
 
     /**
      * Should HTTP/2 be enabled? Can be true, false, or 'fallback'. If true,

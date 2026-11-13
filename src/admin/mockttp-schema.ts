@@ -8,7 +8,7 @@ export const MockttpSchema = gql`
     }
 
     extend type Mutation {
-        enableExtraHttps(name: String!): Int!
+        addPort(options: Raw): Int!
         addRule(input: MockRule!): MockedEndpoint!
         addRules(input: [MockRule!]!): [MockedEndpoint!]!
         setRules(input: [MockRule!]!): [MockedEndpoint!]!

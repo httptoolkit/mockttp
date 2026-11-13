@@ -1,7 +1,7 @@
 import _ from 'lodash';
 
 import { MockedEndpoint } from "../types";
-import { Mockttp, AbstractMockttp, MockttpOptions, PortRange, SubscribableEvent } from "../mockttp";
+import { Mockttp, AbstractMockttp, MockttpOptions, PortRange, SubscribableEvent, AddPortOptions } from "../mockttp";
 
 import type { RequestRuleData } from "../rules/requests/request-rule";
 import type { WebSocketRuleData } from '../rules/websockets/websocket-rule';
@@ -119,12 +119,9 @@ export class MockttpClient extends AbstractMockttp implements Mockttp {
         return this.adminClient.stop();
     }
 
-    get extraHttpsNames(): string[] {
-        return this.adminClient.metadata.http.extraHttpsNames ?? [];
-    }
-
-    enableExtraHttps(name: string): Promise<number> {
-        return this.adminClient.sendQuery(this.requestBuilder!.buildEnableExtraHttpsQuery(name));
+    async addPort(options: AddPortOptions = {}): Promise<number> {
+        if (!this.requestBuilder) throw new Error('Cannot add a port before the server is started');
+        return this.adminClient.sendQuery(this.requestBuilder.buildAddPortQuery(options));
     }
 
     public addRequestRules = async (...rules: RequestRuleData[]): Promise<MockedEndpoint[]> => {
