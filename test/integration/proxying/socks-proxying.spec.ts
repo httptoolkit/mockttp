@@ -39,9 +39,12 @@ function h1RequestOverSocket(
         createConnection: () => parsedURL.protocol === 'https:'
             ? tls.connect({
                 socket,
-                servername: options.noSNI
-                    ? undefined
-                    : parsedURL.hostname
+                ...(options.noSNI
+                    // Without SNI we get Mockttp's default cert. Node verifies against 'host'
+                    // (not sent as SNI) and otherwise falls back to the socket's address.
+                    ? { host: 'localhost' }
+                    : { servername: parsedURL.hostname }
+                )
             })
             : socket
     });
