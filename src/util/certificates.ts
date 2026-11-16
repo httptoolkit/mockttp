@@ -333,12 +333,60 @@ function generateSerialNumber() {
     // valid (e.g. leading 000 is bad padding, and would be unparseable).
 }
 
+const CA_OPTION_TYPES: {
+    [K in keyof Required<CertDataOptions & CertPathOptions>]: 'string' | 'number' | 'boolean'
+} = {
+    key: 'string',
+    cert: 'string',
+    keyPath: 'string',
+    certPath: 'string',
+    keyLength: 'number',
+    countryName: 'string',
+    localityName: 'string',
+    organizationName: 'string',
+    certificateTransparency: 'boolean'
+};
+
+const isCAOptionField = (field: string): field is keyof typeof CA_OPTION_TYPES =>
+    Object.hasOwn(CA_OPTION_TYPES, field);
+const isCertDataOptions = (options: object): options is CertDataOptions =>
+    'key' in options && 'cert' in options;
+const isCertPathOptions = (options: object): options is CertPathOptions =>
+    'keyPath' in options && 'certPath' in options;
+const UNRECOGNIZED_CA_OPTIONS_ERROR =
+    'Unrecognized https options: you need to provide either a keyPath & certPath, or a key & cert.';
+
+/**
+ * Check untrusted CA options (e.g. from a remote client) contain only known CA fields
+ * of the right types. Errors reference field names only, never values.
+ */
+export function validateCAOptions(options: unknown): asserts options is CAOptions {
+    if (typeof options !== 'object' || options === null) {
+        throw new Error('Invalid https options: must be an object');
+    }
+
+    for (const [field, value] of Object.entries(options)) {
+        if (!isCAOptionField(field)) {
+            throw new Error(`Unsupported https option: ${field}`);
+        }
+
+        const expectedType = CA_OPTION_TYPES[field];
+        if (value !== undefined && typeof value !== expectedType) {
+            throw new Error(`Invalid https option: ${field} must be a ${expectedType}`);
+        }
+    }
+
+    if (!isCertDataOptions(options) && !isCertPathOptions(options)) {
+        throw new Error(UNRECOGNIZED_CA_OPTIONS_ERROR);
+    }
+}
+
 export async function getCA(options: CAOptions): Promise<CA> {
     let certOptions: CertDataOptions;
-    if ('key' in options && 'cert' in options) {
+    if (isCertDataOptions(options)) {
         certOptions = options;
     }
-    else if ('keyPath' in options && 'certPath' in options) {
+    else if (isCertPathOptions(options)) {
         certOptions = await Promise.all([
             fs.readFile(options.keyPath, 'utf8'),
             fs.readFile(options.certPath, 'utf8')
@@ -349,7 +397,7 @@ export async function getCA(options: CAOptions): Promise<CA> {
         }));
     }
     else {
-        throw new Error('Unrecognized https options: you need to provide either a keyPath & certPath, or a key & cert.')
+        throw new Error(UNRECOGNIZED_CA_OPTIONS_ERROR);
     }
 
     const caKeyPem = certOptions.key.toString();
