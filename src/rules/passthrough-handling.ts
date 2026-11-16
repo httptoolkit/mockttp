@@ -1,7 +1,6 @@
 import { Buffer } from 'buffer';
 import * as fs from 'fs/promises';
 import * as tls from 'tls';
-import * as url from 'url';
 import type * as net from 'net';
 
 import _ from 'lodash';
@@ -19,7 +18,7 @@ import { CachedDns, dnsLookup, DnsLookupFunction } from '../util/dns';
 import { isMockttpBody, encodeBodyBuffer } from '../util/request-utils';
 import { areFFDHECurvesSupported } from '../util/openssl-compat';
 import { findRawHeaderIndex, getHeaderValue } from '../util/header-utils';
-import { getDefaultPort } from '../util/url';
+import { buildAbsoluteUrl, getDefaultPort, parseRequestUrl } from '../util/url';
 import { TlsMetadata, TlsClientHello } from '../util/socket-extensions';
 import { buildTlsImpersonationConfig } from '../util/tls-impersonation';
 import type { Connection } from './http-agents';
@@ -328,10 +327,10 @@ export function applyDestinationTransforms(
         isH2Downstream: boolean,
         rawHeaders: RawHeaders,
         port: string | null
-        protocol: string | null,
+        protocol: string,
         hostname: string,
-        pathname: string | null
-        query: string | null
+        pathname: string
+        query: string
     },
 ) {
     const {
@@ -343,7 +342,7 @@ export function applyDestinationTransforms(
     } = transform;
 
     if (setProtocol) {
-        const wasDefaultPort = port === null || getDefaultPort(protocol || 'http') === parseInt(port, 10);
+        const wasDefaultPort = port === null || getDefaultPort(protocol) === parseInt(port, 10);
         protocol = setProtocol + ':';
 
         // If we were on the default port, update that accordingly:
@@ -397,7 +396,11 @@ export function applyDestinationTransforms(
     }
 
     return {
-        reqUrl: new URL(`${protocol}//${hostname}${(port ? `:${port}` : '')}${pathname || '/'}${query || ''}`).toString(),
+        reqUrl: buildAbsoluteUrl(
+            protocol,
+            `${hostname}${(port ? `:${port}` : '')}`,
+            `${pathname || '/'}${query || ''}`
+        ),
         protocol,
         hostname,
         port,
@@ -420,7 +423,7 @@ export function getHostAfterModification(
         originalHeaders,
         replacementHeaders,
         'host',
-        url.parse(reqUrl).host!
+        parseRequestUrl(reqUrl).host
     );
 }
 
@@ -443,20 +446,20 @@ export function getH2HeadersAfterModification(
     originalHeaders: Headers,
     replacementHeaders: Headers | undefined
 ): { [K in typeof MODIFIABLE_PSEUDOHEADERS[number]]: string } {
-    const parsedUrl = url.parse(reqUrl);
+    const parsedUrl = parseRequestUrl(reqUrl);
 
     return {
         ':scheme': deriveUrlLinkedHeader(
             originalHeaders,
             replacementHeaders,
             ':scheme',
-            parsedUrl.protocol!.slice(0, -1)
+            parsedUrl.protocol.slice(0, -1)
         ),
         ':authority': deriveUrlLinkedHeader(
             originalHeaders,
             replacementHeaders,
             ':authority',
-            parsedUrl.host!
+            parsedUrl.host
         )
     };
 }

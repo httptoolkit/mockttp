@@ -1,4 +1,3 @@
-import * as url from 'url';
 import { MockedEndpoint, Headers } from "../../types";
 import type { WebSocketRuleData } from "./websocket-rule";
 

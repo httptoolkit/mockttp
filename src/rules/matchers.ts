@@ -1,5 +1,4 @@
 import { Buffer } from 'buffer';
-import * as url from 'url';
 
 import _ from 'lodash';
 import { oneLine } from 'common-tags';
@@ -12,7 +11,9 @@ import {
     getPathFromAbsoluteUrl,
     isRelativeUrl,
     getUrlWithoutProtocol,
-    normalizeUrl
+    getUrlSearch,
+    normalizeUrl,
+    parseQueryString
 } from '../util/url';
 import { waitForCompletedRequest } from '../util/request-utils';
 import { Serializable, ClientServerChannel } from "../serialization/serialization";
@@ -113,7 +114,7 @@ export class HostMatcher extends Serializable implements RequestMatcher {
     }
 
     matches(request: OngoingRequest) {
-        const parsedUrl = new url.URL(request.url);
+        const parsedUrl = new URL(request.url);
 
         if (
             (this.host.endsWith(':80') && request.protocol === 'http') ||
@@ -153,7 +154,7 @@ export class HostnameMatcher extends Serializable implements RequestMatcher {
     }
 
     matches(request: OngoingRequest) {
-        return new url.URL(request.url).hostname === this.hostname;
+        return new URL(request.url).hostname === this.hostname;
     }
 
     explain() {
@@ -172,7 +173,7 @@ export class PortMatcher extends Serializable implements RequestMatcher {
     }
 
     matches(request: OngoingRequest) {
-        const parsedUrl = new url.URL(request.url);
+        const parsedUrl = new URL(request.url);
 
         if (
             (this.port === '80' && request.protocol === 'http') ||
@@ -182,7 +183,7 @@ export class PortMatcher extends Serializable implements RequestMatcher {
             // so for those cases we have to match that separately:
             return parsedUrl.port === '';
         } else {
-            return new url.URL(request.url).port === this.port;
+            return new URL(request.url).port === this.port;
         }
     }
 
@@ -201,11 +202,11 @@ export class FlexiblePathMatcher extends Serializable implements RequestMatcher 
 
         if (!this.path) throw new Error('Invalid URL: URL to match must not be empty');
 
-        let { search, query } = url.parse(this.path, true);
+        const search = getUrlSearch(this.path);
         if (search) {
             throw new Error(oneLine`
                 Tried to match a path that contained a query (${search}).
-                To match query parameters, use .withQuery(${JSON.stringify(query)}) instead,
+                To match query parameters, use .withQuery(${JSON.stringify(parseQueryString(search))}) instead,
                 or .withExactQuery('${search}') to match this exact query string.
             `);
         }
@@ -323,7 +324,7 @@ export class ExactQueryMatcher extends Serializable implements RequestMatcher {
     }
 
     matches(request: OngoingRequest) {
-        const { search } = url.parse(request.url);
+        const search = getUrlSearch(request.url);
         return this.query === search || (!search && !this.query);
     }
 
@@ -349,7 +350,7 @@ export class QueryMatcher extends Serializable implements RequestMatcher {
     }
 
     matches(request: OngoingRequest) {
-        let { query } = url.parse(request.url, true);
+        const query = parseQueryString(getUrlSearch(request.url));
         return _.isMatch(query, this.queryObject);
     }
 

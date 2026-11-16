@@ -632,11 +632,14 @@ nodeOnly(() => {
 
             describe("to an HTTP/2-only target", () => {
 
+                let seenPaths: string[] = [];
+
                 const http2Server = makeDestroyable(http2.createSecureServer({
                     allowHTTP1: false,
                     key: fs.readFileSync('./test/fixtures/test-ca.key'),
                     cert: fs.readFileSync('./test/fixtures/test-ca.pem')
                 }, (req, res) => {
+                    seenPaths.push(req.headers[':path']!);
                     res.writeHead(200);
                     res.end("Real HTTP/2 response");
                 }));
@@ -652,7 +655,10 @@ nodeOnly(() => {
                     });
                 });
 
-                afterEach(() => http2Server.destroy());
+                afterEach(() => {
+                    seenPaths = [];
+                    return http2Server.destroy();
+                });
 
                 it("can pass through end-to-end HTTP/2", async function () {
                     await server.forGet(`https://localhost:${targetPort}/`)
@@ -686,6 +692,45 @@ nodeOnly(() => {
 
                     const responseBody = await getHttp2Body(proxiedRequest);
                     expect(responseBody.toString('utf8')).to.equal("Real HTTP/2 response");
+
+                    await cleanup(proxiedClient, client);
+                });
+
+                it("passes through request paths unmodified", async function () {
+                    const rawPath = '/a/../b/./c/%2e%2e/d\\e|f{g}?h=../i';
+
+                    await server.forAnyRequest()
+                        .thenPassThrough({ ignoreHostHttpsErrors: ['localhost'] });
+
+                    const seenRequest = getDeferred<CompletedRequest>();
+                    await server.on('request', (req) => seenRequest.resolve(req));
+
+                    const client = http2.connect(server.url);
+
+                    const req = client.request({
+                        ':method': 'CONNECT',
+                        ':authority': `localhost:${targetPort}`
+                    });
+
+                    const responseHeaders = await getHttp2Response(req);
+                    expect(responseHeaders[':status']).to.equal(200);
+
+                    const proxiedClient = http2.connect(`https://localhost:${targetPort}`, {
+                        createConnection: () => tls.connect({
+                            socket: req,
+                            ALPNProtocols: ['h2']
+                        })
+                    });
+
+                    const proxiedRequest = proxiedClient.request({
+                        ':path': rawPath
+                    });
+                    const proxiedResponse = await getHttp2Response(proxiedRequest);
+                    expect(proxiedResponse[':status']).to.equal(200);
+                    await getHttp2Body(proxiedRequest);
+
+                    expect(seenPaths).to.deep.equal([rawPath]);
+                    expect((await seenRequest).url).to.equal(`https://localhost:${targetPort}${rawPath}`);
 
                     await cleanup(proxiedClient, client);
                 });

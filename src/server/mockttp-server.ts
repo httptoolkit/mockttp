@@ -178,7 +178,14 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             passthroughUnknownProtocols: this.passthroughUnknownProtocols,
             keyLogStream: this.keyLogStream,
 
-            requestListener: this.app,
+            requestListener: (req, res) => {
+                try {
+                    this.app(req, res);
+                } catch (e) {
+                    // Make sure we handle any URL parsing failures from Connect itself
+                    this.handleUnprocessableRequest(e, req);
+                }
+            },
             tlsClientErrorListener: this.announceTlsErrorAsync.bind(this),
             tlsPassthroughListener: this.passthroughSocket.bind(this, 'tls'),
             rawPassthroughListener: this.passthroughSocket.bind(this, 'raw')
@@ -741,22 +748,28 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
                     : undefined
 
             })
-        } catch (e: any) {
-            const error: Error = Object.assign(e, {
-                code: e.code ?? 'PREPROCESSING_FAILED',
-                badRequest: req
-            });
-
-            const h2Session = req.httpVersionMajor > 1 &&
-                (req as any).stream?.session;
-
-            if (h2Session) {
-                this.handleInvalidHttp2Request(error, h2Session);
-            } else {
-                this.handleInvalidHttp1Request(error, req.socket)
-            }
-
+        } catch (e) {
+            this.handleUnprocessableRequest(e, req);
             return null; // Null -> preprocessing failed, error already handled here
+        }
+    }
+
+    private handleUnprocessableRequest(e: unknown, req: ExtendedRawRequest) {
+        const baseError = e instanceof Error ? e : new Error(String(e));
+        const error: Error = Object.assign(baseError, {
+            code: 'code' in baseError && typeof baseError.code === 'string'
+                ? baseError.code
+                : 'PREPROCESSING_FAILED',
+            badRequest: req
+        });
+
+        const h2Session = req.httpVersionMajor > 1 &&
+            (req as any).stream?.session;
+
+        if (h2Session) {
+            this.handleInvalidHttp2Request(error, h2Session);
+        } else {
+            this.handleInvalidHttp1Request(error, req.socket)
         }
     }
 

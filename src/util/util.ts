@@ -1,17 +1,5 @@
 import { Buffer } from 'buffer';
 
-export function nthIndexOf(input: string, matcher: string, n: number) {
-    let index = -1;
-
-    while (n > 0) {
-        n = n - 1;
-        index = input.indexOf(matcher, index + 1);
-        if (index === -1) break;
-    }
-
-    return index;
-}
-
 // Get the length of the given data in bytes, not characters.
 // If that's a buffer, the length is used raw, but if it's a string
 // it returns the length when encoded as UTF8.

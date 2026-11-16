@@ -1,6 +1,5 @@
 import { Buffer } from 'buffer';
 import { Writable } from 'stream';
-import * as url from 'url';
 import type * as dns from 'dns';
 import * as net from 'net';
 import * as tls from 'tls';
@@ -26,7 +25,7 @@ import {
 import { MaybePromise, ErrorLike, isErrorLike, asErrorLike, delay } from '@httptoolkit/util';
 
 import { AbortError } from '../../util/abort-error';
-import { isAbsoluteUrl, getEffectivePort } from '../../util/url';
+import { isAbsoluteUrl, getEffectivePort, parseRequestUrl } from '../../util/url';
 import {
     waitForCompletedRequest,
     buildBodyReader,
@@ -458,7 +457,7 @@ export class PassThroughStepImpl extends PassThroughStep {
 
         // Capture raw request data:
         let { method, url: reqUrl, rawHeaders, destination } = clientReq as OngoingRequest;
-        let { protocol, pathname, search: query } = url.parse(reqUrl);
+        let { protocol, pathname, search: query } = parseRequestUrl(reqUrl);
         const clientSocket = (clientReq as any).socket as net.Socket;
 
         // Resolve the downstream connection up front, in case it's lost later in async flows
@@ -654,9 +653,9 @@ export class PassThroughStepImpl extends PassThroughStep {
 
                 reqUrl = modifiedReq.url;
 
-                const parsedUrl = url.parse(reqUrl);
+                const parsedUrl = parseRequestUrl(reqUrl);
                 ({ protocol, port, pathname, search: query } = parsedUrl);
-                hostname = parsedUrl.hostname!;
+                hostname = parsedUrl.hostname;
                 hostAddress = hostname;
             }
 
@@ -981,7 +980,7 @@ export class PassThroughStepImpl extends PassThroughStep {
                         body: buildBodyReader(originalBody, serverHeaders)
                     }, {
                         id: clientReq.id,
-                        protocol: protocol?.replace(':', '') ?? '',
+                        protocol: protocol.replace(/:$/, ''),
                         method: method,
                         httpVersion: serverRes.httpVersion,
                         url: reqUrl,
@@ -1270,7 +1269,7 @@ export class PassThroughStepImpl extends PassThroughStep {
             if (options.emitEventCallback) {
                 options.emitEventCallback('passthrough-request-head', {
                     method,
-                    protocol: protocol!.replace(/:$/, ''),
+                    protocol: protocol.replace(/:$/, ''),
                     hostname,
                     port,
                     path: `${pathname || '/'}${query || ''}`,

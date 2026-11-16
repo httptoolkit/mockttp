@@ -1,4 +1,3 @@
-import * as url from 'url';
 import type * as net from 'net';
 import * as http from 'http';
 import * as https from 'https';
@@ -149,7 +148,7 @@ export async function getAgent({
         const existing = connection[UpstreamConnectionAgents]?.get(agentKey);
         if (existing) return existing as http.Agent;
 
-        const { href, protocol: proxyProtocol } = url.parse(proxySetting.proxyUrl);
+        const { href, protocol: proxyProtocol } = new URL(proxySetting.proxyUrl);
         const buildProxyAgent = ProxyAgentFactoryMap[proxyProtocol as keyof typeof ProxyAgentFactoryMap];
 
         // If you specify trusted CAs, we override the CAs used for this connection, i.e. the trusted
@@ -162,7 +161,7 @@ export async function getAgent({
 
         // We resolve the certs (the only async step) above, so building & attaching the agent
         // below is synchronous - no interleaving, no race with the connection's lifecycle.
-        const buildAgent = (): http.Agent => buildProxyAgent(href!, {
+        const buildAgent = (): http.Agent => buildProxyAgent(href, {
             keepAlive: true,
             ...(trustedCerts ? { ca: trustedCerts } : {})
         });

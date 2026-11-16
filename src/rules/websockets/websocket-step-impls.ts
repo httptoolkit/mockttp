@@ -1,6 +1,5 @@
 import { Buffer } from 'buffer';
 import * as net from 'net';
-import * as url from 'url';
 import * as http from 'http';
 import * as https from 'https';
 import { Duplex } from 'stream';
@@ -43,7 +42,7 @@ import {
     TimeoutStepImpl,
     WaitForRequestBodyStepImpl
 } from '../requests/request-step-impls';
-import { getDefaultPort, getEffectivePort } from '../../util/url';
+import { getDefaultPort, getEffectivePort, parseRequestUrl } from '../../util/url';
 import { resetOrDestroy } from '../../util/socket-util';
 import { isHttp2 } from '../../util/request-utils';
 import {
@@ -295,7 +294,7 @@ export class PassThroughWebSocketStepImpl extends PassThroughWebSocketStep {
         this.initializeWsServer();
 
         let reqUrl = req.url!;
-        let { protocol, pathname, search: query } = url.parse(reqUrl);
+        let { protocol, pathname, search: query } = parseRequestUrl(reqUrl);
         let rawHeaders = req.rawHeaders;
 
         // Actual IP address or hostname
@@ -338,7 +337,7 @@ export class PassThroughWebSocketStepImpl extends PassThroughWebSocketStep {
             hostname: hostAddress,
             port: port
                 ? parseInt(port, 10)
-                : getDefaultPort(protocol ?? 'http')
+                : getDefaultPort(protocol)
         };
 
         await this.connectUpstream(destination, reqUrl, reqMessage, rawHeaders, socket, head, options);
@@ -353,9 +352,9 @@ export class PassThroughWebSocketStepImpl extends PassThroughWebSocketStep {
         head: Buffer,
         options: RequestStepOptions
     ) {
-        const parsedUrl = url.parse(wsUrl);
+        const parsedUrl = parseRequestUrl(wsUrl);
 
-        const effectiveHostname = parsedUrl.hostname!; // N.b. not necessarily the same as destination
+        const effectiveHostname = parsedUrl.hostname; // N.b. not necessarily the same as destination
         const effectivePort = getEffectivePort(parsedUrl);
 
         const trustedCAs = await this.trustedCACertificates();
@@ -435,7 +434,7 @@ export class PassThroughWebSocketStepImpl extends PassThroughWebSocketStep {
             // so that the resulting event matches the req.url property elsewhere.
             const urlHost = getEffectiveHostname(effectiveHostname, req.socket, rawHeaders);
 
-            const wsProtocol = parsedUrl.protocol!.replace(/^http/, 'ws').replace(/:$/, '');
+            const wsProtocol = parsedUrl.protocol.replace(/^http/, 'ws').replace(/:$/, '');
 
             const subprotocols = findRawHeaders(rawHeaders, 'sec-websocket-protocol')
                 .flatMap(([_k, v]) => v.split(',').map(s => s.trim()).filter(s => !!s));
@@ -445,7 +444,7 @@ export class PassThroughWebSocketStepImpl extends PassThroughWebSocketStep {
                 protocol: wsProtocol,
                 hostname: urlHost,
                 port: effectivePort.toString(),
-                path: parsedUrl.path || '/',
+                path: parsedUrl.path,
                 rawHeaders,
                 subprotocols
             });

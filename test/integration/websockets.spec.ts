@@ -17,7 +17,8 @@ import {
     startDnsServer,
     DestroyableServer,
     makeDestroyable,
-    delay
+    delay,
+    sendRawRequest
 } from '../test-utils';
 import { getCA } from '../../src/util/certificates';
 import { pairFlatRawHeaders } from '../../src/util/header-utils';
@@ -177,6 +178,28 @@ nodeOnly(() => {
                 const response = await waitForMessageThenClose(ws);
 
                 expect(response.toString()).to.equal('test echo');
+            });
+
+            it("forwards the incoming request's path as-is", async () => {
+                await mockServer.forAnyWebSocket().thenPassThrough();
+
+                const rawPath = '/a/../b/./c/%2e%2e/d\\e|f{g}?h=../i';
+
+                const upstreamRequest = new Promise<http.IncomingMessage>((resolve) =>
+                    (wsServer as WebSocket.Server).once('connection', (_ws, req) => resolve(req))
+                );
+
+                const response = await sendRawRequest(mockServer,
+                    `GET ${rawPath} HTTP/1.1\r\n` +
+                    `Host: localhost:${wsPort}\r\n` +
+                    'Connection: Upgrade\r\n' +
+                    'Upgrade: websocket\r\n' +
+                    'Sec-WebSocket-Version: 13\r\n' +
+                    'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n'
+                );
+
+                expect(response).to.match(/^HTTP\/1\.1 101\b/);
+                expect((await upstreamRequest).url).to.equal(rawPath);
             });
 
             it("forwards the incoming requests's headers as-is", async () => {

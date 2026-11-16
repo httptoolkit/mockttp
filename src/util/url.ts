@@ -1,8 +1,5 @@
-import * as url from 'url';
-import _ from 'lodash';
-
-import { nthIndexOf } from './util';
 import { isIPv6Address } from './ip-utils';
+import { LruCache } from './lru-cache';
 import { Destination } from '../types';
 
 // Is this URL fully qualified?
@@ -21,23 +18,134 @@ export const getUrlWithoutProtocol = (url: string): string => {
     return url.split('://', 2).slice(-1).join('');
 }
 
+const getAuthorityStartIndex = (url: string) => url.indexOf('://') + 3;
+
+// The index where the request target (path & query) begins, or -1 if there's none at all.
+// Backslashes end the authority too, to match WHATWG URL parsing of the host.
+const getTargetStartIndex = (url: string) => {
+    const authorityStart = getAuthorityStartIndex(url);
+    const targetOffset = url.slice(authorityStart).search(/[/\\?#]/);
+    return targetOffset === -1
+        ? -1
+        : authorityStart + targetOffset;
+}
+
 export const getHostFromAbsoluteUrl = (url: string) => {
-    const hostIndex = nthIndexOf(url, '/', 2);
-    const pathIndex = nthIndexOf(url, '/', 3);
-    if (pathIndex !== -1) {
-        return url.slice(hostIndex + 1, pathIndex);
-    } else {
-        return url.slice(hostIndex + 1);
-    }
+    const targetIndex = getTargetStartIndex(url);
+    return url.slice(
+        getAuthorityStartIndex(url),
+        targetIndex === -1 ? undefined : targetIndex
+    );
 }
 
 export const getPathFromAbsoluteUrl = (url: string) => {
-    const pathIndex = nthIndexOf(url, '/', 3);
-    if (pathIndex !== -1) {
-        return url.slice(pathIndex);
-    } else {
-        return '/';
+    const targetIndex = getTargetStartIndex(url);
+    if (targetIndex === -1) return '/';
+
+    const target = url.slice(targetIndex);
+    return target.startsWith('/')
+        ? target
+        : '/' + target;
+}
+
+/**
+ * Splits a request target into its pathname and its search (the query including its
+ * leading '?', or an empty string if there's no query at all), without modifying either.
+ */
+const splitPathAndSearch = (path: string): { pathname: string, search: string } => {
+    const queryIndex = path.indexOf('?');
+    return queryIndex === -1
+        ? { pathname: path, search: '' }
+        : { pathname: path.slice(0, queryIndex), search: path.slice(queryIndex) };
+}
+
+const textEncoder = new TextEncoder();
+
+// Node refuses to send request paths containing these characters at all, so they're the
+// one thing we have to encode. Everything else is left exactly as it was received.
+const escapeUnsendableChars = (path: string) =>
+    path.replace(/[\u0000-\u0020]|[^\u0000-\u00ff]+/g, (chars) =>
+        Array.from(textEncoder.encode(chars))
+            .map((byte) => '%' + byte.toString(16).toUpperCase().padStart(2, '0'))
+            .join('')
+    );
+
+export interface RequestUrlParts {
+    protocol: string; // Including the trailing colon, e.g. 'https:'
+    host: string;
+    hostname: string; // IPv6 addresses are unbracketed
+    port: string; // Empty if not specified
+    path: string;
+    pathname: string;
+    search: string;
+}
+
+/**
+ * Parse an absolute URL into its components, normalizing the scheme & authority, but leaving the
+ * path & query as provided (encoding only characters that can't be sent at all) so that requests
+ * can be forwarded without modification.
+ */
+export const parseRequestUrl = (absoluteUrl: string): RequestUrlParts => {
+    const scheme = absoluteUrl.slice(0, absoluteUrl.indexOf('://'));
+    const rawHost = getHostFromAbsoluteUrl(absoluteUrl);
+    const parsedOrigin = new URL(`${scheme}://${rawHost}`);
+
+    // WHATWG parsing drops explicit default ports, but we want to keep what was specified
+    const port = parsedOrigin.port || rawHost.match(/:(\d+)$/)?.[1] || '';
+    const hostname = parsedOrigin.hostname;
+
+    const path = escapeUnsendableChars(getPathFromAbsoluteUrl(absoluteUrl));
+
+    return {
+        protocol: parsedOrigin.protocol,
+        host: port ? `${hostname}:${port}` : hostname,
+        hostname: hostname.startsWith('[')
+            ? hostname.slice(1, -1)
+            : hostname,
+        port,
+        path,
+        ...splitPathAndSearch(path)
+    };
+}
+
+/**
+ * Build an absolute URL, normalizing the protocol & host, but leaving the
+ * provided path & query exactly as-is.
+ */
+export const buildAbsoluteUrl = (protocol: string, host: string, path: string) => {
+    const scheme = protocol.replace(/:$/, '');
+    new URL(`${scheme}://${host}${path}`); // Throws if the URL as a whole is invalid
+
+    const parsedOrigin = new URL(`${scheme}://${host}`);
+    return `${parsedOrigin.protocol}//${parsedOrigin.host}${path}`;
+};
+
+/**
+ * Get the query string (including the leading '?') from any URL, ignoring any fragment.
+ * Returns an empty string if there is no query.
+ */
+export const getUrlSearch = (url: string): string => {
+    const hashIndex = url.indexOf('#');
+    return splitPathAndSearch(
+        hashIndex === -1 ? url : url.slice(0, hashIndex)
+    ).search;
+}
+
+export const parseQueryString = (search: string): { [key: string]: string | string[] } => {
+    const result: { [key: string]: string | string[] } = Object.create(null);
+
+    for (const [key, value] of new URLSearchParams(search)) {
+        const existingValue = result[key];
+        if (existingValue === undefined) {
+            result[key] = value;
+        } else if (Array.isArray(existingValue)) {
+            existingValue.push(value);
+        } else {
+            result[key] = [existingValue, value];
+        }
     }
+
+    return result;
 }
 
 export const getDefaultPort = (protocol: string) => {
@@ -110,70 +218,57 @@ export const normalizeHost = (protocol: string, host: string) => {
  * This accepts URLs in all three formats: relative, absolute, and protocolless-absolute,
  * and returns them in the same format but normalized.
  */
-export const normalizeUrl: (url: string) => string =
-    _.memoize(
-        (urlInput: string): string => {
-            let parsedUrl: Partial<url.UrlWithStringQuery> | undefined;
+// Normalized URLs are cached, but requested URLs are untrusted & unlimited, so the cache is bounded.
+const normalizedUrlCache = new LruCache<string, string>(1000);
 
-            let isProtocolless = false;
+export const normalizeUrl = (url: string): string => {
+    const cachedResult = normalizedUrlCache.get(url);
+    if (cachedResult !== undefined) return cachedResult;
 
-            try {
-                // Strip the query and anything following it
-                const queryIndex = urlInput.indexOf('?');
-                if (queryIndex !== -1) {
-                    urlInput = urlInput.slice(0, queryIndex);
-                }
+    const result = calculateNormalizedUrl(url);
+    normalizedUrlCache.set(url, result);
+    return result;
+};
 
-                if (isAbsoluteProtocollessUrl(urlInput)) {
-                    parsedUrl = url.parse('http://' + urlInput);
-                    isProtocolless = true;
-                } else {
-                    parsedUrl = url.parse(urlInput);
-                }
+const calculateNormalizedUrl = (urlInput: string): string => {
+    // Strip the query, fragment and anything following them
+    const queryOrHashIndex = urlInput.search(/[?#]/);
+    if (queryOrHashIndex !== -1) {
+        urlInput = urlInput.slice(0, queryOrHashIndex);
+    }
 
-                // Trim out lots of the bits we don't like:
-                delete parsedUrl.host;
-                delete parsedUrl.query;
-                delete parsedUrl.search;
-                delete parsedUrl.hash;
+    const isRelative = isRelativeUrl(urlInput);
+    const isProtocolless = isAbsoluteProtocollessUrl(urlInput);
 
-                if (parsedUrl.pathname) {
-                    parsedUrl.pathname = parsedUrl.pathname.replace(
-                        /\%[A-Fa-z0-9]{2}/g,
-                        (encoded) => encoded.toUpperCase()
-                    ).replace(
-                        /[^\u0000-\u007F]+/g,
-                        (unicodeChar) => encodeURIComponent(unicodeChar)
-                    );
-                }
+    let parsedUrl: URL;
+    try {
+        parsedUrl = new URL(
+            isRelative
+                ? 'http://placeholder' + urlInput
+            : isProtocolless
+                ? 'http://' + urlInput
+            : urlInput
+        );
+    } catch (e) {
+        console.log(`Failed to normalize URL ${urlInput}`);
+        console.log(e);
+        return urlInput;
+    }
 
-                if (parsedUrl.hostname?.endsWith('.')) {
-                    parsedUrl.hostname = parsedUrl.hostname.slice(0, -1);
-                }
+    const pathname = parsedUrl.pathname
+        // Beyond the WHATWG encode set, we also encode the chars that Node's
+        // legacy URL parser always encoded, for backward compat.
+        .replace(/[|^']/g, (char) =>
+            '%' + char.charCodeAt(0).toString(16).toUpperCase()
+        )
+        .replace(/\%[A-Fa-z0-9]{2}/g, (encoded) => encoded.toUpperCase());
 
-                if (
-                    (parsedUrl.protocol === 'https:' && parsedUrl.port === '443') ||
-                    (parsedUrl.protocol === 'http:' && parsedUrl.port === '80')
-                ) {
-                    delete parsedUrl.port;
-                }
-            } catch (e) {
-                console.log(`Failed to normalize URL ${urlInput}`);
-                console.log(e);
+    if (isRelative) return pathname;
 
-                if (!parsedUrl) return urlInput; // Totally unparseble: use as-is
-                // If we've successfully parsed it, we format what we managed
-                // and leave it at that:
-            }
+    const host = parsedUrl.hostname.replace(/\.$/, '') +
+        (parsedUrl.port ? `:${parsedUrl.port}` : '');
 
-            let normalizedUrl = url.format(parsedUrl);
-
-            // If the URL came in with no protocol, it should leave with
-            // no protocol (protocol added temporarily above to allow parsing)
-            if (isProtocolless) {
-                normalizedUrl = normalizedUrl.slice('http://'.length);
-            }
-
-            return normalizedUrl;
-        }
-    );
+    return isProtocolless
+        ? `${host}${pathname}`
+        : `${parsedUrl.protocol}//${host}${pathname}`;
+};

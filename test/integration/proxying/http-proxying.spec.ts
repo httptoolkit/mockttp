@@ -12,6 +12,7 @@ import {
     AbortedRequest,
     CompletedRequest,
     CompletedResponse,
+    MockedEndpoint,
     Request
 } from "../../..";
 import {
@@ -21,6 +22,7 @@ import {
     Deferred,
     delay,
     sendRawRequest,
+    openRawSocket,
     makeAbortableRequest,
     defaultNodeConnectionHeader
 } from "../../test-utils";
@@ -99,6 +101,158 @@ nodeOnly(() => {
                 expect(response).to.include(
                     "This domain is for use in illustrative examples in documents."
                 );
+            });
+
+            describe("given a request path that a URL parser would rewrite", () => {
+
+                const rawPath = '/a/../b/./c/%2e%2e/d\\e|f{g}^\'?h=../i&j=k|l';
+
+                let remoteEndpoint: MockedEndpoint;
+                let seenRequest: Deferred<CompletedRequest>;
+
+                beforeEach(async () => {
+                    remoteEndpoint = await remoteServer.forGet().thenReply(200, 'Remote response');
+                    await server.forAnyRequest().thenPassThrough();
+
+                    seenRequest = getDeferred<CompletedRequest>();
+                    await server.on('request', (req) => seenRequest.resolve(req));
+                });
+
+                async function expectRawPathPreserved(
+                    response: string,
+                    expectedHost = `localhost:${remoteServer.port}`
+                ) {
+                    expect(response).to.include('HTTP/1.1 200 OK');
+
+                    const remoteRequest = (await remoteEndpoint.getSeenRequests())[0];
+                    expect(remoteRequest.path).to.equal(rawPath);
+
+                    const proxiedRequest = await seenRequest;
+                    expect(proxiedRequest.path).to.equal(rawPath);
+                    expect(proxiedRequest.url).to.equal(`http://${expectedHost}${rawPath}`);
+                }
+
+                it("should pass through absolute-form request paths unmodified", async () => {
+                    await expectRawPathPreserved(await sendRawRequest(server,
+                        `GET ${remoteServer.url}${rawPath} HTTP/1.1\r\n` +
+                        `Host: localhost:${remoteServer.port}\r\n\r\n`
+                    ));
+                });
+
+                it("should pass through direct request paths unmodified", async () => {
+                    await expectRawPathPreserved(await sendRawRequest(server,
+                        `GET ${rawPath} HTTP/1.1\r\n` +
+                        `Host: localhost:${remoteServer.port}\r\n\r\n`
+                    ));
+                });
+
+                it("should pass through tunnelled request paths unmodified", async () => {
+                    const socket = await openRawSocket(server);
+                    socket.write(
+                        `CONNECT localhost:${remoteServer.port} HTTP/1.1\r\n` +
+                        `Host: localhost:${remoteServer.port}\r\n\r\n`
+                    );
+                    const connectResponse = await new Promise<Buffer>((resolve) => socket.once('data', resolve));
+                    expect(connectResponse.toString()).to.match(/^HTTP\/1\.1 200\b/);
+
+                    await expectRawPathPreserved(await sendRawRequest(socket,
+                        `GET ${rawPath} HTTP/1.1\r\n` +
+                        `Host: localhost:${remoteServer.port}\r\n\r\n`
+                    ));
+                });
+
+                it("should pass through unmodified paths after transforming the request", async () => {
+                    await server.reset();
+                    await server.on('request', (req) => seenRequest.resolve(req));
+                    await server.forAnyRequest().thenPassThrough({
+                        transformRequest: {
+                            replaceHost: { targetHost: `localhost:${remoteServer.port}` }
+                        }
+                    });
+
+                    await expectRawPathPreserved(await sendRawRequest(server,
+                        `GET ${rawPath} HTTP/1.1\r\n` +
+                        `Host: example.com:${remoteServer.port}\r\n\r\n`
+                    ), `example.com:${remoteServer.port}`);
+                });
+            });
+
+            describe("given requests with invalid or ambiguous targets", () => {
+
+                let remoteEndpoint: MockedEndpoint;
+
+                beforeEach(async () => {
+                    remoteEndpoint = await remoteServer.forAnyRequest().thenReply(200, 'Remote response');
+                    await server.forAnyRequest().thenPassThrough();
+                });
+
+                const expectRejected = async (rawRequest: string) => {
+                    const response = await sendRawRequest(server, rawRequest);
+                    expect(response).to.match(/^HTTP\/1\.1 400 Bad Request/);
+                    expect(await remoteEndpoint.getSeenRequests()).to.have.length(0);
+                };
+
+                it("should reject unparseable absolute URLs without failing", async () => {
+                    for (let badUrl of ['http://[/', 'http://', 'http:///x', 'http://example.com:99999999/']) {
+                        await expectRejected(`GET ${badUrl} HTTP/1.1\r\nHost: example.com\r\n\r\n`);
+                    }
+
+                    // The server is still up and handling requests correctly:
+                    const response = await sendRawRequest(server,
+                        `GET ${remoteServer.url}/ HTTP/1.1\r\nHost: localhost:${remoteServer.port}\r\n\r\n`
+                    );
+                    expect(response).to.include('HTTP/1.1 200 OK');
+                });
+
+                it("should send absolute URLs with userinfo to the URL's real host", async () => {
+                    // This is weird and clients shouldn't do it, but we want to preserve real traffic behaviour
+                    // wherever possible, so we just forward it as is.
+                    const unusedPort = await getPort();
+
+                    // The URL host here is 127.0.0.1:unusedPort - the remote server is just userinfo
+                    const response = await sendRawRequest(server,
+                        `GET http://localhost:${remoteServer.port}@127.0.0.1:${unusedPort}/ HTTP/1.1\r\n` +
+                        `Host: localhost:${remoteServer.port}\r\n\r\n`
+                    );
+
+                    expect(response).to.match(/^HTTP\/1\.1 502/);
+                    expect(await remoteEndpoint.getSeenRequests()).to.have.length(0);
+                });
+
+                it("should send requests with odd Host headers to the host shown in the URL", async () => {
+                    // This is weird and clients shouldn't do it, but we want to preserve real traffic behaviour
+                    // wherever possible, so we just forward it as is.
+                    const seenRequest = getDeferred<CompletedRequest>();
+                    await server.on('request', (req) => seenRequest.resolve(req));
+
+                    const oddHost = `example.invalid:1@localhost:${remoteServer.port}`;
+                    const response = await sendRawRequest(server,
+                        `GET /path HTTP/1.1\r\nHost: ${oddHost}\r\n\r\n`
+                    );
+                    expect(response).to.include('HTTP/1.1 200 OK');
+
+                    expect((await seenRequest).url).to.equal(`http://localhost:${remoteServer.port}/path`);
+
+                    const remoteRequest = (await remoteEndpoint.getSeenRequests())[0];
+                    expect(remoteRequest.headers['host']).to.equal(oddHost);
+                });
+
+                it("should pass through odd Host headers within tunnels unmodified", async () => {
+                    // This is weird and clients shouldn't do it, but we want to preserve real traffic behaviour
+                    // wherever possible, so we just forward it as is.
+                    const socket = await openRawSocket(server);
+                    socket.write(`CONNECT 127.0.0.1:${remoteServer.port} HTTP/1.1\r\n\r\n`);
+                    const connectResponse = await new Promise<Buffer>((resolve) => socket.once('data', resolve));
+                    expect(connectResponse.toString()).to.match(/^HTTP\/1\.1 200\b/);
+
+                    const response = await sendRawRequest(socket,
+                        'GET /path HTTP/1.1\r\nHost: user@example.com/x\r\n\r\n'
+                    );
+                    expect(response).to.include('HTTP/1.1 200 OK');
+
+                    const remoteRequest = (await remoteEndpoint.getSeenRequests())[0];
+                    expect(remoteRequest.headers['host']).to.equal('user@example.com/x');
+                });
             });
 
             it("should be able to pass through request headers", async () => {
@@ -397,6 +551,20 @@ nodeOnly(() => {
 
                 let response = await request.get(remoteServer.urlFor("/"));
                 expect(response).to.equal("/endpoint");
+            });
+
+            it("should percent-encode only unsendable characters when rewriting a request's URL", async () => {
+                const remoteEndpoint = await remoteServer.forGet().thenReply(200, 'Remote response');
+
+                await server.forGet(remoteServer.urlFor("/")).thenPassThrough({
+                    beforeRequest: () => ({ url: remoteServer.urlFor('/a b|c?d e') })
+                });
+
+                let response = await request.get(remoteServer.urlFor("/"));
+                expect(response).to.equal('Remote response');
+
+                const remoteRequest = (await remoteEndpoint.getSeenRequests())[0];
+                expect(remoteRequest.path).to.equal('/a%20b|c?d%20e');
             });
 
             it("should clearly fail when rewriting a request's URL to a relative path", async () => {

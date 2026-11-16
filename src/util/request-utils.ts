@@ -3,7 +3,6 @@ import * as stream from 'stream';
 import * as net from 'net';
 import { TLSSocket } from 'tls';
 import * as querystring from 'querystring';
-import * as url from 'url';
 import * as http from 'http';
 import * as http2 from 'http2';
 
@@ -50,11 +49,14 @@ import {
 } from './header-utils';
 import { isIP } from './ip-utils';
 import {
+    buildAbsoluteUrl,
     getDestination,
+    getEffectivePort,
     getHostFromAbsoluteUrl,
     getPathFromAbsoluteUrl,
     isAbsoluteUrl,
-    normalizeHost
+    normalizeHost,
+    parseRequestUrl
 } from './url';
 import {
     LastHopEncrypted,
@@ -336,7 +338,12 @@ export function preprocessRequest(req: ExtendedRawRequest, options: {
     if (!isAbsoluteUrl(req.url!)) {
         req.protocol = getHeaderValue(rawHeaders, ':scheme') ||
             (req.socket[LastHopEncrypted] ? 'https' : 'http');
-        req.path = req.url;
+        const path = req.url!;
+        if (!path.startsWith('/')) {
+            // Anything else could extend or replace the host when combined into a URL
+            throw new Error(`Invalid request path: ${path}`);
+        }
+        req.path = path;
 
         const tunnelDestination = req.socket[LastTunnelAddress]
             ? getDestination(req.protocol, req.socket[LastTunnelAddress])
@@ -368,16 +375,24 @@ export function preprocessRequest(req: ExtendedRawRequest, options: {
         // URL port should always match the real port - even if (e.g) the Host header is lying.
         urlDestination.port = req.destination.port;
 
-        const absoluteUrl = `${req.protocol}://${
-            normalizeHost(req.protocol, `${urlDestination.hostname}:${urlDestination.port}`)
-        }${req.path}`;
+        const urlHost = normalizeHost(req.protocol, `${urlDestination.hostname}:${urlDestination.port}`);
 
         let effectiveUrl: string;
         try {
-            effectiveUrl = new URL(absoluteUrl).toString();
+            effectiveUrl = buildAbsoluteUrl(req.protocol, urlHost, path);
         } catch (e: any) {
-            req.url = absoluteUrl;
+            req.url = `${req.protocol}://${urlHost}${path}`;
             throw e;
+        }
+
+        if (!tunnelDestination) {
+            // With no tunnel, the destination comes from the URL as parsed, so we always
+            // connect to the same host that rules see, however odd the Host header was.
+            const { hostname, port } = parseRequestUrl(effectiveUrl);
+            req.destination = {
+                hostname,
+                port: getEffectivePort({ protocol: req.protocol, port })
+            };
         }
 
         if (!getHeaderValue(rawHeaders, ':path')) {
@@ -393,12 +408,18 @@ export function preprocessRequest(req: ExtendedRawRequest, options: {
     } else {
         // We have an absolute request. This is effectively a combined tunnel + end-server request,
         // so we need to handle both of those, and hide the proxy-specific bits from later logic.
-        req.protocol = req.url!.split('://', 1)[0];
-        req.path = getPathFromAbsoluteUrl(req.url!);
-        req.destination = getDestination(
+        const parsedUrl = new URL(req.url!);
+        req.protocol = parsedUrl.protocol.slice(0, -1);
+        req.destination = getDestination( // We ignore LastTunnelAddress - this *is* a tunnel
             req.protocol,
-            getHostFromAbsoluteUrl(req.url!) // We ignore LastTunnelAddress - this *is* a tunnel
+            parsedUrl.port ? parsedUrl.host : parsedUrl.hostname
         );
+
+        const urlParts = parseRequestUrl(req.url!);
+        if (urlParts.hostname !== req.destination.hostname) {
+            throw new Error(`Ambiguous request URL: ${req.url}`);
+        }
+        req.path = urlParts.path;
 
         const proxyAuthHeader = getHeaderValue(rawHeaders, 'proxy-authorization');
         if (proxyAuthHeader) {
@@ -837,8 +858,11 @@ export function tryToParseHttpRequest(input: Buffer, socket: net.Socket): Partia
         } catch (e) {}
 
         try {
-            const parsedUrl = url.parse(rawUri);
-            req.path = parsedUrl.path ?? undefined;
+            const isAbsolute = isAbsoluteUrl(rawUri);
+            req.path = (isAbsolute
+                ? getPathFromAbsoluteUrl(rawUri)
+                : rawUri
+            ) || undefined;
 
             const hostHeader = _.find(req.headers, (_value, key) =>
                 key.toLowerCase() === 'host'
@@ -847,8 +871,10 @@ export function tryToParseHttpRequest(input: Buffer, socket: net.Socket): Partia
             if (!req.destination) {
                 if (hostHeader) {
                     req.destination = getDestination(req.protocol, hostHeader);
-                } else if (parsedUrl.hostname) {
-                    req.destination = getDestination(req.protocol, parsedUrl.hostname);
+                } else if (isAbsolute) {
+                    try {
+                        req.destination = getDestination(req.protocol, getHostFromAbsoluteUrl(rawUri));
+                    } catch (e) {}
                 }
             }
 
