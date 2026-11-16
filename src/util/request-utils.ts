@@ -101,6 +101,43 @@ export const writeHead = (
     }
 };
 
+/**
+ * Writes the head of a response with no body, and ends it. Over HTTP/2 the head then goes out as
+ * one HEADERS frame with END_STREAM (as gRPC requires for "Trailers-Only" responses), not headers
+ * and then a separate end. Repeated headers other than Set-Cookie, which Node checks only as it
+ * sends them, and HTTP/1 responses use writeHead() and end() as usual.
+ */
+export const writeHeadAndEnd = (
+    response: http.ServerResponse | http2.Http2ServerResponse,
+    status: number,
+    statusMessage?: string | undefined,
+    headers?: Headers | RawHeaders | undefined
+) => {
+    const objectHeaders: Headers = headers === undefined
+        ? {}
+        : Array.isArray(headers)
+            ? rawHeadersToObject(headers)
+            : headers;
+
+    const hasRepeatedHeaders = Object.entries(objectHeaders).some(([name, value]) =>
+        Array.isArray(value) && value.length > 1 && name.toLowerCase() !== 'set-cookie'
+    );
+
+    if (!isHttp2(response) || hasRepeatedHeaders) {
+        writeHead(response, status, statusMessage, headers);
+        response.end();
+        return;
+    }
+
+    // HTTP/2 has no status message, so it's dropped here as in writeHead.
+    const h2Response = response as http2.Http2ServerResponse;
+    h2Response.statusCode = status;
+    for (const [name, value] of Object.entries(objectHeaders)) {
+        if (value !== undefined) h2Response.setHeader(name, value);
+    }
+    h2Response.end();
+};
+
 export function isHttp2(
     message: | http.IncomingMessage
              | http.ServerResponse
@@ -622,10 +659,6 @@ export function trackResponse(
 
         writtenHeaders = getHeaderPairsFromArgument(headersArg);
 
-        if (isHttp2(trackedResponse)) {
-            writtenHeaders.unshift([':status', args[0].toString()]);
-        }
-
         // Headers might also have been set with setHeader before. They'll be combined, with headers
         // here taking precendence. We simulate this by pulling in all values from getHeaders() and
         // remembering any of those that we're not about to override.
@@ -639,11 +672,17 @@ export function trackResponse(
                 .forEach((key) => {
                     const value = storedHeaders[key];
                     if (Array.isArray(value)) {
-                        value.reverse().forEach(v => writtenHeaders?.unshift([key, v]));
+                        // Copied first: reversing in place would change the headers Node sends.
+                        [...value].reverse().forEach(v => writtenHeaders?.unshift([key, v]));
                     } else if (value !== undefined) {
                         writtenHeaders?.unshift([key, value]);
                     }
                 });
+        }
+
+        // Added last, so it comes first, before any headers set earlier:
+        if (isHttp2(trackedResponse)) {
+            writtenHeaders.unshift([':status', args[0].toString()]);
         }
 
         return originalWriteHeader.apply(this, args);
