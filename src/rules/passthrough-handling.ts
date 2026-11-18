@@ -239,7 +239,7 @@ export async function buildOverriddenBody(
     // for consistent handling later, and encode it to match the headers.
 
     let replacementBody: string | Uint8Array | Buffer | CompletedBody | undefined;
-    if (callbackResult?.json) {
+    if (callbackResult?.json !== undefined) {
         headers['content-type'] = 'application/json';
         replacementBody = JSON.stringify(callbackResult?.json);
     } else {
