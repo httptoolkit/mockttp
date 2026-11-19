@@ -465,9 +465,11 @@ export function getH2HeadersAfterModification(
 }
 
 // When modifying requests, we ensure you always have correct framing, as it's impossible
-// to send a request with framing that doesn't match the body.
+// to send a request with framing that doesn't match the body. The body length is undefined
+// if it can't be known (e.g. for a chunked body that's too large to buffer), in which case
+// the framing is left as it is.
 export function getRequestContentLengthAfterModification(
-    body: string | Uint8Array | Buffer,
+    bodyLength: number | undefined,
     originalHeaders: Headers | RawHeaders,
     replacementHeaders: Headers | RawHeaders | undefined,
     context: {
@@ -483,6 +485,7 @@ export function getRequestContentLengthAfterModification(
 
     // For HTTP/2, framing is optional/advisory so we can just skip this entirely.
     if (context.httpVersion !== 1) return undefined;
+    if (bodyLength === undefined) return undefined;
 
     const resultingHeaders = replacementHeaders || originalHeaders;
 
@@ -490,7 +493,7 @@ export function getRequestContentLengthAfterModification(
         return undefined; // No content-length header games needed
     }
 
-    const expectedLength = byteLength(body).toString();
+    const expectedLength = bodyLength.toString();
     const contentLengthHeader = getHeaderValue(resultingHeaders, 'content-length');
 
     if (contentLengthHeader === expectedLength) return undefined;

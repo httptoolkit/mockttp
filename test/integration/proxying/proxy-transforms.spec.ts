@@ -450,6 +450,42 @@ nodeOnly(() => {
                     expect(response.body).to.equal(JSON.stringify({ a: 1 }));
                 });
 
+                it("adds the content-length if replacing all headers without it", async () => {
+                    await server.forAnyRequest().thenPassThrough({
+                        transformRequest: {
+                            replaceHeaders: {
+                                'custom-header': 'replaced-value'
+                            }
+                        }
+                    });
+
+                    let response = await request.post(`${remoteServerHttpUrl}/abc`, {
+                        body: { a: 1 },
+                        json: true
+                    });
+
+                    expect(response.headers['content-length']).to.equal('7');
+                    expect(response.body).to.equal(JSON.stringify({ a: 1 }));
+                });
+
+                it("fixes an invalid content-length when updating headers", async () => {
+                    await server.forAnyRequest().thenPassThrough({
+                        transformRequest: {
+                            updateHeaders: {
+                                'content-length': '3' // Wrong!
+                            }
+                        }
+                    });
+
+                    let response = await request.post(`${remoteServerHttpUrl}/abc`, {
+                        body: { a: 1 },
+                        json: true
+                    });
+
+                    expect(response.headers['content-length']).to.equal('7');
+                    expect(response.body).to.equal(JSON.stringify({ a: 1 }));
+                });
+
                 it("preserves raw headers where possible", async () => {
                     await server.forAnyRequest().thenPassThrough({
                         transformRequest: {

@@ -40,6 +40,31 @@ describe("WebSocket subscriptions", () => {
                 expect(upgradeEvent.headers['connection']).to.equal('Upgrade');
             });
 
+            nodeOnly(() => {
+                it("should fire websocket-request for a rejected upgrade without traffic recording", async () => {
+                    const unrecordedServer = getLocal({ recordTraffic: false });
+                    await unrecordedServer.start();
+
+                    try {
+                        await unrecordedServer.forAnyWebSocket().thenRejectConnection(403);
+
+                        const eventPromise = getDeferred<CompletedRequest>();
+                        await unrecordedServer.on('websocket-request', (r) => eventPromise.resolve(r));
+
+                        const ws = new WebSocket(`ws://localhost:${unrecordedServer.port}/qwe`);
+                        ws.addEventListener('error', () => {});
+
+                        const upgradeEvent = await Promise.race([
+                            eventPromise,
+                            delay(1000).then(() => { throw new Error('No websocket-request event'); })
+                        ]);
+                        expect(upgradeEvent.url).to.equal(`ws://localhost:${unrecordedServer.port}/qwe`);
+                    } finally {
+                        await unrecordedServer.stop();
+                    }
+                });
+            });
+
             it("should fire websocket-accepted when a websocket upgrade is completed", async () => {
                 await server.forAnyWebSocket().thenPassivelyListen();
 

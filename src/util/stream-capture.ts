@@ -1,33 +1,72 @@
-import { Buffer } from 'buffer';
+import { Buffer, kMaxLength } from 'buffer';
 import * as stream from 'stream';
 
 import { getDeferred } from '@httptoolkit/util';
 
-import { bufferToStream } from './buffer-utils';
+const DISCARDED = Symbol('discarded');
 
 /**
- * Captures the data passing through a stream, so that it can be read as a complete buffer, and/or
- * streamed out again later from the very beginning, regardless of how much has already arrived.
+ * Captures the data of a stream, so that it can be safely accessed later by:
  *
- * Data is retained until it goes past maxSize. We can't buffer everything beyond that point, so the
- * capture stops there: the buffer completes empty, whatever was retained goes to any stream that's
- * already reading, and from then on only a live stream can see the data.
+ * - a single consumer, via takeStream() - owning the data from then on
+ * - any number of observers, via observeStream() - seeing the data without consuming it
+ * - a buffered reader, as complete content via readContent(), if no larger than maxContentSize
+ * - an end listener, waiting for waitForEnd() - starting the read, with minimal interference.
+ *
+ * The input is only read when somebody needs its data, and only as fast as every output stream
+ * can take it, so that slow readers backpressure the source rather than buffering data in memory.
+ * Notably, data isn't read until a consumer arrives, or until dump() says nobody's coming.
+ *
+ * The stream is settled once the consumer takes it, or once dump() says it never will. Observers
+ * and content must be requested before then: afterwards, those requests always fail, regardless
+ * of how much data has arrived, so that they can't succeed or fail depending on timing.
+ *
+ * Data is all or nothing: content over maxContentSize resolves empty instead (see isTruncated),
+ * and nothing ever receives the data from part way through.
  */
 export class StreamCapture {
 
-    constructor(
-        private input: stream.Readable,
-        private maxSize: number
-    ) {
-        // Listening to these is optional, so we treat errors as default-handled:
-        this.buffer.catch(() => {});
-        this.completed.catch(() => {});
+    // The data from the start of the input, while somebody still needs all of it: the expected
+    // consumer, or the content. Set to 'discarded' once it's dropped.
+    private contentBuffer: Buffer[] | typeof DISCARDED = [];
+    private heldSize = 0;
 
-        // If the input has already finished, there's nothing left to capture:
+    // The consumer is expected until it takes the stream, or until dump() says it never will.
+    private consumer: 'expected' | 'taken' | 'not-coming' = 'expected';
+
+    // Set by waitForEnd(): the input is read to its end without holding data for the expected
+    // consumer, which can then only take the stream if all the data was kept as content.
+    private readingToEnd = false;
+
+    private readonly maxContentSize: number;
+    private contentRequested = false;
+    private truncated = false;
+    private readonly contentPromise = getDeferred<Buffer>();
+
+    // Every stream receiving live data, and those of them that are blocked (applying backpressure,
+    // which pauses the input until they drain):
+    private readonly outputs = new Set<stream.Writable>();
+    private readonly blockedOutputs = new Set<stream.Writable>();
+
+    private ended = false;
+    private failure: Error | undefined;
+    private readonly inputEnd = getDeferred<void>();
+
+    constructor(
+        private readonly input: stream.Readable,
+        maxContentSize: number
+    ) {
+        // Content is collected into a single buffer, so it can't be larger than a buffer can be:
+        this.maxContentSize = Math.min(maxContentSize, kMaxLength);
+
+        // Reading the content or waiting for the end are optional, so failures are always
+        // considered handled, rather than becoming unhandled rejections when nobody asks:
+        this.contentPromise.promise.catch(() => {});
+        this.inputEnd.promise.catch(() => {});
+
         if (input.readableEnded) {
-            this.completedBuffer = Buffer.from([]);
-            this.captured.resolve(this.completedBuffer);
-            this.endOfInput.resolve();
+            this.ended = true;
+            this.inputEnd.resolve();
             return;
         }
         if (input.readableAborted) {
@@ -35,129 +74,253 @@ export class StreamCapture {
             return;
         }
 
+        // Adding a data listener starts the data flowing, unless the input has been paused, so
+        // we pause first if nothing needs the data yet:
+        this.updateFlow();
         input.on('data', this.onData);
         input.once('end', this.onEnd);
         input.once('aborted', () => this.fail(new Error('Aborted')));
         input.on('error', (error) => this.fail(error));
     }
 
-    private captured = getDeferred<Buffer>();
-    private endOfInput = getDeferred<void>();
-
     /**
-     * The complete captured data, once the input ends. This resolves empty if the data went past
-     * maxSize, and rejects if the input errors or is aborted.
+     * Collects the data as content, to be read later with readContent(). This must be called
+     * before the stream is settled.
      */
-    readonly buffer = this.captured.promise;
+    keepContent() {
+        if (this.contentRequested) return;
+        this.requireUnsettled('read as content');
 
-    /**
-     * Resolves when the input itself ends, whether or not we kept any of its data. Rejects if the
-     * input fails before that. Unlike `buffer`, this always means the body really has finished.
-     */
-    readonly completed = this.endOfInput.promise;
+        this.contentRequested = true;
+        if (this.ended && this.wantsContent) this.completeContent();
 
-    // What's happening to the data captured so far:
-    // - retaining: we're keeping it, and still reading more.
-    // - dropped: too much arrived, and we've let it go. Only a live stream can see it now.
-    private retention: 'retaining' | 'dropped' = 'retaining';
-
-    private chunks: Buffer[] = [];
-    private capturedSize = 0;
-    private completedBuffer: Buffer | undefined;
-    private failure: Error | undefined;
-
-    private onData = (data: Buffer) => {
-        if (this.retention !== 'retaining') return;
-
-        this.capturedSize += data.length;
-        this.chunks.push(data);
-        if (this.capturedSize > this.maxSize) this.handleOverflow();
-    };
-
-    private onEnd = () => {
-        if (this.retention === 'retaining') {
-            this.completedBuffer = Buffer.concat(this.chunks);
-            this.captured.resolve(this.completedBuffer);
-        }
-        this.endOfInput.resolve();
-    };
-
-    private fail(error: Error) {
-        this.failure ??= error;
-        this.captured.reject(error);
-        this.endOfInput.reject(error);
+        this.updateFlow();
     }
 
-    private handleOverflow() {
-        // If we hit the data limit, we start streaming to anybody who's already attached, and
-        // drop all buffering (resolve to empty, drop held data, drop future data as it comes).
-        this.captured.resolve(Buffer.from([]));
-
-        this.activatePendingOutputs();
-
-        this.retention = 'dropped';
-        this.chunks = [];
-        this.input.removeListener('data', this.onData);
+    /**
+     * The complete content, once the input ends, or an empty buffer if it's truncated.
+     */
+    async readContent(): Promise<Buffer> {
+        this.keepContent();
+        return this.contentPromise.promise;
     }
 
-    // When you take a stream, it stays here until it actually starts reading, and only then starts
-    // piping. This helps us preserve backpressure in the OS/network until data actually starts
-    // moving, which helps avoid buffering data unnecessarily on our side.
-    private pendingOutputs = new Set<() => void>();
+    /**
+     * Whether the data went past maxContentSize, so the content resolves empty.
+     */
+    get isTruncated() {
+        return this.truncated;
+    }
 
     /**
-     * Returns a stream of the complete data, from the beginning: the data captured so far, and
-     * then the rest of the input as it arrives.
+     * Returns a stream of the data, from the start, without consuming it. This must be called
+     * before the stream is settled.
+     */
+    observeStream(): stream.Readable {
+        this.requireUnsettled('observed');
+        return this.createOutput();
+    }
+
+    /**
+     * Returns the one consumer stream of the data, from the start, settling the stream. The input
+     * is read from then on as fast as this stream (and any observers) can take it, and data isn't
+     * held for anybody else unless the content was requested beforehand.
      *
-     * This throws if the data has already been dropped, since the full stream can't be provided.
+     * After waitForEnd(), this is only possible once the input has ended within maxContentSize.
      */
     takeStream(): stream.Readable {
-        if (this.completedBuffer) return bufferToStream(this.completedBuffer);
+        const canTake = this.consumer === 'expected' &&
+            (!this.readingToEnd || (this.ended && !this.truncated));
+        if (!canTake) throw this.unavailableError('streamed');
 
-        if (this.retention === 'dropped') {
-            throw new Error('Stream data exceeded the maximum size and was dropped, so it cannot be streamed');
-        }
-
-        let activated = false;
-        const activate = () => {
-            if (activated) return;
-            activated = true;
-            this.pendingOutputs.delete(activate);
-
-            if (this.failure) {
-                output.destroy(this.failure);
-                return;
-            }
-
-            // Replay buffered chunks, then stream:
-            this.chunks.forEach((chunk) => output.write(chunk));
-            this.input.pipe(output);
-
-            if (this.input.readableEnded) output.end();
-            if (this.input.readableAborted) output.destroy(new Error('Aborted'));
-            this.input.on('error', (e) => output.destroy(e));
-        };
-
-        const output = new stream.PassThrough({
-            read(size) {
-                activate();
-                return stream.Transform.prototype._read.call(this, size);
-            }
-        });
-
-        this.pendingOutputs.add(activate);
-
+        this.consumer = 'taken';
+        const output = this.createOutput();
+        this.discardUnneededData();
+        this.updateFlow();
         return output;
     }
 
     /**
-     * Actively push data into all streams and start them, to ensure any open but not
-     * yet active streams have a chance to start processing data before we drop it if
-     * we hit the buffering limit.
+     * Declares that no consumer will take the stream, settling it, so the input is read without
+     * waiting for one. Content that was requested is still collected.
      */
-    private activatePendingOutputs() {
-        const pending = [...this.pendingOutputs];
-        this.pendingOutputs.clear();
-        pending.forEach((activate) => activate());
+    dump() {
+        if (this.consumer !== 'expected') return;
+
+        this.consumer = 'not-coming';
+        this.discardUnneededData();
+        this.updateFlow();
     }
+
+    /**
+     * Resolves once the input has ended. If the stream isn't settled yet, this reads it all now,
+     * keeping it as content: the expected consumer can still take the stream afterwards, but only
+     * if all of the data fit within maxContentSize.
+     */
+    waitForEnd(): Promise<void> {
+        if (this.consumer === 'expected' && !this.readingToEnd) {
+            this.keepContent();
+            this.readingToEnd = true;
+            this.discardUnneededData();
+            this.updateFlow();
+        }
+
+        return this.inputEnd.promise;
+    }
+
+    private onData = (chunk: Buffer) => {
+        if (this.contentBuffer !== DISCARDED) {
+            this.contentBuffer.push(chunk);
+            this.heldSize += chunk.length;
+
+            if (!this.truncated && this.heldSize > this.maxContentSize) this.truncate();
+            this.discardUnneededData();
+        }
+
+        this.outputs.forEach((output) => this.writeTo(output, chunk));
+        this.updateFlow();
+    };
+
+    private onEnd = () => {
+        // Node's HTTP server dumps the body of a request that nothing has read once its response
+        // completes, removing our listener first, so then we haven't seen all the data:
+        if (!this.input.listeners('data').includes(this.onData)) {
+            this.fail(new Error('Stream data was read elsewhere, so it was not all captured'));
+            return;
+        }
+
+        this.ended = true;
+        if (this.wantsContent) this.completeContent();
+
+        this.outputs.forEach((output) => output.end());
+        this.outputs.clear();
+        this.blockedOutputs.clear();
+
+        this.inputEnd.resolve();
+    };
+
+    private fail(error: Error) {
+        if (this.failure) return;
+        this.failure = error;
+
+        this.contentPromise.reject(error);
+        this.inputEnd.reject(error);
+
+        this.outputs.forEach((output) => failOutput(output, error));
+        this.outputs.clear();
+        this.blockedOutputs.clear();
+    }
+
+    private get wantsContent() {
+        return this.contentRequested && !this.truncated;
+    }
+
+    private get holdingForConsumer() {
+        return this.consumer === 'expected' && !this.readingToEnd;
+    }
+
+    private completeContent() {
+        if (this.contentBuffer === DISCARDED) throw new Error('Stream content was unexpectedly discarded');
+
+        const content = Buffer.concat(this.contentBuffer);
+        this.contentBuffer = [content];
+        this.contentPromise.resolve(content);
+    }
+
+    private truncate() {
+        this.truncated = true;
+        this.contentPromise.resolve(Buffer.alloc(0));
+        this.discardUnneededData();
+    }
+
+    private discardUnneededData() {
+        if (this.holdingForConsumer || this.wantsContent) return;
+
+        this.contentBuffer = DISCARDED;
+        this.heldSize = 0;
+    }
+
+    // The input is paused while any output is blocked, or while data would need to be held for
+    // a consumer that hasn't arrived yet. Pausing is only a request though: data that arrives
+    // while paused is still handled as normal.
+    private updateFlow() {
+        if (this.ended || this.failure) return;
+
+        const shouldPause = this.blockedOutputs.size > 0 ||
+            (this.holdingForConsumer && !this.wantsContent);
+
+        if (shouldPause) this.input.pause();
+        else this.input.resume();
+    }
+
+    private createOutput(): stream.PassThrough {
+        // The settling rules should make this impossible, but just in case:
+        if (this.contentBuffer === DISCARDED) throw new Error('Stream data was unexpectedly discarded');
+
+        const output = new stream.PassThrough();
+
+        if (this.failure) {
+            failOutput(output, this.failure);
+            return output;
+        }
+
+        this.contentBuffer.forEach((chunk) => this.writeTo(output, chunk));
+
+        if (this.ended) {
+            output.end();
+        } else {
+            this.outputs.add(output);
+            output.once('close', () => {
+                this.outputs.delete(output);
+                this.blockedOutputs.delete(output);
+                this.updateFlow();
+            });
+        }
+
+        return output;
+    }
+
+    private writeTo(output: stream.Writable, chunk: Buffer) {
+        if (output.write(chunk) || this.blockedOutputs.has(output)) return;
+
+        this.blockedOutputs.add(output);
+        output.once('drain', () => {
+            this.blockedOutputs.delete(output);
+            this.updateFlow();
+        });
+    }
+
+    private requireUnsettled(purpose: string) {
+        if (this.consumer !== 'expected' || this.readingToEnd) throw this.unavailableError(purpose);
+    }
+
+    private unavailableError(purpose: string) {
+        const reason = this.consumer === 'taken'
+            ? 'has already been taken by its consumer'
+            : this.consumer === 'not-coming'
+                ? 'was dumped'
+                : this.truncated
+                    ? 'exceeded the maximum size'
+                    : 'was already being read to its end';
+
+        return new Error(`Stream ${reason}, so it can't now be ${purpose}`);
+    }
+}
+
+// Destroying a stream with an error emits it, which crashes the process if nothing is listening.
+// Outputs may legitimately have no listeners for a while (e.g. a consumer that takes the stream
+// and then connects to its destination asynchronously), so we fail them once somebody listens.
+function failOutput(output: stream.Writable, error: Error) {
+    if (output.listenerCount('error') > 0) {
+        output.destroy(error);
+        return;
+    }
+
+    const onNewListener = (event: string | symbol) => {
+        if (event !== 'error') return;
+        output.off('newListener', onNewListener);
+        // This fires just before the listener is added, so we wait for that first:
+        queueMicrotask(() => output.destroy(error));
+    };
+    output.on('newListener', onNewListener);
 }

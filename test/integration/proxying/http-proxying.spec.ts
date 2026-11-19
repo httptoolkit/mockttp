@@ -931,6 +931,63 @@ nodeOnly(() => {
                 expect(requestData.body).to.equal("initial body extended");
             });
 
+            it("should forward the original encoded body if beforeRequest returns the request it was given", async () => {
+                await remoteServer.forPost('/').thenCallback(async (req) => ({
+                    statusCode: 200,
+                    json: {
+                        headers: req.headers,
+                        rawBody: req.body.buffer.toString('base64')
+                    }
+                }));
+
+                await server.forPost(remoteServer.urlFor("/")).thenPassThrough({
+                    beforeRequest: (req) => ({
+                        ...req,
+                        body: req.body.buffer,
+                        headers: { ...req.headers, 'x-added': 'yes' }
+                    })
+                });
+
+                // Mockttp encodes at gzip level 1, so encoding at level 9 instead means that any
+                // re-encoding of the body will change its bytes:
+                const bodyText = 'initial body '.repeat(100);
+                const gzippedBody = zlib.gzipSync(bodyText, { level: 9 });
+                expect(gzippedBody).to.not.deep.equal(zlib.gzipSync(bodyText, { level: 1 }));
+
+                const response = await request.post(remoteServer.urlFor("/"), {
+                    headers: { 'content-encoding': 'gzip' },
+                    body: gzippedBody
+                });
+
+                const requestData = JSON.parse(response);
+                expect(requestData.headers['x-added']).to.equal('yes');
+                expect(requestData.headers['content-length']).to.equal(gzippedBody.length.toString());
+                expect(Buffer.from(requestData.rawBody, 'base64')).to.deep.equal(gzippedBody);
+            });
+
+            it("should re-encode the original body if beforeRequest returns it with a new encoding", async () => {
+                await remoteServer.forPost('/').thenCallback(async (req) => ({
+                    statusCode: 200,
+                    json: { headers: req.headers, body: await req.body.getText() }
+                }));
+
+                await server.forPost(remoteServer.urlFor("/")).thenPassThrough({
+                    beforeRequest: (req) => ({
+                        ...req,
+                        body: req.body.buffer,
+                        headers: { ...req.headers, 'content-encoding': 'gzip' }
+                    })
+                });
+
+                const response = await request.post(remoteServer.urlFor("/"), {
+                    body: 'initial body'
+                });
+
+                const requestData = JSON.parse(response);
+                expect(requestData.headers['content-encoding']).to.equal('gzip');
+                expect(requestData.body).to.equal('initial body'); // Decoded from gzip
+            });
+
             it("should be able to edit a request to inject a response directly", async () => {
                 const remoteEndpoint = await remoteServer.forPost('/').thenReply(200);
 
@@ -1495,6 +1552,82 @@ nodeOnly(() => {
                 // But it's truncated in event data, not buffered
                 const proxiedRequestData = (await proxyEndpoint.getSeenRequests())[0];
                 expect(await proxiedRequestData.body.getText()).to.equal('');
+            });
+
+            it("should still proxy larger request bodies if beforeRequest changes only the headers", async () => {
+                const message = "A large request body";
+
+                const remoteEndpoint = await remoteServer.forAnyRequest().thenReply(200);
+                await server.forPost(remoteServer.url).thenPassThrough({
+                    beforeRequest: (req) => ({
+                        headers: { ...req.headers, 'x-added-header': 'yes' }
+                    })
+                });
+
+                let response = await request.post({
+                    url: remoteServer.url,
+                    body: message,
+                    resolveWithFullResponse: true
+                });
+
+                expect(response.statusCode).to.equal(200);
+
+                // The body was too large to buffer, so its length can't be measured here - but
+                // the original body is still streamed upstream, with its original framing:
+                const resultingRequest = (await remoteEndpoint.getSeenRequests())[0];
+                expect(resultingRequest.headers['x-added-header']).to.equal('yes');
+                expect(resultingRequest.headers['content-length']).to.equal(message.length.toString());
+                expect(await resultingRequest.body.getText()).to.equal(message);
+            });
+
+            it("should still proxy larger request bodies if beforeRequest returns the request it was given", async () => {
+                const message = "A large request body";
+
+                const remoteEndpoint = await remoteServer.forAnyRequest().thenReply(200);
+                await server.forPost(remoteServer.url).thenPassThrough({
+                    beforeRequest: (req) => ({
+                        ...req,
+                        body: req.body.buffer, // Truncated, so this mustn't replace the real body
+                        headers: { ...req.headers, 'x-added-header': 'yes' }
+                    })
+                });
+
+                let response = await request.post({
+                    url: remoteServer.url,
+                    body: message,
+                    resolveWithFullResponse: true
+                });
+
+                expect(response.statusCode).to.equal(200);
+
+                const resultingRequest = (await remoteEndpoint.getSeenRequests())[0];
+                expect(resultingRequest.headers['x-added-header']).to.equal('yes');
+                expect(resultingRequest.headers['content-length']).to.equal(message.length.toString());
+                expect(await resultingRequest.body.getText()).to.equal(message);
+            });
+
+            it("should fix an invalid content-length from beforeRequest for larger request bodies", async () => {
+                const message = "A large request body";
+
+                const remoteEndpoint = await remoteServer.forAnyRequest().thenReply(200);
+                await server.forPost(remoteServer.url).thenPassThrough({
+                    beforeRequest: (req) => ({
+                        headers: { ...req.headers, 'content-length': '5' } // Wrong!
+                    })
+                });
+
+                let response = await request.post({
+                    url: remoteServer.url,
+                    body: message,
+                    resolveWithFullResponse: true
+                });
+
+                expect(response.statusCode).to.equal(200);
+
+                // The real body is sent, never just the first part of it:
+                const resultingRequest = (await remoteEndpoint.getSeenRequests())[0];
+                expect(resultingRequest.headers['content-length']).to.equal(message.length.toString());
+                expect(await resultingRequest.body.getText()).to.equal(message);
             });
 
             it("should still proxy larger response bodies", async () => {

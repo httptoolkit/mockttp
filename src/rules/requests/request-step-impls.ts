@@ -19,6 +19,7 @@ import {
     Headers,
     OngoingRequest,
     CompletedRequest,
+    CompletedBody,
     OngoingResponse
 } from "../../types";
 
@@ -231,6 +232,10 @@ export class CallbackStepImpl extends CallbackStep {
     static readonly fromDefinition = copyDefinitionToImpl;
 
     async handle(request: OngoingRequest, response: OngoingResponse) {
+        // Capture the body for the callback, then dump it, there's no stream consumer coming.
+        request.body.startCapture();
+        request.body.dump();
+
         let req = await waitForCompletedRequest(request);
 
         let outResponse: CallbackResponseResult;
@@ -287,6 +292,9 @@ export class StreamStepImpl extends StreamStep {
     static readonly fromDefinition = copyDefinitionToImpl;
 
     async handle(request: OngoingRequest, response: OngoingResponse) {
+        // We don't need the body, and streaming can block indefinitely - dump it.
+        request.body.dump();
+
         if (!this.stream.done) {
             if (this.headers) dropDefaultHeaders(response);
 
@@ -425,6 +433,32 @@ const mapOmitToUndefined = <T extends { [key: string]: any }>(
 // Only used if key logging is enabled, meaning we need to hook into http2-wrapper's TLS setup:
 const h2ProtocolQueue = new Map();
 
+// The original request body length, if we can know it without reading. HTTP/1 bodies are always exactly
+// their content-length, chunked & HTTP/2 bodies could be any length.
+function getUnmodifiedBodyLength(request: OngoingRequest, isH2: boolean): number | undefined {
+    const contentLength = getHeaderValue(request.headers, 'content-length');
+    return !isH2 && contentLength !== undefined ? Number(contentLength) : undefined;
+}
+
+// A callback that returns whether the body we were given (e.g. by returning `{ ...req, headers }`)
+// is unchanged (unset, or the original input, even if that was truncated). Has to check content-encoding
+// too, since we re-encode if that changes.
+function returnsOriginalBody(
+    result: CallbackRequestResult | void,
+    originalBody: CompletedBody,
+    originalHeaders: Headers,
+    resultingHeaders: Headers
+) {
+    if (result?.rawBody) return result.rawBody === originalBody.buffer;
+    if (result?.json) return false;
+
+    const returnedBody: unknown = result?.body;
+    const isSameBody = returnedBody === originalBody || returnedBody === originalBody.buffer;
+
+    return isSameBody && getHeaderValue(originalHeaders, 'content-encoding') ===
+        getHeaderValue(resultingHeaders, 'content-encoding');
+}
+
 export class PassThroughStepImpl extends PassThroughStep {
 
     // In this case, we actually use the constructor, to ensure we initialize fields as normal:
@@ -483,9 +517,9 @@ export class PassThroughStepImpl extends PassThroughStep {
             `);
         }
 
-        // We have to capture the request stream immediately, to make sure nothing is lost if it
-        // goes past its max length (truncating the data) before we start sending upstream.
-        const clientReqBody = clientReq.body.asStream();
+        // beforeResponse runs later, and needs the request body buffer, but that won't be buffered
+        // here by default, so we explicitly start buffering it now to read later.
+        if (this.beforeResponse) clientReq.body.startCapture();
 
         const isH2Downstream = isHttp2(clientReq);
 
@@ -592,15 +626,19 @@ export class PassThroughStepImpl extends PassThroughStep {
                 }
             }
 
-            if (reqBodyOverride) { // Can't check framing without body changes, since we won't have the body yet
+            if (reqBodyOverride) {
                 // We always re-encode the body to match the resulting content-encoding header:
                 reqBodyOverride = await encodeBodyBuffer(
                     reqBodyOverride,
                     rawHeaders
                 );
+            }
 
+            if (reqBodyOverride || updateHeaders || replaceHeaders) {
                 const updatedCLHeader = getRequestContentLengthAfterModification(
-                    reqBodyOverride,
+                    reqBodyOverride
+                        ? reqBodyOverride.byteLength
+                        : getUnmodifiedBodyLength(clientReq, isH2Downstream),
                     clientReq.headers,
                     (updateHeaders && (
                         getHeaderValue(updateHeaders, 'content-length') !== undefined ||
@@ -675,12 +713,18 @@ export class PassThroughStepImpl extends PassThroughStep {
                 MODIFIABLE_PSEUDOHEADERS // These are handled by getH2HeadersAfterModification above
             );
 
-            reqBodyOverride = await buildOverriddenBody(modifiedReq, headers);
+            reqBodyOverride = returnsOriginalBody(modifiedReq, completedRequest.body, clientHeaders, headers)
+                ? undefined
+                : await buildOverriddenBody(modifiedReq, headers);
 
             if (reqBodyOverride || modifiedReq?.headers) {
                 // Automatically match the content-length to the body:
                 const updatedCLHeader = getRequestContentLengthAfterModification(
-                    reqBodyOverride || completedRequest.body.buffer,
+                    reqBodyOverride
+                        ? reqBodyOverride.byteLength
+                        : clientReq.body.isTruncated()
+                            ? getUnmodifiedBodyLength(clientReq, isH2Downstream)
+                            : completedRequest.body.buffer.byteLength,
                     clientHeaders,
                     modifiedReq?.headers,
                     { httpVersion: isH2Downstream ? 2 : 1 }
@@ -769,6 +813,8 @@ export class PassThroughStepImpl extends PassThroughStep {
         } else if (isH2Downstream && !shouldTryH2Upstream) {
             rawHeaders = h2HeadersToH1(rawHeaders, method);
         }
+
+        const clientReqBody = clientReq.body.asStream();
 
         let serverReq: http.ClientRequest;
         return new Promise<void>((resolve, reject) => (async () => { // Wrapped to easily catch (a)sync errors
@@ -1482,7 +1528,10 @@ export class TimeoutStepImpl extends TimeoutStep {
 
     static readonly fromDefinition = () => new TimeoutStepImpl();
 
-    async handle() {
+    async handle(request: OngoingRequest) {
+        // This never completes, so dump the body now:
+        request.body.dump();
+
         // Do nothing, leaving the socket open but never sending a response.
         return new Promise<void>(() => {});
     }
@@ -1527,8 +1576,6 @@ export class WaitForRequestBodyStepImpl extends WaitForRequestBodyStep {
     static readonly fromDefinition = () => new WaitForRequestBodyStepImpl();
 
     async handle(request: OngoingRequest): Promise<{ continue: true }> {
-        // Wait for body delivery to complete - not just buffering to end (they can be
-        // different, e.g. if buffer tops out the max buffering limits).
         await request.body.waitForEnd();
         return { continue: true };
     }
