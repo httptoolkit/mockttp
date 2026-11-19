@@ -8,7 +8,8 @@ import {
 import {
     expect,
     nodeOnly,
-    getDeferred
+    getDeferred,
+    getHttp2Response
 } from "../../test-utils";
 
 function postWithExpectContinue(url: string, body = 'hello') {
@@ -214,6 +215,57 @@ nodeOnly(() => {
                 expect(proxyEvents.length).to.equal(1);
                 expect(proxyEvents[0].statusCode).to.equal(103);
                 expect(proxyEvents[0].headers.link).to.equal('</a>');
+            });
+
+            it("fires when the upstream 1xx arrives over HTTP/2", async () => {
+                // The H2 path reports informational responses through a different
+                // mechanism to H1, so it needs its own coverage:
+                const h2Upstream = getLocal({
+                    https: {
+                        keyPath: './test/fixtures/test-ca.key',
+                        certPath: './test/fixtures/test-ca.pem'
+                    },
+                    http2: true
+                });
+                const h2Proxy = getLocal({
+                    https: {
+                        keyPath: './test/fixtures/test-ca.key',
+                        certPath: './test/fixtures/test-ca.pem'
+                    },
+                    http2: true
+                });
+                await h2Upstream.start();
+                await h2Proxy.start();
+
+                try {
+                    await h2Upstream.forGet('/x')
+                        .sendInfoResponse(103, { 'link': '</a>' })
+                        .thenReply(200, 'ok');
+                    await h2Proxy.forGet('/x').thenForwardTo(h2Upstream.url);
+
+                    const proxyEvents: InformationalResponse[] = [];
+                    await h2Proxy.on('response-information', (info) => proxyEvents.push(info));
+
+                    const client = http2.connect(h2Proxy.url);
+                    const request = client.request({ ':path': '/x' });
+                    const seenDownstream: number[] = [];
+                    request.on('headers', (h) => seenDownstream.push(Number(h[':status'])));
+                    request.end();
+                    const response = await getHttp2Response(request);
+                    request.setEncoding('utf8');
+                    let body = '';
+                    request.on('data', (chunk: string) => { body += chunk; });
+                    await new Promise<void>((resolve) => request.once('end', resolve));
+                    client.close();
+
+                    expect(response[':status']).to.equal(200);
+                    expect(body).to.equal('ok');
+                    expect(seenDownstream).to.deep.equal([103]);
+                    expect(proxyEvents.map(e => e.statusCode)).to.deep.equal([103]);
+                } finally {
+                    await h2Proxy.stop();
+                    await h2Upstream.stop();
+                }
             });
         });
     });
