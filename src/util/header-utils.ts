@@ -247,8 +247,7 @@ export function h2HeadersToH1(h2Headers: RawHeaders, method: string): RawHeaders
     return h1Headers;
 }
 
-// Take from http2/util.js in Node itself
-const HTTP2_ILLEGAL_HEADERS = [
+const H1_ONLY_HEADERS = [
     'connection',
     'upgrade',
     'host',
@@ -258,10 +257,25 @@ const HTTP2_ILLEGAL_HEADERS = [
     'transfer-encoding'
 ];
 
-export function h1HeadersToH2(headers: RawHeaders): RawHeaders {
-    return headers.filter(([key]) =>
-        !HTTP2_ILLEGAL_HEADERS.includes(key.toLowerCase())
-    );
+/**
+ * HTTP/2 forbids various headers entirely (RFC 9113 8.2.2) and Node refuses to send most of them in
+ * either direction, so we drop them. TE is allowed, but only as exactly 'trailers'.
+ */
+export function h1HeadersToH2(rawHeaders: RawHeaders): RawHeaders {
+    return rawHeaders.flatMap(([name, value]): RawHeaders => {
+        const lowerName = name.toLowerCase();
+
+        if (lowerName === 'te') {
+            const acceptsTrailers = value.split(',').some((coding) =>
+                coding.split(';')[0].trim().toLowerCase() === 'trailers'
+            );
+            return acceptsTrailers ? [[name, 'trailers']] : [];
+        }
+
+        return H1_ONLY_HEADERS.includes(lowerName)
+            ? []
+            : [[name, value]];
+    });
 }
 
 // If the user explicitly specifies headers, we tell Node not to handle them,

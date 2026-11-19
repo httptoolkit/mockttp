@@ -316,7 +316,9 @@ nodeOnly(() => {
                     await remoteServer.forGet('/mocked-endpoint')
                         .thenReply(200, "Remote HTTP2 response!", {
                             'HEADER-KEY': 'HEADER-VALUE',
-                            'Connection': 'close'
+                            'Connection': 'close',
+                            'TE': 'gzip',
+                            'Host': 'example.com'
                         });
                     await server.forGet(remoteServer.urlFor('/mocked-endpoint'))
                         .thenPassThrough();
@@ -349,7 +351,7 @@ nodeOnly(() => {
                     ).to.deep.equal({
                         ':status': 200,
                         'header-key': 'HEADER-VALUE' // We lowercase all header keys
-                        // Connection: close is omitted
+                        // Connection, TE & Host are omitted, as HTTP/2 doesn't use them
                     });
 
                     await cleanup(proxiedRequest, proxiedClient, client);
