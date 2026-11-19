@@ -13,7 +13,8 @@ import {
     CompletedRequest,
     CompletedResponse,
     MockedEndpoint,
-    Request
+    Request,
+    RuleEvent
 } from "../../..";
 import {
     expect,
@@ -21,6 +22,7 @@ import {
     getDeferred,
     Deferred,
     delay,
+    pollUntil,
     sendRawRequest,
     openRawSocket,
     makeAbortableRequest,
@@ -1348,6 +1350,9 @@ nodeOnly(() => {
                 const seenAbortPromise = getDeferred<AbortedRequest>();
                 remoteServer.on('abort', (r) => seenAbortPromise.resolve(r));
 
+                const ruleEvents: RuleEvent[] = [];
+                await server.on('rule-event', (event) => ruleEvents.push(event));
+
                 await remoteServer.forPost('/mocked-endpoint').thenTimeout();
                 await server.forPost('/mocked-endpoint').thenPassThrough();
 
@@ -1363,6 +1368,14 @@ nodeOnly(() => {
                 const seenAbort = await seenAbortPromise;
                 expect(seenRequest.id).to.equal(seenAbort.id);
                 expect(seenAbort.error).to.equal(undefined); // Client abort, not an error
+
+                const isAbortEvent = ({ eventType }: RuleEvent) => eventType === 'passthrough-abort';
+                await pollUntil(() => ruleEvents.some(isAbortEvent));
+                const passthroughAbort = ruleEvents.find(isAbortEvent);
+                expect(passthroughAbort?.eventData).to.have.property(
+                    'downstreamAborted',
+                    true
+                );
             });
 
             it('should gracefully handle client connection getting closed in the middle of the body', async () => {

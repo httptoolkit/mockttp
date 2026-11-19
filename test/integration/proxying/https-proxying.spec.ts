@@ -9,7 +9,7 @@ import _ from 'lodash';
 import getPort from 'get-port';
 import request from 'request-promise-native';
 
-import { getLocal, Mockttp, CompletedResponse } from "../../..";
+import { getLocal, Mockttp, CompletedResponse, RuleEvent } from "../../..";
 import {
     expect,
     nodeOnly,
@@ -19,7 +19,8 @@ import {
     DestroyableServer,
     ignoreNetworkError,
     openRawTlsSocket,
-    sendRawRequest
+    sendRawRequest,
+    delay
 } from "../../test-utils";
 import { getCA } from "../../../src/util/certificates";
 import { streamToBuffer } from "../../../src/util/buffer-utils";
@@ -333,6 +334,43 @@ nodeOnly(() => {
                 });
             });
 
+            describe("given an upstream certificate for a different hostname", () => {
+
+                let target: DestroyableServer<https.Server>;
+                let targetPort: number;
+
+                beforeEach(async () => {
+                    const ca = await getCA({
+                        keyPath: './test/fixtures/test-ca.key',
+                        certPath: './test/fixtures/test-ca.pem'
+                    });
+                    // Trusted and correctly signed, but only valid for 'localhost':
+                    const cert = await ca.generateCertificate('localhost');
+
+                    target = makeDestroyable(https.createServer(
+                        { key: cert.key, cert: cert.cert },
+                        (_req, res) => res.end('ok')
+                    ));
+                    await new Promise<void>((resolve) => target.listen(0, '127.0.0.1', resolve));
+                    targetPort = (target.address() as net.AddressInfo).port;
+                });
+
+                afterEach(() => target.destroy());
+
+                it("should refuse to pass through requests", async () => {
+                    // Connecting by IP, which the certificate says nothing about:
+                    await server.forAnyRequest().thenForwardTo(`https://127.0.0.1:${targetPort}`);
+
+                    const response = await request.get(`https://localhost:${targetPort}/`, {
+                        resolveWithFullResponse: true,
+                        simple: false
+                    });
+
+                    expect(response.statusCode).to.equal(502);
+                    expect(response.body).to.contain('ERR_TLS_CERT_ALTNAME_INVALID');
+                });
+            });
+
             describe("given a TLSv1 upstream server", () => {
 
                 let oldServerPort: number;
@@ -579,6 +617,39 @@ nodeOnly(() => {
 
                 expect(response.headers[':status']).to.equal(200);
                 expect(response.headers['received-body']).to.equal('');
+            });
+
+            it("does not report an abort when discarding a completed bodyless H2 response", async () => {
+                await http2Server.destroy();
+                http2Server = makeDestroyable(http2.createSecureServer({
+                    key: await fs.readFile('./test/fixtures/test-ca.key'),
+                    cert: await fs.readFile('./test/fixtures/test-ca.pem')
+                }));
+                http2Server.on('stream', (stream: http2.ServerHttp2Stream) => {
+                    stream.respond({ ':status': 204 }, { endStream: false });
+                    setImmediate(() => stream.end());
+                });
+                targetPort = await getPort();
+                await new Promise<void>((resolve, reject) => {
+                    http2Server.on('error', reject);
+                    http2Server.listen(targetPort, resolve);
+                });
+
+                const ruleEvents: RuleEvent[] = [];
+                await server.on('rule-event', (event) => ruleEvents.push(event));
+                await server.forAnyRequest().thenPassThrough({
+                    ignoreHostHttpsErrors: ['localhost']
+                });
+
+                const response = await http2ProxyRequest(
+                    server,
+                    `https://localhost:${targetPort}`
+                );
+                expect(response.headers[':status']).to.equal(204);
+
+                await delay(20);
+                expect(ruleEvents.map(({ eventType }) => eventType))
+                    .not.to.include('passthrough-abort');
             });
 
             it("can pass through response trailers successfully", async () => {
