@@ -861,7 +861,7 @@ export class PassThroughStepImpl extends PassThroughStep {
                     });
                 }
 
-                if (isH2Downstream) {
+                if (isH2Downstream && serverRes.httpVersion.startsWith('1.')) {
                     serverRawHeaders = h1HeadersToH2(serverRawHeaders);
                 }
 

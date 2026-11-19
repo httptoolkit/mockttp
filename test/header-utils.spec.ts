@@ -1,4 +1,8 @@
-import { h2HeadersToH1, updateRawHeaders } from "../src/util/header-utils";
+import {
+    h1HeadersToH2,
+    h2HeadersToH1,
+    updateRawHeaders
+} from "../src/util/header-utils";
 import { expect } from "./test-utils";
 
 describe("Header utils", () => {
@@ -104,6 +108,44 @@ describe("Header utils", () => {
             ).to.deep.equal([
                 ['C', 'd']
             ]);
+        });
+
+    });
+
+    describe("h1HeadersToH2", () => {
+
+        it("drops connection-specific headers, in any case", () => {
+            expect(h1HeadersToH2([
+                ['Connection', 'keep-alive'],
+                ['keep-alive', 'timeout=5'],
+                ['Proxy-Connection', 'keep-alive'],
+                ['Transfer-Encoding', 'chunked'],
+                ['upgrade', 'websocket'],
+                ['HTTP2-Settings', 'AAMAAABkAARAAAAAAAIAAAAA'],
+                ['x-other', 'value']
+            ])).to.deep.equal([
+                ['x-other', 'value']
+            ]);
+        });
+
+        it("drops host headers, which :authority replaces", () => {
+            expect(h1HeadersToH2([
+                ['Host', 'example.com']
+            ])).to.deep.equal([]);
+        });
+
+        it("reduces TE to exactly 'trailers', if trailers are accepted", () => {
+            expect(h1HeadersToH2([
+                ['TE', 'Trailers, deflate;q=0.5']
+            ])).to.deep.equal([
+                ['TE', 'trailers']
+            ]);
+        });
+
+        it("drops TE if trailers aren't accepted", () => {
+            expect(h1HeadersToH2([
+                ['te', 'gzip']
+            ])).to.deep.equal([]);
         });
 
     });
