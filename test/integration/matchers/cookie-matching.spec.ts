@@ -50,6 +50,10 @@ describe("Cookie matching", function () {
                 .always()
                 .thenReply(200, "matched session cookie", headers),
             server.forGet("/")
+                .withCookie({"unpadded": "YWJjZA"})
+                .always()
+                .thenReply(200, "matched unpadded cookie", headers),
+            server.forGet("/")
                 .always()
                 .thenReply(200, "did not match cookie", headers)
         ]);
@@ -73,8 +77,8 @@ describe("Cookie matching", function () {
         expect(body).to.equal("matched session cookie");
     });
 
-    it("should not match cookies with a truncated value", async () => {
-        const body = await requestWithCookies(server.url, 'session=YWJjZA');
+    it("should not match cookies whose value continues after an equals sign", async () => {
+        const body = await requestWithCookies(server.url, 'unpadded=YWJjZA==');
         expect(body).to.equal("did not match cookie");
     });
 
