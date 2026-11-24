@@ -544,9 +544,10 @@ export class CookieMatcher extends Serializable implements RequestMatcher {
         }
 
         const cookies = request.headers.cookie.split(';').map(cookie => {
-            const [key, value] = cookie.split('=');
+            // Only the first '=' separates name & value, the value itself can contain more
+            const [key, ...valueParts] = cookie.split('=');
 
-            return { [key.trim()]: (value || '').trim()}
+            return { [key.trim()]: valueParts.join('=').trim() };
         });
 
         return cookies.some(element => _.isEqual(element, this.cookie));

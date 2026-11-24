@@ -46,6 +46,14 @@ describe("Cookie matching", function () {
                 .always()
                 .thenReply(200, "matched cookie", headers),
             server.forGet("/")
+                .withCookie({"session": "YWJjZA=="})
+                .always()
+                .thenReply(200, "matched session cookie", headers),
+            server.forGet("/")
+                .withCookie({"unpadded": "YWJjZA"})
+                .always()
+                .thenReply(200, "matched unpadded cookie", headers),
+            server.forGet("/")
                 .always()
                 .thenReply(200, "did not match cookie", headers)
         ]);
@@ -62,6 +70,16 @@ describe("Cookie matching", function () {
             'megacookie=delicious'
         );
         expect(body).to.equal("matched cookie");
+    });
+
+    it("should match cookies with an equals sign in the value", async () => {
+        const body = await requestWithCookies(server.url, 'session=YWJjZA==');
+        expect(body).to.equal("matched session cookie");
+    });
+
+    it("should not match cookies whose value continues after an equals sign", async () => {
+        const body = await requestWithCookies(server.url, 'unpadded=YWJjZA==');
+        expect(body).to.equal("did not match cookie");
     });
 
     it("should not match requests when cookie has a different value", async () => {
