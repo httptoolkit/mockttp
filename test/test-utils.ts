@@ -330,6 +330,7 @@ export const nodeSatisfies = (range: string) =>
 export const BROKEN_H1_OVER_H2_TUNNELLING = "^18.8";
 export const BROKEN_H2_OVER_H2_TUNNELLING = "~20.12"; // https://github.com/nodejs/node/issues/52344
 export const DEFAULT_REQ_HEADERS_DISABLED = "^22.13.0 || >=23.5.0";
+export const BROKEN_PEEKED_REQUEST_BACKPRESSURE = "<22";
 
 const DEFAULT_KEEP_ALIVE = ">=19";
 export const defaultNodeConnectionHeader = nodeSatisfies(DEFAULT_KEEP_ALIVE)

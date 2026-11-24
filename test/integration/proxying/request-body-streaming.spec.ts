@@ -2,7 +2,13 @@ import * as http from 'http';
 import * as stream from 'stream';
 
 import { getLocal, Mockttp, CompletedRequest, MockedEndpoint } from "../../..";
-import { expect, nodeOnly, delay } from "../../test-utils";
+import {
+    expect,
+    nodeOnly,
+    delay,
+    nodeSatisfies,
+    BROKEN_PEEKED_REQUEST_BACKPRESSURE
+} from "../../test-utils";
 import { streamToBuffer } from "../../../src/util/buffer-utils";
 
 // Lengths first, so that a truncated body fails clearly, rather than with a huge buffer diff:
@@ -140,7 +146,9 @@ nodeOnly(() => {
         describe("before anything needs the body", () => {
             beforeEach(() => startProxy());
 
-            it("holds back an upload that only a 'request-body-data' listener watches", async () => {
+            it("holds back an upload that only a 'request-body-data' listener watches", async function () {
+                if (nodeSatisfies(BROKEN_PEEKED_REQUEST_BACKPRESSURE)) this.skip();
+
                 await proxy.on('request-body-data', () => {});
                 await proxy.forAnyRequest().delay(1000).thenReply(200);
 

@@ -1190,6 +1190,17 @@ export class PassThroughStepImpl extends PassThroughStep {
                 socket.once('close', () => this.outgoingSockets.delete(socket));
             });
 
+            // Due to a Node bug, 'drain' won't fire after an early response, so we do it by hand:
+            if (serverReq instanceof http.ClientRequest) {
+                serverReq.once('socket', (socket: net.Socket) => {
+                    const relayDrain = () => {
+                        if (serverReq.writableNeedDrain) serverReq.emit('drain');
+                    };
+                    socket.on('drain', relayDrain);
+                    serverReq.once('close', () => socket.off('drain', relayDrain));
+                });
+            }
+
             // Forward any request trailers received from the client:
             const forwardTrailers = () => {
                 if (clientReq.rawTrailers?.length) {
