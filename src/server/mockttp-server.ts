@@ -783,6 +783,11 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
 
         if (this.debug) console.log(`Handling request for ${rawRequest.url}`);
 
+        const hasRequestListener = emitter.listenerCount('request') > 0;
+        if (hasRequestListener || this.recordTraffic) {
+            request.body.startCapture();
+        }
+
         let result: 'responded' | 'aborted' | null = null;
         const abort = (error?: Error) => {
             if (result === null) {
@@ -799,12 +804,16 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
 
         this.announceInitialRequestAsync(emitter, request);
 
+        // Keep the response body if there's somebody who might want to hear about it later:
+        const hasResponseListener = emitter.listenerCount('response') > 0;
+
         const response = trackResponse(
             rawResponse,
             request.timingEvents,
             request.tags,
             {
                 maxSize: this.maxBodySize,
+                keepBody: hasResponseListener,
                 onWriteHead: () => this.announceInitialResponseAsync(emitter, response),
                 onBodyData: emitter.listenerCount('response-body-data') > 0
                     ? this.announceBodyDataAsync.bind(this, emitter, 'response')
@@ -818,13 +827,6 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         // Standard Node behaviour, reproduced manually for event visibility.
         if (rawRequest[Expects100Continue]) {
             response.sendInformationalResponse(100, []);
-        }
-
-        const hasResponseListener = emitter.listenerCount('response') > 0;
-        if (hasResponseListener) {
-            // Start buffering response body if there's somebody who
-            // might want to hear about it later
-            response.body.asBuffer().catch(() => {});
         }
 
         response.id = request.id;
@@ -842,7 +844,7 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
                 .catch(() => undefined)
                 .then((ruleId) => {
                     request.matchedRuleId = ruleId;
-                    this.announceCompletedRequestAsync(emitter, request);
+                    if (hasRequestListener) this.announceCompletedRequestAsync(emitter, request);
                 });
 
             let nextRule = await nextRulePromise;
@@ -897,6 +899,10 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             }
         }
 
+        // Anything that needs the body has it by now (long-running steps dump it themselves
+        // earlier), so we release anything still held for a consumer that never came:
+        request.body.dump();
+
         if (result === 'responded' && hasResponseListener) {
             this.announceResponseAsync(emitter, response);
         }
@@ -909,6 +915,10 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
         if (request === null) return; // Preprocessing failed - don't handle this
 
         if (this.debug) console.log(`Handling websocket for ${rawRequest.url}`);
+
+        if (this.recordTraffic || emitter.listenerCount('websocket-request') > 0) {
+            request.body.startCapture();
+        }
 
         socket.on('error', (error) => {
             console.log('Response error:', this.debug ? error : error.message);
@@ -957,6 +967,9 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
                 this.sendWebSocketErrorResponse(socket, e);
             }
         }
+
+        // WebSocket steps never use the request body, so nothing else settles it:
+        request.body.dump();
     }
 
     /**

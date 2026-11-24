@@ -32,13 +32,10 @@ import {
 import { makePropertyWritable } from './util';
 import { Mutable } from './type-utils';
 import {
-    bufferThenStream,
-    bufferToStream,
-    BufferInProgress,
     splitBuffer,
-    streamToBuffer,
     asBuffer
 } from './buffer-utils';
+import { StreamCapture } from './stream-capture';
 import {
     flattenPairedRawHeaders,
     getHeaderValue,
@@ -144,37 +141,22 @@ export async function decodeBodyBuffer(buffer: Buffer, headers: Headers) {
     )
 }
 
-// Parse an in-progress request or response stream, i.e. where the body or possibly even the headers have
-// not been fully received/sent yet.
-const parseBodyStream = (bodyStream: stream.Readable, maxSize: number, getHeaders: () => Headers): OngoingBody => {
-    let bufferPromise: BufferInProgress | null = null;
-    let completedBuffer: Buffer | null = null;
+// Parse an in-progress request or response stream.
+const parseBodyStream = (
+    bodyStream: stream.Readable,
+    maxSize: number,
+    getHeaders: () => Headers
+): OngoingBody => {
+    const capture = new StreamCapture(bodyStream, maxSize);
 
     let body = {
-        // Returns a stream for the full body, not the live streaming body.
-        // Each call creates a new stream, which starts with the already seen
-        // and buffered data, and then continues with the live stream, if active.
-        // Listeners to this stream *must* be attached synchronously after this call.
-        asStream() {
-            // If we've already buffered the whole body, just stream it out:
-            if (completedBuffer) return bufferToStream(completedBuffer);
-
-            // Otherwise, we want to start buffering now, and wrap that with
-            // a stream that can live-stream the buffered data on demand:
-            const buffer = body.asBuffer();
-            buffer.catch(() => {}); // Errors will be handled via the stream, so silence unhandled rejections here.
-            return bufferThenStream(buffer, bodyStream);
-        },
-        asBuffer() {
-            if (!bufferPromise) {
-                bufferPromise = streamToBuffer(bodyStream, maxSize);
-
-                bufferPromise
-                    .then((buffer) => completedBuffer = buffer)
-                    .catch(() => {}); // If we get no body, completedBuffer stays null
-            }
-            return bufferPromise;
-        },
+        startCapture: () => capture.keepContent(),
+        asStream: () => capture.takeStream(),
+        observe: () => capture.observeStream(),
+        dump: () => capture.dump(),
+        asBuffer: () => capture.readContent(),
+        waitForEnd: () => capture.waitForEnd(),
+        isTruncated: () => capture.isTruncated,
         async asDecodedBuffer() {
             const buffer = await body.asBuffer();
             return decodeBodyBuffer(buffer, getHeaders());
@@ -306,8 +288,9 @@ export const parseRequestBody = (
     req: http.IncomingMessage | http2.Http2ServerRequest,
     options: { maxSize: number }
 ) => {
-    let transformedRequest = req as any as OngoingRequest;
+    let transformedRequest = req as unknown as OngoingRequest;
     transformedRequest.body = parseBodyStream(req, options.maxSize, () => req.headers);
+    return transformedRequest;
 };
 
 export type ExtendedRawRequest = (http.IncomingMessage | http2.Http2ServerRequest) & {
@@ -493,7 +476,7 @@ export function preprocessRequest(req: ExtendedRawRequest, options: {
     }) as OngoingRequest;
 
     if (options.onBodyData) {
-        emitBodyDataEvents(ongoingReq, ongoingReq.body!.asStream(), options.onBodyData);
+        emitBodyDataEvents(ongoingReq, ongoingReq.body!.observe(), options.onBodyData);
     }
 
     return ongoingReq;
@@ -563,6 +546,7 @@ export function trackResponse(
     tags: string[],
     options: {
         maxSize: number,
+        keepBody: boolean,
         onWriteHead: () => void,
         onBodyData?: (id: string, timestamp: number, content: Uint8Array, isEnded: boolean) => void,
         onInformationalResponse: (status: number, flatHeaders: string[]) => void
@@ -607,10 +591,6 @@ export function trackResponse(
     };
 
     const trackingStream = new stream.PassThrough();
-
-    if (options.onBodyData) {
-        emitBodyDataEvents(trackedResponse, trackingStream, options.onBodyData);
-    }
 
     const originalWriteHeader = trackedResponse.writeHead;
     const originalWrite = trackedResponse.write;
@@ -679,7 +659,10 @@ export function trackResponse(
         return originalAddTrailers.apply(this, args);
     };
 
+    // The response body is sent to the client directly, so nothing ever consumes the tracked copy.
+    // We settle it once writing starts, so it must be observed or captured before then.
     const trackingWrite = function (this: typeof trackedResponse, ...args: any) {
+        trackedResponse.body.dump();
         trackingStream.write.apply(trackingStream, args);
         return originalWrite.apply(this, args);
     };
@@ -694,6 +677,7 @@ export function trackResponse(
 
         trackedResponse.write = originalWrite;
 
+        trackedResponse.body.dump();
         trackingStream.end.apply(trackingStream, args);
         let result = originalEnd.apply(this, args);
 
@@ -706,6 +690,11 @@ export function trackResponse(
         options.maxSize,
         () => trackedResponse.getHeaders()
     );
+
+    if (options.onBodyData) {
+        emitBodyDataEvents(trackedResponse, trackedResponse.body.observe(), options.onBodyData);
+    }
+    if (options.keepBody) trackedResponse.body.startCapture();
 
     // Proxy errors (e.g. write-after-end) to the response, so they can be
     // handled elsewhere, rather than killing the process outright.

@@ -212,9 +212,49 @@ export interface OngoingRequest extends Request, stream.Readable {
     rawTrailers?: RawHeaders;
 }
 
+/**
+ * Internal representation of an ongoing body. Wraps StreamCapture, settles similarly:
+ * once you start a stream consumer, or dump the body, the stream is 'settled' and
+ * future attempts to start streaming, observing or buffering the body will fail.
+ */
 export interface OngoingBody {
+    /**
+     * Starts keeping the body content, to read later with asBuffer() and similar. Like observe(),
+     * this must be called before the body is settled, by asStream() or dump().
+     */
+    startCapture: () => void;
+    /**
+     * Returns a stream of the whole body, from the start, settling the body. Each body has a single
+     * stream consumer, so this can only be called once.
+     */
     asStream: () => stream.Readable;
+    /**
+     * Returns a stream of the whole body, from the start, without consuming it. This must be called
+     * before the body is settled, by asStream() or dump().
+     */
+    observe: () => stream.Readable;
+    /**
+     * Declares that nothing will stream the body with asStream(), settling the body, so it's read
+     * without waiting for that. Content that's being kept is still collected.
+     */
+    dump: () => void;
+    /**
+     * Resolves with the complete body content, or an empty buffer if the body is larger than the
+     * maximum body size (see isTruncated). Unless startCapture() was called earlier, this must be
+     * called before the body is settled.
+     */
     asBuffer: () => Promise<Buffer>;
+    /**
+     * Resolves once the body has been completely received. If the body isn't settled yet, its
+     * content is kept as it arrives, and it can still be streamed afterwards with asStream() only
+     * if it fit within the maximum body size.
+     */
+    waitForEnd: () => Promise<void>;
+    /**
+     * Whether the body was larger than the maximum body size, so that its content reads as empty,
+     * although the real body is not.
+     */
+    isTruncated: () => boolean;
     asDecodedBuffer: () => Promise<Buffer>;
     asText: () => Promise<string>;
     asJson: () => Promise<object>;
