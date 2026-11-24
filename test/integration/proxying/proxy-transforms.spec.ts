@@ -320,6 +320,25 @@ nodeOnly(() => {
                             `http://localhost:${remoteServer.port}/PATH-matchreplace?query=matchreplace-path`
                         );
                     });
+
+                    it("sends a root path if the entire path is replaced", async () => {
+                        await server.forGet('/matchreplace-remove-path')
+                            .thenPassThrough({
+                                transformRequest: {
+                                    matchReplacePath: [
+                                        [/.*/, '']
+                                    ]
+                                }
+                            });
+
+                        const response = await request.get(
+                            `${remoteServerHttpUrl}/matchreplace-remove-path?query=value`,
+                        { json: true });
+
+                        expect(response.url).to.equal(
+                            `http://localhost:${remoteServer.port}/?query=value`
+                        );
+                    });
                 });
 
                 describe("query", () => {

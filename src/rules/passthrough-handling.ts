@@ -388,18 +388,18 @@ export function applyDestinationTransforms(
     }
 
     if (matchReplacePath) {
-        pathname = applyMatchReplace(pathname || '/', matchReplacePath);
+        pathname = applyMatchReplace(pathname, matchReplacePath) || '/';
     }
 
     if (matchReplaceQuery) {
-        query = applyMatchReplace(query || '', matchReplaceQuery);
+        query = applyMatchReplace(query, matchReplaceQuery);
     }
 
     return {
         reqUrl: buildAbsoluteUrl(
             protocol,
             `${hostname}${(port ? `:${port}` : '')}`,
-            `${pathname || '/'}${query || ''}`
+            `${pathname}${query}`
         ),
         protocol,
         hostname,

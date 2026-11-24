@@ -778,7 +778,7 @@ export class PassThroughStepImpl extends PassThroughStep {
                 hostname: hostAddress,
                 port,
                 family,
-                path: `${pathname || '/'}${query || ''}`,
+                path: `${pathname}${query}`,
                 headers: shouldTryH2Upstream
                     ? rawHeadersToObjectPreservingCase(rawHeaders)
                     : flattenPairedRawHeaders(rawHeaders) as any,
@@ -988,7 +988,7 @@ export class PassThroughStepImpl extends PassThroughStep {
                             hostname: hostname || 'localhost',
                             port: effectivePort
                         },
-                        path: `${pathname || '/'}${query || ''}`,
+                        path: `${pathname}${query}`,
                         headers: reqHeader,
                         rawHeaders: rawHeaders,
                         timingEvents: clientReq.timingEvents,
@@ -1272,7 +1272,7 @@ export class PassThroughStepImpl extends PassThroughStep {
                     protocol: protocol.replace(/:$/, ''),
                     hostname,
                     port,
-                    path: `${pathname || '/'}${query || ''}`,
+                    path: `${pathname}${query}`,
                     rawHeaders
                 });
 
