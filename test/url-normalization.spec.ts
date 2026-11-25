@@ -104,6 +104,12 @@ describe("URL normalization for matching", () => {
             expect(formatHostAndPort('cafe')).to.equal('cafe');
         });
 
+        it("keeps a port of zero", () => {
+            expect(formatHostAndPort('example.com', 0)).to.equal('example.com:0');
+            expect(formatHostAndPort('example.com', '0')).to.equal('example.com:0');
+            expect(normalizeHost('http', 'example.com:0')).to.equal('example.com:0');
+        });
+
         it("joins malformed hostnames containing colons as they were sent", () => {
             expect(formatHostAndPort('example.invalid:1@localhost', 8000))
                 .to.equal('example.invalid:1@localhost:8000');

@@ -120,6 +120,24 @@ nodeOnly(() => {
                 expect(seenRequests[0].url).to.equal('http://[::1]/');
             });
 
+            it("should keep a port of zero, not replace it with the default port", async () => {
+                const endpoint = await server.forGet('/').thenReply(200, 'Mock response');
+
+                const response = await sendRawRequest(server,
+                    'GET / HTTP/1.1\r\n' +
+                    'Host: example.test:0\r\n' +
+                    '\r\n'
+                );
+                expect(response).to.include('HTTP/1.1 200 OK');
+
+                const seenRequests = await endpoint.getSeenRequests();
+                expect(seenRequests[0].destination).to.deep.equal({
+                    hostname: 'example.test',
+                    port: 0
+                });
+                expect(seenRequests[0].url).to.equal('http://example.test:0/');
+            });
+
             it("should mock proxied HTTP matching requests by host", async () => {
                 await server.forGet().forHost('example.com').thenReply(200, "host matched");
 

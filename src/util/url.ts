@@ -261,7 +261,8 @@ export const formatHostAndPort = (
     const formattedHostname = IPV6_LITERAL_FORM.test(unbracketedHostname)
         ? `[${unbracketedHostname}]`
         : unbracketedHostname;
-    return formattedHostname + (port ? `:${port}` : '');
+    const hasPort = port !== undefined && port !== null && port !== '';
+    return formattedHostname + (hasPort ? `:${port}` : '');
 };
 
 export const normalizeHost = (protocol: string, host: string) => {
