@@ -24,8 +24,15 @@ interface Destination {
     h2Connections: Set<H2Connection>;
     /** Settles once the latest connection attempt has joined the pool, or failed. */
     pendingConnection: Promise<void> | undefined;
+    /**
+     * Whether the latest connection negotiated HTTP/1. Every connection still negotiates
+     * for itself: this only predicts whether one that's in progress is worth waiting for.
+     */
+    expectH1: boolean;
     tlsSession: Buffer | undefined;
 }
+
+const DEFAULT_CONNECTION_WAIT_LIMIT = 3000;
 
 const DEFAULT_ALPN_PROTOCOLS = ['h2', 'http/1.1'];
 
@@ -82,6 +89,48 @@ function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
     });
 }
 
+/** Wait for a promise as above, but only for so long: once the time is up, this resolves. */
+function waitUpTo(promise: Promise<void>, ms: number, signal: AbortSignal): Promise<void> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeLimit = new Promise<void>((resolve) => { timer = setTimeout(resolve, ms); });
+    return abortable(Promise.race([promise, timeLimit]), signal).finally(() => clearTimeout(timer));
+}
+
+/**
+ * Controls one connection attempt, which is aborted along with the pool. It's also abandoned
+ * if it outlasts the time limit and the request that wanted it has gone. Until then, the
+ * connection is worth finishing for other requests, but after that it has probably stalled.
+ */
+function controlAttempt(poolSignal: AbortSignal, requestSignal: AbortSignal, timeLimit: number) {
+    const controller = new AbortController();
+    const attempt = {
+        signal: controller.signal,
+        abandoned: false,
+        release: () => {
+            clearTimeout(timer);
+            poolSignal.removeEventListener('abort', abortWithPool);
+            requestSignal.removeEventListener('abort', abandonIfUnwanted);
+        }
+    };
+
+    const abortWithPool = () => controller.abort(poolSignal.reason);
+    poolSignal.addEventListener('abort', abortWithPool, { once: true });
+
+    let overdue = false;
+    const abandonIfUnwanted = () => {
+        if (!overdue || !requestSignal.aborted) return;
+        attempt.abandoned = true;
+        controller.abort();
+    };
+    const timer = setTimeout(() => {
+        overdue = true;
+        abandonIfUnwanted();
+    }, timeLimit);
+    requestSignal.addEventListener('abort', abandonIfUnwanted, { once: true });
+
+    return attempt;
+}
+
 /**
  * Sends HTTPS requests from HTTP/2 clients, over whichever protocol each upstream
  * connection negotiates via ALPN. All connections belong to a single downstream
@@ -95,19 +144,29 @@ export class AutoProtocolPool {
     private readonly destinations = new Map<string, Destination>();
     private readonly lifetime = new AbortController();
 
+    /**
+     * @param connectionWaitLimit How long (in ms) a request waits for a connection that
+     * another request is opening, and how long a connection can take once the request
+     * that wanted it has gone.
+     */
+    constructor(private readonly connectionWaitLimit = DEFAULT_CONNECTION_WAIT_LIMIT) {}
+
     async send(requestSpec: UpstreamRequestSpec, hooks: UpstreamRequestHooks): Promise<UpstreamExchange> {
         hooks.signal.throwIfAborted();
         const destination = this.getDestination(requestSpec);
 
         // Wait for in-progress connections that could be HTTP/2, so concurrent requests share H2
-        // sessions where possible. If we already have HTTP/1 connections, then we know that's
-        // preferred, so we skip waiting and go in parallel.
+        // sessions where possible. If the server last negotiated HTTP/1 then we expect that
+        // again, so we skip waiting and go in parallel. The wait is also limited, so that a
+        // stalled connection can't hold up every other request.
+        const waitDeadline = Date.now() + this.connectionWaitLimit;
         while (true) {
             const existing = this.sendOnExisting(destination, requestSpec, hooks);
             if (existing) return existing;
 
-            if (!destination.pendingConnection || destination.h1Connections.size > 0) break;
-            await abortable(destination.pendingConnection, hooks.signal);
+            const waitRemaining = waitDeadline - Date.now();
+            if (!destination.pendingConnection || destination.expectH1 || waitRemaining <= 0) break;
+            await waitUpTo(destination.pendingConnection, waitRemaining, hooks.signal);
         }
 
         return this.sendOnNew(destination, requestSpec, hooks);
@@ -121,6 +180,7 @@ export class AutoProtocolPool {
                 h1Connections: new Set(),
                 h2Connections: new Set(),
                 pendingConnection: undefined,
+                expectH1: false,
                 tlsSession: undefined
             };
             this.destinations.set(key, destination);
@@ -151,7 +211,10 @@ export class AutoProtocolPool {
         requestSpec: UpstreamRequestSpec,
         hooks: UpstreamRequestHooks
     ): Promise<UpstreamExchange> {
-        const firstUse = this.connect(destination, requestSpec).then((connection) => {
+        this.lifetime.signal.throwIfAborted();
+        const attempt = controlAttempt(this.lifetime.signal, hooks.signal, this.connectionWaitLimit);
+
+        const firstUse = this.connect(destination, requestSpec, attempt.signal).then((connection) => {
             try {
                 return hooks.signal.aborted
                     ? {}
@@ -163,10 +226,14 @@ export class AutoProtocolPool {
             }
         });
 
-        // Others can wait for this: it rejects only if we fail to connect.
-        const pendingConnection = firstUse.then(() => {});
+        // Others can wait for this. It rejects only if we fail to connect: if we abandon
+        // the attempt ourselves, they just carry on without it.
+        const pendingConnection = firstUse.then(() => {}, (error) => {
+            if (!attempt.abandoned) throw error;
+        });
         destination.pendingConnection = pendingConnection;
         pendingConnection.catch(() => {}).finally(() => {
+            attempt.release();
             if (destination.pendingConnection === pendingConnection) {
                 destination.pendingConnection = undefined;
             }
@@ -180,9 +247,9 @@ export class AutoProtocolPool {
 
     private async connect(
         destination: Destination,
-        requestSpec: UpstreamRequestSpec
+        requestSpec: UpstreamRequestSpec,
+        signal: AbortSignal
     ): Promise<UpstreamConnection> {
-        const { signal } = this.lifetime;
         const socket = await dialTls({
             ...requestSpec.tlsOptions,
             host: requestSpec.hostname,
@@ -195,11 +262,17 @@ export class AutoProtocolPool {
             onSession: (session) => { destination.tlsSession = session; }
         }, signal);
 
-        if (socket.alpnProtocol !== 'h2') return new H1Connection(socket);
+        destination.expectH1 = socket.alpnProtocol !== 'h2';
+        if (destination.expectH1) return new H1Connection(socket);
 
         const originHost = requestSpec.tlsOptions.servername || requestSpec.hostname;
         const origin = `https://${formatHostAndPort(originHost, requestSpec.port)}`;
-        return H2Connection.open(socket, origin, signal);
+        try {
+            return await H2Connection.open(socket, origin, signal);
+        } catch (error) {
+            socket.destroy();
+            throw error;
+        }
     }
 
     private sendFirstRequest(

@@ -5,9 +5,17 @@ import * as tls from 'tls';
 import * as http from 'http';
 import * as https from 'https';
 import * as http2 from 'http2';
-import type { Readable } from 'stream';
 
-import { expect, nodeOnly, makeDestroyable, DestroyableServer, pollUntil, delay } from './test-utils';
+import {
+    expect,
+    nodeOnly,
+    makeDestroyable,
+    DestroyableServer,
+    pollUntil,
+    delay,
+    readStreamToString,
+    getRejection
+} from './test-utils';
 import type { AutoProtocolPool } from '../src/rules/upstream/auto-protocol-pool';
 import type { H1Connection } from '../src/rules/upstream/h1-connection';
 import type {
@@ -15,29 +23,11 @@ import type {
     UpstreamRequestSpec
 } from '../src/rules/upstream/upstream-exchange';
 
-const readBody = (body: Readable) => new Promise<string>((resolve, reject) => {
-    let data = '';
-    body.setEncoding('utf8');
-    body.on('data', (chunk: string) => { data += chunk; });
-    body.on('end', () => resolve(data));
-    body.on('error', reject);
-});
-
-const getRejection = async (promise: Promise<unknown>): Promise<Error> => {
-    try {
-        await promise;
-    } catch (error) {
-        if (error instanceof Error) return error;
-        throw new Error(`Rejected with a non-error: ${error}`);
-    }
-    throw new Error('Expected a rejection, but the promise resolved');
-};
-
 const completeExchange = async (exchangePromise: Promise<UpstreamExchange>) => {
     const exchange = await exchangePromise;
     exchange.requestBody.end();
     const response = await exchange.response;
-    return { statusCode: response.statusCode, body: await readBody(response.body) };
+    return { statusCode: response.statusCode, body: await readStreamToString(response.body) };
 };
 
 nodeOnly(() => {
@@ -62,11 +52,29 @@ nodeOnly(() => {
             H1ConnectionClass = (await import('../src/rules/upstream/h1-connection')).H1Connection;
         });
 
+        // TLS handshakes that the server is holding up, until each is called. This only
+        // affects new TLS sessions: resumed sessions skip the SNI callback.
+        let heldHandshakes: Array<() => void>;
+        let handshakesToHold: number;
+
+        const holdHandshakes: tls.TlsOptions['SNICallback'] = (_servername, callback) => {
+            if (handshakesToHold === 0) return callback(null);
+            handshakesToHold -= 1;
+            heldHandshakes.push(() => callback(null));
+        };
+
         beforeEach(() => {
             pool = new AutoProtocolPoolClass();
             openConnections = new Set();
             totalConnections = 0;
+            heldHandshakes = [];
+            handshakesToHold = 0;
         });
+
+        const useConnectionWaitLimit = (ms: number) => {
+            pool.destroy();
+            pool = new AutoProtocolPoolClass(ms);
+        };
 
         afterEach(async () => {
             pool.destroy();
@@ -74,24 +82,26 @@ nodeOnly(() => {
             server = undefined;
         });
 
-        const listen = async (tlsServer: net.Server) => {
+        const listen = async (tlsServer: net.Server, port = 0) => {
             tlsServer.on('secureConnection', (socket: net.Socket) => {
                 totalConnections += 1;
                 openConnections.add(socket);
                 socket.once('close', () => openConnections.delete(socket));
             });
             server = makeDestroyable(tlsServer);
-            await new Promise<void>((resolve) => tlsServer.listen(0, '127.0.0.1', resolve));
+            await new Promise<void>((resolve) => tlsServer.listen(port, '127.0.0.1', resolve));
             return (tlsServer.address() as net.AddressInfo).port;
         };
 
         const startH2Server = (
             handler: (req: http2.Http2ServerRequest, res: http2.Http2ServerResponse) => void,
-            settings: http2.Settings = {}
-        ) => listen(http2.createSecureServer({ key, cert, settings }, handler));
+            settings: http2.Settings = {},
+            port?: number
+        ) => listen(http2.createSecureServer({ key, cert, settings, SNICallback: holdHandshakes }, handler), port);
 
-        const startH1Server = (handler: (req: http.IncomingMessage, res: http.ServerResponse) => void) =>
-            listen(https.createServer({ key, cert, ALPNProtocols: ['http/1.1'] }, handler));
+        const startH1Server = (
+            handler: (req: http.IncomingMessage, res: http.ServerResponse) => void
+        ) => listen(https.createServer({ key, cert, ALPNProtocols: ['http/1.1'] }, handler));
 
         const makeRequestSpec = (
             port: number,
@@ -119,9 +129,9 @@ nodeOnly(() => {
             ]
         });
 
-        const makeHooks = (signal = new AbortController().signal) => ({
+        const makeHooks = (signal = new AbortController().signal, clientSockets: net.Socket[] = []) => ({
             signal,
-            onSocket: () => {},
+            onSocket: (socket: net.Socket) => { clientSockets.push(socket); },
             onInformational: () => {}
         });
 
@@ -177,22 +187,7 @@ nodeOnly(() => {
                 ]);
             });
 
-            it("opens another connection when existing ones are full", async () => {
-                const heldResponses: http2.Http2ServerResponse[] = [];
-                const port = await startH2Server((_req, res) => {
-                    heldResponses.push(res);
-                    if (heldResponses.length === 2) heldResponses.forEach((r) => r.end('h2'));
-                }, { maxConcurrentStreams: 1 });
-
-                const results = await Promise.all([1, 2].map(() =>
-                    completeExchange(pool.send(makeRequestSpec(port), makeHooks()))
-                ));
-
-                expect(results).to.deep.equal(Array(2).fill({ statusCode: 200, body: 'h2' }));
-                expect(totalConnections).to.equal(2);
-            });
-
-            it("shares each new connection between waiting requests, as far as it has capacity", async () => {
+            it("opens more connections once existing ones are full, sharing each between waiting requests", async () => {
                 const heldResponses: http2.Http2ServerResponse[] = [];
                 const port = await startH2Server((_req, res) => {
                     heldResponses.push(res);
@@ -212,6 +207,19 @@ nodeOnly(() => {
 
                 const error = await getRejection(pool.send(makeRequestSpec(port), makeHooks()));
                 expect(error).to.have.property('code', 'ERR_HTTP2_OUT_OF_STREAMS');
+            });
+
+            it("closes the connection if a session can't be created on it", async () => {
+                const port = await startH2Server((_req, res) => res.end());
+                const serverSockets: net.Socket[] = [];
+                server!.on('connection', (socket: net.Socket) => serverSockets.push(socket));
+
+                // Sessions are created from a URL, which can't contain this name:
+                const error = await getRejection(
+                    pool.send(makeRequestSpec(port, { servername: 'not a hostname' }), makeHooks())
+                );
+                expect(error).to.have.property('code', 'ERR_INVALID_URL');
+                await pollUntil(() => serverSockets.length === 1 && serverSockets[0].destroyed);
             });
 
         });
@@ -268,6 +276,120 @@ nodeOnly(() => {
                 );
                 expect(idleAtEnd).to.equal(false);
                 connection.destroy();
+            });
+
+            it("doesn't reuse an unused connection once the server has given up on it", async () => {
+                const port = await startH1Server((_req, res) => res.end('h1'));
+
+                // The connection is still set up and kept, but nothing has used it:
+                const abortController = new AbortController();
+                const abortedSend = pool.send(makeRequestSpec(port), makeHooks(abortController.signal));
+                abortController.abort(new Error('Aborted'));
+                await getRejection(abortedSend);
+                await pollUntil(() => openConnections.size === 1);
+
+                // The server gives up on it as Node's HTTP server does, with a 408 for a
+                // request that never came, and then we close our side too:
+                openConnections.forEach((serverSocket) => serverSocket.end(
+                    'HTTP/1.1 408 Request Timeout\r\nConnection: close\r\n\r\n'
+                ));
+                await pollUntil(() => openConnections.size === 0);
+
+                const result = await completeExchange(pool.send(makeRequestSpec(port), makeHooks()));
+                expect(result).to.deep.equal({ statusCode: 200, body: 'h1' });
+                expect(totalConnections).to.equal(2);
+            });
+
+        });
+
+        it("expects the protocol that a server last negotiated, when deciding whether to wait", async () => {
+            const clientSockets: net.Socket[] = [];
+            const send = (port: number) =>
+                completeExchange(pool.send(makeRequestSpec(port), makeHooks(undefined, clientSockets)));
+
+            // Replaces the server with an HTTP/2 server on the same port, once the pool has
+            // seen all of its connections close.
+            const restartAsH2 = async (port: number) => {
+                await server!.destroy();
+                await pollUntil(() => clientSockets.every((socket) => socket.destroyed));
+                await startH2Server((_req, res) => res.end('h2'), {}, port);
+            };
+
+            const port = await startH1Server((_req, res) => res.end('h1'));
+            expect(await send(port)).to.deep.equal({ statusCode: 200, body: 'h1' });
+
+            // HTTP/1 is still expected, so every request connects for itself, just this once:
+            await restartAsH2(port);
+            const firstBurst = await Promise.all([1, 2, 3].map(() => send(port)));
+            expect(firstBurst).to.deep.equal(Array(3).fill({ statusCode: 200, body: 'h2' }));
+            expect(totalConnections).to.equal(1 + 3);
+
+            // Now HTTP/2 is expected, so requests wait to share a connection again:
+            await restartAsH2(port);
+            const secondBurst = await Promise.all([1, 2, 3].map(() => send(port)));
+            expect(secondBurst).to.deep.equal(Array(3).fill({ statusCode: 200, body: 'h2' }));
+            expect(totalConnections).to.equal(1 + 3 + 1);
+        });
+
+        describe("given a connection that stalls", () => {
+
+            let serverSockets: net.Socket[];
+
+            // The first connection's TLS handshake hangs, until it's released
+            const startStallingServer = async () => {
+                handshakesToHold = 1;
+                const port = await startH2Server((_req, res) => res.end('h2'));
+                serverSockets = [];
+                server!.on('connection', (socket: net.Socket) => serverSockets.push(socket));
+                return port;
+            };
+
+            it("stops waiting for it at the wait limit, and abandons it once its own request goes", async () => {
+                useConnectionWaitLimit(100);
+                const port = await startStallingServer();
+
+                const abortController = new AbortController();
+                const stalledSend = pool.send(makeRequestSpec(port), makeHooks(abortController.signal));
+                await pollUntil(() => heldHandshakes.length === 1);
+
+                const startTime = Date.now();
+                const result = await completeExchange(pool.send(makeRequestSpec(port), makeHooks()));
+                expect(result).to.deep.equal({ statusCode: 200, body: 'h2' });
+                expect(Date.now() - startTime).to.be.greaterThanOrEqual(90);
+
+                // The stalled connection carries on for as long as its own request wants it:
+                expect(serverSockets[0].destroyed).to.equal(false);
+                abortController.abort(new Error('Aborted'));
+                await getRejection(stalledSend);
+                await pollUntil(() => serverSockets[0].destroyed);
+            });
+
+            it("abandons it at the wait limit, if its own request has already gone", async () => {
+                useConnectionWaitLimit(100);
+                const port = await startStallingServer();
+
+                const abortController = new AbortController();
+                const abortedSend = pool.send(makeRequestSpec(port), makeHooks(abortController.signal));
+                await pollUntil(() => heldHandshakes.length === 1);
+                abortController.abort(new Error('Aborted'));
+                await getRejection(abortedSend);
+
+                // Anybody who's waiting for that connection carries on without it:
+                const waitingRequest = completeExchange(pool.send(makeRequestSpec(port), makeHooks()));
+
+                await pollUntil(() => serverSockets[0].destroyed);
+                expect(await waitingRequest).to.deep.equal({ statusCode: 200, body: 'h2' });
+            });
+
+            it("aborts it when the pool is destroyed", async () => {
+                const port = await startStallingServer();
+
+                const send = pool.send(makeRequestSpec(port), makeHooks());
+                await pollUntil(() => heldHandshakes.length === 1);
+                pool.destroy();
+
+                expect(await getRejection(send)).to.have.property('code', 'E_DOWNSTREAM_ABORT');
+                await pollUntil(() => serverSockets[0].destroyed);
             });
 
         });
@@ -338,6 +460,36 @@ nodeOnly(() => {
             await Promise.all(exchanges.map((exchange) => getRejection(exchange.response)));
             await pollUntil(() => openConnections.size === 0);
             await getRejection(pool.send(makeRequestSpec(port), makeHooks()));
+        });
+
+        it("cancels HTTP/2 requests in progress when destroyed, failing a response that's still arriving", async () => {
+            const serverStreams: http2.ServerHttp2Stream[] = [];
+            const port = await startH2Server((req, res) => {
+                serverStreams.push(req.stream);
+                req.stream.on('error', () => {});
+                if (serverStreams.length === 2) {
+                    res.writeHead(200);
+                    res.write('partial');
+                }
+            });
+
+            const unanswered = await pool.send(makeRequestSpec(port), makeHooks());
+            const responding = await pool.send(makeRequestSpec(port), makeHooks());
+            const response = await responding.response;
+            const body = readStreamToString(response.body);
+            await new Promise((resolve) => response.body.once('data', resolve));
+
+            const failures = Promise.all([getRejection(unanswered.response), getRejection(body)]);
+            pool.destroy();
+
+            for (const error of await failures) {
+                expect(error).to.have.property('code', 'ERR_HTTP2_STREAM_ABORTED');
+            }
+            await pollUntil(() => serverStreams.every((stream) => stream.closed));
+            expect(serverStreams.map((stream) => stream.rstCode)).to.deep.equal([
+                http2.constants.NGHTTP2_CANCEL,
+                http2.constants.NGHTTP2_CANCEL
+            ]);
         });
 
     });

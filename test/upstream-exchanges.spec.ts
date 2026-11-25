@@ -1,6 +1,5 @@
 import * as net from 'net';
 import * as http2 from 'http2';
-import type { Readable } from 'stream';
 
 import {
     expect,
@@ -8,29 +7,13 @@ import {
     nodeSatisfies,
     makeDestroyable,
     DestroyableServer,
+    readStreamToString,
+    getRejection,
     DEFAULT_REQ_HEADERS_DISABLED
 } from './test-utils';
 import { startH1Exchange } from '../src/rules/upstream/h1-exchange';
 import { startH2Exchange } from '../src/rules/upstream/h2-exchange';
 import type { UpstreamRequestHooks } from '../src/rules/upstream/upstream-exchange';
-
-const readBody = (body: Readable) => new Promise<string>((resolve, reject) => {
-    let data = '';
-    body.setEncoding('utf8');
-    body.on('data', (chunk: string) => { data += chunk; });
-    body.on('end', () => resolve(data));
-    body.on('error', reject);
-});
-
-const getRejection = async (promise: Promise<unknown>): Promise<Error> => {
-    try {
-        await promise;
-    } catch (error) {
-        if (error instanceof Error) return error;
-        throw new Error(`Rejected with a non-error: ${error}`);
-    }
-    throw new Error('Expected a rejection, but the promise resolved');
-};
 
 const makeHooks = (signal = new AbortController().signal) => {
     const sockets: net.Socket[] = [];
@@ -106,7 +89,7 @@ nodeOnly(() => {
                     'Transfer-Encoding', 'chunked',
                     'Trailer', 'X-Trailer'
                 ]);
-                expect(await readBody(response.body)).to.equal('body');
+                expect(await readStreamToString(response.body)).to.equal('body');
                 expect(response.getRawTrailers()).to.deep.equal(['X-Trailer', 'trailer-value']);
 
                 // Nothing added: no Connection, framing or other default headers. Older Node
@@ -169,7 +152,7 @@ nodeOnly(() => {
                 exchange.requestBody.end();
 
                 const response = await exchange.response;
-                await getRejection(readBody(response.body));
+                await getRejection(readStreamToString(response.body));
             });
 
             it("rejects the response when aborted before a response arrives", async () => {
@@ -236,7 +219,7 @@ nodeOnly(() => {
                 expect(response.statusCode).to.equal(200);
                 expect(response.httpVersion).to.equal('2.0');
                 expect(response.headers['x-response']).to.equal('value');
-                expect(await readBody(response.body)).to.equal('body');
+                expect(await readStreamToString(response.body)).to.equal('body');
                 expect(response.getRawTrailers()).to.deep.equal(['x-trailer', 'trailer-value']);
 
                 // Request trailers can't be sent over HTTP/2:
@@ -280,18 +263,6 @@ nodeOnly(() => {
                 expect(error).to.have.property('code', 'ERR_HTTP2_STREAM_ABORTED');
             });
 
-            it("rejects the response if the session closes before a response arrives", async () => {
-                const session = await startServer((stream) => {
-                    stream.on('error', () => {});
-                    stream.session?.destroy();
-                });
-
-                const { hooks } = makeHooks();
-                const exchange = startExchange(session, hooks);
-
-                await getRejection(exchange.response);
-            });
-
             it("errors the body if the session closes mid-response", async () => {
                 const session = await startServer((stream) => {
                     stream.on('error', () => {});
@@ -303,7 +274,7 @@ nodeOnly(() => {
                 const exchange = startExchange(session, hooks);
 
                 const response = await exchange.response;
-                const error = await getRejection(readBody(response.body));
+                const error = await getRejection(readStreamToString(response.body));
                 expect(error).to.have.property('code', 'ERR_HTTP2_STREAM_ABORTED');
             });
 

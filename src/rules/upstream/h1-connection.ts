@@ -35,6 +35,10 @@ export class H1Connection {
         this.agent.on('free', () => { this.busy = false; });
         // Errors on an active socket are reported via its request; otherwise it just closes:
         socket.on('error', () => {});
+        // Until a request reads from it, a socket must still flow, like Node's own idle
+        // sockets. Otherwise we never see the server close it, and anything sent unprompted
+        // (e.g. a 408 for an unused connection) would be read as the next response.
+        socket.resume();
     }
 
     get isClosed(): boolean {

@@ -59,6 +59,24 @@ export async function pollUntil(
     }
 }
 
+export const readStreamToString = (stream: streams.Readable) => new Promise<string>((resolve, reject) => {
+    let data = '';
+    stream.setEncoding('utf8');
+    stream.on('data', (chunk: string) => { data += chunk; });
+    stream.on('end', () => resolve(data));
+    stream.on('error', reject);
+});
+
+export const getRejection = async (promise: Promise<unknown>): Promise<Error> => {
+    try {
+        await promise;
+    } catch (error) {
+        if (error instanceof Error) return error;
+        throw new Error(`Rejected with a non-error: ${error}`);
+    }
+    throw new Error('Expected a rejection, but the promise resolved');
+};
+
 if (isNode) {
     // Run a target websocket server in the background. In browsers, this is
     // launched by from the Karma script. Eventually this should be replaced

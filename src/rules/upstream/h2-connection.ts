@@ -46,7 +46,7 @@ export class H2Connection {
         return new H2Connection(session, socket);
     }
 
-    private activeStreams = 0;
+    private readonly activeStreams = new Set<http2.ClientHttp2Stream>();
 
     private constructor(
         private readonly session: http2.ClientHttp2Session,
@@ -63,17 +63,17 @@ export class H2Connection {
 
     get canTakeStream(): boolean {
         return !this.isClosed &&
-            this.activeStreams < (this.session.remoteSettings.maxConcurrentStreams ?? Infinity);
+            this.activeStreams.size < (this.session.remoteSettings.maxConcurrentStreams ?? Infinity);
     }
 
     send(headers: http2.OutgoingHttpHeaders, hooks: UpstreamRequestHooks): UpstreamExchange {
         const stream = this.session.request(headers, { signal: hooks.signal });
 
-        this.activeStreams += 1;
+        this.activeStreams.add(stream);
         this.session.ref();
         stream.once('close', () => {
-            this.activeStreams -= 1;
-            if (this.activeStreams === 0) this.session.unref();
+            this.activeStreams.delete(stream);
+            if (this.activeStreams.size === 0) this.session.unref();
         });
 
         return startH2Exchange(stream, this.socket, hooks);
@@ -84,6 +84,9 @@ export class H2Connection {
     }
 
     destroy(): void {
+        // Node ends a destroyed session's streams as if they'd completed, with nothing to
+        // show otherwise, so we cancel them first:
+        for (const stream of this.activeStreams) stream.close(http2.constants.NGHTTP2_CANCEL);
         this.session.destroy();
     }
 }
