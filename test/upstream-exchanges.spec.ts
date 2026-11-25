@@ -270,6 +270,16 @@ nodeOnly(() => {
                 expect(error).to.have.property('code', 'ERR_HTTP2_STREAM_ERROR');
             });
 
+            it("rejects the response if the stream closes cleanly before a response arrives", async () => {
+                const session = await startServer((stream) => stream.close());
+
+                const { hooks } = makeHooks();
+                const exchange = startExchange(session, hooks);
+
+                const error = await getRejection(exchange.response);
+                expect(error).to.have.property('code', 'ERR_HTTP2_STREAM_ABORTED');
+            });
+
             it("rejects the response if the session closes before a response arrives", async () => {
                 const session = await startServer((stream) => {
                     stream.on('error', () => {});
@@ -294,7 +304,7 @@ nodeOnly(() => {
 
                 const response = await exchange.response;
                 const error = await getRejection(readBody(response.body));
-                expect(error).to.have.property('code', 'ERR_HTTP2_STREAM_ERROR');
+                expect(error).to.have.property('code', 'ERR_HTTP2_STREAM_ABORTED');
             });
 
             it("cancels the upstream stream if the body is abandoned", async () => {

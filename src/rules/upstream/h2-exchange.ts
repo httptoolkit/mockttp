@@ -18,9 +18,11 @@ const withoutPseudoHeaders = (rawHeaders: string[]) => flattenPairedRawHeaders(
     pairFlatRawHeaders(rawHeaders).filter(([name]) => !name.startsWith(':'))
 );
 
-const incompleteStreamError = (stream: http2.ClientHttp2Stream) => new CustomError(
+// For a stream that stops before it's complete, without an error code. Node raises this
+// itself from v27 when the server resets a stream, but otherwise closes it silently.
+const abortedStreamError = (stream: http2.ClientHttp2Stream) => new CustomError(
     `Upstream HTTP/2 stream closed before the response completed (code ${stream.rstCode})`,
-    { code: 'ERR_HTTP2_STREAM_ERROR' }
+    { code: 'ERR_HTTP2_STREAM_ABORTED' }
 );
 
 /**
@@ -33,12 +35,11 @@ function relayResponseBody(stream: http2.ClientHttp2Stream) {
 
     stream.once('end', () => {
         if (stream.rstCode && stream.rstCode !== http2.constants.NGHTTP2_NO_ERROR) {
-            body.destroy(incompleteStreamError(stream));
+            body.destroy(abortedStreamError(stream));
         } else {
             body.end();
         }
     });
-    stream.on('error', (error) => body.destroy(error));
 
     body.once('close', () => {
         if (!body.readableEnded && !stream.closed) stream.close(http2.constants.NGHTTP2_CANCEL);
@@ -72,34 +73,33 @@ export function startH2Exchange(
     });
 
     const response = new Promise<UpstreamResponse>((resolve, reject) => {
-        let responded = false;
-        let failed = false;
+        let body: PassThrough | undefined;
 
         stream.once('response', (headers, _flags, rawHeaders) => {
-            responded = true;
+            body = relayResponseBody(stream);
             resolve({
                 statusCode: Number(headers[':status']),
                 statusMessage: '',
                 httpVersion: '2.0',
                 headers,
                 rawHeaders,
-                body: relayResponseBody(stream),
+                body,
                 getRawTrailers: () => rawTrailers
             });
         });
 
-        stream.on('error', (error) => {
-            failed = true;
-            if (!responded) reject(error);
-        });
-
-        // A session can go away without failing its streams individually. That still has
-        // to fail the exchange, or it would wait forever for a response or body end.
-        stream.once('close', () => {
-            if (failed || stream.readableEnded) return;
-            const error = incompleteStreamError(stream);
-            if (responded) stream.emit('error', error);
+        // Until the response head arrives failures reject the exchange, then they fail its body:
+        const fail = (error: Error) => {
+            if (body) body.destroy(error);
             else reject(error);
+        };
+        stream.on('error', fail);
+
+        // A stream can close without any error and without finishing, if the server resets
+        // it cleanly or its session goes away. That still has to fail the exchange, or it
+        // would wait forever for a response or body end.
+        stream.once('close', () => {
+            if (!body?.writableEnded) fail(abortedStreamError(stream));
         });
     });
 
