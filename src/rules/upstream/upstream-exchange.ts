@@ -23,6 +23,11 @@ export interface UpstreamRequestSpec extends UpstreamRequestHead {
     lookup: net.LookupFunction;
     tlsOptions: tls.ConnectionOptions;
     keyLogStream: Writable | undefined;
+    /**
+     * Whether the request ends with its headers, so no body can follow. HTTP/2 has to say
+     * so as the request starts, while HTTP/1 shows it in the headers themselves.
+     */
+    endStream: boolean;
 }
 
 export interface UpstreamRequestHooks {

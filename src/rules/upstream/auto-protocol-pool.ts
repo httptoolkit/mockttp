@@ -194,7 +194,9 @@ export class AutoProtocolPool {
         hooks: UpstreamRequestHooks
     ): UpstreamExchange | undefined {
         for (const connection of destination.h2Connections) {
-            if (connection.canTakeStream) return connection.send(toH2Headers(requestSpec), hooks);
+            if (connection.canTakeStream) {
+                return connection.send(toH2Headers(requestSpec), hooks, requestSpec.endStream);
+            }
         }
         for (const connection of destination.h1Connections) {
             if (connection.isIdle) return connection.send(toH1Head(requestSpec), hooks);
@@ -291,7 +293,7 @@ export class AutoProtocolPool {
                 { code: 'ERR_HTTP2_OUT_OF_STREAMS' }
             );
         }
-        return connection.send(toH2Headers(requestSpec), hooks);
+        return connection.send(toH2Headers(requestSpec), hooks, requestSpec.endStream);
     }
 
     private trackConnection(destination: Destination, connection: UpstreamConnection) {

@@ -108,7 +108,9 @@ nodeOnly(() => {
             options: {
                 servername?: string,
                 lookup?: net.LookupFunction,
-                rawHeaders?: [string, string][]
+                rawHeaders?: [string, string][],
+                method?: string,
+                endStream?: boolean
             } = {}
         ): UpstreamRequestSpec => ({
             protocol: 'https:',
@@ -121,8 +123,9 @@ nodeOnly(() => {
                 servername: options.servername ?? 'localhost'
             },
             keyLogStream: undefined,
-            method: 'GET',
+            method: options.method ?? 'GET',
             path: '/path',
+            endStream: options.endStream ?? true,
             rawHeaders: options.rawHeaders ?? [
                 [':authority', `localhost:${port}`],
                 [':scheme', 'https']
@@ -184,6 +187,31 @@ nodeOnly(() => {
                     ':scheme', 'https',
                     'x-custom', 'value',
                     'host', `localhost:${port}`
+                ]);
+            });
+
+            it("ends the stream with the request's headers only when told to, whatever the method", async () => {
+                const seenRequests: Array<[string, boolean, string]> = [];
+                const port = await startH2Server(async (req, res) => {
+                    seenRequests.push([req.method, req.stream.endAfterHeaders, await readStreamToString(req)]);
+                    res.end();
+                });
+
+                await completeExchange(pool.send(
+                    makeRequestSpec(port, { method: 'POST', endStream: true }),
+                    makeHooks()
+                ));
+
+                const openExchange = await pool.send(
+                    makeRequestSpec(port, { method: 'DELETE', endStream: false }),
+                    makeHooks()
+                );
+                openExchange.requestBody.end('request body');
+                await openExchange.response;
+
+                expect(seenRequests).to.deep.equal([
+                    ['POST', true, ''],
+                    ['DELETE', false, 'request body']
                 ]);
             });
 

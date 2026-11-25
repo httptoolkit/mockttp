@@ -66,8 +66,12 @@ export class H2Connection {
             this.activeStreams.size < (this.session.remoteSettings.maxConcurrentStreams ?? Infinity);
     }
 
-    send(headers: http2.OutgoingHttpHeaders, hooks: UpstreamRequestHooks): UpstreamExchange {
-        const stream = this.session.request(headers, { signal: hooks.signal });
+    send(
+        headers: http2.OutgoingHttpHeaders,
+        hooks: UpstreamRequestHooks,
+        endStream: boolean
+    ): UpstreamExchange {
+        const stream = this.session.request(headers, { signal: hooks.signal, endStream });
 
         this.activeStreams.add(stream);
         this.session.ref();
