@@ -170,23 +170,70 @@ export const getEffectivePort = (url: { protocol: string | null, port: string | 
     }
 }
 
+/**
+ * Split a host into hostname & port, or return null if it isn't an unambiguous authority -
+ * i.e. if reading it as one could mean something other than what was written.
+ */
+const tryToSplitHostAndPort = (host: string): [string, string | null] | null => {
+    if (!host || /[\/@?#]/.test(host)) return null;
+
+    if (host.startsWith('[')) {
+        const bracketEnd = host.indexOf(']');
+        if (bracketEnd === -1) return null;
+
+        const hostname = host.slice(1, bracketEnd);
+        const remainder = host.slice(bracketEnd + 1);
+        if (!hostname || (remainder && !remainder.startsWith(':'))) return null;
+        return [hostname, remainder ? remainder.slice(1) : null];
+    }
+
+    // A bare IPv6 address has no unambiguous port separator. IPv6 with a port
+    // must use the standard bracketed authority form.
+    if (isIPv6Address(host)) return [host, null];
+
+    const colonIndex = host.lastIndexOf(':');
+    if (colonIndex === -1) return [host, null];
+
+    const hostname = host.slice(0, colonIndex);
+    if (!hostname || hostname.includes(':')) return null;
+    return [hostname, host.slice(colonIndex + 1)];
+};
+
+/**
+ * Split a host we control - from rule configuration, or built by us - into hostname & port.
+ *
+ * Throws if it isn't a valid authority, because at these call sites that means a mistake
+ * we should report rather than quietly reinterpret.
+ */
+export const splitHostAndPortStrictly = (host: string): [hostname: string, port: string | null] => {
+    const parsed = tryToSplitHostAndPort(host);
+    if (!parsed) throw new Error(`Invalid host: ${host}`);
+    return parsed;
+};
+
+/**
+ * Split a host declared by a client - a Host header, :authority, SNI name or CONNECT
+ * target - into hostname & port.
+ *
+ * Clients can send anything, so we're relaxed here, aiming to accurately reproduce the
+ * real errors that these trigger upstream without auto-correction.
+ */
+export const splitHostAndPortLeniently = (host: string): [hostname: string, port: string | null] => {
+    const parsed = tryToSplitHostAndPort(host);
+    if (parsed) return parsed;
+
+    // A malformed bracketed host has no reliable port, so we don't guess at one:
+    if (host.startsWith('[')) return [host, null];
+
+    const portMatch = /:(\d+)$/.exec(host);
+    return portMatch
+        ? [host.slice(0, portMatch.index), portMatch[1]]
+        : [host, null];
+};
+
 export const getDestination = (protocol: string, host: string): Destination => {
-    let hostname: string;
-    let portString: string | undefined;
-
-    const lastColonIndex = host.lastIndexOf(':');
-    if (lastColonIndex !== -1) {
-        hostname = host.slice(0, lastColonIndex);
-        portString = host.slice(lastColonIndex + 1);
-    } else {
-        hostname = host;
-        portString = undefined;
-    }
-
-    if (hostname[0] === '[' && hostname[hostname.length - 1] === ']') {
-        // Bracketed IPv6 address, drop the brackets:
-        hostname = hostname.slice(1, -1);
-    }
+    // Destinations come from clients, so host parsing is best effort
+    const [hostname, portString] = splitHostAndPortLeniently(host);
 
     const port = portString
         ? parseInt(portString, 10)
@@ -199,16 +246,32 @@ export const getDestination = (protocol: string, host: string): Destination => {
     return { hostname, port };
 };
 
+// Anything that could be an IPv6 literal (including IPv4-mapped or with a zone ID), which must be
+// bracketed for a port to be unambiguous. Any other host with a colon came from a malformed client
+// host, and joining it as-is reproduces what the client sent.
+const IPV6_LITERAL_FORM = /^[0-9a-fA-F.]*:[0-9a-fA-F:.]*(%.+)?$/;
+
+export const formatHostAndPort = (
+    hostname: string,
+    port?: string | number | null
+): string => {
+    const unbracketedHostname = hostname.startsWith('[') && hostname.endsWith(']')
+        ? hostname.slice(1, -1)
+        : hostname;
+    const formattedHostname = IPV6_LITERAL_FORM.test(unbracketedHostname)
+        ? `[${unbracketedHostname}]`
+        : unbracketedHostname;
+    const hasPort = port !== undefined && port !== null && port !== '';
+    return formattedHostname + (hasPort ? `:${port}` : '');
+};
+
 export const normalizeHost = (protocol: string, host: string) => {
     const { hostname, port } = getDestination(protocol, host);
-    const normalizedHostname = isIPv6Address(hostname)
-        ? `[${hostname}]`
-        : hostname;
 
     if (port === getDefaultPort(protocol)) {
-        return normalizedHostname;
+        return formatHostAndPort(hostname);
     } else {
-        return `${normalizedHostname}:${port}`;
+        return formatHostAndPort(hostname, port);
     }
 }
 

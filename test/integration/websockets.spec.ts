@@ -445,6 +445,36 @@ nodeOnly(() => {
                     expect(response.toString()).to.equal('test echo');
                 });
 
+                it('can be passed through via an upstream proxy', async () => {
+                    const intermediateProxy = getLocal({
+                        https: {
+                            keyPath: './test/fixtures/test-ca.key',
+                            certPath: './test/fixtures/test-ca.pem'
+                        }
+                    });
+                    await intermediateProxy.start();
+
+                    try {
+                        const proxyEndpoint = await intermediateProxy.forAnyWebSocket().thenPassThrough();
+                        await mockServer.forAnyWebSocket().thenPassThrough({
+                            proxyConfig: { proxyUrl: intermediateProxy.url }
+                        });
+
+                        const ws = new WebSocket(`wss://localhost:${wsPort}`, {
+                            agent: new HttpsProxyAgent(`http://localhost:${mockServer.port}`)
+                        });
+
+                        ws.on('open', () => ws.send('test echo'));
+
+                        const response = await waitForMessageThenClose(ws);
+
+                        expect(response.toString()).to.equal('test echo');
+                        expect((await proxyEndpoint.getSeenRequests()).length).to.equal(1);
+                    } finally {
+                        await intermediateProxy.stop();
+                    }
+                });
+
             });
 
             describe("to an untrusted HTTPS WS server", () => {

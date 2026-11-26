@@ -882,19 +882,27 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
                         : (isErrorLike(e) && e.message) || e
                 );
 
-                // Do whatever we can to tell the client we broke
-                try {
-                    response.writeHead(
-                        (isErrorLike(e) && e.statusCode) || 500,
-                        (isErrorLike(e) && e.statusMessage) || 'Server error'
-                    );
-                } catch (e) {}
+                if (response.headersSent) {
+                    // The response is already underway, so the only way left to report a
+                    // failure is to break it off. Anything else looks like a complete response.
+                    const error = e instanceof Error ? e : new Error(String(e));
+                    abort(error);
+                    response.destroy(error);
+                } else {
+                    // Do whatever we can to tell the client we broke
+                    try {
+                        response.writeHead(
+                            (isErrorLike(e) && e.statusCode) || 500,
+                            (isErrorLike(e) && e.statusMessage) || 'Server error'
+                        );
+                    } catch (e) {}
 
-                try {
-                    response.end((isErrorLike(e) && e.toString()) || e);
-                    result ||= 'responded';
-                } catch (e) {
-                    abort(e as Error);
+                    try {
+                        response.end((isErrorLike(e) && e.toString()) || e);
+                        result ||= 'responded';
+                    } catch (e) {
+                        abort(e as Error);
+                    }
                 }
             }
         }

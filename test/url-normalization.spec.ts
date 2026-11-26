@@ -1,16 +1,121 @@
 import {
     buildAbsoluteUrl,
+    formatHostAndPort,
     getDestination,
     getUrlSearch,
     normalizeHost,
     normalizeUrl,
     parseQueryString,
-    parseRequestUrl
+    parseRequestUrl,
+    splitHostAndPortLeniently,
+    splitHostAndPortStrictly
 } from '../src/util/url';
 
 import { expect } from "./test-utils";
 
 describe("URL normalization for matching", () => {
+    describe("host and port parsing", () => {
+        it("parses domain, bracketed IPv6 and bare IPv6 hosts consistently", () => {
+            expect(splitHostAndPortStrictly('Example.COM:8080'))
+                .to.deep.equal(['Example.COM', '8080']);
+            expect(splitHostAndPortStrictly('[::1]:8080'))
+                .to.deep.equal(['::1', '8080']);
+            expect(splitHostAndPortStrictly('::1'))
+                .to.deep.equal(['::1', null]);
+        });
+
+        it("uses the shared parsing when building destinations", () => {
+            expect(getDestination('https', '[::1]:8443')).to.deep.equal({
+                hostname: '::1',
+                port: 8443
+            });
+            expect(getDestination('https', '::1')).to.deep.equal({
+                hostname: '::1',
+                port: 443
+            });
+        });
+
+        it("rejects ambiguous hosts from our own configuration", () => {
+            // Where we control the value, an unparseable host is a mistake worth reporting,
+            // rather than something to guess at:
+            expect(() => splitHostAndPortStrictly('user@example.com')).to.throw('Invalid host');
+            expect(() => splitHostAndPortStrictly('example.com/path')).to.throw('Invalid host');
+            expect(() => splitHostAndPortStrictly('')).to.throw('Invalid host');
+        });
+
+        it("preserves invalid host headers exactly as the client sent them", () => {
+            // A client can send whatever it likes, and testing what a server does with a
+            // malformed Host is a legitimate thing to want to do. We never reinterpret it -
+            // notably we don't strip userinfo and connect somewhere else - we just carry it
+            // through and let the connection attempt fail on its own terms.
+            expect(splitHostAndPortLeniently('user@example.com'))
+                .to.deep.equal(['user@example.com', null]);
+            expect(splitHostAndPortLeniently('user@example.com:8080'))
+                .to.deep.equal(['user@example.com', '8080']);
+            expect(splitHostAndPortLeniently('example.com/path'))
+                .to.deep.equal(['example.com/path', null]);
+            expect(splitHostAndPortLeniently('what?is#this'))
+                .to.deep.equal(['what?is#this', null]);
+
+            // Valid hosts are unaffected, and parse identically either way:
+            expect(splitHostAndPortLeniently('[::1]:8080')).to.deep.equal(['::1', '8080']);
+            expect(splitHostAndPortLeniently('Example.COM:8080'))
+                .to.deep.equal(['Example.COM', '8080']);
+        });
+
+        it("splits hex-only hostnames from their port, rather than reading them as IPv6", () => {
+            for (const split of [splitHostAndPortStrictly, splitHostAndPortLeniently]) {
+                expect(split('db:5432')).to.deep.equal(['db', '5432']);
+                expect(split('cafe:8080')).to.deep.equal(['cafe', '8080']);
+            }
+            expect(getDestination('http', 'abc:3000')).to.deep.equal({
+                hostname: 'abc',
+                port: 3000
+            });
+        });
+
+        it("doesn't guess a port from a malformed bracketed host", () => {
+            expect(splitHostAndPortLeniently('[::1')).to.deep.equal(['[::1', null]);
+            expect(splitHostAndPortLeniently('[::1]x')).to.deep.equal(['[::1]x', null]);
+        });
+
+        it("builds destinations from invalid host headers without failing", () => {
+            expect(getDestination('http', 'user@example.com')).to.deep.equal({
+                hostname: 'user@example.com',
+                port: 80
+            });
+            expect(getDestination('http', 'user@example.com:8080')).to.deep.equal({
+                hostname: 'user@example.com',
+                port: 8080
+            });
+        });
+    });
+
+    describe("host formatting", () => {
+        it("brackets IPv6 hostnames in every form", () => {
+            expect(formatHostAndPort('::1', 8080)).to.equal('[::1]:8080');
+            expect(formatHostAndPort('[::1]', 8080)).to.equal('[::1]:8080');
+            expect(formatHostAndPort('::ffff:127.0.0.1', 8080)).to.equal('[::ffff:127.0.0.1]:8080');
+            expect(formatHostAndPort('fe80::1%eth0')).to.equal('[fe80::1%eth0]');
+        });
+
+        it("leaves other hostnames as they are", () => {
+            expect(formatHostAndPort('Example.COM', '443')).to.equal('Example.COM:443');
+            expect(formatHostAndPort('cafe')).to.equal('cafe');
+        });
+
+        it("keeps a port of zero", () => {
+            expect(formatHostAndPort('example.com', 0)).to.equal('example.com:0');
+            expect(formatHostAndPort('example.com', '0')).to.equal('example.com:0');
+            expect(normalizeHost('http', 'example.com:0')).to.equal('example.com:0');
+        });
+
+        it("joins malformed hostnames containing colons as they were sent", () => {
+            expect(formatHostAndPort('example.invalid:1@localhost', 8000))
+                .to.equal('example.invalid:1@localhost:8000');
+        });
+    });
+
     describe("host normalization", () => {
         it("should bracket IPv6 hosts with non-default HTTP ports", () => {
             expect(

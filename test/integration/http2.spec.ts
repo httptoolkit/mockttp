@@ -17,6 +17,8 @@ import {
     makeDestroyable,
     cleanup,
     BROKEN_H2_OVER_H2_TUNNELLING,
+    DEFAULT_REQ_HEADERS_DISABLED,
+    defaultNodeConnectionHeader,
     getDeferred,
     nodeSatisfies,
     openSocksSocket
@@ -305,8 +307,11 @@ nodeOnly(() => {
 
                     expect(seenRequests[0].headers).to.deep.equal({
                         'host': `localhost:${remoteServer.port}`, // Host replaces :authority
-                        'connection': 'keep-alive', // We add this for upstream, as all H2 are keep-alive
-                        'cookie': 'a=b; b=c' // Concatenated automatically
+                        'cookie': 'a=b; b=c', // Concatenated automatically
+                        // Nothing else is added, except where Node can't disable its defaults:
+                        ...(!nodeSatisfies(DEFAULT_REQ_HEADERS_DISABLED)
+                            ? { 'connection': defaultNodeConnectionHeader }
+                            : {})
                     });
 
                     await cleanup(proxiedReq, proxiedClient, client);
@@ -316,7 +321,9 @@ nodeOnly(() => {
                     await remoteServer.forGet('/mocked-endpoint')
                         .thenReply(200, "Remote HTTP2 response!", {
                             'HEADER-KEY': 'HEADER-VALUE',
-                            'Connection': 'close'
+                            'Connection': 'close',
+                            'TE': 'gzip',
+                            'Host': 'example.com'
                         });
                     await server.forGet(remoteServer.urlFor('/mocked-endpoint'))
                         .thenPassThrough();
@@ -349,7 +356,7 @@ nodeOnly(() => {
                     ).to.deep.equal({
                         ':status': 200,
                         'header-key': 'HEADER-VALUE' // We lowercase all header keys
-                        // Connection: close is omitted
+                        // Connection, TE & Host are omitted, as HTTP/2 doesn't use them
                     });
 
                     await cleanup(proxiedRequest, proxiedClient, client);

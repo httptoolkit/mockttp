@@ -213,28 +213,87 @@ export function updateRawHeaders(
     return updatedRawHeaders;
 }
 
-// See https://httptoolkit.com/blog/translating-http-2-into-http-1/ for details on the
-// transformations required between H2 & H1 when proxying.
-export function h2HeadersToH1(h2Headers: RawHeaders, method: string): RawHeaders {
-    let h1Headers = h2Headers.filter(([key]) => key[0] !== ':');
+// Lowercase to browser-case map for the set of standard headers that browsers (Chrome) send
+// consistently with a given casing in H1. Excludes sec-ch-ua-* headers (always lowercase).
+const H1_HEADER_NAMES = new Map([
+    'Accept',
+    'Accept-Charset',
+    'Accept-Encoding',
+    'Accept-Language',
+    'Access-Control-Request-Headers',
+    'Access-Control-Request-Method',
+    'Authorization',
+    'Cache-Control',
+    'Connection',
+    'Content-Length',
+    'Content-Type',
+    'Cookie',
+    'DNT',
+    'Host',
+    'If-Match',
+    'If-Modified-Since',
+    'If-None-Match',
+    'If-Range',
+    'If-Unmodified-Since',
+    'Origin',
+    'Pragma',
+    'Priority',
+    'Proxy-Authorization',
+    'Proxy-Connection',
+    'Range',
+    'Referer',
+    'Sec-Fetch-Dest',
+    'Sec-Fetch-Mode',
+    'Sec-Fetch-Site',
+    'Sec-Fetch-Storage-Access',
+    'Sec-Fetch-User',
+    'Sec-GPC',
+    'Sec-Private-Verification-Token',
+    'Sec-Purpose',
+    'Sec-WebSocket-Extensions',
+    'Sec-WebSocket-Key',
+    'Sec-WebSocket-Protocol',
+    'Sec-WebSocket-Version',
+    'Transfer-Encoding',
+    'Upgrade',
+    'Upgrade-Insecure-Requests',
+    'User-Agent'
+].map((name): [string, string] => [name.toLowerCase(), name]));
+
+/**
+ * Convert HTTP/2 request headers into the HTTP/1 request that the same client would send,
+ * changing as little as possible: order, duplicates and values are all preserved.
+ */
+export function h2HeadersToH1(h2Headers: RawHeaders, endStream: boolean): RawHeaders {
+    const h1Headers: RawHeaders = [];
+    let cookieHeader: RawHeaders[number] | undefined;
+
+    for (const [name, value] of h2Headers) {
+        if (name[0] === ':') continue;
+
+        // If we have a lowercase match, use the browser case equivalent. If this name isn't
+        // lowercase then it definitely came from elsewhere, e.g. a rule, so we preserve as is.
+        const h1Name = H1_HEADER_NAMES.get(name) ?? name;
+
+        if (name.toLowerCase() !== 'cookie') {
+            h1Headers.push([h1Name, value]);
+        } else if (!cookieHeader) {
+            cookieHeader = [h1Name, value];
+            h1Headers.push(cookieHeader);
+        } else {
+            // In HTTP/1 you MUST only send one cookie header - in HTTP/2 sending multiple is
+            // fine, so we concatenate in the position of the first header was:
+            cookieHeader[1] += `; ${value}`;
+        }
+    }
 
     if (!findRawHeader(h1Headers, 'host') && findRawHeader(h2Headers, ':authority')) {
         h1Headers.unshift(['Host', findRawHeader(h2Headers, ':authority')![1]]);
     }
 
-    // In HTTP/1 you MUST only send one cookie header - in HTTP/2 sending multiple is fine,
-    // so we have to concatenate them:
-    const cookieHeaders = findRawHeaders(h1Headers, 'cookie')
-    if (cookieHeaders.length > 1) {
-        h1Headers = h1Headers.filter(([key]) => key.toLowerCase() !== 'cookie');
-        h1Headers.push(['Cookie', cookieHeaders.map(([, value]) => value).join('; ')]);
-    }
-
-    // We don't know if the request has a body yet - but just in case, we ensure it could:
+    // HTTP/2 bodies don't need a length, but HTTP/1 bodies need some framing:
     if (
-        // If the request is a method that probably has a body
-        method !== 'GET' &&
-        method !== 'HEAD' &&
+        !endStream &&
         !( // And you haven't set any kind of framing headers:
             findRawHeader(h1Headers, 'content-length') ||
             // T-E: chunked is almost completely unreachable here, but we check anyway to guard
@@ -247,8 +306,7 @@ export function h2HeadersToH1(h2Headers: RawHeaders, method: string): RawHeaders
     return h1Headers;
 }
 
-// Take from http2/util.js in Node itself
-const HTTP2_ILLEGAL_HEADERS = [
+const H1_ONLY_HEADERS = [
     'connection',
     'upgrade',
     'host',
@@ -258,10 +316,25 @@ const HTTP2_ILLEGAL_HEADERS = [
     'transfer-encoding'
 ];
 
-export function h1HeadersToH2(headers: RawHeaders): RawHeaders {
-    return headers.filter(([key]) =>
-        !HTTP2_ILLEGAL_HEADERS.includes(key.toLowerCase())
-    );
+/**
+ * HTTP/2 forbids various headers entirely (RFC 9113 8.2.2) and Node refuses to send most of them in
+ * either direction, so we drop them. TE is allowed, but only as exactly 'trailers'.
+ */
+export function h1HeadersToH2(rawHeaders: RawHeaders): RawHeaders {
+    return rawHeaders.flatMap(([name, value]): RawHeaders => {
+        const lowerName = name.toLowerCase();
+
+        if (lowerName === 'te') {
+            const acceptsTrailers = value.split(',').some((coding) =>
+                coding.split(';')[0].trim().toLowerCase() === 'trailers'
+            );
+            return acceptsTrailers ? [[name, 'trailers']] : [];
+        }
+
+        return H1_ONLY_HEADERS.includes(lowerName)
+            ? []
+            : [[name, value]];
+    });
 }
 
 // If the user explicitly specifies headers, we tell Node not to handle them,

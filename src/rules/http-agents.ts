@@ -3,7 +3,6 @@ import * as http from 'http';
 import * as https from 'https';
 import type * as http2 from 'http2';
 
-import h2Client from 'http2-wrapper';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import { PacProxyAgent } from 'pac-proxy-agent';
 import { SocksProxyAgent } from 'socks-proxy-agent';
@@ -14,6 +13,7 @@ import { isHttp2 } from '../util/request-utils';
 import { OngoingRequest } from '../types';
 import { UpstreamConnectionAgents, UpstreamConnectionAgentMap } from '../util/socket-extensions';
 import { AbortError } from '../util/abort-error';
+import { AutoProtocolPool } from './upstream/auto-protocol-pool';
 
 /**
  * A downstream connection: the socket, tunnel stream, or H2 session a request arrives on,
@@ -113,21 +113,28 @@ const abortForDeadConnection = () => new AbortError(
 );
 
 
-/**
- * Get the agent to use for a given upstream request, based on config and the downstream
- * connection it arrives on. We aim to match up & downstream connections roughly 1-1 but at
- * most 1-N (i.e. reusing upstreams within a connection, never sharing them across connections).
- */
-export async function getAgent({
-    connection, protocol, hostname, port, tryHttp2, proxySettingSource
-}: {
+interface AgentOptions {
     connection: Connection,
     protocol: 'http:' | 'https:' | 'ws:' | 'wss:' | undefined,
     hostname: string,
     port: number,
     tryHttp2: boolean,
     proxySettingSource: ProxySettingSource
-}): Promise<http.Agent | false> { // <-- We force cast to Agent for convenience in various different uses later
+}
+
+/**
+ * Get the agent to use for a given upstream request, based on config and the downstream
+ * connection it arrives on. We aim to match up & downstream connections roughly 1-1 but at
+ * most 1-N (i.e. reusing upstreams within a connection, never sharing them across connections).
+ *
+ * If HTTP/2 could be used upstream, this returns a pool that negotiates the protocol for
+ * each connection, rather than an HTTP/1 agent.
+ */
+export function getAgent(options: AgentOptions & { tryHttp2: false }): Promise<http.Agent | false>;
+export function getAgent(options: AgentOptions): Promise<http.Agent | false | AutoProtocolPool>;
+export async function getAgent({
+    connection, protocol, hostname, port, tryHttp2, proxySettingSource
+}: AgentOptions): Promise<http.Agent | false | AutoProtocolPool> {
     const proxySetting = await getProxySetting(proxySettingSource, { hostname });
 
     // If the connection has died (previously, or during above await) then this is pointless.
@@ -174,15 +181,8 @@ export async function getAgent({
     if (protocol === 'ws:' || protocol === 'wss:') return false;
 
     if (tryHttp2 && protocol === 'https:') {
-        // H2 wrapper takes multiple agents, uses the appropriate one for the detected protocol.
         // We notably never use H2 upstream for plaintext, it's rare and we can't use ALPN to detect it.
-        const httpsAgent = getOrCreateConnectionAgent(connection, 'https:', () =>
-            new https.Agent({ keepAlive: true })
-        );
-        const http2Agent = getOrCreateConnectionAgent(connection, 'http2:', () =>
-            new h2Client.Agent()
-        );
-        return { https: httpsAgent, http2: http2Agent } as any as http.Agent;
+        return getOrCreateConnectionAgent(connection, 'auto-protocol', () => new AutoProtocolPool());
     } else {
         // A per-connection keep-alive agent. Whether a given socket is actually reused or
         // closed after the response is driven by header and downstream behaviour, so we can

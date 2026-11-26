@@ -1,4 +1,6 @@
 import { Buffer } from 'buffer';
+import { PassThrough } from 'stream';
+import * as net from 'net';
 import * as http from 'http';
 import * as zlib from 'zlib';
 
@@ -13,7 +15,8 @@ import {
     CompletedRequest,
     CompletedResponse,
     MockedEndpoint,
-    Request
+    Request,
+    RuleEvent
 } from "../../..";
 import {
     expect,
@@ -21,9 +24,13 @@ import {
     getDeferred,
     Deferred,
     delay,
+    pollUntil,
     sendRawRequest,
     openRawSocket,
     makeAbortableRequest,
+    readStreamToString,
+    getRejection,
+    makeDestroyable,
     defaultNodeConnectionHeader
 } from "../../test-utils";
 import { isLocalIPv6Available } from "../../../src/util/socket-util";
@@ -80,6 +87,60 @@ nodeOnly(() => {
                 const response = await sendRawRequest(server, 'GET http://example.com HTTP/1.1\r\n\r\n');
                 expect(response).to.include('HTTP/1.1 200 OK');
                 expect(response).to.include('Mock response');
+            });
+
+            it("should parse hex-only hostnames with ports as normal hosts", async () => {
+                const endpoint = await server.forGet('/').thenReply(200, 'Mock response');
+
+                const response = await sendRawRequest(server,
+                    'GET / HTTP/1.1\r\n' +
+                    'Host: cafe:8080\r\n' +
+                    '\r\n'
+                );
+                expect(response).to.include('HTTP/1.1 200 OK');
+
+                const seenRequests = await endpoint.getSeenRequests();
+                expect(seenRequests[0].destination).to.deep.equal({
+                    hostname: 'cafe',
+                    port: 8080
+                });
+                expect(seenRequests[0].url).to.equal('http://cafe:8080/');
+            });
+
+            it("should parse absolute IPv6 URLs without a port", async () => {
+                const endpoint = await server.forGet('/').thenReply(200, 'Mock response');
+
+                const response = await sendRawRequest(server,
+                    'GET http://[::1]/ HTTP/1.1\r\n' +
+                    'Host: [::1]\r\n' +
+                    '\r\n'
+                );
+                expect(response).to.include('HTTP/1.1 200 OK');
+
+                const seenRequests = await endpoint.getSeenRequests();
+                expect(seenRequests[0].destination).to.deep.equal({
+                    hostname: '::1',
+                    port: 80
+                });
+                expect(seenRequests[0].url).to.equal('http://[::1]/');
+            });
+
+            it("should keep a port of zero, not replace it with the default port", async () => {
+                const endpoint = await server.forGet('/').thenReply(200, 'Mock response');
+
+                const response = await sendRawRequest(server,
+                    'GET / HTTP/1.1\r\n' +
+                    'Host: example.test:0\r\n' +
+                    '\r\n'
+                );
+                expect(response).to.include('HTTP/1.1 200 OK');
+
+                const seenRequests = await endpoint.getSeenRequests();
+                expect(seenRequests[0].destination).to.deep.equal({
+                    hostname: 'example.test',
+                    port: 0
+                });
+                expect(seenRequests[0].url).to.equal('http://example.test:0/');
             });
 
             it("should mock proxied HTTP matching requests by host", async () => {
@@ -1151,6 +1212,21 @@ nodeOnly(() => {
                 expect(response).to.equal('got correct req url');
             });
 
+            it("should see a replaced request body in beforeResponse", async () => {
+                await remoteServer.forPost('/').thenReply(200);
+
+                let seenBody: string | undefined;
+                await server.forPost(remoteServer.urlFor("/")).thenPassThrough({
+                    transformRequest: { replaceBody: 'replaced' },
+                    beforeResponse: async (_res, req) => {
+                        seenBody = await req.body.getText();
+                    }
+                });
+
+                await request.post(remoteServer.urlFor("/"), { body: 'original' });
+                expect(seenBody).to.equal('replaced');
+            });
+
             it("should be able to rewrite a response's status", async () => {
                 await remoteServer.forGet('/').thenReply(404);
                 await server.forGet(remoteServer.urlFor("/")).thenPassThrough({
@@ -1362,12 +1438,54 @@ nodeOnly(() => {
                 ]);
             });
 
+            it("should break off the response if the upstream fails after the response has started", async () => {
+                const upstreamBody = new PassThrough();
+                upstreamBody.write('partial');
+                await remoteServer.forGet('/').thenStream(200, upstreamBody);
+                await server.forGet(remoteServer.urlFor('/')).thenPassThrough();
+
+                const response = await new Promise<http.IncomingMessage>((resolve) =>
+                    http.get({ port: server.port, path: remoteServer.urlFor('/') }, resolve)
+                );
+                expect(response.statusCode).to.equal(200);
+
+                // The status can't change once sent, but the body mustn't look complete:
+                response.once('data', () => upstreamBody.destroy(new Error('Upstream failure')));
+                await getRejection(readStreamToString(response));
+            });
+
+            it("should fail the response if the upstream body fails as soon as it starts", async () => {
+                // The head and an invalid chunk arrive together, so the body fails immediately:
+                const upstream = makeDestroyable(net.createServer((socket) => {
+                    socket.on('error', () => {});
+                    socket.once('data', () => socket.end(
+                        'HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\nZZZ\r\n'
+                    ));
+                }));
+                await new Promise<void>((resolve) => upstream.listen(0, '127.0.0.1', resolve));
+                const upstreamUrl = `http://127.0.0.1:${(upstream.address() as net.AddressInfo).port}/`;
+                await server.forGet(upstreamUrl).thenPassThrough();
+
+                try {
+                    await getRejection(new Promise((resolve, reject) =>
+                        http.get({ port: server.port, path: upstreamUrl }, (response) =>
+                            readStreamToString(response).then(resolve, reject)
+                        ).on('error', reject)
+                    ));
+                } finally {
+                    await upstream.destroy();
+                }
+            });
+
             it('should abort upstream requests if downstream is aborted', async () => {
                 const seenRequestPromise = getDeferred<CompletedRequest>();
                 remoteServer.on('request', (r) => seenRequestPromise.resolve(r));
 
                 const seenAbortPromise = getDeferred<AbortedRequest>();
                 remoteServer.on('abort', (r) => seenAbortPromise.resolve(r));
+
+                const ruleEvents: RuleEvent[] = [];
+                await server.on('rule-event', (event) => ruleEvents.push(event));
 
                 await remoteServer.forPost('/mocked-endpoint').thenTimeout();
                 await server.forPost('/mocked-endpoint').thenPassThrough();
@@ -1384,6 +1502,14 @@ nodeOnly(() => {
                 const seenAbort = await seenAbortPromise;
                 expect(seenRequest.id).to.equal(seenAbort.id);
                 expect(seenAbort.error).to.equal(undefined); // Client abort, not an error
+
+                const isAbortEvent = ({ eventType }: RuleEvent) => eventType === 'passthrough-abort';
+                await pollUntil(() => ruleEvents.some(isAbortEvent));
+                const passthroughAbort = ruleEvents.find(isAbortEvent);
+                expect(passthroughAbort?.eventData).to.have.property(
+                    'downstreamAborted',
+                    true
+                );
             });
 
             it('should gracefully handle client connection getting closed in the middle of the body', async () => {

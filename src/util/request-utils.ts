@@ -52,6 +52,7 @@ import {
     getHostFromAbsoluteUrl,
     getPathFromAbsoluteUrl,
     isAbsoluteUrl,
+    formatHostAndPort,
     normalizeHost,
     parseRequestUrl
 } from './url';
@@ -358,7 +359,10 @@ export function preprocessRequest(req: ExtendedRawRequest, options: {
         // URL port should always match the real port - even if (e.g) the Host header is lying.
         urlDestination.port = req.destination.port;
 
-        const urlHost = normalizeHost(req.protocol, `${urlDestination.hostname}:${urlDestination.port}`);
+        const urlHost = normalizeHost(
+            req.protocol,
+            formatHostAndPort(urlDestination.hostname, urlDestination.port)
+        );
 
         let effectiveUrl: string;
         try {
@@ -871,7 +875,10 @@ export function tryToParseHttpRequest(input: Buffer, socket: net.Socket): Partia
                 // URI is absolute, or we have no way to guess the host at all
                 req.url = rawUri;
             } else {
-                const host = normalizeHost(req.protocol, `${req.destination.hostname}:${req.destination.port}`);
+                const host = normalizeHost(
+                    req.protocol,
+                    formatHostAndPort(req.destination.hostname, req.destination.port)
+                );
 
                 // URI is relative (or invalid) and we have a host: use it
                 req.url = `${req.protocol}://${host}${

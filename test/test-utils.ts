@@ -11,7 +11,6 @@ import * as https from 'https';
 import * as http2 from 'http2';
 
 import _ from 'lodash';
-import * as http2Wrapper from 'http2-wrapper';
 import {
     FormData as FormDataPolyfill,
     File as FilePolyfill
@@ -53,10 +52,29 @@ export async function pollUntil(
 ) {
     const deadline = Date.now() + timeout;
     await delay(minDelay);
-    while (!condition() && Date.now() < deadline) {
+    while (!condition()) {
+        if (Date.now() >= deadline) throw new Error(`Condition not met within ${timeout}ms: ${condition}`);
         await delay(5);
     }
 }
+
+export const readStreamToString = (stream: streams.Readable) => new Promise<string>((resolve, reject) => {
+    let data = '';
+    stream.setEncoding('utf8');
+    stream.on('data', (chunk: string) => { data += chunk; });
+    stream.on('end', () => resolve(data));
+    stream.on('error', reject);
+});
+
+export const getRejection = async (promise: Promise<unknown>): Promise<Error> => {
+    try {
+        await promise;
+    } catch (error) {
+        if (error instanceof Error) return error;
+        throw new Error(`Rejected with a non-error: ${error}`);
+    }
+    throw new Error('Expected a rejection, but the promise resolved');
+};
 
 if (isNode) {
     // Run a target websocket server in the background. In browsers, this is
@@ -523,11 +541,3 @@ export async function cleanup(
         }
     });
 }
-
-beforeEach(() => {
-    if (isNode) {
-        // Http2-wrapper has a hostname -> H1/H2 cache, which can cause problems
-        // when our tests reuse ports with servers of different protocols.
-        (http2Wrapper.auto as any).protocolCache.clear();
-    }
-});

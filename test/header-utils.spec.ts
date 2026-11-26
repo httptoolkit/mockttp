@@ -1,4 +1,8 @@
-import { h2HeadersToH1, updateRawHeaders } from "../src/util/header-utils";
+import {
+    h1HeadersToH2,
+    h2HeadersToH1,
+    updateRawHeaders
+} from "../src/util/header-utils";
 import { expect } from "./test-utils";
 
 describe("Header utils", () => {
@@ -108,31 +112,116 @@ describe("Header utils", () => {
 
     });
 
-    describe("h2HeadersToH1", () => {
+    describe("h1HeadersToH2", () => {
 
-        it("combines multiple cookie headers using only their values", () => {
-            expect(
-                h2HeadersToH1([
-                    [':authority', 'example.com'],
-                    ['cookie', 'session=abc'],
-                    ['cookie', 'preferences=dark-mode']
-                ], 'GET')
-            ).to.deep.equal([
-                ['Host', 'example.com'],
-                ['Cookie', 'session=abc; preferences=dark-mode']
+        it("drops connection-specific headers, in any case", () => {
+            expect(h1HeadersToH2([
+                ['Connection', 'keep-alive'],
+                ['keep-alive', 'timeout=5'],
+                ['Proxy-Connection', 'keep-alive'],
+                ['Transfer-Encoding', 'chunked'],
+                ['upgrade', 'websocket'],
+                ['HTTP2-Settings', 'AAMAAABkAARAAAAAAAIAAAAA'],
+                ['x-other', 'value']
+            ])).to.deep.equal([
+                ['x-other', 'value']
             ]);
         });
 
-        it("adds chunked encoding to bodied requests with no framing headers", () => {
+        it("drops host headers, which :authority replaces", () => {
+            expect(h1HeadersToH2([
+                ['Host', 'example.com']
+            ])).to.deep.equal([]);
+        });
+
+        it("reduces TE to exactly 'trailers', if trailers are accepted", () => {
+            expect(h1HeadersToH2([
+                ['TE', 'Trailers, deflate;q=0.5']
+            ])).to.deep.equal([
+                ['TE', 'trailers']
+            ]);
+        });
+
+        it("drops TE if trailers aren't accepted", () => {
+            expect(h1HeadersToH2([
+                ['te', 'gzip']
+            ])).to.deep.equal([]);
+        });
+
+    });
+
+    describe("h2HeadersToH1", () => {
+
+        it("combines cookie headers where the first one was, keeping everything else in order", () => {
+            expect(
+                h2HeadersToH1([
+                    [':method', 'GET'],
+                    [':authority', 'example.com'],
+                    ['x-first', '1'],
+                    ['x-dup', 'a'],
+                    ['cookie', 'session=abc'],
+                    ['x-empty', ''],
+                    ['x-dup', 'b'],
+                    ['COOKIE', 'preferences=dark-mode'],
+                    ['x-last', 'z']
+                ], true)
+            ).to.deep.equal([
+                ['Host', 'example.com'],
+                ['x-first', '1'],
+                ['x-dup', 'a'],
+                ['Cookie', 'session=abc; preferences=dark-mode'],
+                ['x-empty', ''],
+                ['x-dup', 'b'],
+                ['x-last', 'z']
+            ]);
+        });
+
+        it("uses the casing browsers use over HTTP/1, for lowercase names that they generate", () => {
             expect(
                 h2HeadersToH1([
                     [':authority', 'example.com'],
-                    ['content-type', 'text/plain']
-                ], 'POST')
+                    ['user-agent', 'test-agent'],
+                    ['sec-fetch-site', 'same-origin'],
+                    ['dnt', '1'],
+                    // Browsers send client hints in lowercase over HTTP/1 too:
+                    ['sec-ch-ua', '"Chromium";v="153"'],
+                    ['x-custom-header', 'value'],
+                    // Any other casing was set by a rule:
+                    ['ACCEPT', '*/*']
+                ], true)
             ).to.deep.equal([
                 ['Host', 'example.com'],
-                ['content-type', 'text/plain'],
+                ['User-Agent', 'test-agent'],
+                ['Sec-Fetch-Site', 'same-origin'],
+                ['DNT', '1'],
+                ['sec-ch-ua', '"Chromium";v="153"'],
+                ['x-custom-header', 'value'],
+                ['ACCEPT', '*/*']
+            ]);
+        });
+
+        it("adds chunked encoding when a body follows without framing headers, whatever the method", () => {
+            expect(
+                h2HeadersToH1([
+                    [':method', 'GET'],
+                    [':authority', 'example.com'],
+                    ['content-type', 'text/plain']
+                ], false)
+            ).to.deep.equal([
+                ['Host', 'example.com'],
+                ['Content-Type', 'text/plain'],
                 ['Transfer-Encoding', 'chunked']
+            ]);
+        });
+
+        it("adds no framing to requests that end with their headers, whatever the method", () => {
+            expect(
+                h2HeadersToH1([
+                    [':method', 'DELETE'],
+                    [':authority', 'example.com']
+                ], true)
+            ).to.deep.equal([
+                ['Host', 'example.com']
             ]);
         });
 
@@ -141,10 +230,10 @@ describe("Header utils", () => {
                 h2HeadersToH1([
                     [':authority', 'example.com'],
                     ['transfer-encoding', 'gzip, chunked']
-                ], 'POST')
+                ], false)
             ).to.deep.equal([
                 ['Host', 'example.com'],
-                ['transfer-encoding', 'gzip, chunked']
+                ['Transfer-Encoding', 'gzip, chunked']
             ]);
         });
 
@@ -153,10 +242,10 @@ describe("Header utils", () => {
                 h2HeadersToH1([
                     [':authority', 'example.com'],
                     ['transfer-encoding', 'gzip']
-                ], 'POST')
+                ], false)
             ).to.deep.equal([
                 ['Host', 'example.com'],
-                ['transfer-encoding', 'gzip'],
+                ['Transfer-Encoding', 'gzip'],
                 ['Transfer-Encoding', 'chunked']
             ]);
         });

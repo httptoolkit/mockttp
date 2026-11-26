@@ -22,7 +22,7 @@ import { Destination, TlsHandshakeFailure } from '../types';
 import { CAOptions, getCA } from '../util/certificates';
 import { LruCache } from '../util/lru-cache';
 import { shouldPassThrough } from '../util/server-utils';
-import { getDestination } from '../util/url';
+import { formatHostAndPort, getDestination, splitHostAndPortLeniently } from '../util/url';
 import { nodeVersionSatisfies } from '../util/node-version';
 import {
     getParentSocket,
@@ -298,14 +298,10 @@ export async function createComboServer(options: ComboServerOptions): Promise<Co
     if (options.socks) {
         socksServer = buildSocksServer(options.socks === true ? {} : options.socks);
         socksServer.on('socks-tcp-connect', (socket: net.Socket, address: SocksTcpAddress) => {
-            const addressString =
-                address.type === 'ipv4'
-                    ? `${address.ip}:${address.port}`
-                : address.type === 'ipv6'
-                    ? `[${address.ip}]:${address.port}`
-                : address.type === 'hostname'
-                    ? `${address.hostname}:${address.port}`
-                : unreachableCheck(address)
+            const addressString = formatHostAndPort(
+                address.type === 'hostname' ? address.hostname : address.ip,
+                address.port
+            );
 
             if (options.debug) console.log(`Proxying SOCKS TCP connection to ${addressString}`);
 
@@ -327,7 +323,7 @@ export async function createComboServer(options: ComboServerOptions): Promise<Co
                     error = new CustomError('Unknown protocol without destination', {
                         code: 'UNKNOWN_PROTOCOL_NO_DESTINATION'
                     });
-                } else if (!tunnelAddress.includes(':')) {
+                } else if (!splitHostAndPortLeniently(tunnelAddress)[1]) {
                     // Both CONNECT & SOCKS require a port, so this shouldn't happen
                     error = new CustomError('Unknown protocol without destination port', {
                         code: 'UNKNOWN_PROTOCOL_NO_DESTINATION_PORT'

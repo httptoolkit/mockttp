@@ -9,7 +9,13 @@ import { oneLine } from 'common-tags';
 import CacheableLookup from 'cacheable-lookup';
 import { ErrorLike, unreachableCheck } from '@httptoolkit/util';
 
-import { CompletedBody, Headers, RawHeaders } from '../types';
+import {
+    CompletedBody,
+    Headers,
+    OngoingRequest,
+    OngoingResponse,
+    RawHeaders
+} from '../types';
 import { byteLength } from '../util/util';
 import { nodeVersionSatisfies } from '../util/node-version';
 import { asBuffer } from '../util/buffer-utils';
@@ -18,7 +24,14 @@ import { CachedDns, dnsLookup, DnsLookupFunction } from '../util/dns';
 import { isMockttpBody, encodeBodyBuffer } from '../util/request-utils';
 import { areFFDHECurvesSupported } from '../util/openssl-compat';
 import { findRawHeaderIndex, getHeaderValue } from '../util/header-utils';
-import { buildAbsoluteUrl, getDefaultPort, parseRequestUrl } from '../util/url';
+import {
+    buildAbsoluteUrl,
+    formatHostAndPort,
+    getDefaultPort,
+    parseRequestUrl,
+    splitHostAndPortLeniently,
+    splitHostAndPortStrictly
+} from '../util/url';
 import { TlsMetadata, TlsClientHello } from '../util/socket-extensions';
 import { buildTlsImpersonationConfig } from '../util/tls-impersonation';
 import type { Connection } from './http-agents';
@@ -80,9 +93,9 @@ export function getUpstreamTlsOptions({
 }): tls.ConnectionOptions {
     const strictHttpsChecks = shouldUseStrictHttps(hostname, port, ignoreHostHttpsErrors);
 
-    const hostWithPort = `${hostname}:${port}`;
-    const clientCert = clientCertificateHostMap[hostWithPort] ||
-        clientCertificateHostMap[hostname] ||
+    const clientCert = getHostConfigKeys(hostname, port)
+        .map((key) => clientCertificateHostMap[key])
+        .find((cert) => cert !== undefined) ||
         clientCertificateHostMap['*'] ||
         {};
 
@@ -118,7 +131,6 @@ export function getUpstreamTlsOptions({
         // This should only be undefined if impersonation isn't supported:
         if (impersonationConfig) {
             // Mirror the client's ALPN, filtered to protocols we want upstream.
-            // N.b. http2-wrapper currently overrides ALPN on the H2 path regardless (for now).
             const speakableUpstreamAlpn = tryHttp2Upstream ? ['h2', 'http/1.1'] : ['http/1.1'];
             const mirroredAlpn = impersonationConfig.tlsOptions.ALPNProtocols
                 ?.filter(p => speakableUpstreamAlpn.includes(p));
@@ -274,7 +286,7 @@ export function getEffectiveHostname(
     socket: net.Socket,
     rawHeaders: RawHeaders
 ) {
-    return destinationHostname && !isIP(destinationHostname)
+    const effectiveHost = destinationHostname && !isIP(destinationHostname)
         ? destinationHostname
         : ( // Use header info rather than raw IPs, if we can:
             getHeaderValue(rawHeaders, ':authority') ??
@@ -282,7 +294,10 @@ export function getEffectiveHostname(
             socket[TlsMetadata]?.sniHostname ??
             destinationHostname ?? // Use bare IP destination if we have nothing else
             'localhost'
-        ).replace(/:\d+$/, '');
+        );
+
+    // Every source above is client-declared, so this tolerates whatever they sent:
+    return splitHostAndPortLeniently(effectiveHost)[0];
 }
 
 /**
@@ -353,12 +368,15 @@ export function applyDestinationTransforms(
 
     if (replaceHost) {
         const { targetHost } = replaceHost;
-        [hostname, port] = targetHost.split(':');
+        [hostname, port] = splitHostAndPortStrictly(targetHost);
     }
 
     if (matchReplaceHost) {
-        const result = applyMatchReplace(port === null ? hostname! : `${hostname}:${port}`, matchReplaceHost.replacements);
-        [hostname, port] = result.split(':');
+        // Matched in authority form, with IPv6 bracketed, since that's the only unambiguous way
+        // to write it with a port. The result is derived from the client's host, so it's parsed
+        // just as leniently.
+        const result = applyMatchReplace(formatHostAndPort(hostname, port), matchReplaceHost.replacements);
+        [hostname, port] = splitHostAndPortLeniently(result);
     }
 
     if ((replaceHost?.updateHostHeader ?? matchReplaceHost?.updateHostHeader) !== false) {
@@ -380,7 +398,7 @@ export function applyDestinationTransforms(
 
         if (updateHostHeader === undefined || updateHostHeader === true) {
             // If updateHostHeader is true, or just not specified, match the new target
-            hostHeader[1] = hostname + (port ? `:${port}` : '');
+            hostHeader[1] = formatHostAndPort(hostname, port);
         } else if (updateHostHeader) {
             // If it's an explicit custom value, use that directly.
             hostHeader[1] = updateHostHeader;
@@ -398,7 +416,7 @@ export function applyDestinationTransforms(
     return {
         reqUrl: buildAbsoluteUrl(
             protocol,
-            `${hostname}${(port ? `:${port}` : '')}`,
+            formatHostAndPort(hostname, port),
             `${pathname}${query}`
         ),
         protocol,
@@ -569,15 +587,25 @@ function shouldUseStrictHttps(
     if (ignoreHostHttpsErrors === true) {
         // Ignore cert errors if `ignoreHostHttpsErrors` is set to true, or
         skipHttpsErrors = true;
-    } else if (Array.isArray(ignoreHostHttpsErrors) && (
+    } else if (Array.isArray(ignoreHostHttpsErrors) &&
         // if the whole hostname or host+port is whitelisted
-        ignoreHostHttpsErrors.includes(hostname) ||
-        ignoreHostHttpsErrors.includes(`${hostname}:${port}`)
-    )) {
+        getHostConfigKeys(hostname, port).some((key) => ignoreHostHttpsErrors.includes(key))
+    ) {
         skipHttpsErrors = true;
     }
     return !skipHttpsErrors;
 }
+
+/**
+ * The keys a host can be listed under in configuration, most specific first: with its port,
+ * or alone. An IPv6 host can be written alone with or without brackets, but needs them
+ * with a port to be unambiguous.
+ */
+const getHostConfigKeys = (hostname: string, port: number) => _.uniq([
+    formatHostAndPort(hostname, port),
+    hostname,
+    formatHostAndPort(hostname)
+]);
 
 export type DnsLookupFunctionGetter =
     ((lookupOptions: PassThroughLookupOptions | undefined) => DnsLookupFunction) & MemoizedFunction;
@@ -634,6 +662,37 @@ export async function getClientRelativeHostname(
     } else {
         return hostname;
     }
+}
+
+/**
+ * An abort signal for upstream work, which fires if the downstream request is aborted or its
+ * connection closes before the response has been sent.
+ */
+export function trackDownstreamAbort(
+    downstreamRequest: OngoingRequest,
+    downstreamResponse: OngoingResponse
+) {
+    const controller = new AbortController();
+
+    const abort = () => controller.abort(
+        new AbortError('Downstream request aborted', 'E_DOWNSTREAM_ABORT')
+    );
+    const stop = () => {
+        downstreamRequest.off('aborted', abort);
+        downstreamResponse.off('close', abort);
+        downstreamResponse.off('finish', stop);
+    };
+
+    downstreamRequest.once('aborted', abort);
+    downstreamResponse.once('close', abort);
+    downstreamResponse.once('finish', stop);
+
+    if (
+        ('aborted' in downstreamRequest && downstreamRequest.aborted) ||
+        downstreamResponse.destroyed
+    ) abort();
+
+    return { signal: controller.signal, abort, stop };
 }
 
 export function buildUpstreamErrorTags(e: ErrorLike) {
