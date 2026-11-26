@@ -1,4 +1,5 @@
 import { Buffer } from 'buffer';
+import { PassThrough } from 'stream';
 import * as http from 'http';
 import * as zlib from 'zlib';
 
@@ -26,6 +27,8 @@ import {
     sendRawRequest,
     openRawSocket,
     makeAbortableRequest,
+    readStreamToString,
+    getRejection,
     defaultNodeConnectionHeader
 } from "../../test-utils";
 import { isLocalIPv6Available } from "../../../src/util/socket-util";
@@ -1359,6 +1362,22 @@ nodeOnly(() => {
                     'Error: socket hang up',
                     'Error: read ECONNRESET'
                 ]);
+            });
+
+            it("should break off the response if the upstream fails after the response has started", async () => {
+                const upstreamBody = new PassThrough();
+                upstreamBody.write('partial');
+                await remoteServer.forGet('/').thenStream(200, upstreamBody);
+                await server.forGet(remoteServer.urlFor('/')).thenPassThrough();
+
+                const response = await new Promise<http.IncomingMessage>((resolve) =>
+                    http.get({ port: server.port, path: remoteServer.urlFor('/') }, resolve)
+                );
+                expect(response.statusCode).to.equal(200);
+
+                // The status can't change once sent, but the body mustn't look complete:
+                response.once('data', () => upstreamBody.destroy(new Error('Upstream failure')));
+                await getRejection(readStreamToString(response));
             });
 
             it('should abort upstream requests if downstream is aborted', async () => {
