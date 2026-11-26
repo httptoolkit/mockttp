@@ -142,13 +142,16 @@ nodeOnly(() => {
 
             it("shares one connection between concurrent requests", async () => {
                 const port = await startH2Server((_req, res) => res.end('h2'));
+                let tcpConnections = 0;
+                server!.on('connection', () => { tcpConnections += 1; });
 
                 const results = await Promise.all([1, 2, 3].map(() =>
                     completeExchange(pool.send(makeRequestSpec(port), makeHooks()))
                 ));
 
                 expect(results).to.deep.equal(Array(3).fill({ statusCode: 200, body: 'h2' }));
-                expect(totalConnections).to.equal(1);
+                // Including the TCP connection that negotiated HTTP/2, which carries the session:
+                expect(tcpConnections).to.equal(1);
             });
 
             it("advertises 4MB stream and 32MB connection flow-control windows", async () => {

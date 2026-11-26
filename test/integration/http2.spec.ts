@@ -17,6 +17,8 @@ import {
     makeDestroyable,
     cleanup,
     BROKEN_H2_OVER_H2_TUNNELLING,
+    DEFAULT_REQ_HEADERS_DISABLED,
+    defaultNodeConnectionHeader,
     getDeferred,
     nodeSatisfies,
     openSocksSocket
@@ -305,8 +307,11 @@ nodeOnly(() => {
 
                     expect(seenRequests[0].headers).to.deep.equal({
                         'host': `localhost:${remoteServer.port}`, // Host replaces :authority
-                        'connection': 'keep-alive', // We add this for upstream, as all H2 are keep-alive
-                        'cookie': 'a=b; b=c' // Concatenated automatically
+                        'cookie': 'a=b; b=c', // Concatenated automatically
+                        // Nothing else is added, except where Node can't disable its defaults:
+                        ...(!nodeSatisfies(DEFAULT_REQ_HEADERS_DISABLED)
+                            ? { 'connection': defaultNodeConnectionHeader }
+                            : {})
                     });
 
                     await cleanup(proxiedReq, proxiedClient, client);

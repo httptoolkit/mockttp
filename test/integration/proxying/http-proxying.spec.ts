@@ -1,5 +1,6 @@
 import { Buffer } from 'buffer';
 import { PassThrough } from 'stream';
+import * as net from 'net';
 import * as http from 'http';
 import * as zlib from 'zlib';
 
@@ -29,6 +30,7 @@ import {
     makeAbortableRequest,
     readStreamToString,
     getRejection,
+    makeDestroyable,
     defaultNodeConnectionHeader
 } from "../../test-utils";
 import { isLocalIPv6Available } from "../../../src/util/socket-util";
@@ -1378,6 +1380,29 @@ nodeOnly(() => {
                 // The status can't change once sent, but the body mustn't look complete:
                 response.once('data', () => upstreamBody.destroy(new Error('Upstream failure')));
                 await getRejection(readStreamToString(response));
+            });
+
+            it("should fail the response if the upstream body fails as soon as it starts", async () => {
+                // The head and an invalid chunk arrive together, so the body fails immediately:
+                const upstream = makeDestroyable(net.createServer((socket) => {
+                    socket.on('error', () => {});
+                    socket.once('data', () => socket.end(
+                        'HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\nZZZ\r\n'
+                    ));
+                }));
+                await new Promise<void>((resolve) => upstream.listen(0, '127.0.0.1', resolve));
+                const upstreamUrl = `http://127.0.0.1:${(upstream.address() as net.AddressInfo).port}/`;
+                await server.forGet(upstreamUrl).thenPassThrough();
+
+                try {
+                    await getRejection(new Promise((resolve, reject) =>
+                        http.get({ port: server.port, path: upstreamUrl }, (response) =>
+                            readStreamToString(response).then(resolve, reject)
+                        ).on('error', reject)
+                    ));
+                } finally {
+                    await upstream.destroy();
+                }
             });
 
             it('should abort upstream requests if downstream is aborted', async () => {

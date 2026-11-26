@@ -194,9 +194,7 @@ nodeOnly(() => {
 
         describe("for an HTTP/2 client downgraded to an HTTP/1.1 upstream", () => {
 
-            // Known gap: http2-wrapper's H1 fallback rebuilds the headers as an object, so
-            // duplicates are grouped, Host is appended last and Connection: keep-alive is added.
-            it.skip("forwards every header in order, with only the changes H1 requires", async function () {
+            it("forwards every header in order, with only the changes H1 requires", async function () {
                 if (!nodeSatisfies('>=22.17.0')) this.skip();
 
                 const target = await makeH1OnlyTlsTarget(caKey, caCert);
@@ -293,6 +291,105 @@ nodeOnly(() => {
 
                     expect(headerLines(target.requests()[0]))
                         .to.include('Transfer-Encoding: chunked');
+                } finally {
+                    await target.destroy();
+                }
+            });
+
+        });
+
+        describe("for an HTTP/2 client and an HTTP/2 upstream", () => {
+
+            interface SeenH2Request {
+                method: string | undefined;
+                endedWithHeaders: boolean;
+                body: string;
+            }
+
+            // Records how each request was framed, as well as what it contained
+            async function makeH2Target() {
+                const requests: SeenH2Request[] = [];
+                const h2Server = makeDestroyable(http2.createSecureServer({ key: caKey, cert: caCert }));
+                h2Server.on('stream', (stream: http2.ServerHttp2Stream, headers) => {
+                    const request: SeenH2Request = {
+                        method: headers[':method'],
+                        endedWithHeaders: stream.endAfterHeaders,
+                        body: ''
+                    };
+                    requests.push(request);
+
+                    stream.setEncoding('utf8');
+                    stream.on('data', (data: string) => { request.body += data; });
+                    stream.on('end', () => {
+                        stream.respond({ ':status': 200 });
+                        stream.end('ok');
+                    });
+                    stream.on('error', () => {});
+                });
+                await new Promise<void>((resolve) => h2Server.listen(0, '127.0.0.1', resolve));
+
+                return {
+                    port: (h2Server.address() as net.AddressInfo).port,
+                    requests,
+                    destroy: () => h2Server.destroy()
+                };
+            }
+
+            async function sendH2Request(
+                targetPort: number,
+                method: string,
+                send: (request: http2.ClientHttp2Stream) => void,
+                options?: http2.ClientSessionRequestOptions
+            ) {
+                server = getLocal({ http2: true });
+                await server.start();
+                await server.forAnyRequest().thenPassThrough({
+                    ignoreHostHttpsErrors: ['127.0.0.1']
+                });
+
+                const client = http2.connect(server.url, { ca: caCert });
+                const request = client.request({
+                    ':method': method,
+                    ':path': '/',
+                    ':scheme': 'https',
+                    ':authority': `127.0.0.1:${targetPort}`
+                }, options);
+                send(request);
+
+                const response = await getHttp2Response(request);
+                expect(response[':status']).to.equal(200);
+                request.resume();
+                await new Promise<void>((resolve, reject) => {
+                    request.once('end', resolve);
+                    request.once('error', reject);
+                });
+                client.close();
+            }
+
+            it("ends a request with its headers, if the client did", async () => {
+                const target = await makeH2Target();
+                try {
+                    // A POST is assumed to have a body unless it's ended explicitly like this:
+                    await sendH2Request(target.port, 'POST', () => {}, { endStream: true });
+
+                    expect(target.requests).to.deep.equal([
+                        { method: 'POST', endedWithHeaders: true, body: '' }
+                    ]);
+                } finally {
+                    await target.destroy();
+                }
+            });
+
+            it("sends a request body for methods that don't usually have one", async () => {
+                const target = await makeH2Target();
+                try {
+                    await sendH2Request(target.port, 'DELETE', (request) => request.end('body'), {
+                        endStream: false
+                    });
+
+                    expect(target.requests).to.deep.equal([
+                        { method: 'DELETE', endedWithHeaders: false, body: 'body' }
+                    ]);
                 } finally {
                     await target.destroy();
                 }

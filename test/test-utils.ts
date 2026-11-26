@@ -11,7 +11,6 @@ import * as https from 'https';
 import * as http2 from 'http2';
 
 import _ from 'lodash';
-import * as http2Wrapper from 'http2-wrapper';
 import {
     FormData as FormDataPolyfill,
     File as FilePolyfill
@@ -541,11 +540,3 @@ export async function cleanup(
         }
     });
 }
-
-beforeEach(() => {
-    if (isNode) {
-        // Http2-wrapper has a hostname -> H1/H2 cache, which can cause problems
-        // when our tests reuse ports with servers of different protocols.
-        (http2Wrapper.auto as any).protocolCache.clear();
-    }
-});

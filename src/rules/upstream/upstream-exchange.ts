@@ -56,7 +56,10 @@ export interface UpstreamResponse {
     httpVersion: string;
     headers: Headers;
     rawHeaders: string[];
-    /** Ends normally, or emits an error if the exchange fails after the head. */
+    /**
+     * Ends normally, or fails if the exchange fails after the head. It can fail before
+     * the response is handled, so check its outcome with stream.finished().
+     */
     body: Readable;
     /** Complete once the body has ended. */
     getRawTrailers(): string[];

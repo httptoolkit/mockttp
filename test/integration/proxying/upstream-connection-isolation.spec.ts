@@ -8,6 +8,7 @@ import * as https from 'https';
 import * as http2 from 'http2';
 
 import { getLocal, Mockttp } from "../../..";
+import { isLocalIPv6Available } from "../../../src/util/socket-util";
 import { startTestProxy, TestProxy } from "../../fixtures/test-connect-proxy";
 import {
     expect,
@@ -21,6 +22,7 @@ import {
     openRawTlsSocket,
     makeDestroyable,
     sendRawRequest,
+    readStreamToString,
     BROKEN_H2_OVER_H2_TUNNELLING
 } from "../../test-utils";
 
@@ -565,15 +567,7 @@ nodeOnly(() => {
                 await cleanup(client1, client2);
             });
 
-            // Known gap: HTTP/2 *upstream* connections are correctly isolated between
-            // downstream connections (above), but are not currently reused between
-            // requests within a single downstream connection. This is a limitation of
-            // http2-wrapper's `auto`: its ALPN-probe path feeds the probe socket back in
-            // via `_reuseSocket`, which pollutes the session's cache name so the agent
-            // never reuses the existing session (reproducible with http2-wrapper alone,
-            // independent of Mockttp). Fixing it requires an http2-wrapper change, so for
-            // now each upstream H2 request opens its own connection.
-            it.skip("reuses HTTP/2 upstream connections across streams within one downstream connection", async () => {
+            it("reuses HTTP/2 upstream connections across streams within one downstream connection", async () => {
                 await forwardToTls();
                 const client = http2.connect(server.url, { ca: caCert });
 
@@ -582,6 +576,106 @@ nodeOnly(() => {
 
                 expect(id1).to.equal(id2);
                 await cleanup(client);
+            });
+
+            it("drains a GOAWAY session while sending later streams on a new session", async () => {
+                let nextSessionId = 0;
+                const sessionIds = new WeakMap<http2.Http2Session, number>();
+                let finishFirstResponse: (() => void) | undefined;
+                const goawayTarget = makeDestroyable(http2.createSecureServer({
+                    key: caKey,
+                    cert: caCert
+                }));
+                goawayTarget.on('session', (session) => {
+                    sessionIds.set(session, ++nextSessionId);
+                });
+                goawayTarget.on('stream', (stream: http2.ServerHttp2Stream) => {
+                    const session = stream.session;
+                    if (!session) throw new Error('HTTP/2 stream unexpectedly had no session');
+                    const sessionId = sessionIds.get(session)!;
+                    if (sessionId === 1) {
+                        // Start a response, but send GOAWAY before its body, and finish it later:
+                        stream.respond({ ':status': 200 });
+                        session.goaway();
+                        stream.write('1-');
+                        finishFirstResponse = () => stream.end('done');
+                    } else {
+                        stream.end(String(sessionId));
+                        finishFirstResponse?.();
+                    }
+                });
+                await new Promise<void>((resolve) => goawayTarget.listen(0, '127.0.0.1', resolve));
+                const goawayPort = (goawayTarget.address() as net.AddressInfo).port;
+
+                try {
+                    await server.forAnyRequest().thenForwardTo(`https://127.0.0.1:${goawayPort}`, {
+                        ignoreHostHttpsErrors: ['127.0.0.1']
+                    });
+                    const client = http2.connect(server.url, { ca: caCert });
+
+                    const first = client.request({ ':path': '/first' });
+                    first.end();
+                    const firstBody = readStreamToString(first);
+                    // The GOAWAY reaches the proxy ahead of this body data:
+                    await new Promise((resolve) => first.once('data', resolve));
+
+                    expect(await h2Get(client, '/second')).to.equal('2');
+                    expect(await firstBody).to.equal('1-done');
+                    expect(nextSessionId).to.equal(2);
+
+                    await cleanup(client);
+                } finally {
+                    await goawayTarget.destroy();
+                }
+            });
+
+            it("cancels only the aborted request, leaving the shared upstream connection usable", async () => {
+                let sessionCount = 0;
+                const sessionIds = new WeakMap<http2.Http2Session, number>();
+                const resetCodes: number[] = [];
+                const h2Target = makeDestroyable(http2.createSecureServer({
+                    key: caKey,
+                    cert: caCert
+                }));
+                h2Target.on('session', (session) => {
+                    sessionIds.set(session, ++sessionCount);
+                });
+                h2Target.on('stream', (stream, headers) => {
+                    // Never answer /slow, so it can be aborted while it's in flight:
+                    if (headers[':path'] === '/slow') {
+                        stream.on('error', () => {});
+                        stream.once('close', () => resetCodes.push(stream.rstCode));
+                        return;
+                    }
+                    stream.end(String(stream.session && sessionIds.get(stream.session)));
+                });
+                await new Promise<void>((resolve) => h2Target.listen(0, '127.0.0.1', resolve));
+                const h2Port = (h2Target.address() as net.AddressInfo).port;
+
+                try {
+                    await server.forAnyRequest().thenForwardTo(`https://127.0.0.1:${h2Port}`, {
+                        ignoreHostHttpsErrors: ['127.0.0.1']
+                    });
+                    const client = http2.connect(server.url, { ca: caCert });
+
+                    const idBefore = await h2Get(client);
+
+                    const stalled = client.request({ ':path': '/slow' });
+                    stalled.on('error', () => {});
+                    stalled.end();
+                    await delay(100);
+                    stalled.close(http2.constants.NGHTTP2_CANCEL);
+
+                    // The upstream stream is cancelled, but its connection carries on:
+                    await pollUntil(() => resetCodes.length === 1);
+                    expect(resetCodes).to.deep.equal([http2.constants.NGHTTP2_CANCEL]);
+                    expect(await h2Get(client)).to.equal(idBefore);
+                    expect(sessionCount).to.equal(1);
+
+                    await cleanup(client);
+                } finally {
+                    await h2Target.destroy();
+                }
             });
 
             it("rejects rather than hanging when an upstream session closes without a stream error", async () => {
@@ -796,6 +890,98 @@ nodeOnly(() => {
                     await pollUntil(() => sessions.size === 0);
                 } finally {
                     await limitedTarget.destroy();
+                }
+            });
+
+            it("keeps negotiating when only the request that wanted the connection is aborted", async () => {
+                // Accepts connections but never completes a TLS handshake on them:
+                const stalledSockets = new Set<net.Socket>();
+                const stalledTarget = makeDestroyable(net.createServer((socket) => {
+                    stalledSockets.add(socket);
+                    socket.once('close', () => stalledSockets.delete(socket));
+                    socket.resume(); // So that we see the client close
+                }));
+                await new Promise<void>((resolve) => stalledTarget.listen(0, '127.0.0.1', resolve));
+                const stalledPort = (stalledTarget.address() as net.AddressInfo).port;
+
+                try {
+                    await server.forAnyRequest().thenForwardTo(`https://127.0.0.1:${stalledPort}`, {
+                        ignoreHostHttpsErrors: ['127.0.0.1']
+                    });
+                    const client = http2.connect(server.url, { ca: caCert });
+                    const request = client.request({ ':path': '/' });
+                    request.on('error', () => {});
+                    request.end();
+
+                    await pollUntil(() => stalledSockets.size === 1);
+                    request.close(http2.constants.NGHTTP2_CANCEL);
+
+                    // Connections belong to the downstream connection, which is still open, so
+                    // this one is still worth finishing for its later requests:
+                    await delay(100);
+                    expect(stalledSockets.size).to.equal(1);
+
+                    client.destroy();
+                    await pollUntil(() => stalledSockets.size === 0);
+                } finally {
+                    await stalledTarget.destroy();
+                }
+            });
+
+            it("connects to HTTPS HTTP/2 targets using IPv6 literals", async function () {
+                if (!isLocalIPv6Available) this.skip();
+
+                const ipv6Target = makeDestroyable(http2.createSecureServer({
+                    key: caKey,
+                    cert: caCert
+                }, (_req, res) => res.end('ipv6')));
+                await new Promise<void>((resolve, reject) => {
+                    ipv6Target.once('error', reject);
+                    ipv6Target.listen(0, '::1', resolve);
+                });
+                const ipv6Port = (ipv6Target.address() as net.AddressInfo).port;
+
+                try {
+                    await server.forAnyRequest().thenForwardTo(`https://[::1]:${ipv6Port}`, {
+                        ignoreHostHttpsErrors: ['::1']
+                    });
+                    const client = http2.connect(server.url, { ca: caCert });
+
+                    expect(await h2Get(client)).to.equal('ipv6');
+                    await cleanup(client);
+                } finally {
+                    await ipv6Target.destroy();
+                }
+            });
+
+            it("follows a server that switches from HTTP/2 to HTTP/1", async () => {
+                const firstTarget = makeDestroyable(http2.createSecureServer({
+                    key: caKey,
+                    cert: caCert
+                }, (_req, res) => res.end('h2')));
+                await new Promise<void>((resolve) => firstTarget.listen(0, '127.0.0.1', resolve));
+                const changingPort = (firstTarget.address() as net.AddressInfo).port;
+                const secondTarget = makeDestroyable(https.createServer({
+                    key: caKey,
+                    cert: caCert,
+                    ALPNProtocols: ['http/1.1']
+                }, (_req, res) => res.end('h1')));
+
+                try {
+                    await server.forAnyRequest().thenForwardTo(`https://127.0.0.1:${changingPort}`, {
+                        ignoreHostHttpsErrors: ['127.0.0.1']
+                    });
+                    const client = http2.connect(server.url, { ca: caCert });
+
+                    expect(await h2Get(client)).to.equal('h2');
+                    await firstTarget.destroy();
+                    await new Promise<void>((resolve) => secondTarget.listen(changingPort, '127.0.0.1', resolve));
+
+                    expect(await h2Get(client)).to.equal('h1');
+                    await cleanup(client);
+                } finally {
+                    if (firstTarget.listening) await firstTarget.destroy();
+                    if (secondTarget.listening) await secondTarget.destroy();
                 }
             });
         });

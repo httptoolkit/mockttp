@@ -1,15 +1,11 @@
 import { Buffer } from 'buffer';
-import { Writable } from 'stream';
-import type * as dns from 'dns';
+import { Writable, finished } from 'stream';
 import * as net from 'net';
-import * as tls from 'tls';
 import * as http from 'http';
-import type * as http2 from 'http2';
 import * as https from 'https';
 
 import _ from 'lodash';
 import * as fs from 'fs/promises';
-import h2Client from 'http2-wrapper';
 import { decode as decodeBase64 } from 'base64-arraybuffer';
 import { Transform } from 'stream';
 import { stripIndent, oneLine } from 'common-tags';
@@ -71,6 +67,14 @@ import { MockttpDeserializationOptions } from '../rule-deserialization'
 import { assertParamDereferenced } from '../rule-parameters';
 
 import { getAgent, getConnection } from '../http-agents';
+import { AutoProtocolPool } from '../upstream/auto-protocol-pool';
+import { sendViaAgent } from '../upstream/h1-exchange';
+import type {
+    UpstreamExchange,
+    UpstreamRequestHooks,
+    UpstreamRequestSpec,
+    UpstreamResponse
+} from '../upstream/upstream-exchange';
 import { ProxySettingSource } from '../proxy-config';
 import {
     ForwardingOptions,
@@ -86,6 +90,7 @@ import {
     getUpstreamTlsOptions,
     getClientRelativeHostname,
     getDnsLookupFunction,
+    trackDownstreamAbort,
     getTrustedCAs,
     buildUpstreamErrorTags,
     getEffectiveHostname,
@@ -422,9 +427,6 @@ const mapOmitToUndefined = <T extends { [key: string]: any }>(
             : v
     );
 
-// Only used if key logging is enabled, meaning we need to hook into http2-wrapper's TLS setup:
-const h2ProtocolQueue = new Map();
-
 export class PassThroughStepImpl extends PassThroughStep {
 
     // In this case, we actually use the constructor, to ensure we initialize fields as normal:
@@ -697,9 +699,9 @@ export class PassThroughStepImpl extends PassThroughStep {
         const effectivePort = getEffectivePort({ protocol, port });
         const trustedCAs = await this.trustedCACertificates();
 
-        // We only do H2 upstream for HTTPS. Http2-wrapper doesn't support H2C, it's rarely used
-        // and we can't use ALPN to detect HTTP/2 support cleanly.
-        let shouldTryH2Upstream = isH2Downstream && protocol === 'https:';
+        if (protocol !== 'http:' && protocol !== 'https:') {
+            throw new Error(`Cannot pass through a request with unsupported protocol ${protocol}`);
+        }
 
         let family: undefined | 4 | 6;
         if (hostname === 'localhost') {
@@ -716,108 +718,145 @@ export class PassThroughStepImpl extends PassThroughStep {
         // handle a request in that case - make sure our proxyConfig is always dereferenced before use.
         const proxySettingSource = assertParamDereferenced(this.proxyConfig) as ProxySettingSource;
 
+        // For HTTP/2 clients we try HTTP/2 upstream too, where the route allows it. In that case
+        // we get a pool here, which negotiates the protocol separately for each connection.
         const agent = await getAgent({
             connection,
-            protocol: (protocol || undefined) as 'http:' | 'https:' | undefined,
-            hostname: hostname!,
+            protocol,
+            hostname,
             port: effectivePort,
-            tryHttp2: shouldTryH2Upstream,
+            tryHttp2: isH2Downstream,
             proxySettingSource
         });
+        const negotiatesProtocol = agent instanceof AutoProtocolPool;
 
-        if (agent && !('http2' in agent)) {
-            // I.e. only use HTTP/2 if we're using an HTTP/2-compatible agent
-            shouldTryH2Upstream = false;
-        }
-
-        let makeRequest = (
-            shouldTryH2Upstream
-                ? (reqOpts: any, cb: any) =>
-                    h2Client.auto({
-                        ...reqOpts,
-                        resolveProtocol: options.keyLogStream
-                            // Wrap TLS setup in key logging:
-                            ? h2Client.auto.createResolveProtocol(
-                                h2Client.auto.protocolCache as any,
-                                h2ProtocolQueue,
-                                function (...args) {
-                                    const socket = tls.connect(...args);
-                                    socket.on('keylog', (line) => options.keyLogStream!.write(line));
-                                    return socket;
-                                }
-                            ) : undefined,
-                    }, cb).catch((e) => {
-                        // If an error occurs during auto detection via ALPN, that's an
-                        // TypeError implies it's an invalid HTTP/2 request that was rejected.
-                        // Anything else implies an upstream HTTP/2 issue.
-                        e.causedByUpstreamError = !(e instanceof TypeError);
-                        throw e;
-                    })
-            // HTTP/1 + TLS
-            : protocol === 'https:'
-                ? https.request
-            // HTTP/1 plaintext:
-                : http.request
-        ) as typeof https.request;
-
-        if (isH2Downstream && shouldTryH2Upstream) {
+        if (negotiatesProtocol) {
             // We drop all incoming pseudoheaders, and regenerate them (except legally modified ones)
             rawHeaders = rawHeaders.filter(([key]) =>
                 !key.toString().startsWith(':') ||
                 MODIFIABLE_PSEUDOHEADERS.includes(key.toLowerCase() as any)
             );
-        } else if (isH2Downstream && !shouldTryH2Upstream) {
+        } else if (isH2Downstream) {
             rawHeaders = h2HeadersToH1(rawHeaders, method);
         }
 
-        let serverReq: http.ClientRequest;
-        return new Promise<void>((resolve, reject) => (async () => { // Wrapped to easily catch (a)sync errors
-            serverReq = await makeRequest({
-                protocol,
+        const upstreamRequest: UpstreamRequestSpec = {
+            protocol,
+            hostname: hostAddress,
+            port: effectivePort,
+            family,
+            lookup: getDnsLookupFunction(this.lookupOptions) as net.LookupFunction,
+            // ^ Cast required to handle __promisify__ type hack in the official Node types
+            tlsOptions: getUpstreamTlsOptions({
+                hostname,
+                port: effectivePort,
+                ignoreHostHttpsErrors: this.ignoreHostHttpsErrors,
+                clientCertificateHostMap: this.clientCertificateHostMap,
+                trustedCAs,
+
+                // Pass the connection through to mirror its inbound TLS fingerprint upstream,
+                // if that's enabled (getUpstreamTlsOptions reads the hello from it):
+                ...(this.mirrorTlsFingerprint && protocol === 'https:'
+                    ? { connection, tryHttp2Upstream: negotiatesProtocol }
+                    : {})
+            }),
+            keyLogStream: options.keyLogStream,
+            method,
+            path: `${pathname || '/'}${query || ''}`,
+            rawHeaders,
+            // We end the request with its headers if the client did, unless a rule has
+            // replaced its body:
+            endStream: reqBodyOverride
+                ? reqBodyOverride.length === 0
+                : isHttp2(clientReq) && clientReq.stream.endAfterHeaders
+        };
+
+        // Expose upstream traffic details via rule events:
+        if (options.emitEventCallback) {
+            options.emitEventCallback('passthrough-request-head', {
                 method,
-                hostname: hostAddress,
+                protocol: protocol.replace(/:$/, ''),
+                hostname,
                 port,
-                family,
-                path: `${pathname || '/'}${query || ''}`,
-                headers: shouldTryH2Upstream
-                    ? rawHeadersToObjectPreservingCase(rawHeaders)
-                    : flattenPairedRawHeaders(rawHeaders) as any,
-                setDefaultHeaders: shouldTryH2Upstream, // For now, we need this for unexpected H2->H1 header fallback
-                ...({
-                    // Disable strict HTTP/2 single-value field validation, extracted here
-                    // due to types. Needed for compatibility with weird servers, Node 24.15+.
-                    strictSingleValueFields: false,
-                }),
+                path: upstreamRequest.path,
+                rawHeaders
+            });
+            options.emitEventCallback('passthrough-request-body', reqBodyOverride
+                ? { overridden: true, rawBody: reqBodyOverride }
+                : { overridden: false }
+            );
+        }
 
-                lookup: getDnsLookupFunction(this.lookupOptions) as typeof dns.lookup,
-                // ^ Cast required to handle __promisify__ type hack in the official Node types
-                agent,
+        const downstreamAbort = trackDownstreamAbort(clientReq, clientRes);
 
-                // TLS options:
-                ...getUpstreamTlsOptions({
-                    hostname,
-                    port: effectivePort,
-                    ignoreHostHttpsErrors: this.ignoreHostHttpsErrors,
-                    clientCertificateHostMap: this.clientCertificateHostMap,
-                    trustedCAs,
+        // If the upstream fails, for any reason, we need to fire an event to any rule
+        // listeners who might be present (although only the first time)
+        let reportedUpstreamFailure = false;
+        const upstreamFailure = (e: ErrorLike & { causedByUpstreamError?: boolean }) => {
+            // Node rejects requests it can't send with TypeErrors: that's our failure, not upstream's
+            if (e instanceof TypeError) return e;
+            e.causedByUpstreamError = true;
 
-                    // Pass the connection through to mirror its inbound TLS fingerprint upstream,
-                    // if that's enabled (getUpstreamTlsOptions reads the hello from it):
-                    ...(this.mirrorTlsFingerprint && protocol === 'https:'
-                        ? { connection, tryHttp2Upstream: shouldTryH2Upstream }
-                        : {})
-                })
-            }, (serverRes) => (async () => {
-                serverRes.on('error', (e: any) => {
-                    reportUpstreamAbort(e)
-                    reject(e);
+            if (options.emitEventCallback && !reportedUpstreamFailure) {
+                reportedUpstreamFailure = true;
+                options.emitEventCallback('passthrough-abort', {
+                    downstreamAborted: downstreamAbort.signal.aborted,
+                    tags: [
+                        ...clientReq.tags,
+                        buildUpstreamErrorTags(e)
+                    ],
+                    error: {
+                        name: e.name,
+                        code: e.code,
+                        message: e.message,
+                        stack: e.stack
+                    }
                 });
+            }
+            return e;
+        };
+
+        const trackUpstreamSocket = (socket: net.Socket) => {
+            // This can fire multiple times for sockets that carry multiple requests. If/when
+            // that happens, we don't need more event listeners.
+            if (this.outgoingSockets.has(socket)) return;
+
+            // Add this port to our list of active ports, once it's connected (before then it has no port)
+            if (socket.connecting) {
+                socket.once('connect', () => {
+                    this.outgoingSockets.add(socket)
+                });
+            } else if (socket.localPort !== undefined) {
+                this.outgoingSockets.add(socket);
+            }
+
+            // Remove this port from our list of active ports when it's closed
+            // This is called for both clean closes & errors.
+            socket.once('close', () => this.outgoingSockets.delete(socket));
+        };
+
+        // Forward upstream 1xx responses downstream, except 100 (Node handles automatically) and
+        // 101 (handled elsewhere by websocket steps etc).
+        const tryForward1xx = (statusCode: number, flatHeaders: string[]) => {
+            if (statusCode < 102 || statusCode > 199) return;
+            try {
+                clientRes.sendInformationalResponse(statusCode, flatHeaders);
+            } catch (e) {
+                // Downstream may have moved on (e.g. final response already started).
+            }
+        };
+
+        return new Promise<void>((resolve, reject) => (async () => { // Wrapped to easily catch (a)sync errors
+            const handleUpstreamResponse = async (serverRes: UpstreamResponse) => {
+                // The body may have failed already, before we could listen for errors:
+                finished(serverRes.body, (e) => { if (e) reject(upstreamFailure(e)); });
 
                 // Forward server trailers, if we receive any:
-                serverRes.on('end', () => {
-                    if (!serverRes.rawTrailers?.length) return;
+                serverRes.body.on('end', () => {
+                    const rawTrailers = serverRes.getRawTrailers();
+                    if (!rawTrailers.length) return;
 
-                    const trailersToForward = pairFlatRawHeaders(serverRes.rawTrailers)
+                    const trailersToForward = pairFlatRawHeaders(rawTrailers)
                         .filter(([key, value]) => {
                             if (!validateHeader(key, value)) {
                                 console.warn(`Not forwarding invalid trailer: "${key}: ${value}"`);
@@ -840,7 +879,7 @@ export class PassThroughStepImpl extends PassThroughStep {
                     }
                 });
 
-                let serverStatusCode = serverRes.statusCode!;
+                let serverStatusCode = serverRes.statusCode;
                 let serverStatusMessage = serverRes.statusMessage
                 let serverRawHeaders = pairFlatRawHeaders(serverRes.rawHeaders);
 
@@ -895,7 +934,7 @@ export class PassThroughStepImpl extends PassThroughStep {
                     } else if (replaceBodyFromFile) {
                         resBodyOverride = await fs.readFile(replaceBodyFromFile);
                     } else if (updateJsonBody) {
-                        originalBody = await streamToBuffer(serverRes);
+                        originalBody = await streamToBuffer(serverRes.body);
                         const realBody = buildBodyReader(originalBody, serverRes.headers);
                         const jsonBody = await realBody.getJson();
 
@@ -912,7 +951,7 @@ export class PassThroughStepImpl extends PassThroughStep {
 
                         resBodyOverride = asBuffer(JSON.stringify(updatedBody));
                     } else if (patchJsonBody) {
-                        originalBody = await streamToBuffer(serverRes);
+                        originalBody = await streamToBuffer(serverRes.body);
                         const realBody = buildBodyReader(originalBody, serverRes.headers);
                         const jsonBody = await realBody.getJson();
 
@@ -923,7 +962,7 @@ export class PassThroughStepImpl extends PassThroughStep {
                         applyJsonPatch(jsonBody, patchJsonBody, true); // Mutates the JSON body returned above
                         resBodyOverride = asBuffer(JSON.stringify(jsonBody));
                     } else if (matchReplaceBody) {
-                        originalBody = await streamToBuffer(serverRes);
+                        originalBody = await streamToBuffer(serverRes.body);
                         const realBody = buildBodyReader(originalBody, serverRes.headers);
 
                         const originalBodyText = await realBody.getText();
@@ -967,7 +1006,7 @@ export class PassThroughStepImpl extends PassThroughStep {
                 } else if (this.beforeResponse) {
                     let modifiedRes: CallbackResponseResult | void;
 
-                    originalBody = await streamToBuffer(serverRes);
+                    originalBody = await streamToBuffer(serverRes.body);
                     let serverHeaders = rawHeadersToObject(serverRawHeaders);
 
                     let reqHeader = rawHeadersToObjectPreservingCase(rawHeaders);
@@ -988,7 +1027,7 @@ export class PassThroughStepImpl extends PassThroughStep {
                             hostname: hostname || 'localhost',
                             port: effectivePort
                         },
-                        path: `${pathname || '/'}${query || ''}`,
+                        path: upstreamRequest.path,
                         headers: reqHeader,
                         rawHeaders: rawHeaders,
                         timingEvents: clientReq.timingEvents,
@@ -1073,7 +1112,7 @@ export class PassThroughStepImpl extends PassThroughStep {
                     clientRes.end(resBodyOverride);
 
                     // Dump the real response data, in case that body wasn't read yet:
-                    serverRes.resume();
+                    serverRes.body.resume();
                     resolve();
                 } else if (originalBody) {
                     // If the original body was read, and not overridden, then send it
@@ -1092,25 +1131,25 @@ export class PassThroughStepImpl extends PassThroughStep {
                     // the server response is still technically pending.
                     // https://github.com/nodejs/node/blob/f6f8eb7c/lib/internal/http2/core.js#L2976-L2985
                     clientRes.end();
-                    serverRes.destroy();
+                    serverRes.body.resume();
                     resolve();
                 } else {
                     // Otherwise the body hasn't been read - stream it live:
-                    serverRes.pipe(clientRes);
-                    serverRes.once('end', resolve);
+                    serverRes.body.pipe(clientRes);
+                    serverRes.body.once('end', resolve);
                 }
 
                 if (options.emitEventCallback) {
                     if (!!resBodyOverride) {
                         (originalBody
                             ? Promise.resolve(originalBody)
-                            : streamToBuffer(serverRes)
+                            : streamToBuffer(serverRes.body)
                         ).then((upstreamBody) => {
                             options.emitEventCallback!('passthrough-response-body', {
                                 overridden: true,
                                 rawBody: upstreamBody
                             });
-                        }).catch((e) => reportUpstreamAbort(e));
+                        }).catch(upstreamFailure);
                     } else {
                         options.emitEventCallback('passthrough-response-body', {
                             overridden: false
@@ -1119,40 +1158,39 @@ export class PassThroughStepImpl extends PassThroughStep {
                         });
                     }
                 }
-            })().catch(reject));
+            };
 
-            serverReq.once('socket', (socket: net.Socket) => {
-                // This event can fire multiple times for keep-alive sockets, which are used to
-                // make multiple requests. If/when that happens, we don't need more event listeners.
-                if (this.outgoingSockets.has(socket)) return;
+            downstreamAbort.signal.throwIfAborted();
 
-                if (options.keyLogStream) {
-                    socket.on('keylog', (line) => options.keyLogStream!.write(line));
-                }
+            const hooks: UpstreamRequestHooks = {
+                signal: downstreamAbort.signal,
+                onSocket: trackUpstreamSocket,
+                onInformational: tryForward1xx
+            };
 
-                // Add this port to our list of active ports, once it's connected (before then it has no port)
-                if (socket.connecting) {
-                    socket.once('connect', () => {
-                        this.outgoingSockets.add(socket)
-                    });
-                } else if (socket.localPort !== undefined) {
-                    this.outgoingSockets.add(socket);
-                }
+            // We always start upstream connections *immediately*. This might be less efficient, but it
+            // ensures that we're accurately mirroring downstream, which has indeed already connected.
+            let exchange: UpstreamExchange;
+            if (negotiatesProtocol) {
+                exchange = await agent.send(upstreamRequest, hooks)
+                    .catch((e) => { throw upstreamFailure(asErrorLike(e)); });
+            } else {
+                exchange = sendViaAgent(agent, upstreamRequest, hooks);
+            }
 
-                // Remove this port from our list of active ports when it's closed
-                // This is called for both clean closes & errors.
-                socket.once('close', () => this.outgoingSockets.delete(socket));
-            });
+            exchange.response.then(
+                handleUpstreamResponse,
+                (e) => { throw upstreamFailure(asErrorLike(e)); }
+            ).catch(reject);
 
             // Forward any request trailers received from the client:
             const forwardTrailers = () => {
-                if (clientReq.rawTrailers?.length) {
-                    if (serverReq.addTrailers) {
-                        serverReq.addTrailers(clientReq.rawTrailers);
-                    } else {
-                        // See https://github.com/szmarczak/http2-wrapper/issues/103
-                        console.warn('Not forwarding request trailers - not yet supported for HTTP/2');
-                    }
+                if (!clientReq.rawTrailers?.length) return;
+
+                if (exchange.addTrailers) {
+                    exchange.addTrailers(clientReq.rawTrailers);
+                } else {
+                    console.warn('Not forwarding request trailers - not yet supported for HTTP/2');
                 }
             };
             // This has to be above the pipe setup below, or we end the stream before adding the
@@ -1167,131 +1205,19 @@ export class PassThroughStepImpl extends PassThroughStep {
             if (reqBodyOverride) {
                 clientReqBody.resume(); // Dump any remaining real request body
 
-                if (reqBodyOverride.length > 0) serverReq.end(reqBodyOverride);
-                else serverReq.end(); // http2-wrapper fails given an empty buffer for methods that aren't allowed a body
+                // An HTTP/2 request with no body has already ended, and can't take even an empty chunk:
+                if (reqBodyOverride.length > 0) exchange.requestBody.end(reqBodyOverride);
+                else exchange.requestBody.end();
             } else {
                 // asStream includes all content, including the body before this call
-                clientReqBody.pipe(serverReq);
-                clientReqBody.on('error', () => serverReq.abort());
-            }
-
-            // If the downstream connection aborts, before the response has been completed,
-            // we also abort the upstream connection. Important to avoid unnecessary connections,
-            // and to correctly proxy client connection behaviour to the upstream server.
-            function abortUpstream() {
-                serverReq.abort();
-            }
-
-            // If the upstream fails, for any reason, we need to fire an event to any rule
-            // listeners who might be present (although only the first time)
-            let reportedUpstreamError = false;
-            function reportUpstreamAbort(e: ErrorLike & { causedByUpstreamError?: true }) {
-                e.causedByUpstreamError = true;
-
-                if (!options.emitEventCallback) return;
-
-                if (reportedUpstreamError) return;
-                reportedUpstreamError = true;
-
-                options.emitEventCallback('passthrough-abort', {
-                    downstreamAborted: !!(serverReq?.aborted),
-                    tags: [
-                        ...clientReq.tags,
-                        buildUpstreamErrorTags(e)
-                    ],
-                    error: {
-                        name: e.name,
-                        code: e.code,
-                        message: e.message,
-                        stack: e.stack
-                    }
-                });
-            }
-
-            // Handle the case where the downstream connection is prematurely closed before
-            // fully sending the request or receiving the response.
-            clientReq.on('aborted', abortUpstream);
-            clientRes.on('close', abortUpstream);
-
-            // Disable the upstream request abort handlers once the response has been received.
-            clientRes.once('finish', () => {
-                clientReq.off('aborted', abortUpstream);
-                clientRes.off('close', abortUpstream);
-            });
-
-            serverReq.on('error', (e: any) => {
-                reportUpstreamAbort(e);
-                reject(e);
-            });
-
-            // Forward upstream 1xx responses downstream, except 100 (Node handles automatically) and
-            // 101 (handled elsewhere by websocket steps etc).
-            const tryForward1xx = (statusCode: number, flatHeaders: string[]) => {
-                if (statusCode < 102 || statusCode > 199) return;
-                try {
-                    clientRes.sendInformationalResponse(statusCode, flatHeaders);
-                } catch (e) {
-                    // Downstream may have moved on (e.g. final response already started).
-                }
-            };
-            serverReq.once('socket', () => {
-                const h2Stream = (serverReq as any)._request as http2.ClientHttp2Stream | undefined;
-                if (h2Stream) {
-                    h2Stream.on('headers', (h2Headers) => {
-                        const status = Number(h2Headers[':status']);
-                        if (!(status >= 100 && status < 200)) return;
-                        const flat: string[] = [];
-                        for (const [name, value] of Object.entries(h2Headers)) {
-                            if (name.startsWith(':') || value === undefined) continue;
-                            if (Array.isArray(value)) for (const v of value) flat.push(name, v);
-                            else flat.push(name, value);
-                        }
-                        tryForward1xx(status, flat);
-                    });
-                } else {
-                    serverReq.on('information', (info) => {
-                        const rawHeaders = (info as any).rawHeaders as string[] | undefined;
-                        const flat = rawHeaders ?? objectHeadersToFlat((info.headers ?? {}) as Headers);
-                        tryForward1xx(info.statusCode, flat);
-                    });
-                }
-            });
-
-            // We always start upstream connections *immediately*. This might be less efficient, but it
-            // ensures that we're accurately mirroring downstream, which has indeed already connected.
-            serverReq.flushHeaders();
-
-            // For similar reasons, we don't want any buffering on outgoing data at all if possible:
-            serverReq.setNoDelay(true);
-
-            // Fire rule events, to allow in-depth debugging of upstream traffic & modifications,
-            // so anybody interested can see _exactly_ what we're sending upstream here:
-            if (options.emitEventCallback) {
-                options.emitEventCallback('passthrough-request-head', {
-                    method,
-                    protocol: protocol.replace(/:$/, ''),
-                    hostname,
-                    port,
-                    path: `${pathname || '/'}${query || ''}`,
-                    rawHeaders
-                });
-
-                if (!!reqBodyOverride) {
-                    options.emitEventCallback('passthrough-request-body', {
-                        overridden: true,
-                        rawBody: reqBodyOverride
-                    });
-                } else {
-                    options.emitEventCallback!('passthrough-request-body', {
-                        overridden: false
-                    });
-                }
+                clientReqBody.pipe(exchange.requestBody);
+                clientReqBody.on('error', downstreamAbort.abort);
             }
         })().catch(reject)
-        ).catch((e: ErrorLike) => {
+        ).catch((e: ErrorLike & { causedByUpstreamError?: boolean }) => {
             clientRes.tags.push(...buildUpstreamErrorTags(e));
 
-            if ((e as any).causedByUpstreamError && !serverReq?.aborted) {
+            if (e.causedByUpstreamError && !downstreamAbort.signal.aborted) {
                 if (this.simulateConnectionErrors) {
                     // The upstream socket failed: forcibly break the downstream stream to match. This could
                     // happen due to a reset, TLS or DNS failures, or anything - but critically it's a
@@ -1313,7 +1239,7 @@ export class PassThroughStepImpl extends PassThroughStep {
             } else {
                 throw e;
             }
-        });
+        }).finally(downstreamAbort.stop);
     }
 
     /**

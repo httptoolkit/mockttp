@@ -9,7 +9,13 @@ import { oneLine } from 'common-tags';
 import CacheableLookup from 'cacheable-lookup';
 import { ErrorLike, unreachableCheck } from '@httptoolkit/util';
 
-import { CompletedBody, Headers, RawHeaders } from '../types';
+import {
+    CompletedBody,
+    Headers,
+    OngoingRequest,
+    OngoingResponse,
+    RawHeaders
+} from '../types';
 import { byteLength } from '../util/util';
 import { nodeVersionSatisfies } from '../util/node-version';
 import { asBuffer } from '../util/buffer-utils';
@@ -125,7 +131,6 @@ export function getUpstreamTlsOptions({
         // This should only be undefined if impersonation isn't supported:
         if (impersonationConfig) {
             // Mirror the client's ALPN, filtered to protocols we want upstream.
-            // N.b. http2-wrapper currently overrides ALPN on the H2 path regardless (for now).
             const speakableUpstreamAlpn = tryHttp2Upstream ? ['h2', 'http/1.1'] : ['http/1.1'];
             const mirroredAlpn = impersonationConfig.tlsOptions.ALPNProtocols
                 ?.filter(p => speakableUpstreamAlpn.includes(p));
@@ -654,6 +659,37 @@ export async function getClientRelativeHostname(
     } else {
         return hostname;
     }
+}
+
+/**
+ * An abort signal for upstream work, which fires if the downstream request is aborted or its
+ * connection closes before the response has been sent.
+ */
+export function trackDownstreamAbort(
+    downstreamRequest: OngoingRequest,
+    downstreamResponse: OngoingResponse
+) {
+    const controller = new AbortController();
+
+    const abort = () => controller.abort(
+        new AbortError('Downstream request aborted', 'E_DOWNSTREAM_ABORT')
+    );
+    const stop = () => {
+        downstreamRequest.off('aborted', abort);
+        downstreamResponse.off('close', abort);
+        downstreamResponse.off('finish', stop);
+    };
+
+    downstreamRequest.once('aborted', abort);
+    downstreamResponse.once('close', abort);
+    downstreamResponse.once('finish', stop);
+
+    if (
+        ('aborted' in downstreamRequest && downstreamRequest.aborted) ||
+        downstreamResponse.destroyed
+    ) abort();
+
+    return { signal: controller.signal, abort, stop };
 }
 
 export function buildUpstreamErrorTags(e: ErrorLike) {

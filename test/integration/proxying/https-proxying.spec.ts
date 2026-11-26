@@ -665,6 +665,21 @@ nodeOnly(() => {
                 expect(response.trailers['test-response-trailer']).to.equal('trailer-value');
             });
 
+            it("fails requests where a rule adds a header that HTTP/2 forbids, rather than changing them", async () => {
+                await server.forAnyRequest().thenPassThrough({
+                    ignoreHostHttpsErrors: ['localhost'],
+                    transformRequest: {
+                        updateHeaders: { 'connection': 'keep-alive' }
+                    }
+                });
+
+                const response = await http2ProxyRequest(server, `https://localhost:${targetPort}`);
+
+                // This is the rule's mistake, not an upstream failure, so it's not a 502:
+                expect(response.headers[':status']).to.equal(500);
+                expect(response.body.toString('utf8')).to.include('ERR_HTTP2_INVALID_CONNECTION_HEADERS');
+            });
+
             it("should return a 502 for failing upstream requests by default", async () => {
                 await server.forAnyRequest().thenPassThrough();
 
