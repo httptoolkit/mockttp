@@ -152,16 +152,51 @@ describe("Header utils", () => {
 
     describe("h2HeadersToH1", () => {
 
-        it("combines multiple cookie headers using only their values", () => {
+        it("combines cookie headers where the first one was, keeping everything else in order", () => {
             expect(
                 h2HeadersToH1([
+                    [':method', 'GET'],
                     [':authority', 'example.com'],
+                    ['x-first', '1'],
+                    ['x-dup', 'a'],
                     ['cookie', 'session=abc'],
-                    ['cookie', 'preferences=dark-mode']
+                    ['x-empty', ''],
+                    ['x-dup', 'b'],
+                    ['COOKIE', 'preferences=dark-mode'],
+                    ['x-last', 'z']
                 ], 'GET')
             ).to.deep.equal([
                 ['Host', 'example.com'],
-                ['Cookie', 'session=abc; preferences=dark-mode']
+                ['x-first', '1'],
+                ['x-dup', 'a'],
+                ['Cookie', 'session=abc; preferences=dark-mode'],
+                ['x-empty', ''],
+                ['x-dup', 'b'],
+                ['x-last', 'z']
+            ]);
+        });
+
+        it("uses the casing browsers use over HTTP/1, for lowercase names that they generate", () => {
+            expect(
+                h2HeadersToH1([
+                    [':authority', 'example.com'],
+                    ['user-agent', 'test-agent'],
+                    ['sec-fetch-site', 'same-origin'],
+                    ['dnt', '1'],
+                    // Browsers send client hints in lowercase over HTTP/1 too:
+                    ['sec-ch-ua', '"Chromium";v="153"'],
+                    ['x-custom-header', 'value'],
+                    // Any other casing was set by a rule:
+                    ['ACCEPT', '*/*']
+                ], 'GET')
+            ).to.deep.equal([
+                ['Host', 'example.com'],
+                ['User-Agent', 'test-agent'],
+                ['Sec-Fetch-Site', 'same-origin'],
+                ['DNT', '1'],
+                ['sec-ch-ua', '"Chromium";v="153"'],
+                ['x-custom-header', 'value'],
+                ['ACCEPT', '*/*']
             ]);
         });
 
@@ -173,7 +208,7 @@ describe("Header utils", () => {
                 ], 'POST')
             ).to.deep.equal([
                 ['Host', 'example.com'],
-                ['content-type', 'text/plain'],
+                ['Content-Type', 'text/plain'],
                 ['Transfer-Encoding', 'chunked']
             ]);
         });
@@ -186,7 +221,7 @@ describe("Header utils", () => {
                 ], 'POST')
             ).to.deep.equal([
                 ['Host', 'example.com'],
-                ['transfer-encoding', 'gzip, chunked']
+                ['Transfer-Encoding', 'gzip, chunked']
             ]);
         });
 
@@ -198,7 +233,7 @@ describe("Header utils", () => {
                 ], 'POST')
             ).to.deep.equal([
                 ['Host', 'example.com'],
-                ['transfer-encoding', 'gzip'],
+                ['Transfer-Encoding', 'gzip'],
                 ['Transfer-Encoding', 'chunked']
             ]);
         });
