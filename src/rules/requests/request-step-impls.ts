@@ -1032,7 +1032,7 @@ export class PassThroughStepImpl extends PassThroughStep {
                         rawHeaders: rawHeaders,
                         timingEvents: clientReq.timingEvents,
                         tags: clientReq.tags,
-                        body: buildBodyReader(reqBodyOverride ? Buffer.from(reqBodyOverride.buffer) : await clientReq.body.asDecodedBuffer(), reqHeader),
+                        body: buildBodyReader(reqBodyOverride ? asBuffer(reqBodyOverride) : await clientReq.body.asDecodedBuffer(), reqHeader),
                         rawTrailers: clientReq.rawTrailers ?? [],
                         trailers: rawHeadersToObject(clientReq.rawTrailers ?? []),
                     });

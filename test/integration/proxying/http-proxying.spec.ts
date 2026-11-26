@@ -1155,6 +1155,21 @@ nodeOnly(() => {
                 expect(response).to.equal('got correct req url');
             });
 
+            it("should see a replaced request body in beforeResponse", async () => {
+                await remoteServer.forPost('/').thenReply(200);
+
+                let seenBody: string | undefined;
+                await server.forPost(remoteServer.urlFor("/")).thenPassThrough({
+                    transformRequest: { replaceBody: 'replaced' },
+                    beforeResponse: async (_res, req) => {
+                        seenBody = await req.body.getText();
+                    }
+                });
+
+                await request.post(remoteServer.urlFor("/"), { body: 'original' });
+                expect(seenBody).to.equal('replaced');
+            });
+
             it("should be able to rewrite a response's status", async () => {
                 await remoteServer.forGet('/').thenReply(404);
                 await server.forGet(remoteServer.urlFor("/")).thenPassThrough({
