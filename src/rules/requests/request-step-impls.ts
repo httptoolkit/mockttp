@@ -730,6 +730,11 @@ export class PassThroughStepImpl extends PassThroughStep {
         });
         const negotiatesProtocol = agent instanceof AutoProtocolPool;
 
+        // We end the request with its headers if the client did, unless a rule has replaced its body:
+        const endStream = reqBodyOverride
+            ? reqBodyOverride.length === 0
+            : isHttp2(clientReq) && clientReq.stream.endAfterHeaders;
+
         if (negotiatesProtocol) {
             // We drop all incoming pseudoheaders, and regenerate them (except legally modified ones)
             rawHeaders = rawHeaders.filter(([key]) =>
@@ -737,7 +742,7 @@ export class PassThroughStepImpl extends PassThroughStep {
                 MODIFIABLE_PSEUDOHEADERS.includes(key.toLowerCase() as any)
             );
         } else if (isH2Downstream) {
-            rawHeaders = h2HeadersToH1(rawHeaders, method);
+            rawHeaders = h2HeadersToH1(rawHeaders, endStream);
         }
 
         const upstreamRequest: UpstreamRequestSpec = {
@@ -764,11 +769,7 @@ export class PassThroughStepImpl extends PassThroughStep {
             method,
             path: `${pathname || '/'}${query || ''}`,
             rawHeaders,
-            // We end the request with its headers if the client did, unless a rule has
-            // replaced its body:
-            endStream: reqBodyOverride
-                ? reqBodyOverride.length === 0
-                : isHttp2(clientReq) && clientReq.stream.endAfterHeaders
+            endStream
         };
 
         // Expose upstream traffic details via rule events:

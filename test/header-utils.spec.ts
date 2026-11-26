@@ -164,7 +164,7 @@ describe("Header utils", () => {
                     ['x-dup', 'b'],
                     ['COOKIE', 'preferences=dark-mode'],
                     ['x-last', 'z']
-                ], 'GET')
+                ], true)
             ).to.deep.equal([
                 ['Host', 'example.com'],
                 ['x-first', '1'],
@@ -188,7 +188,7 @@ describe("Header utils", () => {
                     ['x-custom-header', 'value'],
                     // Any other casing was set by a rule:
                     ['ACCEPT', '*/*']
-                ], 'GET')
+                ], true)
             ).to.deep.equal([
                 ['Host', 'example.com'],
                 ['User-Agent', 'test-agent'],
@@ -200,16 +200,28 @@ describe("Header utils", () => {
             ]);
         });
 
-        it("adds chunked encoding to bodied requests with no framing headers", () => {
+        it("adds chunked encoding when a body follows without framing headers, whatever the method", () => {
             expect(
                 h2HeadersToH1([
+                    [':method', 'GET'],
                     [':authority', 'example.com'],
                     ['content-type', 'text/plain']
-                ], 'POST')
+                ], false)
             ).to.deep.equal([
                 ['Host', 'example.com'],
                 ['Content-Type', 'text/plain'],
                 ['Transfer-Encoding', 'chunked']
+            ]);
+        });
+
+        it("adds no framing to requests that end with their headers, whatever the method", () => {
+            expect(
+                h2HeadersToH1([
+                    [':method', 'DELETE'],
+                    [':authority', 'example.com']
+                ], true)
+            ).to.deep.equal([
+                ['Host', 'example.com']
             ]);
         });
 
@@ -218,7 +230,7 @@ describe("Header utils", () => {
                 h2HeadersToH1([
                     [':authority', 'example.com'],
                     ['transfer-encoding', 'gzip, chunked']
-                ], 'POST')
+                ], false)
             ).to.deep.equal([
                 ['Host', 'example.com'],
                 ['Transfer-Encoding', 'gzip, chunked']
@@ -230,7 +242,7 @@ describe("Header utils", () => {
                 h2HeadersToH1([
                     [':authority', 'example.com'],
                     ['transfer-encoding', 'gzip']
-                ], 'POST')
+                ], false)
             ).to.deep.equal([
                 ['Host', 'example.com'],
                 ['Transfer-Encoding', 'gzip'],

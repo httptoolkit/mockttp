@@ -74,9 +74,9 @@ const toH2Headers = ({ method, path, rawHeaders }: UpstreamRequestHead): http2.O
     ...rawHeadersToObject(rawHeaders)
 });
 
-const toH1Head = (head: UpstreamRequestHead): UpstreamRequestHead => ({
-    ...head,
-    rawHeaders: h2HeadersToH1(head.rawHeaders, head.method)
+const toH1Head = (requestSpec: UpstreamRequestSpec): UpstreamRequestHead => ({
+    ...requestSpec,
+    rawHeaders: h2HeadersToH1(requestSpec.rawHeaders, requestSpec.endStream)
 });
 
 /** Wait for a promise, unless the signal aborts first, which rejects with its reason. */

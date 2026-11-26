@@ -264,7 +264,7 @@ const H1_HEADER_NAMES = new Map([
  * Convert HTTP/2 request headers into the HTTP/1 request that the same client would send,
  * changing as little as possible: order, duplicates and values are all preserved.
  */
-export function h2HeadersToH1(h2Headers: RawHeaders, method: string): RawHeaders {
+export function h2HeadersToH1(h2Headers: RawHeaders, endStream: boolean): RawHeaders {
     const h1Headers: RawHeaders = [];
     let cookieHeader: RawHeaders[number] | undefined;
 
@@ -291,11 +291,9 @@ export function h2HeadersToH1(h2Headers: RawHeaders, method: string): RawHeaders
         h1Headers.unshift(['Host', findRawHeader(h2Headers, ':authority')![1]]);
     }
 
-    // We don't know if the request has a body yet - but just in case, we ensure it could:
+    // HTTP/2 bodies don't need a length, but HTTP/1 bodies need some framing:
     if (
-        // If the request is a method that probably has a body
-        method !== 'GET' &&
-        method !== 'HEAD' &&
+        !endStream &&
         !( // And you haven't set any kind of framing headers:
             findRawHeader(h1Headers, 'content-length') ||
             // T-E: chunked is almost completely unreachable here, but we check anyway to guard
