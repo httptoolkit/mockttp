@@ -155,6 +155,31 @@ nodeOnly(() => {
                 await getRejection(readStreamToString(response.body));
             });
 
+            it("keeps a complete response if the request fails afterwards", async () => {
+                // E.g. a server rejecting an upload early, then resetting the connection:
+                const port = await startServer((socket) => {
+                    socket.write('HTTP/1.1 413 Payload Too Large\r\nContent-Length: 5\r\nConnection: close\r\n\r\nnope!');
+                    setTimeout(() => socket.resetAndDestroy(), 10);
+                });
+
+                const { hooks } = makeHooks();
+                const exchange = startH1Exchange('http:', { hostname: '127.0.0.1', port, agent: false }, {
+                    method: 'POST',
+                    path: '/',
+                    rawHeaders: [['host', 'example.com'], ['transfer-encoding', 'chunked']]
+                }, hooks);
+                const response = await exchange.response;
+
+                // Keep uploading until that fails, before reading the response:
+                const requestFailed = new Promise((resolve) => exchange.requestBody.once('error', resolve));
+                const uploader = setInterval(() => exchange.requestBody.write('data'), 5);
+                await requestFailed;
+                clearInterval(uploader);
+
+                expect(response.statusCode).to.equal(413);
+                expect(await readStreamToString(response.body)).to.equal('nope!');
+            });
+
             it("rejects the response when aborted before a response arrives", async () => {
                 const port = await startServer(() => {}); // Never responds
 

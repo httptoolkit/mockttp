@@ -54,7 +54,7 @@ export function startH1Exchange(
         });
         request.on('error', (error) => {
             if (!incoming) reject(error);
-            else if (!incoming.readableEnded) incoming.destroy(error);
+            else if (!incoming.complete) incoming.destroy(error);
         });
     });
 
