@@ -500,9 +500,6 @@ export function getRequestContentLengthAfterModification(
     // to need to set your own content-length override when you just want to change
     // the body. To help out, if you override the body in a way that results in invalid
     // content-length headers, we fix them for you.
-
-    // For HTTP/2, framing is optional/advisory so we can just skip this entirely.
-    if (context.httpVersion !== 1) return undefined;
     if (bodyLength === undefined) return undefined;
 
     const resultingHeaders = replacementHeaders || originalHeaders;
@@ -515,7 +512,9 @@ export function getRequestContentLengthAfterModification(
     const contentLengthHeader = getHeaderValue(resultingHeaders, 'content-length');
 
     if (contentLengthHeader === expectedLength) return undefined;
-    if (contentLengthHeader === undefined) return expectedLength; // Differs from responses
+    // HTTP/1 requests need framing (unlike responses), while HTTP/2 needs none, but any
+    // content-length it does have must still match:
+    if (contentLengthHeader === undefined) return context.httpVersion === 1 ? expectedLength : undefined;
 
     // The content-length is expected, but it's wrong or missing.
 
@@ -540,13 +539,11 @@ export function getResponseContentLengthAfterModification(
     replacementHeaders: Headers | RawHeaders | undefined,
     context: {
         httpMethod: string
-        httpVersion: 1 | 2
     }
 ): string | undefined {
     // For HEAD requests etc, you can set an arbitrary content-length header regardless
-    // of the empty body, so we don't bother checking anything. For HTTP/2, framing is
-    // optional/advisory so we can just skip this entirely.
-    if (context.httpVersion !== 1 || context.httpMethod === 'HEAD') return undefined;
+    // of the empty body, so we don't bother checking anything.
+    if (context.httpMethod === 'HEAD') return undefined;
 
     const resultingHeaders = replacementHeaders || originalHeaders;
 

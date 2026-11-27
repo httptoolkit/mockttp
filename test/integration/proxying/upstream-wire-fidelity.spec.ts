@@ -9,6 +9,7 @@ import {
     expect,
     nodeOnly,
     getHttp2Response,
+    getHttp2Body,
     makeDestroyable,
     nodeSatisfies,
     sendRawRequest,
@@ -377,6 +378,53 @@ nodeOnly(() => {
                     ]);
                 } finally {
                     await target.destroy();
+                }
+            });
+
+            it("corrects the content-length of bodies replaced in either direction", async () => {
+                const seen: { contentLength?: string, body: string } = { body: '' };
+                const h2Server = makeDestroyable(http2.createSecureServer({ key: caKey, cert: caCert }));
+                h2Server.on('stream', (stream: http2.ServerHttp2Stream, headers) => {
+                    seen.contentLength = headers['content-length'];
+                    stream.setEncoding('utf8');
+                    stream.on('data', (data: string) => { seen.body += data; });
+                    stream.on('end', () => {
+                        stream.respond({ ':status': 200, 'content-length': '8' });
+                        stream.end('original');
+                    });
+                    stream.on('error', () => {});
+                });
+                await new Promise<void>((resolve) => h2Server.listen(0, '127.0.0.1', resolve));
+                const targetPort = (h2Server.address() as net.AddressInfo).port;
+
+                try {
+                    server = getLocal({ http2: true });
+                    await server.start();
+                    await server.forAnyRequest().thenPassThrough({
+                        ignoreHostHttpsErrors: ['127.0.0.1'],
+                        transformRequest: { replaceBody: 'abc' },
+                        transformResponse: { replaceBody: 'xyz' }
+                    });
+
+                    const client = http2.connect(server.url, { ca: caCert });
+                    const request = client.request({
+                        ':method': 'POST',
+                        ':path': '/',
+                        ':scheme': 'https',
+                        ':authority': `127.0.0.1:${targetPort}`,
+                        'content-length': '8'
+                    });
+                    request.end('original');
+
+                    const response = await getHttp2Response(request);
+                    const responseBody = await getHttp2Body(request);
+                    client.close();
+
+                    expect(seen).to.deep.equal({ contentLength: '3', body: 'abc' });
+                    expect(response['content-length']).to.equal('3');
+                    expect(responseBody.toString()).to.equal('xyz');
+                } finally {
+                    await h2Server.destroy();
                 }
             });
 

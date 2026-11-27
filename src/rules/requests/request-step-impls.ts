@@ -1041,7 +1041,7 @@ export class PassThroughStepImpl extends PassThroughStep {
                             (updateHeaders && getHeaderValue(updateHeaders, 'content-length') !== undefined)
                                 ? serverRawHeaders // Iff you replaced the content length
                                 : replaceHeaders,
-                            { httpMethod: method, httpVersion: serverRes.httpVersion.startsWith('1.') ? 1 : 2 }
+                            { httpMethod: method }
                         );
 
                         if (updatedCLHeader !== undefined) {
@@ -1123,10 +1123,7 @@ export class PassThroughStepImpl extends PassThroughStep {
                             resBodyOverride || originalBody,
                             serverRes.headers,
                             modifiedRes?.headers,
-                            {
-                                httpMethod: method,
-                                httpVersion: serverRes.httpVersion.startsWith('1.') ? 1 : 2
-                            }
+                            { httpMethod: method }
                         );
 
                         if (updatedContentLength !== undefined) {
