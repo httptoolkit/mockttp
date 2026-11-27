@@ -492,6 +492,28 @@ describe("Abort subscriptions", () => {
             expect(wasRequestSeen).to.equal(false);
         });
 
+        it("should be sent without an error when a proxied request is aborted mid-response", async () => {
+            await remoteServer.reset();
+            const upstreamBody = new PassThrough();
+            await remoteServer.forAnyRequest().thenStream(200, upstreamBody);
+
+            let seenAbortPromise = getDeferred<AbortedRequest>();
+            await server.on('abort', (r) => seenAbortPromise.resolve(r));
+
+            await server.forPost('/mocked-endpoint').thenForwardTo(remoteServer.url);
+
+            let abortable = makeAbortableRequest(server, '/mocked-endpoint') as http.ClientRequest;
+            abortable.on('response', (res) => {
+                res.on('error', () => {});
+                res.once('data', () => abortable.abort());
+            });
+            abortable.end();
+            upstreamBody.write('start of the body');
+
+            let seenAbort = await seenAbortPromise;
+            expect(seenAbort.error).to.equal(undefined); // Client abort, not an error
+        });
+
         describe("given a server that closes connections", () => {
 
             const badServer = new http.Server((req, res) => {

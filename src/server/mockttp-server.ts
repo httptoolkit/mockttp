@@ -869,7 +869,8 @@ export class MockttpServer extends AbstractMockttp implements Mockttp {
             result ||= 'responded';
         } catch (e) {
             if (e instanceof AbortError) {
-                abort(e);
+                // The client giving up isn't a failure of ours, so that's an abort with no error:
+                abort(e.code === 'E_DOWNSTREAM_ABORT' ? undefined : e);
                 response.destroy(e);
 
                 if (this.debug) {

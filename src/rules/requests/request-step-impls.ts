@@ -847,7 +847,9 @@ export class PassThroughStepImpl extends PassThroughStep {
         const upstreamFailure = (e: ErrorLike & { causedByUpstreamError?: boolean }) => {
             // Node rejects requests it can't send with TypeErrors: that's our failure, not upstream's
             if (e instanceof TypeError) return e;
-            e.causedByUpstreamError = true;
+            // Once the client has gone, upstream errors just reflect us cancelling the request:
+            if (downstreamAbort.signal.aborted) e = downstreamAbort.signal.reason;
+            else e.causedByUpstreamError = true;
 
             if (options.emitEventCallback && !reportedUpstreamFailure) {
                 reportedUpstreamFailure = true;
@@ -1267,9 +1269,12 @@ export class PassThroughStepImpl extends PassThroughStep {
             }
         })().catch(reject)
         ).catch((e: ErrorLike & { causedByUpstreamError?: boolean }) => {
+            // With the client gone there's nobody to send a failure to, so it's only ever an abort:
+            if (downstreamAbort.signal.aborted) e = downstreamAbort.signal.reason;
+
             clientRes.tags.push(...buildUpstreamErrorTags(e));
 
-            if (e.causedByUpstreamError && !downstreamAbort.signal.aborted) {
+            if (e.causedByUpstreamError) {
                 if (this.simulateConnectionErrors) {
                     // The upstream socket failed: forcibly break the downstream stream to match. This could
                     // happen due to a reset, TLS or DNS failures, or anything - but critically it's a

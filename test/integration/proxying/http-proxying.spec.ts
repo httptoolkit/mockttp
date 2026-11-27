@@ -1503,6 +1503,9 @@ nodeOnly(() => {
                 const seenAbortPromise = getDeferred<AbortedRequest>();
                 remoteServer.on('abort', (r) => seenAbortPromise.resolve(r));
 
+                const proxyAbortPromise = getDeferred<AbortedRequest>();
+                await server.on('abort', (r) => proxyAbortPromise.resolve(r));
+
                 const ruleEvents: RuleEvent[] = [];
                 await server.on('rule-event', (event) => ruleEvents.push(event));
 
@@ -1522,12 +1525,19 @@ nodeOnly(() => {
                 expect(seenRequest.id).to.equal(seenAbort.id);
                 expect(seenAbort.error).to.equal(undefined); // Client abort, not an error
 
+                const proxyAbort = await proxyAbortPromise;
+                expect(proxyAbort.error).to.equal(undefined); // Client abort, not an error
+
                 const isAbortEvent = ({ eventType }: RuleEvent) => eventType === 'passthrough-abort';
                 await pollUntil(() => ruleEvents.some(isAbortEvent));
                 const passthroughAbort = ruleEvents.find(isAbortEvent);
                 expect(passthroughAbort?.eventData).to.have.property(
                     'downstreamAborted',
                     true
+                );
+                expect(passthroughAbort?.eventData).to.have.nested.property(
+                    'error.code',
+                    'E_DOWNSTREAM_ABORT'
                 );
             });
 
