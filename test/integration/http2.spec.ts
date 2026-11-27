@@ -432,6 +432,26 @@ nodeOnly(() => {
                 await cleanup(client);
             });
 
+            it("exposes HTTP/2 request trailers", async () => {
+                const seenTrailers = getDeferred<CompletedRequest['rawTrailers']>();
+                await server.forPost('/').thenCallback((req) => {
+                    seenTrailers.resolve(req.rawTrailers);
+                    return { statusCode: 200 };
+                });
+
+                const client = http2.connect(server.url);
+                try {
+                    const req = client.request({ ':method': 'POST' }, { waitForTrailers: true });
+                    req.once('wantTrailers', () => req.sendTrailers({ 'x-trailer': 'value' }));
+                    req.end('body');
+
+                    expect((await getHttp2Response(req))[':status']).to.equal(200);
+                    expect(await seenTrailers).to.deep.equal([['x-trailer', 'value']]);
+                } finally {
+                    await cleanup(client);
+                }
+            });
+
             it("can respond to proxied HTTP/2 requests", async function() {
                 await server.forGet('https://example.com/mocked-endpoint')
                     .thenReply(200, "Proxied HTTP2 response!");

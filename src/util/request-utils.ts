@@ -467,9 +467,18 @@ export function preprocessRequest(req: ExtendedRawRequest, options: {
     makePropertyWritable(req, 'headers');
     makePropertyWritable(req, 'rawHeaders');
 
+    // HTTP/1 requests have their trailers set here as they complete. HTTP/2 requests expose
+    // theirs via an inherited getter instead, which this property would otherwise hide:
+    const getInheritedRawTrailers = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(req), 'rawTrailers')?.get;
     let rawTrailers: RawTrailers | undefined;
     Object.defineProperty(req, 'rawTrailers', {
-        get: () => rawTrailers,
+        get: () => {
+            if (rawTrailers) return rawTrailers;
+            const inheritedRawTrailers: unknown = getInheritedRawTrailers?.call(req);
+            return Array.isArray(inheritedRawTrailers) && inheritedRawTrailers.length
+                ? pairFlatRawHeaders(inheritedRawTrailers)
+                : undefined;
+        },
         set: (flatRawTrailers) => {
             rawTrailers = flatRawTrailers
                 ? pairFlatRawHeaders(flatRawTrailers)
