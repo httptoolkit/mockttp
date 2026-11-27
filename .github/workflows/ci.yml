@@ -18,6 +18,7 @@ jobs:
           - node-version: 24.x
           - node-version: 'v24.22.3'
             deploys-docs: true
+          - node-version: 26.x
           - node-version: latest
 
     services:
