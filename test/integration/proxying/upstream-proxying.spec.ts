@@ -666,12 +666,12 @@ nodeOnly(() => {
                 await pollUntil(() => ruleEvents.some(isAbortEvent));
                 const eventData = ruleEvents.find(isAbortEvent)!.eventData as {
                     downstreamAborted: boolean,
-                    tags: Array<string | string[]>
+                    tags: string[]
                 };
                 expect(eventData.downstreamAborted).to.equal(false);
                 // Proxy failures are tagged just like upstream server failures,
                 // with no way to tell the two apart:
-                expect(eventData.tags.flat().some((tag) => tag.startsWith('passthrough-error:')))
+                expect(eventData.tags.some((tag) => tag.startsWith('passthrough-error:')))
                     .to.equal(true);
             });
 

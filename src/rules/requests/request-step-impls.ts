@@ -850,7 +850,7 @@ export class PassThroughStepImpl extends PassThroughStep {
                     downstreamAborted: downstreamAbort.signal.aborted,
                     tags: [
                         ...clientReq.tags,
-                        buildUpstreamErrorTags(e)
+                        ...buildUpstreamErrorTags(e)
                     ],
                     error: {
                         name: e.name,
