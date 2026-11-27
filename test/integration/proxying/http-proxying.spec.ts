@@ -811,6 +811,25 @@ nodeOnly(() => {
                 expect(response).to.deep.equal({ hello: "world" });
             });
 
+            it("should rewrite a spread request's body with a falsy JSON value", async () => {
+                await remoteServer.forAnyRequest().thenCallback(async (req) => ({
+                    status: 200,
+                    body: await req.body.getText()
+                }));
+
+                for (const value of [false, 0, '', null]) {
+                    await server.reset();
+                    await server.forPost(remoteServer.urlFor("/")).thenPassThrough({
+                        beforeRequest: (req) => ({ ...req, body: req.body.buffer, json: value })
+                    });
+
+                    const response = await request.post(remoteServer.urlFor("/"), {
+                        body: 'original body'
+                    });
+                    expect(response).to.equal(JSON.stringify(value));
+                }
+            });
+
             it("should be able to rewrite a request's body as JSON and encode it automatically", async () => {
                 await remoteServer.forAnyRequest().thenCallback(async (req) => ({
                     status: 200,
