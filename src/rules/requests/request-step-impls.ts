@@ -187,7 +187,7 @@ export class FixedResponseStepImpl extends FixedResponseStep {
             response.addTrailers(this.trailers);
         }
 
-        response.end(this.data || "");
+        response.end(this.data?.length ? this.data : undefined);
     }
 }
 
@@ -227,9 +227,14 @@ async function writeResponseFromCallback(
         result.headers
     );
 
-    if (result.trailers) response.addTrailers(result.trailers);
+    if (result.trailers) {
+        // Due to a Node bug, we have to flush headers before we add trailers - auto-flush
+        // on end() drops trailers silently.
+        response.flushHeaders();
+        response.addTrailers(result.trailers);
+    }
 
-    response.end(result.rawBody || "");
+    response.end(result.rawBody);
 }
 
 export class CallbackStepImpl extends CallbackStep {
@@ -1163,22 +1168,25 @@ export class PassThroughStepImpl extends PassThroughStep {
                     // onward directly:
                     clientRes.end(originalBody);
                     resolve();
-                } else if (isH2Downstream && (
+                } else if (serverRes.endedWithHead || (isH2Downstream && (
                     serverRes.statusCode === 204 ||
                     serverRes.statusCode === 205 ||
                     serverRes.statusCode === 304 ||
                     method === 'HEAD'
-                )) {
-                    // Here, Node's HTTP/2 implementation auto-ends the downstream request knowing
-                    // that it can't have a body. We need to mirror this, or we end up with a confusing
-                    // race condition where the client is done (and can even close the connection) while
-                    // the server response is still technically pending.
+                ))) {
+                    // If the upstream response ended with its head, so does ours. Node's HTTP/2
+                    // implementation also auto-ends the downstream request when it can't have a body.
+                    // We need to mirror this, or we end up with a confusing race condition where the
+                    // client is done (and can even close the connection) while the server response
+                    // is still technically pending.
                     // https://github.com/nodejs/node/blob/f6f8eb7c/lib/internal/http2/core.js#L2976-L2985
                     clientRes.end();
                     serverRes.body.resume();
                     resolve();
                 } else {
-                    // Otherwise the body hasn't been read - stream it live:
+                    // Otherwise the body hasn't been read - stream it live, sending the head now
+                    // as the upstream did, rather than with the first data:
+                    clientRes.flushHeaders();
                     serverRes.body.pipe(clientRes);
                     serverRes.body.once('end', resolve);
                 }

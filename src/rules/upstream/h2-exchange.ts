@@ -75,7 +75,7 @@ export function startH2Exchange(
     const response = new Promise<UpstreamResponse>((resolve, reject) => {
         let body: PassThrough | undefined;
 
-        stream.once('response', (headers, _flags, rawHeaders) => {
+        stream.once('response', (headers, flags, rawHeaders) => {
             body = relayResponseBody(stream);
             resolve({
                 statusCode: Number(headers[':status']),
@@ -83,6 +83,7 @@ export function startH2Exchange(
                 httpVersion: '2.0',
                 headers,
                 rawHeaders,
+                endedWithHead: (flags & http2.constants.NGHTTP2_FLAG_END_STREAM) !== 0,
                 body,
                 getRawTrailers: () => rawTrailers
             });

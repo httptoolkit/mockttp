@@ -68,22 +68,32 @@ import {
     getSocketMetadataTags
 } from './socket-metadata';
 
+/**
+ * Write a response's head. As in HTTP/1, an HTTP/2 head is sent with the first write or the
+ * end (unless flushHeaders() is called first), so a response with no body is sent as a single
+ * HEADERS frame with END_STREAM. Node sends HTTP/2 heads immediately by default, but gRPC
+ * needs this for responses with no messages, and it's the only way to mirror such responses.
+ */
 export const writeHead = (
     response: http.ServerResponse | http2.Http2ServerResponse,
     status: number,
     statusMessage?: string | undefined,
     headers?: Headers | RawHeaders | undefined
 ) => {
+    if (isHttp2(response)) {
+        // HTTP/2 uses setHeader directly, as H2 writeHead is always flushed
+        const h2Headers = Array.isArray(headers) ? rawHeadersToObject(headers) : headers ?? {};
+
+        response.statusCode = status;
+        for (const [name, value] of Object.entries(h2Headers)) {
+            if (value !== undefined) response.setHeader(name, value);
+        }
+        return; // HTTP/2 has no status messages
+    }
+
     const flatHeaders: http.OutgoingHttpHeaders | string[] =
         headers === undefined
             ? {}
-        : isHttp2(response) && Array.isArray(headers)
-            // H2 raw headers support is poor so we map to object here.
-            // We should revert to flat headers once the below is resolved in LTS:
-            // https://github.com/nodejs/node/issues/51402
-            ? rawHeadersToObject(headers)
-        : isHttp2(response)
-            ? headers as Headers // H2 supports object headers just fine
         : !Array.isArray(headers)
             ? objectHeadersToFlat(headers)
         // RawHeaders for H1, must be flattened:
@@ -94,10 +104,9 @@ export const writeHead = (
     // different casing can't be represented with setHeader at all (the latter overwrites).
 
     if (statusMessage === undefined) {
-        // Cast is required as Node H2 types don't know about raw headers:
-        (response as http.ServerResponse).writeHead(status, flatHeaders);
+        response.writeHead(status, flatHeaders);
     } else {
-        (response as http.ServerResponse).writeHead(status, statusMessage, flatHeaders);
+        response.writeHead(status, statusMessage, flatHeaders);
     }
 };
 
@@ -627,10 +636,6 @@ export function trackResponse(
 
         writtenHeaders = getHeaderPairsFromArgument(headersArg);
 
-        if (isHttp2(trackedResponse)) {
-            writtenHeaders.unshift([':status', args[0].toString()]);
-        }
-
         // Headers might also have been set with setHeader before. They'll be combined, with headers
         // here taking precendence. We simulate this by pulling in all values from getHeaders() and
         // remembering any of those that we're not about to override.
@@ -644,11 +649,20 @@ export function trackResponse(
                 .forEach((key) => {
                     const value = storedHeaders[key];
                     if (Array.isArray(value)) {
-                        value.reverse().forEach(v => writtenHeaders?.unshift([key, v]));
+                        // Copied, since reversing in place would change the headers sent:
+                        [...value].reverse().forEach(v => writtenHeaders?.unshift([key, v]));
                     } else if (value !== undefined) {
                         writtenHeaders?.unshift([key, value]);
                     }
                 });
+        }
+
+        if (isHttp2(trackedResponse)) {
+            // HTTP/2 always sends header names lowercased:
+            writtenHeaders = [
+                [':status', args[0].toString()],
+                ...writtenHeaders.map(([name, value]): [string, string] => [name.toLowerCase(), value])
+            ];
         }
 
         return originalWriteHeader.apply(this, args);

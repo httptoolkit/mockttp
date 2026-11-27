@@ -56,6 +56,8 @@ export interface UpstreamResponse {
     httpVersion: string;
     headers: Headers;
     rawHeaders: string[];
+    /** Whether the response is known to have ended with its head, so no body follows. */
+    endedWithHead: boolean;
     /**
      * Ends normally, or fails if the exchange fails after the head. It can fail before
      * the response is handled, so check its outcome with stream.finished().

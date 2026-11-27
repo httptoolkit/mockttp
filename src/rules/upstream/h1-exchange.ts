@@ -66,6 +66,7 @@ export function startH1Exchange(
                 httpVersion: res.httpVersion,
                 headers: res.headers,
                 rawHeaders: res.rawHeaders,
+                endedWithHead: false,
                 body: res,
                 getRawTrailers: () => res.rawTrailers
             });

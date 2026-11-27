@@ -373,7 +373,7 @@ export function getHttp2Response(req: http2.ClientHttp2Stream) {
 
 export function getHttp2Body(req: http2.ClientHttp2Stream) {
     return new Promise<Buffer>((resolve, reject) => {
-        if (req.closed) {
+        if (req.readableEnded || req.destroyed) {
             resolve(Buffer.from([]));
             return;
         }
