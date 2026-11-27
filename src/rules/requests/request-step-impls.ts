@@ -452,7 +452,7 @@ function returnsOriginalBody(
     resultingHeaders: Headers
 ) {
     if (result?.rawBody) return result.rawBody === originalBody.buffer;
-    if (result?.json) return false;
+    if (result?.json !== undefined) return false;
 
     const returnedBody: unknown = result?.body;
     const isSameBody = returnedBody === originalBody || returnedBody === originalBody.buffer;
