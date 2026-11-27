@@ -156,7 +156,7 @@ afterEach(async function () {
             body: JSON.stringify({
                 api_key: PERF_LOGGING_API_KEY,
                 event: "performance_test_result",
-                distinct_id: `mockttp-${process.env.ImageOS || 'local'}`,
+                distinct_id: `mockttp-${process.env.ImageOS || 'local'}-${process.versions.node}`,
                 properties: {
                     $process_person_profile: false,
                     sha: process.env.GITHUB_SHA || 'local',
@@ -165,7 +165,8 @@ afterEach(async function () {
                     mean_latency: testResults.latency.mean,
                     p99_latency: testResults.latency.p99,
                     errors: testResults.errors,
-
+                    node_version_major: process.versions.node.split('.')[0],
+                    node_version: process.versions.node,
                 },
             }),
         });
