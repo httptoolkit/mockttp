@@ -486,9 +486,7 @@ nodeOnly(() => {
                 );
             });
 
-            // Known gap: https-proxy-agent replays a refused CONNECT to the client as if the
-            // target had sent it, so the proxy's 407 challenge reaches the client.
-            it.skip("should return a 502 if the proxy rejects the credentials", async () => {
+            it("should return a 502 if the proxy rejects the credentials", async () => {
                 await server.forAnyRequest().thenPassThrough({
                     proxyConfig: {
                         proxyUrl: proxy.url.replace('://', '://wrong:credentials@')
@@ -622,9 +620,7 @@ nodeOnly(() => {
                 process.env = _.merge({}, process.env, server.proxyEnv);
             };
 
-            // Known gap: https-proxy-agent replays a refused CONNECT to the client as if the
-            // target had sent it, so the proxy's own response reaches the client.
-            it.skip("should treat a refused CONNECT as a failure to reach the upstream", async () => {
+            it("should treat a refused CONNECT as a failure to reach the upstream", async () => {
                 proxy = await startTestProxy({ behaviour: 'reject-502' });
                 await startServer();
 

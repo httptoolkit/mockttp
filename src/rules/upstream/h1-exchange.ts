@@ -2,6 +2,7 @@ import * as http from 'http';
 import * as https from 'https';
 import type * as net from 'net';
 import type { Writable } from 'stream';
+import { CustomError } from '@httptoolkit/util';
 
 import { flattenPairedRawHeaders } from '../../util/header-utils';
 import type {
@@ -36,6 +37,14 @@ export function startH1Exchange(
         : http.request(options);
 
     request.on('socket', hooks.onSocket);
+
+    request.once('proxyConnect', (connect: { statusCode: number, statusText: string }) => {
+        if (connect.statusCode === 200) return;
+        request.destroy(new CustomError(
+            `Upstream proxy refused to connect: ${connect.statusCode} ${connect.statusText}`,
+            { code: 'E_PROXY_CONNECT_REFUSED' }
+        ));
+    });
     request.on('information', (info) => hooks.onInformational(info.statusCode, info.rawHeaders));
 
     // Due to a Node bug, 'drain' won't fire after an early response, so we do it by hand:
